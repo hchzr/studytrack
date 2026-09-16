@@ -212,7 +212,7 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 | **Sauvegarde / restauration** | ✅ **nouveau** | Profil › Données › *Créer une sauvegarde* produit un JSON **réimportable** (structure + avancement + sessions). Restauration par Importer › JSON, idempotente. Export CSV des sessions pour un tableur |
 | **Import JSON / CSV** | ✅ | Idempotent (upsert par code de cours / numéro) |
 | **Import PDF des séries** | ✅ | `SeriesPDFParser` (fonction pure, 19 cas testés) repère « Série 3 », « Exercice 3.1 », « (bonus) », les numéros seuls et les espaces insécables. **Toujours suivi d'un écran de relecture** : on coche, on corrige le bonus, on crée. Un PDF **scanné** est annoncé comme tel plutôt que de laisser croire à un échec |
-| **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage — **sur l'appareil** (Apple Intelligence / FoundationModels, iOS 26, gratuit, hors ligne) ou, en secours, par n'importe quelle API compatible OpenAI configurée par l'étudiant·e (Groq, OpenRouter, Ollama…). La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Réglages : Profil › Import intelligent, avec bouton « Tester » |
+| **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage, **routé automatiquement et sans rien demander à l'étudiant·e** : (1) **sur l'appareil** — Apple Intelligence / FoundationModels, iOS 26, hors ligne ; (2) la **fonction Supabase** `extract-series` de l'app — la clé du fournisseur est côté serveur, l'app n'utilise que sa clé `anon` ; (3) un **service perso** (URL + clé, compatible OpenAI) si l'étudiant·e en a saisi un. Un maillon qui échoue passe au suivant. La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Plusieurs PDF à la fois, ou un énoncé **collé** (Moodle, mail). Réglages : Profil › Import intelligent |
 | ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s : ce connecteur ne pouvait jamais s'authentifier. Remplacé par l'import `.ics`. |
 
 ### Social
@@ -326,6 +326,24 @@ indisponibles. L'écran Compte l'annonce alors explicitement — *« Groupes non
 configurés dans cette version »* — au lieu d'afficher deux champs que personne ne
 peut remplir. `validate.sh` vérifie qu'une valeur absente, vide, ou restée littérale
 (`$(SUPABASE_URL)`) n'est jamais prise pour une configuration.
+
+### Analyse des PDF par IA : déployer la fonction Supabase (une fois)
+
+Pour que l'analyse fonctionne **sans jeton** chez les étudiant·e·s dont l'appareil n'a
+pas Apple Intelligence, la clé du fournisseur vit dans une Edge Function du projet
+Supabase — jamais dans l'app :
+
+```bash
+supabase link --project-ref <ref>
+supabase functions deploy extract-series --project-ref <ref>
+supabase secrets set LLM_API_KEY=gsk_…                                 # Groq : palier gratuit
+supabase secrets set LLM_BASE_URL=https://api.groq.com/openai/v1       # facultatif (défaut)
+supabase secrets set LLM_MODEL=llama-3.1-8b-instant                    # facultatif (défaut)
+```
+
+Le code est dans `Support/supabase/functions/extract-series/index.ts` ; n'importe quelle
+API compatible OpenAI convient (OpenRouter avec un modèle `:free`, Mistral…). Sans
+déploiement, l'app le détecte (HTTP 404) et passe au maillon suivant.
 
 ### Widgets : App Group à enregistrer
 

@@ -267,21 +267,27 @@ final class SupabaseClient {
     }
 
     @discardableResult
-    func insert(_ table: String, values: [String: Any]) async throws -> Data? {
+    /// - Parameter returning: `false` = `return=minimal`. **Indispensable** sur une
+    ///   table dont la politique de lecture dépend de la ligne qu'on insère
+    ///   (`group_members` : « visible par les membres ») — avec `RETURNING`,
+    ///   Postgres relit la ligne dans la même instruction, la fonction `stable`
+    ///   ne la voit pas encore, et l'insertion échoue en 42501 alors qu'elle est
+    ///   parfaitement autorisée.
+    func insert(_ table: String, values: [String: Any], returning: Bool = true) async throws -> Data? {
         let body = try JSONSerialization.data(withJSONObject: values)
         return try await request("/rest/v1/\(table)",
                                  method: "POST",
                                  body: body,
-                                 prefer: "return=representation")
+                                 prefer: returning ? "return=representation" : "return=minimal")
     }
 
     @discardableResult
-    func insert(_ table: String, rows: [[String: Any]]) async throws -> Data? {
+    func insert(_ table: String, rows: [[String: Any]], returning: Bool = true) async throws -> Data? {
         let body = try JSONSerialization.data(withJSONObject: rows)
         return try await request("/rest/v1/\(table)",
                                  method: "POST",
                                  body: body,
-                                 prefer: "return=representation")
+                                 prefer: returning ? "return=representation" : "return=minimal")
     }
 
     @discardableResult
@@ -300,13 +306,15 @@ final class SupabaseClient {
     }
 
     @discardableResult
-    func upsert(_ table: String, rows: [[String: Any]], onConflict: String) async throws -> Data? {
+    func upsert(_ table: String, rows: [[String: Any]], onConflict: String, returning: Bool = true) async throws -> Data? {
         let body = try JSONSerialization.data(withJSONObject: rows)
         return try await request("/rest/v1/\(table)",
                                  method: "POST",
                                  query: [URLQueryItem(name: "on_conflict", value: onConflict)],
                                  body: body,
-                                 prefer: "resolution=merge-duplicates,return=representation")
+                                 prefer: returning
+                                     ? "resolution=merge-duplicates,return=representation"
+                                     : "resolution=merge-duplicates,return=minimal")
     }
 
     @discardableResult

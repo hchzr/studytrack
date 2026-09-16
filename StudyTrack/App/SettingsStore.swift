@@ -35,8 +35,9 @@ final class SettingsStore {
         static let aiModel = "settings.aiModel"
     }
 
-    /// Valeurs par défaut du service distant : une API compatible OpenAI avec une
-    /// offre gratuite et un petit modèle rapide — modifiable librement.
+    /// Pré-remplissage du service **perso** (facultatif) : une API compatible
+    /// OpenAI avec un palier gratuit. Sans clé saisie, ce maillon est ignoré —
+    /// l'analyse passe par le modèle embarqué ou la fonction Supabase de l'app.
     static let defaultAIEndpoint = "https://api.groq.com/openai/v1"
     static let defaultAIModel = "llama-3.1-8b-instant"
 
@@ -125,9 +126,15 @@ final class SettingsStore {
         self.timetableURLString = defaults.string(forKey: Key.timetableURLString) ?? ""
         self.hasSeededSampleData = defaults.bool(forKey: Key.hasSeededSampleData)
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
-        self.aiEndpoint = defaults.string(forKey: Key.aiEndpoint) ?? Self.defaultAIEndpoint
-        self.aiAPIKey = defaults.string(forKey: Key.aiAPIKey) ?? ""
-        self.aiModel = defaults.string(forKey: Key.aiModel) ?? Self.defaultAIModel
+        // Une version intermédiaire proposait un service anonyme aujourd'hui
+        // épuisé : on revient au pré-remplissage courant si rien n'a été saisi.
+        let storedEndpoint = defaults.string(forKey: Key.aiEndpoint) ?? ""
+        let storedKey = defaults.string(forKey: Key.aiAPIKey) ?? ""
+        let legacyAnonymous = storedEndpoint.contains("pollinations")
+        self.aiEndpoint = (storedEndpoint.isEmpty || (legacyAnonymous && storedKey.isEmpty)) ? Self.defaultAIEndpoint : storedEndpoint
+        self.aiAPIKey = storedKey
+        let storedModel = defaults.string(forKey: Key.aiModel) ?? ""
+        self.aiModel = (storedModel.isEmpty || (legacyAnonymous && storedKey.isEmpty)) ? Self.defaultAIModel : storedModel
     }
 
     /// Vrai quand la **build** porte une configuration Supabase — ce n'est plus un

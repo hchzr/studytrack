@@ -22,7 +22,7 @@ struct AIImportSettingsView: View {
             } header: {
                 Text("Import de séries")
             } footer: {
-                Text("À l'import d'un PDF, la lecture par motifs est toujours faite d'abord. Le modèle la complète — exercices manqués, intitulés, bonus — et tout passe par l'écran de relecture. Rien n'est créé sans ta validation.")
+                Text("Rien à configurer : l'analyse choisit toute seule, dans l'ordre, le modèle sur l'appareil, puis la fonction StudyTrack (clé côté serveur), puis ton service perso si tu en as saisi un. La lecture par motifs est toujours faite d'abord ; le modèle la complète et tout passe par l'écran de relecture.")
             }
 
             Section {
@@ -37,6 +37,22 @@ struct AIImportSettingsView: View {
                 Text("Sur l'appareil")
             } footer: {
                 Text("Gratuit, privé et hors ligne : le texte du PDF ne quitte pas le téléphone. Demande iOS 26 et Apple Intelligence activé.")
+            }
+
+            Section {
+                HStack(spacing: Layout.control) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(SeriesAIExtractor.isSharedAvailable ? Color.green.accessibleMark : .secondary)
+                    Text(SeriesAIExtractor.isSharedAvailable
+                         ? "Disponible : la clé du fournisseur est sur le serveur de l'app, rien à saisir."
+                         : "Indisponible dans cette build (pas de projet Supabase).")
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                Text("Fonction StudyTrack")
+            } footer: {
+                Text("Le texte du PDF est envoyé à la fonction `extract-series` du projet Supabase de l'app, qui interroge le fournisseur configuré par le mainteneur (Groq par défaut). Utilisée seulement si le modèle embarqué manque.")
             }
 
             Section {
@@ -65,7 +81,7 @@ struct AIImportSettingsView: View {
                 }
                 .disabled(isTesting || !SeriesAIExtractor.isRemoteConfigured(settings))
 
-                Button("Valeurs par défaut (Groq)") {
+                Button("Pré-remplir pour Groq") {
                     settings.aiEndpoint = SettingsStore.defaultAIEndpoint
                     settings.aiModel = SettingsStore.defaultAIModel
                 }
@@ -76,9 +92,9 @@ struct AIImportSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Text("Service distant (secours)")
+                Text("Service perso (facultatif)")
             } footer: {
-                Text("N'importe quelle API compatible OpenAI : Groq et OpenRouter ont une offre gratuite, Ollama tourne sur un Mac. Le texte du PDF est alors envoyé à ce service — uniquement si le modèle embarqué manque. La clé reste sur l'appareil.")
+                Text("Pour choisir ton propre modèle : n'importe quelle API compatible OpenAI (Groq et OpenRouter ont un palier gratuit, Ollama tourne sur un Mac). La clé reste sur l'appareil. Ce maillon n'est utilisé que si les deux précédents ont échoué.")
             }
         }
         .navigationTitle("Import intelligent")

@@ -1,0 +1,4 @@
+# Configuration locale minimale pour `supabase functions deploy`.
+# La fonction accepte la clé `anon` (JWT valide) : pas de compte utilisateur requis.
+[functions.extract-series]
+verify_jwt = true

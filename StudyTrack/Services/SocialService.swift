@@ -346,23 +346,21 @@ final class SocialService {
         guard let data, let group = try? JSONDecoder().decode([RemoteGroup].self, from: data).first else {
             throw SupabaseError.decoding("study_groups")
         }
-        _ = try? await client.insert("group_members", values: [
-            "group_id": group.id,
-            "user_id": userID,
-            "role": "admin"
-        ])
-        // Vérification immédiate : sans elle, une insertion silencieusement refusée
-        // laissait le groupe sur le serveur **sans son créateur**.
-        try? await ensureMembership(groupID: group.id, role: .admin)
+        // L'adhésion du créateur. Elle **lance** si elle échoue : un groupe sans
+        // son créateur côté serveur est invisible à la synchronisation et refuse
+        // la présence — mieux vaut une erreur maintenant qu'un groupe fantôme.
+        try await ensureMembership(groupID: group.id, role: .admin)
         if !subjects.isEmpty {
             _ = try? await client.insert("group_courses",
                                          rows: subjects.map {
                                              ["group_id": group.id, "course_code": $0]
-                                         })
+                                         },
+                                         returning: false)
             _ = try? await client.insert("member_courses",
                                          rows: subjects.map {
                                              ["group_id": group.id, "user_id": userID, "course_code": $0]
-                                         })
+                                         },
+                                         returning: false)
         }
         return group
     }
@@ -381,9 +379,7 @@ final class SocialService {
         guard let data, let group = try? JSONDecoder().decode([RemoteGroup].self, from: data).first else {
             throw SupabaseError.decoding("Aucun groupe avec ce code")
         }
-        _ = try? await client.upsert("group_members",
-                                     rows: [["group_id": group.id, "user_id": userID, "role": "member"]],
-                                     onConflict: "group_id,user_id")
+        try await ensureMembership(groupID: group.id, role: .member)
         // On rejoint **toutes** les matières du groupe par défaut : c'est le cas
         // courant, et l'étudiant·e décoche ensuite celles qu'il ou elle ne suit pas.
         // L'ordre compte : la politique RLS de `group_courses` exige l'adhésion,
@@ -464,13 +460,30 @@ final class SocialService {
     /// la synchronisation ne le revoyait jamais, l'avancement ne remontait pas, et
     /// publier ma présence était refusé par `is_group_member` — un `42501` que
     /// l'app affichait sans pouvoir le réparer.
+    /// Crée mon adhésion si elle manque. Idempotent.
+    ///
+    /// **Jamais un upsert** ici : `ON CONFLICT DO UPDATE` déclenche la politique de
+    /// mise à jour, réservée aux administrateurs — un simple membre qui rejoint
+    /// deux fois se voyait refuser en 42501. Et **sans `RETURNING`** : la politique
+    /// de lecture (« visible par les membres ») ne voit pas encore la ligne
+    /// qu'on insère dans la même instruction, ce qui produisait « new row violates
+    /// row-level security policy for table group_members » sur une insertion
+    /// pourtant autorisée. Un doublon (23505) veut dire « déjà membre » : succès.
     func ensureMembership(groupID: String, role: GroupRole) async throws {
         guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
-        _ = try await client.upsert("group_members",
-                                    rows: [["group_id": groupID,
-                                            "user_id": userID,
-                                            "role": role.rawValue]],
-                                    onConflict: "group_id,user_id")
+        do {
+            _ = try await client.insert("group_members",
+                                        values: ["group_id": groupID,
+                                                 "user_id": userID,
+                                                 "role": role.rawValue],
+                                        returning: false)
+        } catch let error as SupabaseError {
+            if case .server(let status, let message) = error,
+               status == 409 || message.contains("23505") || message.lowercased().contains("duplicate") {
+                return
+            }
+            throw error
+        }
     }
 
     /// Change le rôle d'un membre : « admin » ou « member ».
@@ -577,7 +590,7 @@ final class SocialService {
                     "updated_at": formatter.string(from: Date())
                 ]
                 do {
-                    _ = try await client.upsert("presence", rows: [row], onConflict: "group_id,user_id")
+                    _ = try await client.upsert("presence", rows: [row], onConflict: "group_id,user_id", returning: false)
                 } catch let error as SupabaseError where Self.isMembershipRefusal(error) {
                     // « new row violates row-level security policy for table
                     // presence » : la politique exige `is_group_member`, et ma ligne
@@ -589,7 +602,7 @@ final class SocialService {
                                                  rows: [["id": me, "display_name": entry.displayName]],
                                                  onConflict: "id")
                     try await ensureMembership(groupID: groupID, role: .member)
-                    _ = try await client.upsert("presence", rows: [row], onConflict: "group_id,user_id")
+                    _ = try await client.upsert("presence", rows: [row], onConflict: "group_id,user_id", returning: false)
                 }
             } else {
                 // Seulement **ma** ligne : sans le filtre `user_id`, arrêter mon

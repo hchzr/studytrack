@@ -298,9 +298,14 @@ create policy groups_delete on public.study_groups
   for delete to authenticated using (created_by = auth.uid());
 
 -- group_members : visible par les membres du groupe ; on s'ajoute soi-même.
+-- Ma propre ligne est **toujours** visible, membre ou pas encore : c'est ce qui
+-- permet à l'insertion de mon adhésion de renvoyer sa ligne (`RETURNING`) sans
+-- que `is_group_member` — qui ne voit pas encore la ligne dans la même
+-- instruction — ne fasse échouer l'écriture en 42501.
 drop policy if exists members_read on public.group_members;
 create policy members_read on public.group_members
-  for select to authenticated using (public.is_group_member(group_id));
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_group_member(group_id));
 
 drop policy if exists members_join on public.group_members;
 create policy members_join on public.group_members
@@ -468,7 +473,8 @@ alter table public.presence enable row level security;
 
 drop policy if exists presence_read on public.presence;
 create policy presence_read on public.presence
-  for select to authenticated using (public.is_group_member(group_id));
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_group_member(group_id));
 
 drop policy if exists presence_write on public.presence;
 create policy presence_write on public.presence

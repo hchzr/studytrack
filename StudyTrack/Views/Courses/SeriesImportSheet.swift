@@ -26,6 +26,8 @@ struct SeriesImportSheet: View {
     @State private var excluded: Set<String> = []
     @State private var bonusOverride: [String: Bool] = [:]
     @State private var showingPicker = false
+    @State private var showingPaste = false
+    @State private var pastedText = ""
     @State private var status: Status = .idle
 
     private enum Status: Equatable {
@@ -115,8 +117,11 @@ struct SeriesImportSheet: View {
             }
             .fileImporter(isPresented: $showingPicker,
                           allowedContentTypes: [.pdf],
-                          allowsMultipleSelection: false) { result in
+                          allowsMultipleSelection: true) { result in
                 handle(result)
+            }
+            .sheet(isPresented: $showingPaste) {
+                pasteSheet
             }
         }
     }
@@ -129,12 +134,21 @@ struct SeriesImportSheet: View {
                 Button {
                     showingPicker = true
                 } label: {
-                    Label("Choisir un PDF de série", systemImage: "doc.badge.plus")
+                    Label("Choisir un ou plusieurs PDF", systemImage: "doc.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
 
-                Text("StudyTrack lit le texte du PDF et repère les numéros d'exercices. Rien n'est créé avant que tu aies validé la liste ci-dessous.")
+                Button {
+                    pastedText = ""
+                    showingPaste = true
+                } label: {
+                    Label("Coller le texte d'une série", systemImage: "doc.on.clipboard")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text("StudyTrack lit le texte et repère les numéros d'exercices ; l'IA complète automatiquement ce que les motifs ont raté. Rien n'est créé avant que tu aies validé la liste ci-dessous.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -337,6 +351,39 @@ struct SeriesImportSheet: View {
         }
     }
 
+    /// Le texte d'un énoncé copié depuis Moodle ou un mail : même pipeline que le
+    /// PDF, sans fichier.
+    private var pasteSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $pastedText)
+                        .font(.system(.footnote, design: .monospaced))
+                        .frame(minHeight: 220)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Texte de la série")
+                } footer: {
+                    Text("Colle l'énoncé tel quel — « Série 3 », « Exercice 3.1 (bonus) »… Les motifs puis l'IA en déduisent la structure, que tu relis avant de créer.")
+                }
+            }
+            .navigationTitle("Coller un énoncé")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { showingPaste = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Analyser") {
+                        showingPaste = false
+                        analyze(text: pastedText)
+                    }
+                    .disabled(pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
     // MARK: Actions
 
     private func handle(_ result: Result<[URL], Error>) {
@@ -344,25 +391,48 @@ struct SeriesImportSheet: View {
         case .failure(let error):
             status = .failed(error.localizedDescription)
         case .success(let urls):
-            guard let url = urls.first else { return }
-            read(url)
+            guard !urls.isEmpty else { return }
+            read(urls)
         }
     }
 
-    private func read(_ url: URL) {
+    /// Lit un ou plusieurs PDF et enchaîne leurs textes : une série par fichier,
+    /// ou un polycopié en plusieurs parties, dans le même écran de relecture.
+    private func read(_ urls: [URL]) {
         status = .reading
-        // Un fichier choisi hors du bac à sable doit être ouvert explicitement.
-        let needsScope = url.startAccessingSecurityScopedResource()
-        defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
-
-        guard let document = PDFDocument(url: url) else {
-            status = .failed("Ce fichier n'a pas pu être ouvert comme PDF.")
+        var texts: [String] = []
+        var unreadable = 0
+        for url in urls {
+            // Un fichier choisi hors du bac à sable doit être ouvert explicitement.
+            let needsScope = url.startAccessingSecurityScopedResource()
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+            guard let document = PDFDocument(url: url) else {
+                unreadable += 1
+                continue
+            }
+            let text = (0..<document.pageCount)
+                .compactMap { document.page(at: $0)?.string }
+                .joined(separator: "\n")
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                texts.append(text)
+            }
+        }
+        if texts.isEmpty {
+            if unreadable == urls.count {
+                status = .failed(urls.count == 1
+                                 ? "Ce fichier n'a pas pu être ouvert comme PDF."
+                                 : "Aucun de ces fichiers n'a pu être ouvert comme PDF.")
+            } else {
+                detected = []
+                status = .noText
+            }
             return
         }
-        let text = (0..<document.pageCount)
-            .compactMap { document.page(at: $0)?.string }
-            .joined(separator: "\n")
+        analyze(text: texts.joined(separator: "\n\n"))
+    }
 
+    /// Le pipeline commun : motifs tout de suite, IA ensuite, relecture toujours.
+    private func analyze(text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             detected = []
             status = .noText
