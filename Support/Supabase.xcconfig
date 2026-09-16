@@ -1,0 +1,26 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Configuration Supabase — édite CE FICHIER.
+//
+//  Ces deux valeurs sont compilées dans l'app (lues par `SupabaseConfig`) et ne
+//  sont JAMAIS demandées à l'utilisateur.
+//
+//  Où les trouver : dans Supabase ▸ Project Settings ▸ API
+//     « Project URL »      → le domaine, à recopier dans SUPABASE_HOST
+//     « anon public » key  → la longue chaîne, dans SUPABASE_ANON_KEY
+//
+//  ⚠️  SUPABASE_HOST se met SANS « https:// ».
+//      Un fichier .xcconfig considère « // » comme le début d'un commentaire :
+//      écrire « https://xyz.supabase.co » ici ne garderait que « https: ».
+//      L'app ajoute le schéma elle-même.
+//
+//  Exemple :
+//     SUPABASE_HOST = abcdefghijklmnop.supabase.co
+//     SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+//
+//  Les laisser vides est un état VALIDE : l'app se lance, le suivi des cours, le
+//  temps de travail, l'agenda et les widgets fonctionnent normalement. Seuls les
+//  groupes sont indisponibles, et l'écran Compte l'annonce explicitement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+SUPABASE_HOST = aaigscutkuefhqftfszv.supabase.co
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhaWdzY3V0a3VlZmhxZnRmc3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0OTQyNzksImV4cCI6MjEwNTA3MDI3OX0.xP4wQW_oJhOFdko5F4l-SP1L1iTK8z5pSPh1Ur1ul3c

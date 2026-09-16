@@ -1,0 +1,134 @@
+import SwiftUI
+import SwiftData
+
+#if DEBUG
+/// Arguments de capture pour le simulateur — jamais compilés en Release.
+///
+/// `xcrun simctl` ne sait pas taper dans l'interface, et ouvrir un lien profond
+/// déclenche un « Ouvrir dans StudyTrack ? » qu'on ne peut pas confirmer. Ce sont
+/// donc les seuls moyens de rendre l'app **remplie**, un onglet donné, et l'étape
+/// « section » de l'accueil — pour les relire sur iPhone **et** sur iPad :
+///
+///     xcrun simctl launch <udid> com.hczr.studytrack.app -seedSampleData -tab 1
+enum PreviewLaunch {
+    static let seedFlag = "-seedSampleData"
+    static let tabFlag = "-tab"
+    static let courseFlag = "-course"
+    /// Avec `-course`, ouvre un onglet de la fiche (`theory`, `exercises`,
+    /// `progress`, `agenda`).
+    static let courseTabFlag = "-courseTab"
+    static let onboardingStepFlag = "-onboardingStep"
+    static let profileFlag = "-profile"
+    /// Ouvre « Statistiques » depuis « Aujourd'hui ».
+    static let statsFlag = "-stats"
+    /// Index du groupe à ouvrir dans l'onglet Groupes.
+    static let groupFlag = "-group"
+    /// Avec `-group`, ouvre en plus l'avancement d'une matière (`-groupSubject CODE`).
+    static let groupSubjectFlag = "-groupSubject"
+    /// Avec `-group`, ouvre une sous-page (`members`, `time`, `series`, `planning`).
+    static let groupPageFlag = "-groupPage"
+    /// Avec `-group`, ouvre la feuille d'invitation (QR code et lien).
+    static let groupInviteFlag = "-groupInvite"
+    /// Avec `-group`, ouvre l'éditeur des matières du groupe.
+    static let groupSubjectsFlag = "-groupSubjects"
+    /// Ouvre « Section et semestre » depuis le profil.
+    static let schoolFlag = "-school"
+    /// **Casse** volontairement le lien cours ↔ semestre, pour vérifier la
+    /// réparation du lancement suivant. Outil de diagnostic, pas fonctionnalité.
+    static let breakTermFlag = "-breakTermLink"
+    /// **Rétrograde** le créateur du groupe à « membre », pour reproduire l'état
+    /// migré qui lui retirait ses droits sur son propre groupe.
+    static let breakRoleFlag = "-breakGroupRole"
+
+    static func isSet(_ flag: String) -> Bool {
+        CommandLine.arguments.contains(flag)
+    }
+
+    /// Valeur entière qui suit `flag`, si elle est présente et lisible.
+    static func int(_ flag: String) -> Int? {
+        guard let index = CommandLine.arguments.firstIndex(of: flag),
+              index + 1 < CommandLine.arguments.count else { return nil }
+        return Int(CommandLine.arguments[index + 1])
+    }
+
+    /// Valeur textuelle qui suit `flag`.
+    static func string(_ flag: String) -> String? {
+        guard let index = CommandLine.arguments.firstIndex(of: flag),
+              index + 1 < CommandLine.arguments.count else { return nil }
+        return CommandLine.arguments[index + 1]
+    }
+
+    /// Ouvre l'onglet demandé, et installe le semestre d'exemple si `-seedSampleData`.
+    static func apply(to container: AppContainer) {
+        if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw) {
+            container.router.selectedTab = tab
+        }
+        // `-profile` ouvre les réglages : les onze écrans de configuration sont
+        // autrement inatteignables sans taper dans l'interface.
+        if isSet(profileFlag) {
+            container.router.showingProfile = true
+        }
+        if isSet(statsFlag) {
+            container.router.showingStats = true
+        }
+        // Le lien est cassé **après** la réparation faite par `AppContainer.init` :
+        // l'état cassé est donc visible pour cette exécution, et le lancement
+        // suivant — sans ce drapeau — montre la réparation.
+        if isSet(breakRoleFlag) {
+            let context = ModelContext(container.modelContainer)
+            for group in (try? context.fetch(FetchDescriptor<StudyGroup>())) ?? [] {
+                group.isAdmin = true
+                for member in group.members where member.isMe {
+                    member.role = .member
+                }
+            }
+            try? context.save()
+        }
+
+        if isSet(breakTermFlag) {
+            let context = ModelContext(container.modelContainer)
+            for course in (try? context.fetch(FetchDescriptor<Course>())) ?? [] {
+                course.term = nil
+            }
+            for series in (try? context.fetch(FetchDescriptor<ExerciseSeries>())) ?? []
+            where series.seriesNumber > 1 {
+                series.plannedWeek = 1
+            }
+            try? context.save()
+        }
+
+        guard isSet(seedFlag) else { return }
+        let context = ModelContext(container.modelContainer)
+        SeedData.seedIfNeeded(context, settings: container.settings)
+        try? context.save()
+        container.settings.hasCompletedOnboarding = true
+    }
+}
+#endif
+
+@main
+struct StudyTrackApp: App {
+    @State private var container: AppContainer
+
+    init() {
+        let container = AppContainer()
+        _container = State(initialValue: container)
+        // Expose le conteneur aux App Intents (Siri, Raccourcis).
+        MainActor.assumeIsolated {
+            AppRuntime.container = container
+        }
+
+        #if DEBUG
+        PreviewLaunch.apply(to: container)
+        #endif
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            RootTabView()
+                .environment(container)
+                .modelContainer(container.modelContainer)
+                .tint(Theme.accent)
+        }
+    }
+}

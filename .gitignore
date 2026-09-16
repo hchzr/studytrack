@@ -1,0 +1,17 @@
+# Build artefacts
+build/
+.build-validation/
+*.ipa
+*.dSYM
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# Build artefacts (appareil)
+build-device/
+.impeccable/
