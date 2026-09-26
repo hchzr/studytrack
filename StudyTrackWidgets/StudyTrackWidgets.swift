@@ -384,14 +384,28 @@ struct StudyActivityLockView: View {
 
 /// Le compteur : vivant tant que la session tourne, figé en pause.
 ///
-/// `showsHours: false` en forme compacte : à partir d'une heure, le compteur
-/// système écrirait « 1:10:48 » et élargirait l'îlot. « 70:48 » tient dans la
-/// largeur d'origine, et reste juste.
+/// **La largeur de l'îlot replié se décide ici.** `Text(timerInterval:)` ne
+/// mesure pas ce qu'il affiche : il réserve la place du **plus grand texte que
+/// l'intervalle puisse produire**. Un îlot resté large alors qu'il affiche
+/// « 1:20 » vient toujours de là.
+///
+/// Borner l'intervalle ne suffisait pas — cela ne fait que choisir *lequel* des
+/// textes démesurés sera le plus large. Sur une journée et en `MM:SS`
+/// (`showsHours: false`), le pire cas est « 1440:00 » : sept caractères réservés
+/// en permanence pour en afficher quatre.
+///
+/// La forme repliée impose donc une **largeur fixe**, calculée pour « 59:59 » et
+/// suivant la taille de texte du lecteur. Le compteur n'y décide plus rien : au
+/// delà de cent minutes, c'est le texte qui se condense (`minimumScaleFactor`),
+/// pas l'îlot qui s'élargit.
 struct StudyActivityTimer: View {
     let state: StudyActivityAttributes.ContentState
     var font: Font
     /// Vrai dans l'îlot replié, où la place est comptée.
     var compact: Bool = false
+
+    /// Place de « 59:59 » en chiffres à chasse fixe, à la taille du lecteur.
+    @ScaledMetric(relativeTo: .caption2) private var compactWidth: CGFloat = 38
 
     var body: some View {
         Group {
@@ -399,11 +413,9 @@ struct StudyActivityTimer: View {
                 // Le système fait avancer ce texte tout seul, à partir de l'instant
                 // reculé du total déjà écoulé : la reprise ne repart donc pas de zéro.
                 //
-                // La fin de l'intervalle est **bornée**, et c'est important : SwiftUI
-                // réserve la largeur du plus grand texte possible dans l'intervalle.
-                // Avec `Date.distantFuture`, il réservait la place d'un nombre
-                // d'heures démesuré — d'où une région repliée très large. Une
-                // journée est déjà plus qu'une session d'étude.
+                // L'intervalle reste borné à une journée, mais pour une autre
+                // raison que la largeur : passé sa fin, le compteur s'arrêterait.
+                // Une journée est déjà plus qu'une session d'étude.
                 Text(timerInterval: since...Self.horizon(from: since),
                      countsDown: false,
                      showsHours: !compact)
@@ -413,14 +425,16 @@ struct StudyActivityTimer: View {
         }
         .font(font.monospacedDigit().weight(.semibold))
         .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .minimumScaleFactor(0.5)
+        // `nil` hors de la forme repliée : l'écran verrouillé a la place, et une
+        // largeur imposée y tronquerait un compteur à heures.
+        .frame(width: compact ? compactWidth : nil, alignment: .trailing)
     }
 
     /// La borne haute de l'intervalle du chrono : une journée.
     ///
-    /// Elle n'est pas là pour arrêter le temps — le système continue d'avancer —
-    /// mais pour dire à SwiftUI jusqu'où le texte peut grandir, donc quelle largeur
-    /// réserver.
+    /// Elle borne le **temps**, pas la largeur — le compteur cesserait d'avancer
+    /// après elle. La largeur, elle, est imposée par `compactWidth`.
     static func horizon(from start: Date) -> Date {
         start.addingTimeInterval(24 * 3600)
     }
@@ -481,11 +495,13 @@ struct ExamActivityWidget: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "graduationcap.fill")
+                    .font(.system(size: 11))
                     .foregroundStyle(.orange)
             } compactTrailing: {
                 ExamActivityCountdown(attributes: context.attributes,
                                       state: context.state,
-                                      font: .caption2)
+                                      font: .caption2,
+                                      compact: true)
             } minimal: {
                 Image(systemName: "graduationcap.fill")
                     .foregroundStyle(.orange)
@@ -496,18 +512,25 @@ struct ExamActivityWidget: Widget {
 }
 
 /// Le temps qui reste avant l'épreuve — ou le fait qu'elle a commencé.
+///
+/// Même piège que le chrono : le compte à rebours s'ouvre jusqu'à douze heures
+/// avant l'épreuve, donc `Text(timerInterval:)` réserverait la place de
+/// « 12:00:00 » — huit caractères — dans une région repliée qui en affiche
+/// quatre. La forme repliée impose donc sa largeur.
 struct ExamActivityCountdown: View {
     let attributes: ExamActivityAttributes
     let state: ExamActivityState
     var font: Font
+    /// Vrai dans l'îlot replié, où la place est comptée.
+    var compact: Bool = false
+
+    /// Place de « 9:59:59 » en chiffres à chasse fixe, à la taille du lecteur.
+    @ScaledMetric(relativeTo: .caption2) private var compactWidth: CGFloat = 50
 
     var body: some View {
         Group {
             switch state.phase {
             case .upcoming:
-                // Borné en amont : SwiftUI réserve la largeur du plus grand texte
-                // de l'intervalle, et une borne trop lointaine réserverait la place
-                // d'un nombre d'heures démesuré.
                 Text(timerInterval: Date()...attributes.examDate, countsDown: true)
             case .running:
                 Text("en cours")
@@ -517,7 +540,8 @@ struct ExamActivityCountdown: View {
         }
         .font(font.monospacedDigit().weight(.semibold))
         .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .minimumScaleFactor(0.5)
+        .frame(width: compact ? compactWidth : nil, alignment: .trailing)
     }
 }
 

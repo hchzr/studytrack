@@ -307,7 +307,7 @@ lancé, le matin de l'épreuve.
 |---|---|
 | L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié (`log show --predicate 'subsystem == "com.hczr.studytrack"'`) |
 | L'îlot replié | Un icône d'état à gauche, le **temps** à droite. Vider ces deux régions ne rétrécit pas l'îlot : il n'affiche **plus rien** |
-| L'intervalle du chrono est **borné** | `Text(timerInterval:)` réserve la largeur du plus grand texte de l'intervalle ; `Date.distantFuture` faisait réserver une place démesurée |
+| La largeur de l'îlot replié est **imposée** | `Text(timerInterval:)` réserve la largeur du plus grand texte que son intervalle peut produire, pas celle de ce qu'il affiche — d'où un îlot large affichant « 1:20 ». Borner l'intervalle **ne suffit pas** : en `MM:SS` sur une journée, le pire cas est « 1440:00 ». La forme repliée impose donc une largeur (`@ScaledMetric`, calculée pour « 59:59 »), et le texte se condense au delà. L'intervalle reste borné pour une autre raison : le compteur s'arrête à sa fin |
 | Diagnostic | Profil › **Diagnostics** › « Îlot et écran verrouillé » : activités en cours, dernier refus, et deux boutons d'essai — le chrono et le jour d'examen |
 
 **Ce que porte l'activité du chrono** (`ActivityTimerState`, pur et testé) :
