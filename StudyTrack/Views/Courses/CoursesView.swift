@@ -21,6 +21,10 @@ struct CoursesView: View {
     @State private var courseToDelete: Course?
     /// Cours poussé dans la pile iPhone (capture `-course`, lien profond).
     @State private var pushedCourse: Course?
+    /// Import de série lancé depuis l'appui long sur un cours.
+    @State private var seriesImportCourse: Course?
+    /// Segment à ouvrir sur le cours poussé par un autre onglet.
+    @State private var pushedSection: CourseDetailView.Section = .exercises
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
     private var archived: [Course] { courses.sorted { $0.code < $1.code }.filter { !$0.isTracked } }
@@ -61,11 +65,28 @@ struct CoursesView: View {
         } message: {
             Text(deleteMessage)
         }
-        .task { applyPreviewCourse() }
+        .sheet(item: $seriesImportCourse) { course in
+            SeriesImportSheet(course: course)
+        }
+        .task { applyPreviewCourse(); applyRoute() }
+        .onChange(of: app.router.courseRoute) { _, _ in applyRoute() }
         // Les cours arrivent parfois après la première passe : `@Query` rend une
         // liste vide, puis la remplit. Sans ce second essai, le drapeau de
         // prévisualisation ne trouvait rien et la capture montrait la liste.
         .onChange(of: courses.count) { _, _ in applyPreviewCourse() }
+    }
+
+    /// Un cours demandé par un autre onglet : sélectionné (iPad) ou poussé (iPhone).
+    private func applyRoute() {
+        guard let route = app.router.courseRoute,
+              let match = courses.first(where: { $0.id == route.id }) else { return }
+        app.router.courseRoute = nil
+        pushedSection = route.section
+        selectedCourseID = match.id
+        if !isWide {
+            pushedCourse = nil
+            Task { @MainActor in pushedCourse = match }
+        }
     }
 
     /// `-course CS-250` présélectionne un cours : `xcrun simctl` ne sait pas taper
@@ -107,7 +128,8 @@ struct CoursesView: View {
         } detail: {
             NavigationStack {
                 if let course = selectedCourse {
-                    CourseDetailView(course: course)
+                    CourseDetailView(course: course, initialSection: pushedSection)
+                        .id("\(course.id)-\(pushedSection.rawValue)")
                 } else {
                     semesterOverview
                 }
@@ -216,7 +238,7 @@ struct CoursesView: View {
             .navigationTitle("Mes cours")
             .toolbar { toolbarItems }
             .navigationDestination(item: $pushedCourse) { course in
-                CourseDetailView(course: course)
+                CourseDetailView(course: course, initialSection: pushedSection)
             }
         }
     }
@@ -294,6 +316,20 @@ struct CoursesView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    // Les gestes fréquents d'abord : s'y mettre, ajouter la série
+                    // de la semaine. Archiver et supprimer ensuite.
+                    Button {
+                        app.router.startFocus(courseID: course.id, courseCode: course.code,
+                                              taskType: .exercise, label: "\(course.displayCode) · Exercices")
+                    } label: {
+                        Label("Démarrer un chrono", systemImage: "play.fill")
+                    }
+                    Button {
+                        seriesImportCourse = course
+                    } label: {
+                        Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+                    }
+                    Divider()
                     Button {
                         course.isTracked = false
                         try? context.save()

@@ -23,6 +23,9 @@ struct GroupsView: View {
     @State private var isSyncing = false
     @State private var syncMessage: String?
     @State private var path = NavigationPath()
+    /// Qui travaille en ce moment, par groupe — lu toutes les minutes tant que
+    /// la liste est affichée.
+    @State private var live: [UUID: [PresenceEntry]] = [:]
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -45,7 +48,7 @@ struct GroupsView: View {
                     Section("Mes groupes") {
                         ForEach(groups) { group in
                             NavigationLink(value: group) {
-                                GroupRow(group: group)
+                                GroupRow(group: group, live: live[group.id] ?? [])
                             }
                         }
                         .onDelete(perform: delete)
@@ -54,6 +57,7 @@ struct GroupsView: View {
             }
             .adaptiveListColumn()
             .navigationTitle("Groupes")
+            .task { await watchPresence() }
             .navigationDestination(for: StudyGroup.self) { group in
                 GroupDetailView(group: group)
             }
@@ -159,6 +163,22 @@ struct GroupsView: View {
                                               settings: app.settings)
     }
 
+    /// Le direct de chaque groupe synchronisé. Une minute d'intervalle : la
+    /// liste n'a pas besoin de la seconde, la fiche du groupe s'en charge.
+    private func watchPresence() async {
+        guard app.social.isSignedIn else { return }
+        while !Task.isCancelled {
+            var next: [UUID: [PresenceEntry]] = [:]
+            for group in groups {
+                guard let remoteID = group.remoteID,
+                      let entries = try? await app.social.fetchPresence(groupID: remoteID) else { continue }
+                next[group.id] = PresenceBoard.live(entries)
+            }
+            live = next
+            try? await Task.sleep(for: .seconds(60))
+        }
+    }
+
     private func delete(at offsets: IndexSet) {
         for index in offsets where index < groups.count {
             context.delete(groups[index])
@@ -170,6 +190,8 @@ struct GroupsView: View {
 /// Ligne de groupe : nom, matières, membres, et ce que j'y ai fait.
 struct GroupRow: View {
     let group: StudyGroup
+    /// Membres qui travaillent en ce moment (vide si inconnu).
+    var live: [PresenceEntry] = []
 
     @Environment(AppContainer.self) private var app
 
@@ -199,7 +221,17 @@ struct GroupRow: View {
                 }
                 // Une seule ligne de matières, tronquée proprement : au-delà de
                 // trois codes, la liste complète n'apporte rien dans une liste.
-                if !subjects.isEmpty {
+                // Le direct passe avant les matières : c'est ce qui change, et
+                // ce qui donne envie d'ouvrir le groupe.
+                if !live.isEmpty {
+                    HStack(spacing: Layout.snug) {
+                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                        Text(liveLine)
+                            .font(.caption)
+                            .foregroundStyle(Color.green.accessibleInk)
+                            .lineLimit(1)
+                    }
+                } else if !subjects.isEmpty {
                     Text(subjects.prefix(3).joined(separator: " · ")
                          + (subjects.count > 3 ? " +\(subjects.count - 3)" : ""))
                         .font(.caption2)
@@ -227,8 +259,17 @@ struct GroupRow: View {
         .accessibilityLabel(accessibilityText)
     }
 
+    /// « Alice · CS-250 » ou la phrase de synthèse quand plusieurs travaillent.
+    private var liveLine: String {
+        if live.count == 1, let one = live.first, !one.courseCode.isEmpty {
+            return "\(one.isMe ? "Toi" : one.displayName) · \(one.courseCode)"
+        }
+        return PresenceBoard.summary(live)
+    }
+
     private var accessibilityText: String {
         var parts = [group.name, "\(group.members.count) membres"]
+        if !live.isEmpty { parts.append(liveLine) }
         if !subjects.isEmpty { parts.append("matières : \(subjects.joined(separator: ", "))") }
         if let rank = myRank { parts.append("rang \(rank) sur \(group.members.count) cette semaine") }
         return parts.joined(separator: ", ")

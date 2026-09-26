@@ -60,6 +60,18 @@ final class AppRouter {
     /// Statistiques et récapitulatif, ouverts depuis « Aujourd'hui ».
     var showingStats = false
 
+    /// Un cours à ouvrir depuis un autre onglet (accueil, widget, recherche).
+    struct CourseRoute: Equatable {
+        var id: UUID
+        var section: CourseDetailView.Section
+    }
+    var courseRoute: CourseRoute?
+
+    func openCourse(_ id: UUID, section: CourseDetailView.Section = .exercises) {
+        selectedTab = .courses
+        courseRoute = CourseRoute(id: id, section: section)
+    }
+
     /// Code d'invitation reçu par lien profond (`studytrack://join?code=EPFL-XXXX`).
     ///
     /// Consommé par l'onglet Groupes, qui ouvre alors la feuille « Rejoindre » déjà

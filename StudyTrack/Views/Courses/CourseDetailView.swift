@@ -1,25 +1,34 @@
 import SwiftUI
 import SwiftData
 
-/// Détail d'un cours : théorie, exercices, progression, agenda.
+/// Détail d'un cours : exercices, théorie, agenda — la progression en page à part.
+///
+/// Quatre segments se disputaient un téléphone, et on arrivait sur « Théorie »
+/// alors que le suivi des exercices est la colonne vertébrale de l'app. Les
+/// exercices s'ouvrent donc en premier ; la progression, qui se consulte et ne
+/// se manipule pas, passe derrière un lien de l'en-tête.
 struct CourseDetailView: View {
     let course: Course
     /// Onglet ouvert à l'arrivée. La recherche y mène directement : arriver sur
     /// « Théorie » après avoir cherché un exercice ferait rater ce qu'on venait
     /// chercher.
-    var initialSection: Section = .theory
+    var initialSection: Section = .exercises
 
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @State private var tab: Section = .theory
+    @State private var tab: Section = .exercises
+    @State private var showingProgress = false
     @State private var hasAppliedInitialSection = false
     @State private var showingEditor = false
     @State private var showingDelete = false
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
-        case theory, exercises, progress, agenda
+        case exercises, theory, agenda
+        /// N'est plus un segment : ouvre la page « Progression ».
+        case progress
         var id: String { rawValue }
+        static var segments: [Section] { [.exercises, .theory, .agenda] }
         var title: String {
             switch self {
             case .theory: return "Théorie"
@@ -36,7 +45,7 @@ struct CourseDetailView: View {
                 header
 
                 Picker("Section", selection: $tab) {
-                    ForEach(Section.allCases) { section in
+                    ForEach(Section.segments) { section in
                         Text(section.title).tag(section)
                     }
                 }
@@ -45,10 +54,8 @@ struct CourseDetailView: View {
                 switch tab {
                 case .theory:
                     TheoryTabView(course: course)
-                case .exercises:
+                case .exercises, .progress:
                     ExercisesTabView(course: course)
-                case .progress:
-                    ProgressTabView(course: course)
                 case .agenda:
                     CourseAgendaTabView(course: course)
                 }
@@ -68,14 +75,6 @@ struct CourseDetailView: View {
                         showingEditor = true
                     } label: {
                         Label("Modifier le cours", systemImage: "slider.horizontal.3")
-                    }
-                    Button {
-                        app.router.startFocus(courseID: course.id,
-                                              courseCode: course.code,
-                                              taskType: .exercise,
-                                              label: "\(course.displayCode) · Exercices")
-                    } label: {
-                        Label("Démarrer un chrono", systemImage: "timer")
                     }
                     if let url = URL(string: course.moodleURLString), !course.moodleURLString.isEmpty {
                         Link(destination: url) {
@@ -105,10 +104,25 @@ struct CourseDetailView: View {
         .sheet(isPresented: $showingEditor) {
             CourseFormView(course: course)
         }
+        .navigationDestination(isPresented: $showingProgress) {
+            ScrollView {
+                ProgressTabView(course: course)
+                    .padding(Layout.screenPadding)
+                    .adaptiveColumn()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Progression · \(course.displayCode)")
+            .navigationBarTitleDisplayMode(.inline)
+        }
         .onAppear {
             if !hasAppliedInitialSection {
                 hasAppliedInitialSection = true
-                tab = initialSection
+                if initialSection == .progress {
+                    tab = .exercises
+                    showingProgress = true
+                } else {
+                    tab = initialSection
+                }
             }
             #if DEBUG
             // `-courseTab agenda` : le segment est à un tap, que `simctl` ne sait pas faire.
@@ -195,6 +209,28 @@ struct CourseDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+
+                // Les deux gestes qu'on fait depuis un cours sans en changer
+                // l'onglet : voir où on en est, et s'y mettre.
+                HStack(spacing: Layout.control) {
+                    Button {
+                        showingProgress = true
+                    } label: {
+                        Label("Progression", systemImage: "chart.line.uptrend.xyaxis")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    Button {
+                        app.router.startFocus(courseID: course.id, courseCode: course.code,
+                                              taskType: tab == .theory ? .theory : .exercise,
+                                              label: "\(course.displayCode) · \(tab == .theory ? "Théorie" : "Exercices")")
+                    } label: {
+                        Label("Chrono", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .font(.subheadline.weight(.medium))
             }
         }
     }

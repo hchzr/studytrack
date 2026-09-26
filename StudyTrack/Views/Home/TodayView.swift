@@ -12,11 +12,11 @@ import SwiftData
 private struct TodayState {
     let tracked: [Course]
     let todos: [StudyTodo]
+    /// La prochaine action — la carte principale, que la liste ne répète pas.
+    let hero: NextAction?
     let term: AcademicTerm?
     let streak: Int
     let weekSeconds: Int
-    let weeklyVideoMinutes: Int
-    let workload: WorkloadDelta
     let upcomingExams: [Exam]
     let upcomingSessions: [PlannedSession]
     let dueTasks: [LinkedTask]
@@ -70,6 +70,7 @@ struct TodayView: View {
         return TodayState(
             tracked: tracked,
             todos: todos,
+            hero: NextActionEngine.actions(for: tracked, limit: 1).first,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
             streak: GamificationEngine.currentStreak(sessions: sessions),
             // Un seul parcours des sessions, au lieu d'un `filter` puis d'un `reduce`.
@@ -78,12 +79,6 @@ struct TodayView: View {
                     ? total + session.durationSeconds
                     : total
             },
-            weeklyVideoMinutes: DailyPlanner.weeklyVideoMinutes(for: tracked),
-            // Hebdomadaire : l'attendu d'une semaine, comparé à cette semaine-là.
-            workload: WorkloadEngine.aggregateWeekly(courses: tracked,
-                                                     hoursPerCredit: app.settings.hoursPerCredit,
-                                                     from: week.start,
-                                                     to: week.end),
             // Les trois `@Query` sont déjà triées : `prefix(3)` s'arrête au 3ᵉ match.
             upcomingExams: Array(exams.lazy.filter { $0.date >= today }.prefix(3)),
             upcomingSessions: Array(plannedSessions.lazy.filter { !$0.isPast }.prefix(3)),
@@ -183,13 +178,12 @@ struct TodayView: View {
                     HStack(alignment: .top, spacing: Layout.sectionSpacing) {
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                             greeting(state)
-                            timerBanner
                             if state.tracked.isEmpty {
                                 emptyState
                             } else {
                                 primaryActionCard(state)
                                 todaySchedule(state)
-                                weekOverview(state)
+                                weekCard(state)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -334,19 +328,19 @@ struct TodayView: View {
     private func content(_ state: TodayState) -> some View {
         LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
             greeting(state)
-            timerBanner
 
             if state.tracked.isEmpty {
                 emptyState
             } else {
                 // Par ordre d'urgence : la prochaine chose à faire, ce qui a une
-                // heure aujourd'hui, la liste de la semaine, les échéances, puis
-                // le bilan. La progression par cours vit dans l'onglet Cours.
+                // heure aujourd'hui, où j'en suis par cours, la suite, les
+                // échéances. Le chrono en cours n'a plus de bandeau : le dock le
+                // montre sur tous les onglets.
                 primaryActionCard(state)
                 todaySchedule(state)
+                weekCard(state)
                 weeklyList(state)
                 deadlinesSection(state)
-                weekOverview(state)
             }
         }
     }
@@ -471,54 +465,6 @@ struct TodayView: View {
         return nil
     }
 
-    // MARK: Chrono en cours
-
-    /// Un chrono laissé en route dans Focus reste visible ici : sinon on l'oublie,
-    /// et il compte des heures que personne n'a travaillées.
-    @ViewBuilder
-    private var timerBanner: some View {
-        if let timer = runningTimer, timer.isRestorable() {
-            Button {
-                app.router.openFocus()
-            } label: {
-                HStack(spacing: Layout.block) {
-                    Image(systemName: timer.isRunning ? "timer" : "pause.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(timer.isRunning ? Theme.accentInk : Color.orange.accessibleMark)
-                    VStack(alignment: .leading, spacing: Layout.micro) {
-                        Text(timer.isRunning ? "Chrono en cours" : "Chrono en pause")
-                            .font(.subheadline.weight(.semibold))
-                        Text(timerBannerDetail(timer))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: Layout.inline)
-                    Text(DateUtils.durationLabel(seconds: Int(timer.elapsed())))
-                        .font(.subheadline.weight(.bold))
-                        .monospacedDigit()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(Layout.gutter)
-                .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(timer.isRunning ? "Chrono en cours" : "Chrono en pause"), \(DateUtils.durationLabel(seconds: Int(timer.elapsed()))). Ouvrir Focus")
-        }
-    }
-
-    private func timerBannerDetail(_ timer: FocusTimerState) -> String {
-        let course = courses.first { $0.id == timer.courseID }
-        var parts = [course?.displayCode ?? "Session libre", timer.taskType.label]
-        if !timer.contextLabel.isEmpty, timer.contextLabel != parts.joined(separator: " · ") {
-            parts = [timer.contextLabel]
-        }
-        return parts.joined(separator: " · ")
-    }
-
     // MARK: En-tête
 
     private func greeting(_ state: TodayState) -> some View {
@@ -611,7 +557,7 @@ struct TodayView: View {
     private func primaryActionCard(_ state: TodayState) -> some View {
         // Le même classement que le dock et les widgets : l'accueil ne propose
         // jamais autre chose que le bouton « ▶ » au bas de l'écran.
-        if let next = NextActionEngine.actions(for: state.tracked, limit: 1).first {
+        if let next = state.hero {
             ActionCard(icon: next.icon,
                        title: "\(next.courseCode) · \(next.title)",
                        subtitle: "\(next.reasonLabel) · \(next.detail)",
@@ -636,77 +582,14 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Vue de la semaine
+    // MARK: Cette semaine
 
-    /// Le bilan de la semaine, en une carte compacte : trois chiffres, la charge
-    /// EPFL en une ligne, et le chemin vers les statistiques détaillées.
-    private func weekOverview(_ state: TodayState) -> some View {
-        Card(title: "Cette semaine", icon: "calendar") {
-            VStack(alignment: .leading, spacing: Layout.cardGap) {
-                HStack(alignment: .top, spacing: Layout.block) {
-                    weekMetric(value: DateUtils.hoursLabel(seconds: state.weekSeconds), label: "travaillées (7 j)")
-                    weekMetric(value: DateUtils.durationLabel(seconds: state.weeklyVideoMinutes * 60), label: "de théorie à voir")
-                    weekMetric(value: state.streak > 0 ? "\(state.streak) j" : "—", label: "d'affilée")
-                }
-
-                // La charge EPFL sur une ligne, en retrait : c'est un repère, pas
-                // la position du produit. Elle se lit « fait / attendu », puis l'écart.
-                workloadLine(state.workload)
-
-                Button {
-                    app.router.showingStats = true
-                } label: {
-                    HStack {
-                        Text("Statistiques détaillées")
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                    }
-                    .font(.subheadline)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accentInk)
-            }
-        }
-    }
-
-    private func weekMetric(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: Layout.micro) {
-            Text(value)
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func workloadLine(_ workload: WorkloadDelta) -> some View {
-        VStack(alignment: .leading, spacing: Layout.snug) {
-            LabeledProgress(title: "Charge EPFL (semaine)",
-                            progress: workload.completion,
-                            color: workload.isBehind ? .red : (workload.isOnTrack ? .green : .orange),
-                            countLabel: "\(workload.actualLabel) / \(workload.expectedLabel)")
-            HStack(spacing: Layout.snug) {
-                Image(systemName: workload.isBehind ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .font(.caption2)
-                Text(workloadSentence(workload))
-                    .font(.caption)
-            }
-            .foregroundStyle((workload.isBehind ? Color.red : Color.green).accessibleInk)
-        }
-    }
-
-    private func workloadSentence(_ workload: WorkloadDelta) -> String {
-        let gap = DateUtils.hoursLabel(seconds: abs(workload.deltaSeconds))
-        if workload.deltaSeconds >= 0 { return "\(gap) d'avance sur l'attendu" }
-        if workload.isBehind { return "\(gap) de retard sur l'attendu" }
-        return "\(gap) sous l'attendu — dans la marge"
+    private func weekCard(_ state: TodayState) -> some View {
+        TodayWeekCard(courses: state.tracked,
+                      weekSeconds: state.weekSeconds,
+                      streak: state.streak,
+                      onOpenCourse: { course in app.router.openCourse(course.id) },
+                      onOpenStats: { app.router.showingStats = true })
     }
 
     // MARK: Liste de la semaine
@@ -717,8 +600,8 @@ struct TodayView: View {
 
     @ViewBuilder
     private func weeklyList(_ state: TodayState) -> some View {
-        // La première ligne est déjà la carte d'action principale.
-        let rest = Array(state.todos.dropFirst())
+        // La prochaine action est déjà la carte principale : on ne la répète pas.
+        let rest = state.todos.filter { $0.targetID != state.hero?.targetID }
         if !rest.isEmpty {
             let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
             VStack(alignment: .leading, spacing: 10) {

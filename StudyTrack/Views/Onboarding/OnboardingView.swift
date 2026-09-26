@@ -1,7 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// Accueil guidé : section → cours → semestre.
+/// Accueil guidé en trois temps : **toi** (section, semestre) → **tes cours** →
+/// **ta première série**.
+///
+/// Quatre écrans, dont un de présentation et un de dates que presque personne
+/// ne change (l'automne commence le même lundi pour tout le monde), retardaient
+/// le moment où l'app devient utile. La dernière étape importe une vraie série :
+/// on arrive sur « Aujourd'hui » avec quelque chose à faire.
 ///
 /// Aucune donnée fictive n'est créée : l'étudiant·e choisit sa section et ses
 /// classes, et indique lesquelles ont des heures de cours (amphi).
@@ -24,16 +30,19 @@ struct OnboardingView: View {
     @State private var termWeeks = 14
     @State private var showingCourseForm = false
     @State private var showingImport = false
+    @State private var showingSeriesImport = false
+    @State private var editingTerm = false
     @State private var resultMessage: String?
+    @Query private var series: [ExerciseSeries]
 
-    private let lastStep = 3
+    private let lastStep = 2
 
     /// Étape de départ. En Release : toujours 0 ; en Debug, `-onboardingStep N`
     /// ouvre directement une étape (cf. `PreviewLaunch`).
     static var initialStep: Int {
         #if DEBUG
         if let value = PreviewLaunch.int(PreviewLaunch.onboardingStepFlag) {
-            return min(max(value, 0), 3)
+            return min(max(value, 0), 2)
         }
         #endif
         return 0
@@ -52,16 +61,15 @@ struct OnboardingView: View {
                     // principaux étaient déjà paresseux, pas celui-ci.
                     LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                         switch step {
-                        case 0: welcomeStep
-                        case 1: sectionStep
-                        case 2: coursesStep
-                        default: termStep
+                        case 0: aboutYouStep
+                        case 1: coursesStep
+                        default: firstSeriesStep
                         }
                     }
                     .padding(Layout.screenPadding)
                     // L'étape « section » est une grille et gagne à occuper la
                     // largeur ; les étapes de texte restent à une mesure lisible.
-                    .adaptiveColumn(maxWidth: step == 1 ? Layout.wideWidth : Layout.readableWidth)
+                    .adaptiveColumn(maxWidth: step == 0 ? Layout.wideWidth : Layout.readableWidth)
                 }
                 footer
             }
@@ -71,6 +79,9 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingImport) {
                 ImportSheet(defaultSectionCode: sectionCode)
+            }
+            .sheet(isPresented: $showingSeriesImport) {
+                SeriesImportSheet(course: nil)
             }
         }
     }
@@ -86,8 +97,23 @@ struct OnboardingView: View {
                         .frame(height: 4)
                 }
             }
-            Text(titles[step])
-                .font(.title2.weight(.bold))
+            HStack(alignment: .firstTextBaseline) {
+                Text(titles[step])
+                    .font(.title2.weight(.bold))
+                Spacer(minLength: Layout.inline)
+                // Voir l'app remplie avant de rien saisir : un semestre d'exemple,
+                // qui s'efface depuis le profil.
+                if step == 0, courses.isEmpty {
+                    Button {
+                        seedSample()
+                    } label: {
+                        Label("Exemple", systemImage: "sparkles")
+                    }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Essayer avec des données d'exemple")
+                }
+            }
             Text(subtitles[step])
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -101,67 +127,16 @@ struct OnboardingView: View {
     }
 
     private var titles: [String] {
-        ["Bienvenue sur StudyTrack", "Ta section", "Tes cours", "Ton semestre"]
+        ["Bienvenue sur StudyTrack", "Tes cours", "Ta première série"]
     }
 
     private var subtitles: [String] {
-        ["Suis ta théorie, tes exercices et ton temps de travail — sans rien oublier.",
-         "Choisis ta section EPFL : elle sera associée à tes cours.",
-         "Ajoute tes classes et indique celles qui ont des heures de cours (amphi).",
-         "Indique les dates du semestre pour que le suivi hebdomadaire soit juste."]
+        ["Ta théorie, tes exercices et ton temps de travail, semaine par semaine. Commence par ta section.",
+         "Importe ton horaire EPFL ou ajoute tes classes à la main.",
+         "Importe le PDF d'une série : exercices, questions et points sont repérés tout seuls."]
     }
 
     // MARK: Étapes
-
-    private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: Layout.cardSpacing) {
-            Card {
-                VStack(alignment: .leading, spacing: 16) {
-                    feature(icon: TaskType.video.icon,
-                            title: "Théorie, quel que soit le support",
-                            detail: "Vidéo 1.1, chapitre 2.3, lecture ou diapositives — durée quand elle existe, date de travail et date de résumé.")
-                    Divider()
-                    feature(icon: TaskType.exercise.icon,
-                            title: "Exercices et bonus",
-                            detail: "Exercice 1.1, 1.2… avec le sureté de réponse en vert / orange / rouge.")
-                    Divider()
-                    feature(icon: TaskType.correction.icon,
-                            title: "Corrections",
-                            detail: "Juste, moyennement juste ou faux, et ce qui est à refaire.")
-                    Divider()
-                    feature(icon: "clock.fill",
-                            title: "Temps de travail et charge EPFL",
-                            detail: "Chrono par matière et par type, comparé aux heures attendues.")
-                    Divider()
-                    feature(icon: "person.3.fill",
-                            title: "Groupes et horaire",
-                            detail: "Classements, planning partagé, import de ton horaire .ics.")
-                }
-            }
-
-            // Aucune donnée n'est inventée sans le demander. Mais on peut la
-            // **demander** : un semestre d'exemple montre l'app remplie en un tap,
-            // et s'efface depuis Profil › Données.
-            Card {
-                VStack(alignment: .leading, spacing: Layout.block) {
-                    Text("Tu veux d'abord voir l'app remplie ?")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Un semestre d'exemple (trois cours, des séries, dix jours de sessions) s'installe, et se supprime en un geste depuis le profil.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button {
-                        seedSample()
-                    } label: {
-                        Label("Essayer avec des données d'exemple", systemImage: "sparkles")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!courses.isEmpty)
-                }
-            }
-        }
-    }
 
     private func seedSample() {
         SeedData.seedIfNeeded(context, settings: app.settings)
@@ -170,19 +145,34 @@ struct OnboardingView: View {
         app.settings.hasCompletedOnboarding = true
     }
 
-    private func feature(icon: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(Theme.accentInk)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: Layout.tight) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// Étape 1 : le semestre en une ligne (modifiable), puis la section.
+    private var aboutYouStep: some View {
+        VStack(alignment: .leading, spacing: Layout.cardSpacing) {
+            Card {
+                VStack(alignment: .leading, spacing: Layout.block) {
+                    HStack(spacing: Layout.control) {
+                        Image(systemName: "calendar")
+                            .foregroundStyle(Theme.accentInk)
+                        VStack(alignment: .leading, spacing: Layout.micro) {
+                            Text("Semestre").font(.subheadline.weight(.semibold))
+                            Text("Du \(DateUtils.shortDay.string(from: termStart)) · \(termWeeks) semaines")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Button(editingTerm ? "OK" : "Modifier") {
+                            withAnimation(.snappy) { editingTerm.toggle() }
+                        }
+                        .font(.subheadline)
+                        .buttonStyle(.borderless)
+                    }
+                    if editingTerm {
+                        DatePicker("Début (semaine 1)", selection: $termStart, displayedComponents: .date)
+                        Stepper("Durée : \(termWeeks) semaines", value: $termWeeks, in: 8...24)
+                    }
+                }
             }
+            sectionStep
         }
     }
 
@@ -357,39 +347,46 @@ struct OnboardingView: View {
         }
     }
 
-    private var termStep: some View {
+    /// Étape 3 : une vraie série, tout de suite — facultatif.
+    private var firstSeriesStep: some View {
         VStack(alignment: .leading, spacing: Layout.cardSpacing) {
-            Card(title: "Dates du semestre", icon: "calendar") {
-                VStack(alignment: .leading, spacing: 16) {
-                    DatePicker("Début (semaine 1)", selection: $termStart, displayedComponents: .date)
-                    Stepper("Durée : \(termWeeks) semaines", value: $termWeeks, in: 8...24)
-                    Divider()
-                    DetailRow(icon: "flag.checkered",
-                              label: "Fin estimée",
-                              value: DateUtils.shortDay.string(from: DateUtils.addWeeks(termWeeks, to: termStart)))
+            Card {
+                VStack(alignment: .leading, spacing: Layout.block) {
+                    Label("Depuis Moodle ou Fichiers", systemImage: "doc.badge.plus")
+                        .font(.headline)
+                    Text("Choisis le PDF de la série de cette semaine. Tu vérifies la liste — exercices, questions (a)(b)(c), bonus — avant que quoi que ce soit ne soit créé.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        showingSeriesImport = true
+                    } label: {
+                        Label(series.isEmpty ? "Importer une série" : "Importer une autre série", systemImage: "square.and.arrow.down")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(trackedCourses.isEmpty)
+                    if trackedCourses.isEmpty {
+                        Text("Ajoute d'abord un cours à l'étape précédente.")
+                            .font(.caption)
+                            .foregroundStyle(Color.orange.accessibleInk)
+                    }
                 }
             }
-
-            Card(title: "Récapitulatif", icon: "checklist") {
-                VStack(alignment: .leading, spacing: 12) {
-                    DetailRow(icon: "graduationcap.fill",
-                              label: "Section",
-                              value: app.sectionDisplayName(sectionCode))
-                    DetailRow(icon: "books.vertical.fill",
-                              label: "Cours suivis",
-                              value: "\(trackedCourses.count)")
-                    DetailRow(icon: "building.columns.fill",
-                              label: "Avec heures de cours",
-                              value: "\(lectureCourses.count)")
-                    DetailRow(icon: "clock.fill",
-                              label: "Heures par crédit",
-                              value: "\(Int(app.settings.hoursPerCredit)) h")
+            if !series.isEmpty {
+                Card(title: "Déjà importé", icon: "checkmark.circle.fill") {
+                    VStack(alignment: .leading, spacing: Layout.snug) {
+                        ForEach(series.sorted { $0.seriesNumber < $1.seriesNumber }) { item in
+                            Text("\(item.course?.displayCode ?? "") · \(item.title) · \(item.exercises.count) exercices")
+                                .font(.subheadline)
+                        }
+                    }
                 }
             }
-
-            Text("Tout est modifiable ensuite : les cours depuis l'onglet Cours, la section et la charge depuis le profil.")
+            Text("Tu peux passer cette étape : chaque cours a un bouton « Importer un PDF ». Section, semestre et cours restent modifiables depuis le profil.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -413,13 +410,13 @@ struct OnboardingView: View {
                 Haptics.tap()
                 advance()
             } label: {
-                Text(step == lastStep ? "Terminer" : "Continuer")
+                Text(step == lastStep ? (series.isEmpty ? "Passer et terminer" : "Terminer") : "Continuer")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(step == 1 && sectionCode.isEmpty && !search.isEmpty && EPFLCatalog.search(search).isEmpty)
+            .disabled(step == 0 && sectionCode.isEmpty && !search.isEmpty && EPFLCatalog.search(search).isEmpty)
         }
         .padding(Layout.screenPadding)
         .background(.bar)

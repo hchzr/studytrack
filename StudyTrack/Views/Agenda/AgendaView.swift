@@ -69,6 +69,8 @@ struct AgendaView: View {
     @State private var weekStart = DateUtils.startOfWeek(Date())
     @State private var filter = AgendaFilter()
     @State private var showingPlan = false
+    /// Début choisi en touchant un créneau libre ; sinon, le défaut du jour.
+    @State private var planStart: Date?
     @State private var syncMessage: String?
     @State private var isSyncing = false
     @State private var sessionToDelete: PlannedSession?
@@ -193,8 +195,8 @@ struct AgendaView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Agenda")
             .toolbar { toolbar }
-            .sheet(isPresented: $showingPlan) {
-                PlanSessionView(group: nil, defaultStart: defaultPlanStart)
+            .sheet(isPresented: $showingPlan, onDismiss: { planStart = nil }) {
+                PlanSessionView(group: nil, defaultStart: planStart ?? defaultPlanStart)
             }
             .sheet(item: $editingExam) { exam in
                 if let course = exam.course {
@@ -408,6 +410,10 @@ struct AgendaView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, entry in
                             timelineRow(entry)
+                            if let gap = freeGap(after: entry, in: items) {
+                                Divider().padding(.leading, 64)
+                                freeSlotRow(gap)
+                            }
                             if index < items.count - 1 {
                                 Divider().padding(.leading, 64)
                             }
@@ -416,6 +422,54 @@ struct AgendaView: View {
                 }
             }
         }
+    }
+
+    /// Un créneau libre d'au moins une heure après cette entrée, entre 8 h et
+    /// 20 h — là où une session d'étude tient réellement. Le passé est ignoré.
+    private func freeGap(after entry: AgendaEntry, in items: [AgendaEntry]) -> DateInterval? {
+        guard !entry.isAllDay else { return nil }
+        let timed = items.filter { !$0.isAllDay }
+        guard let index = timed.firstIndex(where: { $0.id == entry.id }), index + 1 < timed.count else { return nil }
+        let start = max(entry.endDate ?? entry.date.addingTimeInterval(3600), Date())
+        let next = timed[index + 1].date
+        guard let dayStart = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: selectedDay),
+              let dayEnd = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: selectedDay) else { return nil }
+        let from = max(start, dayStart), to = min(next, dayEnd)
+        guard to.timeIntervalSince(from) >= 3600 else { return nil }
+        // Arrondi au quart d'heure suivant : « 14 h 07 » n'est pas une heure qu'on planifie.
+        let minutes = calendar.component(.minute, from: from)
+        let rounded = calendar.date(byAdding: .minute, value: (15 - minutes % 15) % 15, to: from) ?? from
+        return DateInterval(start: rounded, end: to)
+    }
+
+    private func freeSlotRow(_ gap: DateInterval) -> some View {
+        Button {
+            planStart = gap.start
+            showingPlan = true
+        } label: {
+            HStack(spacing: Layout.block) {
+                Text(DateUtils.time.string(from: gap.start))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 44, alignment: .trailing)
+                RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 4, height: 24)
+                Text("Libre · \(DateUtils.durationLabel(seconds: Int(gap.duration)))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: Layout.inline)
+                Label("Planifier", systemImage: "plus")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.accentInk)
+            }
+            .padding(.vertical, Layout.inline)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Créneau libre de \(DateUtils.durationLabel(seconds: Int(gap.duration))) à \(DateUtils.time.string(from: gap.start)). Planifier une session")
     }
 
     private var dayTitle: String {
