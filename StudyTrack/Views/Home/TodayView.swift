@@ -39,7 +39,6 @@ struct TodayItem: Identifiable {
 struct TodayView: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @Query(sort: \Course.code) private var courses: [Course]
@@ -58,7 +57,6 @@ struct TodayView: View {
     @State private var openedExercise: Exercise?
     @State private var openedVideo: TheoryItem?
     /// Chrono laissé en route dans Focus, relu à chaque passage au premier plan.
-    @State private var runningTimer: FocusTimerState?
     @State private var showAllTodos = false
 
     /// Une seule passe de dérivation, réutilisée par toutes les sections du rendu.
@@ -261,7 +259,6 @@ struct TodayView: View {
                 await TaskSync.sync(context: context, settings: app.settings)
             }
             .onAppear {
-                runningTimer = FocusTimerStore.load()
                 // Partage reçu avant que l'accueil n'existe (lancement à froid) :
                 // `onChange` ne le verra jamais passer.
                 if let shared = app.router.pendingImport {
@@ -307,12 +304,10 @@ struct TodayView: View {
             }
             .modifier(TodayObservers(sheet: $sheet,
                                      searchQuery: $searchQuery,
-                                     runningTimer: $runningTimer,
                                      requests: requests,
                                      openedExercise: openedExercise,
                                      openedVideo: openedVideo,
                                      courses: courses,
-                                     scenePhase: scenePhase,
                                      app: app,
                                      applyRequests: apply))
         }
@@ -360,37 +355,25 @@ struct TodayView: View {
     private struct TodayObservers: ViewModifier {
         @Binding var sheet: TodaySheet?
         @Binding var searchQuery: String
-        @Binding var runningTimer: FocusTimerState?
         var requests: Requests
         var openedExercise: Exercise?
         var openedVideo: TheoryItem?
         var courses: [Course]
-        var scenePhase: ScenePhase
         var app: AppContainer
         var applyRequests: (Requests) -> Void
 
         func body(content: Content) -> some View {
             content
-                .onChange(of: scenePhase) { _, phase in handleScene(phase) }
                 .onChange(of: requests) { _, state in applyRequests(state) }
                 .onChange(of: app.router.shortcut) { _, shortcut in handleShortcut(shortcut) }
                 .onChange(of: app.router.pendingImport) { _, shared in handleImport(shared) }
                 .onChange(of: openedExercise) { _, exercise in handleExercise(exercise) }
                 .onChange(of: openedVideo) { _, video in handleVideo(video) }
-                .onChange(of: app.router.selectedTab) { _, _ in reloadTimer() }
         }
 
-        // Chaque fermeture appelle une méthode nommée : sept `.onChange` dont le
+        // Chaque fermeture appelle une méthode nommée : cinq `.onChange` dont le
         // corps est écrit sur place font échouer le vérificateur de types, et un
         // corps d'une ligne se lit mieux qu'un bloc imbriqué.
-
-        private func handleScene(_ phase: ScenePhase) {
-            if phase == .active { reloadTimer() }
-        }
-
-        private func reloadTimer() {
-            runningTimer = FocusTimerStore.load()
-        }
 
         private func handleShortcut(_ shortcut: ShortcutAction?) {
             guard let shortcut else { return }

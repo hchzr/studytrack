@@ -9,7 +9,7 @@ intégrations calendrier, horaire et tâches.
 - **Langue de l'interface :** français
 - **Dépendances :** aucune (100 % frameworks système : SwiftUI, SwiftData, EventKit,
   UserNotifications, AuthenticationServices, AppIntents, UIKit)
-- **86 fichiers Swift**, ~21 000 lignes (app + widget + code partagé)
+- **141 fichiers Swift**, ~36 000 lignes (app + widget + extension de partage + code partagé)
 
 > **v2.1.** Une relecture complète de l'app (`AUDIT.md` §0 bis) a corrigé une
 > exigence inatteignable — aucun écran ne permettait de **saisir une évaluation** —,
@@ -110,7 +110,7 @@ arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaq
 | Argument | Effet |
 |---|---|
 | `-seedSampleData` | installe le semestre d'exemple, saute l'accueil, et supprime le prompt de notifications qui recouvrirait la capture |
-| `-tab <0…4>` | ouvre directement un onglet (0 Aujourd'hui, 1 Cours, 2 Focus, 3 Groupes, 4 Agenda) |
+| `-tab <0,1,3,4>` | ouvre directement un onglet (0 Aujourd'hui, 1 Cours, 3 Groupes, 4 Agenda). **`-tab 2` ouvre la feuille Focus** : 2 était l'onglet du chrono, et les valeurs brutes n'ont pas bougé pour que liens et captures restent valables |
 | `-course <code>` | présélectionne un cours dans le volet de droite (`-course CS-250`) |
 | `-courseTab <theory\|exercises\|progress\|agenda>` | avec `-course`, ouvre cet onglet de la fiche |
 | `-onboardingStep <0…3>` | ouvre une étape de l'accueil — à lancer sur une installation **fraîche**, le seeding marquant l'accueil comme terminé |
@@ -123,6 +123,14 @@ arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaq
 | `-groupSubjects` | avec `-group`, ouvre l'éditeur des matières du groupe |
 | `-groupPage <members\|time\|series\|planning>` | avec `-group`, ouvre une sous-page de la fiche |
 | `-importFile <chemin absolu>` | ouvre l'import de série sur ce PDF, comme un partage depuis une autre app (le simulateur non signé n'a pas de conteneur de groupe) |
+| `-exerciseDetail <numéro>` | avec `-course` et `-courseTab exercises`, ouvre le détail de cet exercice (`-exerciseDetail 3.1`) |
+| `-timerSeconds <n>` | pré-remplit le chrono et le lance : un chrono en marche est autrement inatteignable sans taper |
+| `-pomodoro` | active le mode Pomodoro sur le chrono — avec `-timerSeconds`, montre un bloc en cours |
+| `-shortcuts` | ouvre l'éditeur des raccourcis du chrono |
+| `-search <requête>` | ouvre la recherche, pré-remplie |
+| `-examActivity` | lance l'activité **« jour d'examen »** sur l'écran verrouillé. Elle se déclenche par le *temps* (douze heures avant l'épreuve) : sans ce drapeau, la vérifier demanderait d'attendre la veille d'un vrai examen |
+| `-aiImport` | avec `-profile`, ouvre « Import intelligent » |
+| `-coverage`, `-epflLife` | avec `-stats`, ouvrent « Couverture du suivi » et « Vie de l'EPFL » |
 | `-breakTermLink` | **casse** le lien cours ↔ semestre (et remet les séries à la semaine 1) pour vérifier la réparation au lancement suivant |
 | `-breakGroupRole` | **rétrograde** le créateur du groupe à « membre », pour vérifier qu'il garde ses droits |
 
@@ -149,15 +157,30 @@ de portée d'une capture automatique. C'est une limite connue de cette méthode.
 Aucune donnée n'est inventée. Un bouton explicite « Essayer avec des données
 d'exemple » ajoute un semestre de démonstration si on le souhaite.
 
-### Les cinq onglets
+### Quatre onglets et un dock
+
+Le chrono **n'est plus un onglet**. Il occupait un cinquième de la barre pour un
+écran qu'on ouvre en passant, et il obligeait à quitter ce qu'on regardait pour
+le lancer. Il vit maintenant dans un **dock** (`Views/Focus/FocusDock.swift`),
+présent sur les quatre onglets : accessoire bas de la barre d'onglets sur iOS 26,
+encart au-dessus avant cela.
 
 | Onglet | Rôle |
 |---|---|
-| **Aujourd'hui** | La prochaine chose à faire (avec un bouton « Démarrer le chrono »), ce qui reste cette semaine, les échéances, la progression |
-| **Cours** | Ton plan : une carte par cours, puis Théorie / Exercices / Progression / Agenda |
-| **Focus** | Chrono catégorisé, mode Pomodoro, saisie manuelle, journal du jour |
+| **Aujourd'hui** | La prochaine chose à faire, la journée en timeline, l'avancement de la semaine par cours (`TodayWeekCard`), puis « Ensuite » |
+| **Cours** | Ton plan : une carte par cours, puis **Exercices** (en premier), Théorie, Agenda — la progression est une page à part |
 | **Groupes** | Une fiche qui **oriente** (direct, trois chiffres, matières) vers quatre sous-pages : **Avancement des séries** (série par série, membre par membre, numéros faits écrits), **Temps d'étude** (classement 7 j / total, ma place), **Membres** (rôles, gestion par glissement), **Sessions planifiées** (RSVP) |
-| **Agenda** | Une **bande de semaine** à balayer (pastilles colorées sous les jours chargés), la journée choisie en timeline (heure, barre de couleur du cours, présence à cocher), puis « Ensuite » (les 8 prochains éléments). Filtres par famille, planification depuis le jour choisi, menu contextuel pour terminer une tâche ou supprimer une session |
+| **Agenda** | Une **bande de semaine** à balayer (pastilles colorées sous les jours chargés), la journée choisie en timeline (heure, barre de couleur du cours, présence à cocher), puis « Ensuite » (les 8 prochains éléments). Les créneaux libres sont **tapables** : planifier part de l'heure qu'on vient de toucher |
+
+Le dock a deux états, et un seul à la fois :
+
+- **au repos**, il propose la prochaine action, classée par `NextActionEngine`
+  (série due sous 48 h → à refaire → évaluation sous 7 jours → planning) ;
+- **pendant une session**, il devient un mini-lecteur : cours, temps, pause/arrêt.
+
+Focus, Profil et Statistiques sont des **feuilles**, ouvertes depuis n'importe
+quel onglet (`router.showingFocus / showingProfile / showingStats`). Le bouton de
+profil est sur chaque onglet.
 
 ---
 
@@ -170,6 +193,7 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 | Décomposition de la théorie (`vidéo 1.1`, `chapitre 2.3`…) + durée | `TheoryItem` typé par `TheoryKind` — **vidéo, lecture, chapitre, diapositives**. Un cours **sans aucune vidéo** est un cas normal, pas une exception : la durée est facultative et n'est jamais inventée. Onglet **Théorie** |
 | Durée de théorie à faire **par semaine** | carte « Théorie cette semaine », `ProgressEngine` |
 | Décomposition par sous-exercices (`exercice 1.1`) + **bonus** | `ExerciseSeries` / `Exercise` |
+| **Sous-questions** d'un exercice, sur deux niveaux | `SubQuestion` est un arbre (`parent` / `children`). Les cases à cocher réelles sont les **feuilles** (`Exercise.leafSubQuestions`) : « 1) (a) (b) 2) (a) » compte **trois** cases, pas cinq — 1) et 2) ne sont faits que lorsque leurs points le sont. Un nœud peut être une partie **sans numéro** (`kind: .part`, « Ensuite, … »). `refreshCompletion()` remonte l'état jusqu'à `doneAt`, qui reste la seule vérité pour le reste de l'app |
 | **Date de visionnage** | `TheoryVideo.watchedAt` |
 | **Date de résumé** | `TheoryVideo.summarizedAt` + texte du résumé |
 | **Date** de l'exercice + **code couleur vert/orange/rouge** | `Exercise.doneAt` + `ConfidenceControl` — **contrôle à trois pastilles toujours visible**, plus caché dans un menu |
@@ -207,8 +231,10 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 | **TickTick** | ✅ **nouveau, non vérifié sur un compte réel** | API ouverte v1 (`api.ticktick.com/open/v1`), jeton OAuth2 |
 | **Notice par intégration** | ✅ **nouveau** | Bouton « Comment configurer ? » sur chaque fournisseur : résumé, capacité, étapes numérotées, lien vers la page des identifiants et limite propre. `validate.sh` refuse un fournisseur sans notice |
 | **Siri / Raccourcis (App Intents)** | ✅ **nouveau** | « Démarre une session », « Enregistre une session », « Ajoute une tâche », « **Planifie une session** » (écrite au calendrier) et « **Marque un exercice comme fait** » (avec la sureté) — métadonnées `Metadata.appintents` générées |
-| **Widgets d'écran d'accueil** | ✅ | Cible d'extension `StudyTrackWidgets` (petit / moyen / grand) : temps de la semaine, série, à-faire, prochaine évaluation + un widget compact « temps de travail ». Un tap ouvre l'écran correspondant. Données partagées via l'App Group `group.com.studytracker.app` |
-| **Live Activity** (écran verrouillé, îlot dynamique) | ✅ | `StudyActivityWidget` : le chrono en cours, avancé par le système (`Text(timerInterval:)`), état « en cours / en pause » |
+| **Widgets d'écran d'accueil** | ✅ | Six widgets dans la cible `StudyTrackWidgets`, dont trois **agissants** : **Prochaine tâche** (✓ pour cocher, ▶ pour lancer le chrono, temps en direct), **Cours de la semaine** (avancement par cours), **Prochaine évaluation** (compte à rebours, aussi en complication `accessory`). Les deux premiers widgets — « Cette semaine » et « Temps de travail » — sont **conservés** : les retirer viderait ceux déjà posés sur un écran d'accueil. Données partagées via l'App Group |
+| **Coches depuis un widget** | ✅ **nouveau** | La base SwiftData **n'est pas** dans l'App Group : le widget ne peut pas l'écrire. Il dépose donc le geste (`PendingWidgetActions`), met son propre affichage à jour tout de suite, et l'app l'applique à sa prochaine activation (`WidgetSnapshotWriter.applyPendingCompletions`) |
+| **Bouton Centre de contrôle** | ✅ **nouveau** | `FocusControl` (iOS 18) : un bouton « Chrono » pour le Centre de contrôle, l'écran verrouillé et le bouton Action |
+| **Live Activity** (écran verrouillé, îlot dynamique) | ✅ | `StudyActivityWidget` : le chrono, l'**anneau du bloc Pomodoro**, l'avancement en sous-questions « 3/9 » et un bouton **« question suivante »**. `ExamActivityWidget` : le **jour d'examen**, déclenché par le temps. Voir « Live Activity et îlot » plus bas |
 | **Liens profonds** | ✅ | `studytrack://focus?course=CS-250&type=exercise`, `://today`, `://tasks`, `://stats`, `://agenda`, `://courses`, `://groups`, **`://join?code=EPFL-XXXX`** (ouvre « Rejoindre » pré-rempli) |
 | **Sauvegarde / restauration** | ✅ **nouveau** | Profil › Données › *Créer une sauvegarde* produit un JSON **réimportable** (structure + avancement + sessions). Restauration par Importer › JSON, idempotente. Export CSV des sessions pour un tableur |
 | **Import JSON / CSV** | ✅ | Idempotent (upsert par code de cours / numéro) |
@@ -217,6 +243,38 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 | **Ce que l'IA garantit** | ✅ **nouveau** | Une consigne explicite et testée : **un titre pour chaque exercice**, jamais vide — le modèle en écrit un de 2 à 6 mots à partir du titre de section quand le PDF n'en donne pas ; **dans la langue du document** (un PDF français donnait des titres anglais) ; et **un numéro qualifié par la série**, même quand le PDF recommence à 1 dans chaque section. Un exercice **sans aucun numéro** reçoit le suivant libre au lieu d'être jeté. La lecture de la réponse est **tolérante** : un modèle qui écrit `"02a"` au lieu de `2`, ou `"oui"` au lieu de `true`, ne fait plus perdre la réponse entière |
 | **Sous-questions** | ✅ **nouveau** | Un polycopié numérote souvent ses exercices 1, 2, 3 **dans chaque section**, et regroupe plusieurs questions sous un seul numéro. Le modèle `SubQuestion` porte ces questions : chacune se coche, l'exercice devient fait quand elles le sont toutes, et la série, la progression et les statistiques continuent de compter des **exercices**. Un compteur « 2/3 » se lit dans la liste sans ouvrir. L'IA les détecte et les regroupe ; l'import les crée sans jamais dupliquer ce qui existe |
 | ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s : ce connecteur ne pouvait jamais s'authentifier. Remplacé par l'import `.ics`. |
+
+### Relire et corriger une série importée
+
+Une lecture automatique se trompe. Le brouillon (`Domain/SeriesDraft.swift`) est
+donc **le même objet** pour la relecture d'un import et pour l'édition d'une
+série déjà enregistrée : corriger après coup n'est pas un second chemin qui
+pourrait diverger du premier.
+
+| Pièce | Rôle |
+|---|---|
+| `SeriesDraft` / `ExerciseDraft` | Le brouillon éditable : titres, énoncés, numéros, sous-questions, bonus |
+| `SubQuestionTree` | Les gestes sur l'arbre (ajouter, indenter, supprimer) **et** la syntaxe abrégée |
+| `SeriesDraftWriter` | L'écriture. `.importMerge` **ne supprime jamais** ; `.edit` supprime les exercices retirés et **garde l'avancement** à travers une renumérotation |
+
+**Syntaxe abrégée** : `1(a-d) 2(a-e) 3-5 +` décrit une série entière en une
+ligne — deux exercices à sous-questions, trois exercices simples, un bonus.
+Saisir vingt cases une par une pour une série d'analyse n'était pas tenable.
+
+L'import est un parcours en trois temps : **choisir → analyser → relire**. Un
+résultat d'IA qui arrive **après** que l'étudiant·e a commencé à corriger est
+**proposé**, jamais appliqué par-dessus ses corrections.
+
+Dans la liste des exercices : un menu « ⋯ » par série (éditer, réimporter, tout
+marquer, supprimer), un menu long-press par exercice, la liste des sous-questions
+à cocher sur place, et une confirmation avant toute suppression.
+
+### Mathématiques dans les énoncés
+
+`Domain/MathMarkup.swift` (pur et testé) transforme un LaTeX-léger en suites de
+texte normal / indice / exposant, avec les symboles usuels ; `MathText` les
+affiche. Utilisé dans les énoncés, les titres et les sous-questions — un énoncé
+d'analyse écrit `x^2` et `\alpha` reste lisible au lieu de s'afficher tel quel.
 
 ### Chrono et Live Activity
 
@@ -241,12 +299,37 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 
 ### Live Activity et îlot
 
+Deux activités, de **types d'attributs différents**, donc indépendantes : le
+chrono et le jour d'examen peuvent s'afficher en même temps — on révise, chrono
+lancé, le matin de l'épreuve.
+
 | Ce qui est vrai | Détail |
 |---|---|
-| L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié |
+| L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié (`log show --predicate 'subsystem == "com.hczr.studytrack"'`) |
 | L'îlot replié | Un icône d'état à gauche, le **temps** à droite. Vider ces deux régions ne rétrécit pas l'îlot : il n'affiche **plus rien** |
 | L'intervalle du chrono est **borné** | `Text(timerInterval:)` réserve la largeur du plus grand texte de l'intervalle ; `Date.distantFuture` faisait réserver une place démesurée |
-| Diagnostic | Profil › **Diagnostics** › « Îlot et écran verrouillé » : activités en cours, dernier refus, et un bouton **« Lancer une activité d'essai »** |
+| Diagnostic | Profil › **Diagnostics** › « Îlot et écran verrouillé » : activités en cours, dernier refus, et deux boutons d'essai — le chrono et le jour d'examen |
+
+**Ce que porte l'activité du chrono** (`ActivityTimerState`, pur et testé) :
+
+| Élément | Comment il tient sans que l'app envoie quoi que ce soit |
+|---|---|
+| **Compteur** | `Text(timerInterval:)` à partir d'un instant de départ **reculé du total écoulé** : la reprise ne repart donc pas de zéro |
+| **Anneau Pomodoro** | `ActivityPomodoro` porte les deux bornes du bloc en horloge murale, et `ProgressView(timerInterval:)` le remplit. **En pause et sur un bloc à terme, il n'y a pas d'intervalle** : l'anneau est dessiné figé — un anneau qui continuerait de se remplir pendant une pause mentirait, le chrono comptant le travail |
+| **Sous-questions « 3/9 »** | Publié au changement d'état, et republié quand une case est cochée **ailleurs dans l'app** — mais seulement si le compte change vraiment : `ModelContext.didSave` se déclenche à chaque écriture, et ActivityKit limite les mises à jour |
+| **« Question suivante »** | `NextQuestionIntent` coche la première case non faite de l'exercice visé. Pas de curseur à tenir, donc rien qui puisse diverger de la liste. Le bouton n'apparaît que s'il reste une case |
+
+Les champs ajoutés à l'état sont **optionnels** : une activité publiée par une
+version précédente se décode encore. Un `Int` manquant aurait fait échouer tout
+le décodage et laissé un îlot figé sur un état mort.
+
+**L'activité du jour d'examen** (`ExamActivityState`, pur et testé) n'est
+déclenchée par aucun geste — personne n'appuie sur « commencer l'examen ». Elle
+s'ouvre **douze heures** avant l'épreuve (la veille au soir, quand on prépare ses
+affaires ; pas trois jours avant, où un compte à rebours permanent n'est plus une
+information mais une pression) et se retire une fois l'épreuve passée. Le raccord
+se fait là où les rappels sont replanifiés (`NotificationScheduler`) et à chaque
+activation de l'app.
 
 
 ### Plan, annales, session partagée
@@ -418,6 +501,46 @@ Le code est dans `supabase/functions/extract-series/index.ts` ; n'importe quelle
 API compatible OpenAI convient (OpenRouter avec un modèle `:free`, Mistral…). Sans
 déploiement, l'app le détecte (HTTP 404) et passe au maillon suivant.
 
+#### La voie « vision » : le modèle regarde les pages
+
+Le texte extrait d'un PDF perd la mise en page, et c'est précisément elle qui dit
+ce qui est une sous-question. Les pages sont donc **aussi** envoyées en images
+(`Services/PDFPageRenderer.swift`, JPEG 1240 px), avec le texte en appui. Cela
+demande un fournisseur qui accepte les images, distinct de celui du texte :
+
+```bash
+supabase secrets set LLM_VISION_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+supabase secrets set LLM_VISION_API_KEY=…            # Google AI Studio
+supabase secrets set LLM_VISION_MODEL=gemini-flash-latest
+```
+
+Trois modes de requête : `{"text": …}` (texte, sur Groq), `{"images": […],
+"text": …, "seriesHint": 3}` (vision), et `{"listModels": true}`, qui renvoie les
+modèles utilisables par chaque clé — un diagnostic, sans secrets.
+
+**La course.** Les modèles Flash de Google sont souvent « en forte demande »
+(503). La fonction fait donc courir jusqu'à **5 candidats** par lot de 5 pages :
+le modèle configuré, puis le dernier Gemini Flash, Flash-Lite, Pro, et Groq en
+dernier recours. Les modèles « Lite » ne partent qu'après 5 s — ils sont plus
+rapides mais moins bons, et les laisser partir en même temps revenait à choisir
+le moins bon presque à chaque fois. Le dernier modèle qui a répondu est retenu
+pour la fois suivante, et un modèle qui renvoie 503/429 est mis au repos deux
+minutes. La réponse porte `timings` et `fallbacks` : on sait **qui** a répondu.
+
+Compter en temps réel : 7–13 s sur la Série 3 (3 pages), 22–30 s quand Google est
+congestionné. Le palier gratuit de Groq (7 000 jetons/minute en entrée) impose
+2 pages par appel et aucun texte en appui quand la vision passe par lui.
+
+**Type-checker la fonction sans Deno** — copier `index.ts` à côté d'un fichier
+`deno.d.ts` contenant
+`declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Promise<Response> | Response): void };`
+puis :
+
+```bash
+npx -p typescript@5 tsc --noEmit --strict --target es2022 \
+  --lib es2022,es2021.promise,dom index.ts deno.d.ts
+```
+
 ### Widgets : App Group à enregistrer
 
 L'app et l'extension widget partagent leurs données via l'App Group
@@ -476,19 +599,33 @@ StudyTrack/                     # cible application
 ├── Models/                      # 13 entités SwiftData, énumérations,
 │                                # catalogue de sections EPFL, données d'exemple
 ├── Domain/                      # ProgressEngine, WorkloadEngine, GamificationEngine,
-│                                # DailyPlanner, DateUtils, FocusTimerState, SessionStats
+│                                # DailyPlanner, DateUtils, FocusTimerState, SessionStats,
+│                                # NextActionEngine (« quoi ensuite »), PomodoroEngine,
+│                                # SeriesLayout (arbre des sous-questions), SeriesDraft
+│                                # (brouillon + syntaxe abrégée), MathMarkup
 │                                # (logique pure testée)
 ├── Services/                    # ICS, import JSON/CSV, EventKit, tâches (5 fournisseurs),
-│                                # Supabase, notifications, App Intents, widget, export
-└── Views/                       # Onboarding, Home, Courses, Focus, Groups, Agenda,
-                                 # Stats, Tasks, Components (design system)
+│                                # Supabase, notifications, App Intents, widget, export,
+│                                # StudyActivityController / ExamActivityController
+└── Views/                       # Onboarding, Home, Courses, Focus (dont FocusDock),
+                                 # Groups, Agenda, Stats, Tasks, Components (design system)
 
-Shared/                          # compilé dans les deux cibles
+Shared/                          # compilé dans les trois cibles (app, widget, partage)
 ├── WidgetBridge.swift           # contrat app ↔ widget (instantané, App Group)
+├── WidgetActions.swift          # gestes faits dans un widget, en attente de l'app
+├── ActivityTimerState.swift     # état du chrono publié (pur) + anneau Pomodoro
+├── StudyActivityAttributes.swift
+├── ExamActivityState.swift      # fenêtre et phases du jour d'examen (pur)
+├── ExamActivityAttributes.swift
+├── FocusTimerIntents.swift      # pause / reprise / enregistrer / question suivante
 └── ColorContrast.swift          # solveur de contraste WCAG (couleurs accessibles)
 
 StudyTrackWidgets/               # cible d'extension WidgetKit
-└── StudyTrackWidgets.swift      # timeline, widgets petit/moyen/grand
+├── StudyTrackWidgets.swift      # timelines, widgets d'origine, les deux Live Activities
+└── StudyTrackActionWidgets.swift # Prochaine tâche, Cours de la semaine, Évaluation,
+                                  # bouton Centre de contrôle
+
+StudyTrackShare/                 # cible d'extension de partage (recevoir un PDF)
 ```
 
 ---
@@ -503,6 +640,7 @@ StudyTrackWidgets/               # cible d'extension WidgetKit
 - Le catalogue de sections EPFL est indicatif (28 entrées) ; il est modifiable.
 - Moodle : volontairement absent, faute d'accès API étudiant.
 - Things 3 est en écriture seule (pas d'API de lecture) — signalé dans l'interface.
-- **Ni widgets Control Center / StandBy, ni extension de partage** : ces chantiers demandent une nouvelle cible Xcode et une intervention dans le portail Apple Developer. La Live Activity du chrono, elle, est fournie dans la cible widget.
+- Le widget « Cours de la semaine » montre **tous** les cours suivis : il n'a pas
+  de sélecteur de cours (`AppIntentConfiguration`), qui reste à faire.
 - L'icône d'app n'est pas fournie ; le widget d'écran d'accueil, lui, est fourni.
 - La synchronisation Supabase est « best effort » : hors ligne, les groupes restent locaux.
