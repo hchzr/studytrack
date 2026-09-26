@@ -52,6 +52,12 @@ enum PreviewLaunch {
     static let timerSecondsFlag = "-timerSeconds"
     /// Ouvre l'éditeur de raccourcis du chrono.
     static let shortcutsFlag = "-shortcuts"
+    /// Lance l'activité « jour d'examen » sur l'écran verrouillé.
+    ///
+    /// Elle se déclenche par le **temps** — douze heures avant l'épreuve : sans ce
+    /// drapeau, la vérifier demanderait d'attendre la veille d'un vrai examen, ou
+    /// de déplacer l'horloge du simulateur.
+    static let examActivityFlag = "-examActivity"
     /// **Casse** volontairement le lien cours ↔ semestre, pour vérifier la
     /// réparation du lancement suivant. Outil de diagnostic, pas fonctionnalité.
     static let breakTermFlag = "-breakTermLink"
@@ -117,6 +123,16 @@ enum PreviewLaunch {
                 series.plannedWeek = 1
             }
             try? context.save()
+        }
+
+        if isSet(examActivityFlag) {
+            // Après l'installation du semestre d'exemple : l'activité montre alors
+            // un vrai cours. Elle est lancée depuis le contrôleur d'essai, sans
+            // toucher aux dates des examens enregistrés.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                ExamActivityController.startTest()
+            }
         }
 
         guard isSet(seedFlag) else { return }

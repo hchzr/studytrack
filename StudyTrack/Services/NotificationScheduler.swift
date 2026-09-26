@@ -190,5 +190,10 @@ extension NotificationScheduler {
                             exams: exams,
                             settings: settings,
                             weeklySummary: "Cette semaine : \(DateUtils.hoursLabel(seconds: weekSeconds)) de travail.")
+        // Le jour d'examen s'affiche sur l'écran verrouillé, et il se déclenche par
+        // le temps, pas par un geste : le raccord se fait là où les rappels sont
+        // replanifiés — c'est le seul endroit que l'app traverse de toute façon
+        // quand les évaluations changent.
+        ExamActivityController.reconcile(exams: exams)
     }
 }

@@ -50,6 +50,10 @@ struct RootTabView: View {
             // chrono éteint. Sans ça, une Live Activity laissée par une exécution
             // précédente restait affichée indéfiniment.
             StudyActivityController.reconcile(with: FocusTimerStore.load())
+            // Même raccord pour le jour d'examen : une activité laissée par une
+            // épreuve passée doit disparaître, et une épreuve qui arrive dans les
+            // douze heures doit s'afficher sans attendre un passage en arrière-plan.
+            ExamActivityController.reconcileFromStore(context: context)
         }
         .onOpenURL { url in
             handle(url)
@@ -58,6 +62,11 @@ struct RootTabView: View {
         // série importée —, pas seulement le passage en arrière-plan.
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
             WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
+            // Cocher (a) dans la liste des exercices doit faire passer l'îlot de
+            // « 3/9 » à « 4/9 ». Le contrôleur ne republie que si le compte change
+            // vraiment : `didSave` se déclenche à chaque écriture, et ActivityKit
+            // limite les mises à jour.
+            StudyActivityController.refreshQuestions(container: app)
         }
         .onReceive(NotificationCenter.default.publisher(for: FocusTimerStore.didSave)) { _ in
             WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)

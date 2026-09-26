@@ -106,7 +106,10 @@ struct StudyActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    StudyActivityStateIcon(state: context.state)
+                    // L'anneau remplace l'icône quand la session est en Pomodoro :
+                    // il porte la même information — le chrono tourne — et il dit
+                    // en plus où en est le bloc.
+                    StudyActivityLeading(state: context.state)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -122,14 +125,77 @@ struct StudyActivityWidget: Widget {
                 // L'état, à gauche ; le temps, à droite. **Ne plus vider ces deux
                 // régions** : les laisser vides ne rapetissait pas l'îlot, il
                 // n'affichait plus rien du tout.
-                StudyActivityStateIcon(state: context.state, tiny: true)
+                StudyActivityLeading(state: context.state, tiny: true)
             } compactTrailing: {
                 StudyActivityTimer(state: context.state, font: .caption2, compact: true)
             } minimal: {
-                StudyActivityStateIcon(state: context.state, tiny: true)
+                StudyActivityLeading(state: context.state, tiny: true)
             }
             .keylineTint(context.state.isRunning ? .indigo : .orange)
         }
+    }
+}
+
+/// Ce qui occupe la gauche de l'îlot : l'anneau du bloc, sinon l'état.
+///
+/// Une seule région, deux contenus possibles, pour ne pas élargir l'îlot : un
+/// anneau **et** une icône côte à côte coûtent une place que la forme repliée n'a
+/// pas.
+struct StudyActivityLeading: View {
+    let state: StudyActivityAttributes.ContentState
+    var tiny: Bool = false
+
+    var body: some View {
+        if let pomodoro = state.pomodoro {
+            StudyActivityPomodoroRing(pomodoro: pomodoro,
+                                      isRunning: state.isRunning,
+                                      tiny: tiny)
+        } else {
+            StudyActivityStateIcon(state: state, tiny: tiny)
+        }
+    }
+}
+
+/// L'anneau du bloc Pomodoro.
+///
+/// `ProgressView(timerInterval:)` est le même mécanisme que `Text(timerInterval:)`
+/// pour le compteur : c'est le **système** qui remplit l'anneau, seconde après
+/// seconde, à partir des deux bornes du bloc. L'app n'envoie rien pendant ce
+/// temps-là — une mise à jour par seconde coûterait de la batterie pour un
+/// résultat identique.
+///
+/// En pause, et sur un bloc arrivé à terme, il n'y a pas d'intervalle à animer :
+/// l'anneau est alors dessiné **figé**, à la fraction déjà faite. Un anneau qui
+/// continuerait de se remplir pendant une pause mentirait — le chrono compte le
+/// travail, et une pause n'en est pas.
+struct StudyActivityPomodoroRing: View {
+    let pomodoro: ActivityPomodoro
+    let isRunning: Bool
+    var tiny: Bool = false
+
+    private var tint: Color {
+        if pomodoro.isBlockComplete { return .orange }
+        return isRunning ? .green : .orange
+    }
+
+    var body: some View {
+        Group {
+            if let interval = pomodoro.interval {
+                ProgressView(timerInterval: interval, countsDown: false) {
+                    EmptyView()
+                } currentValueLabel: {
+                    EmptyView()
+                }
+                .progressViewStyle(.circular)
+            } else {
+                // Figé : la fraction déjà faite, sans animation.
+                ProgressView(value: pomodoro.frozenProgress)
+                    .progressViewStyle(.circular)
+            }
+        }
+        .tint(tint)
+        .frame(width: tiny ? 18 : 30, height: tiny ? 18 : 30)
+        .accessibilityLabel("\(pomodoro.label), \(Int(pomodoro.frozenProgress * 100)) %")
     }
 }
 
@@ -178,9 +244,9 @@ struct StudyActivityControls: View {
     var compact: Bool = false
 
     var body: some View {
-        // **Un seul** bouton dans l'îlot : deux pastilles côte à côte forcent une
-        // largeur qui se voit. L'enregistrement reste sur l'écran verrouillé, où
-        // il y a la place de deux commandes.
+        // L'îlot n'a pas la place de tout : l'enregistrement reste sur l'écran
+        // verrouillé, où il y a de quoi aligner trois commandes. Ne garder ici que
+        // ce qui se fait pendant la session — cocher, mettre en pause.
         HStack(spacing: 10) {
             if !compact {
                 Button(intent: FinishFocusTimerIntent()) {
@@ -188,6 +254,24 @@ struct StudyActivityControls: View {
                 }
                 .tint(.red)
                 .accessibilityLabel("Enregistrer la session")
+            }
+
+            // « Question suivante » : le geste réel d'une série. Il n'apparaît que
+            // s'il reste une case à cocher — un bouton qui ne fait rien est pire
+            // qu'un bouton absent. Avec le compte à côté, on sait ce qu'il coche.
+            if state.hasNextQuestion {
+                Button(intent: NextQuestionIntent()) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                        if let label = state.questionsLabel {
+                            Text(label).monospacedDigit()
+                        }
+                    }
+                }
+                .tint(.blue)
+                .buttonBorderShape(.capsule)
+                .accessibilityLabel("Cocher la question suivante")
+                .accessibilityValue(state.questionsLabel ?? "")
             }
 
             if state.isRunning {
@@ -242,6 +326,19 @@ struct StudyActivityLockView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
+            // L'anneau du bloc, quand la session est en Pomodoro : ici la place ne
+            // manque pas, il accompagne le reste au lieu de le remplacer.
+            if let pomodoro = context.state.pomodoro {
+                VStack(spacing: 2) {
+                    StudyActivityPomodoroRing(pomodoro: pomodoro,
+                                              isRunning: context.state.isRunning)
+                    Text(pomodoro.label)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Circle()
@@ -256,6 +353,24 @@ struct StudyActivityLockView: View {
                         .lineLimit(1)
                 }
                 StudyActivityTimer(state: context.state, font: .title2)
+
+                // Les sous-questions : la barre dit l'avancement d'un coup d'œil,
+                // le compte dit exactement où on en est. Rien ne s'affiche quand la
+                // cible n'a pas de sous-questions.
+                if let label = context.state.questionsLabel,
+                   let progress = context.state.questionsProgress {
+                    HStack(spacing: 6) {
+                        ProgressView(value: progress)
+                            .progressViewStyle(.linear)
+                            .tint(.blue)
+                            .frame(width: 64)
+                        Text(label)
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Sous-questions faites : \(label)")
+                }
             }
 
             Spacer(minLength: 8)
@@ -322,6 +437,133 @@ struct StudyActivityTimer: View {
     }
 }
 
+// MARK: - Live Activity : le jour d'examen
+
+/// L'examen du jour, sur l'écran verrouillé et dans l'îlot.
+///
+/// Aucune commande : il n'y a rien à faire sur un examen, seulement à savoir quand
+/// et où. Le compte à rebours est un `Text(timerInterval:)` qui descend, donc le
+/// système l'anime seul — l'app ne publie qu'aux changements de phase.
+struct ExamActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: ExamActivityAttributes.self) { context in
+            ExamActivityLockView(context: context)
+                .activityBackgroundTint(Color.black.opacity(0.55))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label(context.attributes.courseCode, systemImage: "graduationcap.fill")
+                        .font(.caption.weight(.bold))
+                        .padding(.leading, 4)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    ExamActivityCountdown(attributes: context.attributes,
+                                          state: context.state,
+                                          font: .title3)
+                        .padding(.trailing, 4)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack(spacing: 6) {
+                        Text(context.attributes.title)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                        if let room = context.attributes.room {
+                            Text("· \(room)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Text(context.attributes.examDate, style: .time)
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                    }
+                }
+            } compactLeading: {
+                Image(systemName: "graduationcap.fill")
+                    .foregroundStyle(.orange)
+            } compactTrailing: {
+                ExamActivityCountdown(attributes: context.attributes,
+                                      state: context.state,
+                                      font: .caption2)
+            } minimal: {
+                Image(systemName: "graduationcap.fill")
+                    .foregroundStyle(.orange)
+            }
+            .keylineTint(.orange)
+        }
+    }
+}
+
+/// Le temps qui reste avant l'épreuve — ou le fait qu'elle a commencé.
+struct ExamActivityCountdown: View {
+    let attributes: ExamActivityAttributes
+    let state: ExamActivityState
+    var font: Font
+
+    var body: some View {
+        Group {
+            switch state.phase {
+            case .upcoming:
+                // Borné en amont : SwiftUI réserve la largeur du plus grand texte
+                // de l'intervalle, et une borne trop lointaine réserverait la place
+                // d'un nombre d'heures démesuré.
+                Text(timerInterval: Date()...attributes.examDate, countsDown: true)
+            case .running:
+                Text("en cours")
+            case .over:
+                Text("terminé")
+            }
+        }
+        .font(font.monospacedDigit().weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+}
+
+/// Écran verrouillé : quand, quoi, où. Rien d'autre.
+struct ExamActivityLockView: View {
+    let context: ActivityViewContext<ExamActivityAttributes>
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "graduationcap.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(context.attributes.courseCode)
+                        .font(.subheadline.weight(.bold))
+                        .lineLimit(1)
+                    Text(context.attributes.title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                ExamActivityCountdown(attributes: context.attributes,
+                                      state: context.state,
+                                      font: .title2)
+                HStack(spacing: 6) {
+                    Text(context.attributes.examDate,
+                         format: .dateTime.weekday(.abbreviated).hour().minute())
+                        .font(.caption2)
+                    if let room = context.attributes.room {
+                        Text("· \(room)")
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
 @main
 struct StudyTrackWidgetsBundle: WidgetBundle {
     var body: some Widget {
@@ -331,6 +573,7 @@ struct StudyTrackWidgetsBundle: WidgetBundle {
         StudyTrackWidget()
         StudyTrackTimerWidget()
         StudyActivityWidget()
+        ExamActivityWidget()
         if #available(iOS 18.0, *) {
             FocusControl()
         }

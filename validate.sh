@@ -30,6 +30,9 @@ cp "$ROOT"/Shared/ColorContrast.swift "$WORK/Sources/"
 # La logique de temps de la Live Activity est pure (pas d'ActivityKit) : elle se
 # teste donc ici, ce qui aurait attrapé le compteur qui repartait de zéro.
 cp "$ROOT"/Shared/ActivityTimerState.swift "$WORK/Sources/"
+# Même raison pour le jour d'examen : quand l'activité s'ouvre et quand elle se
+# ferme sont des décisions pures, et ce sont les seules qui puissent se tromper.
+cp "$ROOT"/Shared/ExamActivityState.swift "$WORK/Sources/"
 cp "$ROOT"/Shared/WidgetBridge.swift "$WORK/Sources/"
 cp "$ROOT"/StudyTrack/Services/DataExporter.swift "$WORK/Sources/"
 cp "$ROOT"/StudyTrack/Services/CalendarService.swift "$WORK/Sources/"

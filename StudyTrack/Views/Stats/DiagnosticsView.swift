@@ -8,6 +8,8 @@ struct DiagnosticsView: View {
     @State private var entries: [LogEntry] = []
     @State private var level: LogEntry.Level?
     @State private var liveCount = 0
+    /// Les activités d'examen, comptées à part : elles vivent en parallèle du chrono.
+    @State private var examCount = 0
 
     private var liveIcon: String {
         guard StudyActivityController.isEnabledBySystem else { return "xmark.circle.fill" }
@@ -23,8 +25,11 @@ struct DiagnosticsView: View {
         guard StudyActivityController.isEnabledBySystem else {
             return "Les activités en direct sont refusées pour StudyTrack (Réglages du système)."
         }
-        if liveCount == 0 { return "Aucune activité en cours — l'îlot est vide, c'est normal." }
-        return "\(liveCount) activité\(liveCount > 1 ? "s" : "") en cours."
+        let total = liveCount + examCount
+        if total == 0 { return "Aucune activité en cours — l'îlot est vide, c'est normal." }
+        var text = "\(total) activité\(total > 1 ? "s" : "") en cours"
+        if examCount > 0 { text += " (dont \(examCount) d'examen)" }
+        return text + "."
     }
     @State private var showingClear = false
 
@@ -82,18 +87,30 @@ struct DiagnosticsView: View {
                 } label: {
                     Label("Lancer une activité d'essai", systemImage: "play.circle")
                 }
+                // L'activité d'examen se déclenche par le **temps** : sans ce
+                // bouton, la vérifier demanderait d'attendre la veille d'une vraie
+                // épreuve. C'est la même raison que pour l'essai du chrono.
+                Button {
+                    ExamActivityController.startTest()
+                    examCount = ExamActivityController.liveCount
+                    Haptics.tap()
+                } label: {
+                    Label("Essayer le jour d'examen", systemImage: "graduationcap")
+                }
                 Button(role: .destructive) {
                     StudyActivityController.end()
+                    ExamActivityController.end()
                     liveCount = StudyActivityController.liveCount
+                    examCount = ExamActivityController.liveCount
                     Haptics.warning()
                 } label: {
                     Label("Fermer toute activité", systemImage: "stop.circle")
                 }
-                .disabled(liveCount == 0)
+                .disabled(liveCount == 0 && examCount == 0)
             } header: {
                 Text("Îlot et écran verrouillé")
             } footer: {
-                Text("« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct.")
+                Text("« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct.")
             }
 
             Section {
@@ -124,6 +141,7 @@ struct DiagnosticsView: View {
         .onAppear {
             entries = AppLog.load()
             liveCount = StudyActivityController.liveCount
+            examCount = ExamActivityController.liveCount
         }
     }
 

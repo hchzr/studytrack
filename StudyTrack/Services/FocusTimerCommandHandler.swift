@@ -47,17 +47,13 @@ enum FocusTimerCommandHandler {
         case .pause:
             state.pause()
             FocusTimerStore.save(state)
-            StudyActivityController.sync(
-                attributes: attributes(for: state, container: container),
-                state: .make(elapsed: state.elapsed(), running: false))
+            StudyActivityController.publish(state, container: container)
             notify()
 
         case .resume:
             state.start()
             FocusTimerStore.save(state)
-            StudyActivityController.sync(
-                attributes: attributes(for: state, container: container),
-                state: .make(elapsed: state.elapsed(), running: true))
+            StudyActivityController.publish(state, container: container)
             notify()
 
         case .finish:
@@ -65,7 +61,37 @@ enum FocusTimerCommandHandler {
             FocusTimerStore.save(nil)
             StudyActivityController.end()
             notify()
+
+        case .nextQuestion:
+            // La coche est du travail de l'étudiant·e : elle est écrite avant
+            // toute chose, et l'activité n'est republiée qu'ensuite — sinon un
+            // appui donnerait un compte qui avance sans que la case soit cochée.
+            tickNextQuestion(state, container: container)
+            StudyActivityController.publish(state, container: container)
+            notify()
         }
+    }
+
+    /// Coche la première sous-question non faite de la cible.
+    ///
+    /// « La première non faite » et non « la suivante d'un curseur » : il n'y a
+    /// pas de curseur à tenir, donc rien qui puisse se désynchroniser de ce que
+    /// l'app affiche. Cocher depuis l'écran verrouillé et cocher dans la liste
+    /// écrivent la même chose.
+    @MainActor
+    private static func tickNextQuestion(_ state: FocusTimerState, container: AppContainer) {
+        let context = ModelContext(container.modelContainer)
+        guard let course = StudyActivityController.course(for: state, context: context),
+              let exercise = StudyActivityController.exercise(for: state, course: course),
+              let next = exercise.leafSubQuestions.first(where: { !$0.isDone }) else { return }
+
+        next.isDone = true
+        next.doneAt = Date()
+        // `refreshCompletion` remonte l'état aux questions parentes puis à
+        // l'exercice : `doneAt` reste la seule vérité pour le reste de l'app.
+        exercise.refreshCompletion()
+        try? context.save()
+        WidgetSnapshotWriter.refresh(context: context, settings: container.settings)
     }
 
     /// Enregistre la session — la même écriture que le bouton « Enregistrer ».
@@ -96,32 +122,6 @@ enum FocusTimerCommandHandler {
         context.insert(session)
         try? context.save()
         WidgetSnapshotWriter.refresh(context: context, settings: container.settings)
-    }
-
-    @MainActor
-    private static func attributes(for state: FocusTimerState,
-                                   container: AppContainer) -> StudyActivityAttributes {
-        let context = ModelContext(container.modelContainer)
-        let course = ((try? context.fetch(FetchDescriptor<Course>())) ?? [])
-            .first { $0.id == state.courseID }
-        let target = targetLabel(state, course: course)
-        return StudyActivityAttributes(courseCode: course?.displayCode ?? "Sans cours",
-                                       courseName: course?.name ?? "Session libre",
-                                       taskLabel: state.taskType.label,
-                                       taskIcon: state.taskType.icon,
-                                       target: target)
-    }
-
-    @MainActor
-    private static func targetLabel(_ state: FocusTimerState, course: Course?) -> String? {
-        guard let course, let targetID = state.targetID else { return nil }
-        if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
-            return exercise.displayNumber
-        }
-        if let item = course.theoryItems.first(where: { $0.id == targetID }) {
-            return item.displayNumber
-        }
-        return nil
     }
 
     @MainActor

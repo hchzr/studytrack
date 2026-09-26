@@ -235,7 +235,13 @@ struct FocusView: View {
                 }
                 Button("Annuler", role: .cancel) { sessionToDelete = nil }
             }
-            .onChange(of: pomodoro) { _, _ in schedulePomodoroIfNeeded() }
+            // L'anneau de l'îlot apparaît et disparaît avec le mode : sans cette
+            // republication, activer le Pomodoro en pleine session ne se voyait
+            // que sur l'écran Focus.
+            .onChange(of: pomodoro) { _, _ in
+                schedulePomodoroIfNeeded()
+                if isRunning { publishActivity() }
+            }
             // Revenir sur le chrono après un passage par le journal doit réafficher
             // la bonne durée immédiatement, sans attendre le battement suivant.
             .onChange(of: mode) { _, _ in now = Date() }
@@ -1017,6 +1023,10 @@ struct FocusView: View {
         pomodoroAnnounced = true
         Haptics.success()
         showingBreak = true
+        // L'anneau de l'îlot se remplit tout seul pendant le bloc, mais le passage
+        // au bloc suivant est un **changement d'état** : sans republication, il
+        // resterait plein jusqu'à la prochaine pause.
+        publishActivity()
     }
 
     /// Prévient les groupes que je travaille — ou que je viens d'arrêter.
@@ -1128,8 +1138,16 @@ struct FocusView: View {
                 taskLabel: taskType.label,
                 taskIcon: taskType.icon,
                 target: label),
-            state: StudyActivityAttributes.ContentState.make(elapsed: elapsed,
-                                                            running: startDate != nil))
+            // Le compte de sous-questions et l'anneau Pomodoro sont composés par
+            // le contrôleur, pas ici : c'est la même fonction que pour les
+            // commandes venues de l'écran verrouillé, donc les deux chemins
+            // publient exactement la même chose.
+            state: StudyActivityController.makeState(
+                elapsed: elapsed,
+                running: startDate != nil,
+                pomodoro: pomodoro,
+                focusMinutes: app.settings.pomodoroFocusMinutes,
+                exercise: target.exercise))
     }
 
     private func addManual() {

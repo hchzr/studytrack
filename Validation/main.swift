@@ -893,6 +893,119 @@ check(zero.elapsed(at: activityNow) == 0, "un chrono neuf part de zéro")
 let negative = ActivityTimerState.make(elapsed: -50, running: false, now: activityNow)
 check(negative.frozenTotal == 0, "un total négatif est ramené à zéro")
 
+print("== Live Activity : sous-questions et anneau Pomodoro ==")
+// Les champs ajoutés sont `Optional` pour deux raisons, toutes deux testées ici :
+// une activité publiée par une version précédente doit se décoder, et « pas de
+// sous-questions » ne doit pas se confondre avec « zéro sur zéro ».
+let bare = ActivityTimerState.make(elapsed: 120, running: true, now: activityNow)
+check(bare.questionsLabel == nil, "sans cible, aucun compte de sous-questions")
+check(!bare.hasNextQuestion, "…et donc pas de bouton « question suivante »")
+check(bare.questionsProgress == nil, "…ni de barre de progression")
+
+let withQuestions = ActivityTimerState.make(elapsed: 120, running: true,
+                                            questionsDone: 3, questionsTotal: 9,
+                                            now: activityNow)
+check(withQuestions.questionsLabel == "3/9", "trois sur neuf — \(withQuestions.questionsLabel ?? "nil")")
+check(withQuestions.hasNextQuestion, "il reste des questions à cocher")
+check(abs((withQuestions.questionsProgress ?? 0) - 1.0 / 3) < 0.001, "un tiers fait")
+
+let finished = ActivityTimerState.make(elapsed: 120, running: true,
+                                       questionsDone: 9, questionsTotal: 9,
+                                       now: activityNow)
+check(!finished.hasNextQuestion, "tout coché : plus de question suivante")
+check(finished.questionsLabel == "9/9", "…mais le compte reste affiché")
+
+let single = ActivityTimerState.make(elapsed: 120, running: true,
+                                     questionsDone: 0, questionsTotal: 1,
+                                     now: activityNow)
+check(single.questionsLabel == nil,
+      "une cible à une seule case n'affiche pas « 0/1 » : le bouton « fait » le dit déjà")
+check(single.hasNextQuestion, "…elle garde pourtant sa question suivante")
+
+// Décodage d'une activité écrite **avant** ces champs : le contrat de compatibilité.
+let legacyJSON = #"{"countingSince":"2023-11-14T22:13:20Z","frozenTotal":600}"#
+let legacyDecoder = JSONDecoder()
+legacyDecoder.dateDecodingStrategy = .iso8601
+if let data = legacyJSON.data(using: .utf8),
+   let legacy = try? legacyDecoder.decode(ActivityTimerState.self, from: data) {
+    check(legacy.frozenTotal == 600, "un état d'avant les sous-questions se décode encore")
+    check(legacy.questionsTotal == nil, "…et ses champs absents valent nil")
+    check(legacy.pomodoro == nil, "…y compris le bloc Pomodoro")
+} else {
+    check(false, "un état d'avant les sous-questions doit se décoder")
+}
+
+// L'anneau : les bornes en horloge murale sont ce que le système sait animer.
+let ring = ActivityPomodoro.make(blockNumber: 1, elapsedInBlock: 600, remaining: 900,
+                                 completedBlocks: 0, running: true, now: activityNow)
+check(ring.startedAt == activityNow.addingTimeInterval(-600),
+      "le bloc a commencé il y a dix minutes de travail")
+check(ring.endsAt == activityNow.addingTimeInterval(900), "…et se termine dans quinze")
+check(ring.interval != nil, "l'anneau a un intervalle à animer")
+check(abs(ring.frozenProgress - 0.4) < 0.001, "40 % du bloc")
+check(ring.label == "Bloc 1", "libellé du bloc")
+
+let pausedRing = ActivityPomodoro.make(blockNumber: 2, elapsedInBlock: 300, remaining: 1200,
+                                       completedBlocks: 1, running: false, now: activityNow)
+check(pausedRing.interval == nil,
+      "en pause, aucun intervalle : un anneau qui continue de se remplir mentirait")
+check(abs(pausedRing.frozenProgress - 0.2) < 0.001, "…mais la part faite reste connue")
+check(pausedRing.completedBlocks == 1, "un bloc déjà terminé")
+
+let completeRing = ActivityPomodoro.make(blockNumber: 1, elapsedInBlock: 1500, remaining: 0,
+                                         completedBlocks: 1, running: true, now: activityNow)
+check(completeRing.isBlockComplete, "un bloc à terme est marqué terminé")
+check(completeRing.interval == nil, "…et n'anime plus rien : l'intervalle serait vide")
+
+// Le pont entre le moteur et l'anneau : ce que l'app fera réellement.
+let engineStatus = PomodoroEngine.status(elapsed: 1500 * 2 + 600, focusMinutes: 25)
+let fromEngine = ActivityPomodoro.make(blockNumber: engineStatus.blockNumber,
+                                       elapsedInBlock: engineStatus.elapsedInBlock,
+                                       remaining: engineStatus.remaining,
+                                       completedBlocks: engineStatus.completedBlocks,
+                                       running: true, now: activityNow)
+check(fromEngine.blockNumber == 3, "le moteur donne le bloc 3, l'anneau le reprend")
+check(fromEngine.completedBlocks == 2, "…et ses deux blocs terminés")
+check(abs(fromEngine.frozenProgress - engineStatus.progress) < 0.001,
+      "…sans changer la fraction que le moteur a calculée")
+
+print("== Live Activity : le jour d'examen ==")
+// L'activité d'examen n'est déclenchée par aucun geste : elle s'ouvre et se ferme
+// **par le temps**. C'est donc la seule chose qui puisse se tromper, et elle est
+// ici entièrement testable.
+let examAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+check(ExamActivityState.phase(examDate: examAt, now: examAt.addingTimeInterval(-3600)) == .upcoming,
+      "une heure avant, l'épreuve est à venir")
+check(ExamActivityState.phase(examDate: examAt, now: examAt) == .running,
+      "à l'heure pile, l'épreuve est en cours")
+check(ExamActivityState.phase(examDate: examAt, now: examAt.addingTimeInterval(3600)) == .running,
+      "une heure après le début, toujours en cours")
+check(ExamActivityState.phase(examDate: examAt,
+                              now: examAt.addingTimeInterval(ExamActivityState.assumedDuration + 1)) == .over,
+      "passé la durée supposée, l'épreuve est terminée")
+
+// La fenêtre d'affichage : ni trop tôt — un compte à rebours de trois jours est
+// une pression, pas une information — ni après coup.
+check(!ExamActivityState.isRelevant(examDate: examAt, now: examAt.addingTimeInterval(-3 * 86400)),
+      "trois jours avant, aucune activité")
+check(!ExamActivityState.isRelevant(examDate: examAt,
+                                    now: examAt.addingTimeInterval(-ExamActivityState.lead - 60)),
+      "juste avant la fenêtre, toujours rien")
+check(ExamActivityState.isRelevant(examDate: examAt,
+                                   now: examAt.addingTimeInterval(-ExamActivityState.lead + 60)),
+      "dans les douze heures, l'activité s'affiche")
+check(ExamActivityState.isRelevant(examDate: examAt, now: examAt.addingTimeInterval(-1800)),
+      "une demi-heure avant, elle est là")
+check(ExamActivityState.isRelevant(examDate: examAt, now: examAt.addingTimeInterval(1800)),
+      "pendant l'épreuve, elle reste")
+check(!ExamActivityState.isRelevant(examDate: examAt,
+                                    now: examAt.addingTimeInterval(ExamActivityState.assumedDuration + 60)),
+      "après l'épreuve, elle disparaît — c'est ce qui laissait un îlot mort à l'écran")
+
+check(ExamActivityState.make(examDate: examAt, now: examAt.addingTimeInterval(-600)).phase == .upcoming,
+      "l'état publié reprend la phase déduite")
+
 print("== Pomodoro ==")
 check(PomodoroEngine.blockDuration(minutes: 25) == 1500, "25 min = 1500 s")
 check(PomodoroEngine.blockDuration(minutes: 0) == 60,

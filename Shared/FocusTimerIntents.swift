@@ -6,12 +6,15 @@ enum FocusTimerCommand: String, Codable, Sendable {
     case pause
     case resume
     case finish
+    /// Coche la prochaine sous-question de la cible.
+    case nextQuestion
 
     var label: String {
         switch self {
         case .pause: return "Mettre en pause"
         case .resume: return "Reprendre"
         case .finish: return "Enregistrer la session"
+        case .nextQuestion: return "Question suivante"
         }
     }
 }
@@ -94,6 +97,22 @@ struct FinishFocusTimerIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         FocusTimerBridge.request(.finish)
+        return .result()
+    }
+}
+
+/// Coche la sous-question en cours et passe à la suivante.
+///
+/// C'est le geste réel d'une série d'exercices : on finit (a), on passe à (b).
+/// Sans ce bouton, il fallait déverrouiller le téléphone, ouvrir l'app et
+/// retrouver l'exercice — pour cocher une case. La coche vit dans SwiftData, donc
+/// l'intention ne fait que déposer la commande ; c'est l'app qui écrit.
+struct NextQuestionIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Question suivante"
+    static var isDiscoverable: Bool = false
+
+    func perform() async throws -> some IntentResult {
+        FocusTimerBridge.request(.nextQuestion)
         return .result()
     }
 }
