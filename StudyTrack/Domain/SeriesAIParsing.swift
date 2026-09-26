@@ -37,8 +37,94 @@ enum SeriesAIParsing {
         return result.isEmpty ? String(cleaned.prefix(maxCharacters)) : result
     }
 
+    /// Limite du texte **mis en forme** envoyé à la fonction partagée, qui coupe
+    /// au-delà de 6 000 caractères. Couper nous-mêmes, en gardant la structure de
+    /// tout le document, vaut mieux que de laisser le serveur tronquer la fin :
+    /// c'est ce qui faisait disparaître les derniers exercices, un import sur deux.
+    static let layoutBudget = 5_800
+
+    /// Le texte d'un PDF **avec sa mise en page**, pour le modèle.
+    ///
+    /// Le modèle recevait un texte aplati alors que sa consigne lui demande de
+    /// juger l'indentation : il devinait. Ici chaque titre est préfixé de « # »,
+    /// chaque ligne garde son retrait (deux espaces par cran), et les pages sont
+    /// séparées. Les lignes de corps sont raccourcies avant les lignes de
+    /// structure, pour que **tout** le document tienne dans le budget.
+    static func prepareLayout(_ lines: [PDFLayoutLine], seriesHint: Int?) -> String {
+        let body = SeriesLayoutParser.bodyFontSize(lines)
+        let boldBody = SeriesLayoutParser.bodyIsBold(lines)
+        let margin = lines.filter { !$0.isEmpty && $0.indent > 0 }.map(\.indent).min() ?? 0
+
+        struct Entry { var text: String; var structural: Bool; var page: Int }
+        var entries: [Entry] = []
+        // Pieds et en-têtes de page répétés (« Compilation : … », numéro de page)
+        // n'apprennent rien au modèle et mangent son budget.
+        var pagesByText: [String: Set<Int>] = [:]
+        for line in lines where !line.isEmpty { pagesByText[line.trimmed, default: []].insert(line.pageIndex) }
+        for line in lines where !line.isEmpty {
+            let isPageNumber = line.trimmed.count <= 3 && line.trimmed.allSatisfy(\.isNumber)
+                && isFooterOrHeader(line, in: lines)
+            // Une ligne répétée sur plusieurs pages est un pied ou un en-tête — sauf
+            // si elle porte le numéro de série, qui reste un repère utile.
+            let isRunning = (pagesByText[line.trimmed]?.count ?? 0) >= 2
+                && isFooterOrHeader(line, in: lines)
+                && SeriesDocumentInference.seriesNumberInDocument([line]) == nil
+            if isRunning || isPageNumber { continue }
+            let heading = SeriesLayoutParser.isHeading(line, body: body, boldBody: boldBody)
+                || (!boldBody && line.startsBold)
+            // Arrondi par défaut, avec une tolérance : 104,6 et 105,9 pt sont le
+            // même retrait. `rounded()` les mettait de part et d'autre d'un cran.
+            let level = min(8, max(0, Int((line.indent - margin + 4) / 14)))
+            let indent = String(repeating: "  ", count: level)
+            let text = line.trimmed.replacingOccurrences(of: "\u{00A0}", with: " ")
+            let structural = heading || looksStructural(text)
+                || SeriesLayoutParser.questionLabel(text, allowNumbers: true) != nil
+            entries.append(Entry(text: indent + (heading ? "# " : "") + text,
+                                 structural: structural, page: line.pageIndex))
+        }
+
+        func render(bodyLimit: Int?) -> String {
+            var output: [String] = []
+            if let seriesHint { output.append("[Indice : ce document semble être la série \(seriesHint)]") }
+            var page = -1
+            var bodyRun = 0
+            for entry in entries {
+                if entry.page != page {
+                    page = entry.page
+                    output.append("--- page \(page + 1) ---")
+                }
+                if entry.structural {
+                    output.append(entry.text)
+                    bodyRun = 0
+                    continue
+                }
+                guard let bodyLimit else { output.append(entry.text); continue }
+                // Au plus deux lignes d'énoncé par bloc : de quoi voir « Calculer : »
+                // ou « (facultatif) », pas de quoi noyer la structure.
+                bodyRun += 1
+                if bodyLimit == 0 || bodyRun > 2 { continue }
+                output.append(entry.text.count > bodyLimit ? String(entry.text.prefix(bodyLimit)) + "…" : entry.text)
+            }
+            return output.joined(separator: "\n")
+        }
+
+        for limit in [nil, 90, 50, 0] as [Int?] {
+            let rendered = render(bodyLimit: limit)
+            if rendered.count <= layoutBudget { return rendered }
+        }
+        return String(render(bodyLimit: 0).prefix(layoutBudget))
+    }
+
+    /// Une ligne isolée tout en haut ou tout en bas de sa page.
+    private static func isFooterOrHeader(_ line: PDFLayoutLine, in lines: [PDFLayoutLine]) -> Bool {
+        if let position = line.verticalPosition { return position < 0.1 || position > 0.9 }
+        let page = lines.filter { $0.pageIndex == line.pageIndex && !$0.isEmpty }
+        guard let index = page.firstIndex(of: line) else { return false }
+        return index < 2 || index >= page.count - 2
+    }
+
     private static let structural = try! NSRegularExpression(
-        pattern: #"(?i)\b(s[ée]rie|exercice|exo|ex[ .\-]?\d|probl[eè]me|question|bonus|facultatif|optionnel)\b|^\s*\d{1,2}[.\-·]\d{1,2}\b"#,
+        pattern: #"(?i)\b(s[ée]ries?|exercices?|exercises?|exo|ex[ .\-]?\d|probl[eè]mes?|problems?|aufgabe|question|bonus|facultatif|optionnel|optional)\b|^\s*\d{1,2}[.\-·]\d{1,2}\b"#,
         options: []
     )
 
@@ -54,24 +140,129 @@ enum SeriesAIParsing {
     static let instructions = """
     Tu extrais la structure d'une série d'exercices d'un cours EPFL à partir du texte brut d'un PDF.
     Réponds UNIQUEMENT avec un objet JSON de la forme :
-    {"series":[{"number":3,"title":"Récurrences","exercises":[{"number":"3.1","title":"Tri fusion","isBonus":false}]}]}
-    Règles : n'invente aucun exercice ni numéro absent du texte ; le numéro d'un exercice s'écrit « série.exercice » (ex. « 3.2 ») ; si le PDF ne numérote que « Exercice 2 » dans la Série 3, écris « 3.2 » ; « title » est l'intitulé court s'il existe, sinon une chaîne vide (jamais l'énoncé) ; « isBonus » vaut true si l'exercice est marqué bonus, facultatif, optionnel ou étoilé ; s'il n'y a aucune série, renvoie {"series":[]}.
+    {"series":[{"number":3,"title":"Récurrences","exercises":[{"number":"3.1","title":"Tri fusion","isBonus":false,"questions":[{"label":"1","text":"Montrer la borne"},{"label":"2","text":"Cas d'égalité"}]}]}]}
+    Format du texte : « # » en début de ligne marque un titre du PDF ; les espaces de tête reproduisent le retrait (une question est décalée sous son exercice) ; « --- page N --- » sépare les pages ; « [Indice : … série N] » donne le numéro de série à utiliser.
+    Langue : écris « title » et le texte des questions dans la même langue que le PDF.
+    Exercices et questions : « exercises » contient les EXERCICES, pas les questions. Un exercice peut poser plusieurs questions — elles vont dans « questions ». Si le PDF introduit une liste par une phrase suivie de deux points (« Calculer : », « Déterminer : ») puis numérote 1., 2., ce sont les questions d'un même exercice. Si chaque numéro est une consigne autonome, ce sont des exercices distincts.
+    Numérotation : « number » de la série est un entier (« Série 02a » donne 2) ; le numéro d'un exercice s'écrit toujours « série.exercice » (« 3.2 »), même si le PDF recommence à 1 dans chaque section ; sans numéro, prends le numéro suivant dans l'ordre. N'invente aucun exercice absent du texte.
+    Titre : « title » est TOUJOURS rempli, jamais vide. Reprends l'intitulé court s'il existe ; sinon écris toi-même 2 à 6 mots qui nomment la tâche, en t'appuyant sur le titre de la section ou sur l'objet de l'exercice. Ne recopie jamais l'énoncé complet.
+    « isBonus » vaut true si l'exercice est marqué bonus, facultatif, optionnel ou étoilé. S'il n'y a aucune série, renvoie {"series":[]}.
     """
 
     // MARK: Lecture de la réponse
+
+    /// Une valeur que le modèle peut écrire de plusieurs façons.
+    ///
+    /// Le JSON d'un modèle de langage **n'est pas un contrat** : il écrit `2` là où
+    /// on attend `"2"`, `"02a"` là où on attend un entier, `"oui"` là où on attend
+    /// un booléen. Un décodeur strict rejette alors **toute** la réponse pour un
+    /// seul champ — et l'utilisateur voit une extraction vide sans savoir pourquoi.
+    /// On lit donc souplement, et on ne refuse que ce qui n'a vraiment aucun sens.
+    private enum Flexible {
+
+        static func int<K: CodingKey>(_ container: KeyedDecodingContainer<K>,
+                                      _ key: K) -> Int? {
+            if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value }
+            if let value = try? container.decodeIfPresent(Double.self, forKey: key) { return Int(value) }
+            guard let text = try? container.decodeIfPresent(String.self, forKey: key) else { return nil }
+            return leadingInt(text)
+        }
+
+        static func string<K: CodingKey>(_ container: KeyedDecodingContainer<K>,
+                                         _ key: K) -> String? {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key) { return value }
+            if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return String(value) }
+            if let value = try? container.decodeIfPresent(Double.self, forKey: key) { return String(value) }
+            return nil
+        }
+
+        static func bool<K: CodingKey>(_ container: KeyedDecodingContainer<K>,
+                                       _ key: K) -> Bool? {
+            if let value = try? container.decodeIfPresent(Bool.self, forKey: key) { return value }
+            guard let text = try? container.decodeIfPresent(String.self, forKey: key) else { return nil }
+            switch text.trimmingCharacters(in: .whitespaces).lowercased() {
+            case "true", "oui", "yes", "vrai", "1": return true
+            case "false", "non", "no", "faux", "0": return false
+            default: return nil
+            }
+        }
+
+        /// Le premier entier d'un texte : « 02a » → 2, « Série 3 » → 3.
+        static func leadingInt(_ text: String) -> Int? {
+            let digits = text.drop(while: { !$0.isNumber }).prefix(while: { $0.isNumber })
+            return digits.isEmpty ? nil : Int(digits)
+        }
+    }
 
     private struct Payload: Decodable {
         struct Series: Decodable {
             var number: Int?
             var title: String?
             var exercises: [Exercise]?
+
+            enum Keys: String, CodingKey { case number, title, exercises }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: Keys.self)
+                number = Flexible.int(container, Keys.number)
+                title = Flexible.string(container, Keys.title)
+                // Une liste absente ou d'un type inattendu ne doit pas faire perdre
+                // la série : on la remplace par une liste vide.
+                exercises = (try? container.decodeIfPresent([Exercise].self, forKey: .exercises)) ?? []
+            }
         }
+
+        /// Une question, écrite de deux façons selon le modèle.
+        ///
+        /// On demande une simple étiquette — `"questions":["1","2"]` — parce que
+        /// recopier un énoncé mathématique dans une chaîne JSON produit souvent du
+        /// JSON invalide. Mais un modèle bavard répond parfois
+        /// `[{"label":"1","text":"…"}]` : on accepte les deux plutôt que de perdre
+        /// la structure pour une question de forme.
+        struct Question: Decodable {
+            var label: String?
+            var text: String?
+
+            enum Keys: String, CodingKey { case label, text }
+
+            init(from decoder: Decoder) throws {
+                if let single = try? decoder.singleValueContainer(),
+                   let text = try? single.decode(String.self) {
+                    label = text
+                    self.text = ""
+                    return
+                }
+                let container = try decoder.container(keyedBy: Keys.self)
+                label = Flexible.string(container, Keys.label)
+                text = Flexible.string(container, Keys.text)
+            }
+        }
+
         struct Exercise: Decodable {
             var number: String?
             var title: String?
             var isBonus: Bool?
+            var questions: [Question]?
+
+            enum Keys: String, CodingKey { case number, title, isBonus, questions }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: Keys.self)
+                number = Flexible.string(container, Keys.number)
+                title = Flexible.string(container, Keys.title)
+                isBonus = Flexible.bool(container, Keys.isBonus)
+                questions = (try? container.decodeIfPresent([Question].self, forKey: .questions)) ?? []
+            }
         }
+
         var series: [Series]?
+
+        enum Keys: String, CodingKey { case series }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Keys.self)
+            series = (try? container.decodeIfPresent([Series].self, forKey: .series)) ?? []
+        }
     }
 
     /// Lit la réponse du modèle, tolérante aux bavardages autour du JSON.
@@ -93,13 +284,25 @@ enum SeriesAIParsing {
             guard let number = series.number, (1...60).contains(number) else { continue }
             var seen = Set<String>()
             var exercises: [DetectedExercise] = []
+            var nextIndex = 1
             for exercise in series.exercises ?? [] {
-                guard let candidate = normalizeNumber(exercise.number, series: number),
-                      seen.insert(candidate).inserted else { continue }
+                // Un exercice sans numéro n'est pas jeté : beaucoup de polycopiés
+                // numérotent leurs exercices 1, 2, 3 **dans chaque section**, et
+                // certains n'en donnent aucun. On prend alors le premier numéro
+                // libre, ce qui laisse à l'étudiant·e une ligne à cocher plutôt
+                // qu'un exercice invisible.
+                var candidate = normalizeNumber(exercise.number, series: number)
+                if candidate == nil {
+                    while seen.contains("\(number).\(nextIndex)") { nextIndex += 1 }
+                    candidate = "\(number).\(nextIndex)"
+                }
+                guard let candidate, seen.insert(candidate).inserted else { continue }
+                nextIndex += 1
                 let title = (exercise.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 exercises.append(DetectedExercise(number: candidate,
                                                   title: SeriesPDFParser.looksLikeTitle(title) ? title : "",
-                                                  isBonus: exercise.isBonus ?? false))
+                                                  isBonus: exercise.isBonus ?? false,
+                                                  subQuestions: subQuestions(exercise.questions)))
             }
             exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
             if let existing = result.firstIndex(where: { $0.number == number }) {
@@ -112,6 +315,25 @@ enum SeriesAIParsing {
             }
         }
         return result.sorted { $0.number < $1.number }
+    }
+
+    /// Les sous-questions d'un exercice, étiquetées et dédoublonnées.
+    ///
+    /// Une sous-question sans étiquette reçoit son rang : le polycopié les numérote
+    /// presque toujours, et une case sans nom reste utilisable.
+    private static func subQuestions(_ raw: [Payload.Question]?) -> [DetectedSubQuestion] {
+        // Une seule « question », c'est l'exercice lui-même : pas de case à part.
+        guard let raw, raw.count >= 2 else { return [] }
+        var seen = Set<String>()
+        var result: [DetectedSubQuestion] = []
+        for (index, question) in raw.enumerated() {
+            let label = (question.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolved = label.isEmpty ? String(index + 1) : label
+            guard seen.insert(resolved).inserted else { continue }
+            let text = (question.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            result.append(DetectedSubQuestion(label: resolved, text: text))
+        }
+        return result
     }
 
     /// « 2 » dans la série 3 → « 3.2 » ; « 3.2 » reste ; « Ex 3.2 » → « 3.2 ».
@@ -139,34 +361,82 @@ enum SeriesAIParsing {
 
     /// Fusionne l'heuristique et la réponse du modèle.
     ///
-    /// Le modèle **complète** : il apporte les exercices que les motifs ont ratés
-    /// et les intitulés qu'ils ne savent pas isoler. Il ne **retire** rien de ce
-    /// que l'heuristique a lu — un numéro présent dans le texte ne disparaît pas
-    /// parce qu'un modèle l'a oublié. Sur un bonus, le modèle l'emporte s'il dit
-    /// oui (il lit « ⋆ » et « facultatif » mieux qu'un motif).
-    static func merge(heuristic: [DetectedSeries], ai: [DetectedSeries]) -> [DetectedSeries] {
-        guard !ai.isEmpty else { return heuristic }
-        var result = heuristic
-        for series in ai {
-            if let index = result.firstIndex(where: { $0.number == series.number }) {
-                if result[index].title.isEmpty, !series.title.isEmpty {
-                    result[index].title = series.title
+    /// Trois règles, dans l'ordre :
+    ///   1. **Un seul numéro de série.** Quand chaque côté ne voit qu'une série
+    ///      mais pas la même — l'heuristique rangeait tout en série 1 faute
+    ///      d'en-tête, le modèle lisait 4 —, les deux sont ramenés au numéro que le
+    ///      document annonce (`preferredSeries`), à défaut à celui du modèle.
+    ///      Sans ça, l'écran proposait deux séries pour un seul PDF.
+    ///   2. **Le modèle complète**, il n'efface pas ce qui est sûr : un exercice
+    ///      repéré par un mot-clé (« Exercice 3 ») reste, même oublié par le modèle.
+    ///   3. **Un repère douteux doit être confirmé.** Un numéro nu (« 1.5 ») que
+    ///      le modèle ne retrouve pas est écarté : c'était, le plus souvent, une
+    ///      ligne de démonstration.
+    static func merge(heuristic: [DetectedSeries], ai: [DetectedSeries],
+                      preferredSeries: Int? = nil) -> [DetectedSeries] {
+        guard !ai.isEmpty, ai.contains(where: { !$0.exercises.isEmpty }) else { return heuristic }
+        var heuristic = heuristic
+        var ai = ai
+
+        if heuristic.count <= 1, ai.count == 1 {
+            let target = preferredSeries ?? ai[0].number
+            ai = ai.map { renumber($0, to: target) }
+            heuristic = heuristic.map { renumber($0, to: target) }
+        } else if let preferredSeries, heuristic.count == 1, ai.count > 1,
+                  !ai.contains(where: { $0.number == heuristic[0].number }) {
+            heuristic = heuristic.map { renumber($0, to: preferredSeries) }
+        }
+
+        var result = ai
+        let aiSeriesNumbers = Set(ai.map(\.number))
+        for series in heuristic {
+            guard let index = result.firstIndex(where: { $0.number == series.number }) else {
+                // Série que le modèle n'a pas vue : on la garde si elle repose sur
+                // des repères sûrs.
+                let kept = series.exercises.filter(\.isConfident)
+                if !kept.isEmpty || (series.exercises.isEmpty && !aiSeriesNumbers.contains(series.number) && !series.title.isEmpty) {
+                    result.append(DetectedSeries(number: series.number, title: series.title, exercises: kept))
                 }
-                for exercise in series.exercises {
-                    if let existing = result[index].exercises.firstIndex(where: { $0.number == exercise.number }) {
-                        if result[index].exercises[existing].title.isEmpty, !exercise.title.isEmpty {
-                            result[index].exercises[existing].title = exercise.title
-                        }
-                        if exercise.isBonus { result[index].exercises[existing].isBonus = true }
-                    } else {
-                        result[index].exercises.append(exercise)
-                    }
-                }
-                result[index].exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
-            } else {
-                result.append(series)
+                continue
             }
+            if result[index].title.isEmpty, !series.title.isEmpty {
+                result[index].title = series.title
+            }
+            for exercise in series.exercises {
+                if let existing = result[index].exercises.firstIndex(where: { $0.number == exercise.number }) {
+                    var merged = result[index].exercises[existing]
+                    if merged.title.isEmpty { merged.title = exercise.title }
+                    merged.isBonus = merged.isBonus || exercise.isBonus
+                    merged.isConfident = true
+                    // Les sous-questions ne s'additionnent pas : c'est le même
+                    // exercice, décrit deux fois. La lecture du texte l'emporte
+                    // quand elle en a trouvé — elle est déterministe, et le modèle
+                    // se trompe sur les listes en deux colonnes. Le modèle ne
+                    // comble que l'absence.
+                    if !exercise.subQuestions.isEmpty {
+                        merged.subQuestions = exercise.subQuestions
+                    }
+                    result[index].exercises[existing] = merged
+                } else if exercise.isConfident {
+                    result[index].exercises.append(exercise)
+                }
+            }
+            result[index].exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
         }
         return result.sorted { $0.number < $1.number }
+    }
+
+    /// La même série sous un autre numéro : « 1.3 » devient « 4.3 ».
+    static func renumber(_ series: DetectedSeries, to number: Int) -> DetectedSeries {
+        guard series.number != number else { return series }
+        var copy = series
+        copy.number = number
+        copy.exercises = series.exercises.map { exercise in
+            var moved = exercise
+            let minor = exercise.number.split(separator: ".").last.map(String.init) ?? exercise.number
+            moved.number = "\(number).\(minor)"
+            return moved
+        }
+        return copy
     }
 }

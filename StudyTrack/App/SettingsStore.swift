@@ -29,6 +29,10 @@ final class SettingsStore {
         static let shareProgressWithGroups = "settings.shareProgressWithGroups"
         static let trackAttendance = "settings.trackAttendance"
         static let hasSeededSampleData = "settings.hasSeededSampleData"
+        static let focusShortcuts = "settings.focusShortcuts"
+        static let ankiEndpoint = "settings.ankiEndpoint"
+        static let ankiDeck = "settings.ankiDeck"
+        static let ankiModel = "settings.ankiModel"
         static let aiExtractionEnabled = "settings.aiExtractionEnabled"
         static let aiEndpoint = "settings.aiEndpoint"
         static let aiAPIKey = "settings.aiAPIKey"
@@ -96,6 +100,32 @@ final class SettingsStore {
     var aiAPIKey: String { didSet { defaults.set(aiAPIKey, forKey: Key.aiAPIKey) } }
     var aiModel: String { didSet { defaults.set(aiModel, forKey: Key.aiModel) } }
 
+    // MARK: Anki
+    /// Adresse d'AnkiConnect. Vide = fonctionnalité éteinte.
+    ///
+    /// Ce n'est pas `127.0.0.1` par défaut : sur un iPhone, cette adresse désigne
+    /// le téléphone lui-même, pas le Mac où tourne Anki. On laisse le champ vide
+    /// et l'écran explique quoi y mettre, plutôt que de proposer une valeur qui ne
+    /// peut pas marcher.
+    var ankiEndpoint: String { didSet { defaults.set(ankiEndpoint, forKey: Key.ankiEndpoint) } }
+    var ankiDeck: String { didSet { defaults.set(ankiDeck, forKey: Key.ankiDeck) } }
+    /// Modèle de note Anki. « Basic » est le nom par défaut d'Anki.
+    var ankiModel: String { didSet { defaults.set(ankiModel, forKey: Key.ankiModel) } }
+
+    var isAnkiConfigured: Bool { AnkiConnect.normalizeEndpoint(ankiEndpoint) != nil }
+
+    // MARK: Chrono
+    /// Raccourcis du chrono, composés par l'étudiant·e.
+    ///
+    /// Stockés en JSON plutôt qu'en liste de clés : l'ordre compte, et un tableau
+    /// se relit d'un coup.
+    var focusShortcutsRaw: String { didSet { defaults.set(focusShortcutsRaw, forKey: Key.focusShortcuts) } }
+
+    var focusShortcuts: [FocusShortcut] {
+        get { FocusShortcut.decode(focusShortcutsRaw) }
+        set { focusShortcutsRaw = FocusShortcut.encode(newValue) }
+    }
+
     // MARK: État interne
     var hasSeededSampleData: Bool { didSet { defaults.set(hasSeededSampleData, forKey: Key.hasSeededSampleData) } }
 
@@ -125,6 +155,10 @@ final class SettingsStore {
         self.thingsEnabled = defaults.bool(forKey: Key.thingsEnabled)
         self.timetableURLString = defaults.string(forKey: Key.timetableURLString) ?? ""
         self.hasSeededSampleData = defaults.bool(forKey: Key.hasSeededSampleData)
+        self.focusShortcutsRaw = defaults.string(forKey: Key.focusShortcuts) ?? ""
+        self.ankiEndpoint = defaults.string(forKey: Key.ankiEndpoint) ?? ""
+        self.ankiDeck = defaults.string(forKey: Key.ankiDeck) ?? "StudyTrack"
+        self.ankiModel = defaults.string(forKey: Key.ankiModel) ?? "Basic"
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         // Une version intermédiaire proposait un service anonyme aujourd'hui
         // épuisé : on revient au pré-remplissage courant si rien n'a été saisi.

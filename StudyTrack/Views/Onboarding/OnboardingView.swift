@@ -446,6 +446,11 @@ struct OnboardingView: View {
         }
         try? context.save()
         app.settings.hasCompletedOnboarding = true
+        // La demande de notifications arrive **ici**, au terme d'une configuration
+        // que l'étudiant·e vient de faire — et non plus au lancement de l'app, où
+        // une alerte système sans contexte recouvrait le premier écran.
+        let notifications = app.notifications
+        Task { _ = await notifications.requestAuthorization() }
     }
 
     private func resolvedTerm() -> AcademicTerm {

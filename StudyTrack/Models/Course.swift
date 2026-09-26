@@ -56,6 +56,9 @@ final class Course {
     @Relationship(deleteRule: .cascade, inverse: \Exam.course)
     var exams: [Exam] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \PastExam.course)
+    var pastExams: [PastExam] = []
+
     @Relationship(deleteRule: .cascade, inverse: \LinkedTask.course)
     var linkedTasks: [LinkedTask] = []
 
@@ -128,6 +131,15 @@ final class Course {
     var allExercises: [Exercise] { series.flatMap(\.exercises) }
 
     var sortedExams: [Exam] { exams.sorted { $0.date < $1.date } }
+
+    /// Annales, de la plus récente à la plus ancienne — l'ordre dans lequel on les
+    /// travaille.
+    var sortedPastExams: [PastExam] {
+        pastExams.sorted { lhs, rhs in
+            if lhs.year != rhs.year { return lhs.year > rhs.year }
+            return lhs.addedAt > rhs.addedAt
+        }
+    }
 
     var nextExam: Exam? { sortedExams.first { $0.date >= Date() } }
 

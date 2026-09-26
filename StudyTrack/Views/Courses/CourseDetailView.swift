@@ -4,15 +4,20 @@ import SwiftData
 /// Détail d'un cours : théorie, exercices, progression, agenda.
 struct CourseDetailView: View {
     let course: Course
+    /// Onglet ouvert à l'arrivée. La recherche y mène directement : arriver sur
+    /// « Théorie » après avoir cherché un exercice ferait rater ce qu'on venait
+    /// chercher.
+    var initialSection: Section = .theory
 
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var tab: Section = .theory
+    @State private var hasAppliedInitialSection = false
     @State private var showingEditor = false
     @State private var showingDelete = false
 
-    enum Section: String, CaseIterable, Identifiable {
+    enum Section: String, CaseIterable, Identifiable, Hashable {
         case theory, exercises, progress, agenda
         var id: String { rawValue }
         var title: String {
@@ -101,6 +106,10 @@ struct CourseDetailView: View {
             CourseFormView(course: course)
         }
         .onAppear {
+            if !hasAppliedInitialSection {
+                hasAppliedInitialSection = true
+                tab = initialSection
+            }
             #if DEBUG
             // `-courseTab agenda` : le segment est à un tap, que `simctl` ne sait pas faire.
             if let raw = PreviewLaunch.string(PreviewLaunch.courseTabFlag),
@@ -146,14 +155,17 @@ struct CourseDetailView: View {
                                 Text(course.code).font(.caption).foregroundStyle(.secondary)
                             }
                         }
+                        // Les heures encadrées en une ligne de texte : trois
+                        // pastilles se coupaient en deux lignes (« 3 h / amphi »).
                         HStack(spacing: Layout.snug) {
                             Pill(text: "\(Int(course.credits)) ECTS", color: Color(hex: course.colorHex))
-                            if course.hasLectures {
-                                Pill(text: "\(fmt(course.weeklyLectureHours)) h amphi", color: .blue, icon: "building.columns.fill")
-                            } else {
-                                Pill(text: "sans amphi", color: .secondary)
-                            }
-                            Pill(text: "\(fmt(course.weeklyExerciseHours)) h exos", color: .green, icon: "checklist")
+                            Text(course.hasLectures
+                                 ? "\(fmt(course.weeklyLectureHours)) h cours · \(fmt(course.weeklyExerciseHours)) h exos"
+                                 : "\(fmt(course.weeklyExerciseHours)) h exos · sans amphi")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         if let term = course.term {
                             Text(term.statusLabel)

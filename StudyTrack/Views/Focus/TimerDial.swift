@@ -1,0 +1,257 @@
+import SwiftUI
+
+/// Le cadran du chrono : un anneau, le temps au centre.
+///
+/// Le compteur était un simple texte posé dans une carte. Un anneau fait deux
+/// choses qu'un texte ne fait pas : il **situe** la session dans le bloc en cours,
+/// et il donne au chrono la présence visuelle qu'on attend de l'écran principal
+/// d'une app de travail.
+struct TimerDial: View {
+    var time: String
+    /// Progression de l'anneau. `nil` quand il n'y a rien à mesurer — le chrono
+    /// libre n'a pas d'échéance, et un anneau qui tourne pour rien mentirait.
+    var progress: Double?
+    var tint: Color = Theme.accent
+    var isRunning: Bool = false
+    /// Libellé sous le temps (« Bloc 2 », « reste 12 min »).
+    var caption: String?
+    /// Ce sur quoi porte la session (« CS-250 · Exercices »).
+    var context: String?
+    /// Temps écoulé, en secondes. Sert à **poser** le point sur l'anneau : sa
+    /// position est le temps lui-même, pas un angle tenu à part — le point ne peut
+    /// donc pas diverger de l'affichage.
+    var elapsed: TimeInterval = 0
+    /// Mode ajustement : un point apparaît sur l'anneau et se fait glisser.
+    var isAdjusting: Bool = false
+    /// Variation à appliquer, en secondes (positive ou négative).
+    var onAdjust: ((TimeInterval) -> Void)?
+    /// Remise à zéro, proposée dans le mode ajustement.
+    var onReset: (() -> Void)?
+    /// Fixe le temps **absolu** — c'est ce qu'un champ éditable demande.
+    var onSet: ((TimeInterval) -> Void)??
+
+    /// Un tour complet de l'anneau vaut une heure : 6° par minute. Assez fin pour
+    /// viser la minute, assez large pour ajouter une heure en un geste.
+    private static let minutesPerTurn: Double = 60
+
+    @ScaledMetric(relativeTo: .largeTitle) private var diameter: CGFloat = 236
+    @ScaledMetric(relativeTo: .largeTitle) private var timeSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .body) private var ringWidth: CGFloat = 14
+
+    private var clamped: Double { min(1, max(0, progress ?? 0)) }
+
+    /// Position du point sur l'anneau : le temps ramené à un tour d'heure.
+    private var knobAngle: Double {
+        let secondsInTurn = max(0, elapsed).truncatingRemainder(dividingBy: 3600)
+        return secondsInTurn / 3600 * 360
+    }
+
+    /// Dernier angle touché, pour ne compter que la **variation**.
+    @State private var lastDragAngle: Double?
+    /// Saisie au clavier en cours.
+    @State private var isTyping = false
+    @State private var typed = ""
+    @FocusState private var typingFocused: Bool
+    /// Minute atteinte au dernier retour haptique.
+    @State private var lastTick: Int = 0
+
+    var body: some View {
+        ZStack {
+            // Piste : toujours visible, pour que l'anneau ne « saute » pas quand la
+            // progression repart de zéro.
+            Circle()
+                .stroke(tint.badgeFill, lineWidth: ringWidth)
+
+            if progress != nil {
+                Circle()
+                    .trim(from: 0, to: clamped)
+                    .stroke(tint.accessibleMark,
+                            style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    // La progression doit glisser, pas sauter d'un coup à chaque
+                    // battement : c'est ce qui rend l'anneau lisible pendant
+                    // qu'on travaille.
+                    .animation(.easeOut(duration: 0.35), value: clamped)
+            }
+
+            if isAdjusting {
+                // Le point à faire glisser, posé sur l'anneau.
+                Circle()
+                    .fill(tint.accessibleMark)
+                    .frame(width: ringWidth + 8, height: ringWidth + 8)
+                    .overlay(Circle().stroke(Theme.softBackground, lineWidth: 3))
+                    .offset(y: -diameter / 2)
+                    .rotationEffect(.degrees(knobAngle))
+                    .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+            }
+
+            VStack(spacing: 6) {
+                if isTyping {
+                    // Un champ, au même endroit et à la même taille que le temps :
+                    // on corrige ce qu'on lit, sans changer d'écran.
+                    TextField("", text: $typed)
+                        .font(.system(size: timeSize * 0.8, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .multilineTextAlignment(.center)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textFieldStyle(.plain)
+                        .focused($typingFocused)
+                        .frame(maxWidth: diameter - ringWidth * 2 - 24)
+                        .foregroundStyle(tint.accessibleInk)
+                        .onSubmit(commitTyping)
+                        .onChange(of: typingFocused) { _, focused in
+                            if !focused { commitTyping() }
+                        }
+                        .accessibilityLabel("Temps compté, format minutes:secondes")
+                } else {
+                    Text(time)
+                        .font(.system(size: timeSize, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .contentTransition(.numericText())
+                        .foregroundStyle(isRunning ? tint.accessibleInk : .primary)
+                        // En ajustement, taper le temps ouvre la saisie : c'est le
+                        // geste qu'on essaie d'abord, avant de faire glisser.
+                        .onTapGesture {
+                            guard isAdjusting, onSet != nil else { return }
+                            typed = TimerText.text(from: elapsed)
+                            isTyping = true
+                            typingFocused = true
+                        }
+                        .accessibilityHint(isAdjusting ? "Touche pour saisir le temps" : "")
+                }
+
+                if let context {
+                    Text(context)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Theme.softBackground, in: Capsule())
+                }
+
+                if let caption {
+                    Text(caption)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, ringWidth + 8)
+        }
+        .frame(width: diameter, height: diameter)
+        .contentShape(Circle())
+        .gesture(isAdjusting && onAdjust != nil ? dragGesture : nil)
+        .animation(.easeOut(duration: 0.2), value: isAdjusting)
+        // Un anneau est décoratif : ce qui compte est le temps, déjà lisible.
+        .accessibilityElement(children: isAdjusting ? .contain : .combine)
+        .accessibilityLabel([time, context, caption].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityHint(isAdjusting ? "Fais glisser autour de l'anneau pour ajuster le temps" : "")
+    }
+
+    /// Valide la saisie. Un texte illisible laisse le temps tel quel : mieux vaut
+    /// ne rien changer que de mettre zéro sur une faute de frappe.
+    private func commitTyping() {
+        defer { isTyping = false }
+        guard let seconds = TimerText.seconds(from: typed) else { return }
+        onSet??(seconds)
+        Haptics.tap()
+    }
+
+    // MARK: Ajustement au doigt
+
+    /// Glisser **autour** de l'anneau modifie le temps.
+    ///
+    /// La variation, et non la position : viser une position absolue obligerait à
+    /// savoir où l'on se trouve sur le tour, et un temps de plus d'une heure
+    /// reviendrait au même point. Ici, un tour complet vaut une heure, dans un sens
+    /// comme dans l'autre, quel que soit le total.
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let center = CGPoint(x: diameter / 2, y: diameter / 2)
+                let vector = CGVector(dx: value.location.x - center.x,
+                                      dy: value.location.y - center.y)
+                // `atan2` donne l'angle depuis l'axe des x ; on le ramène à un
+                // repère où midi vaut 0, comme l'anneau.
+                var degrees = atan2(vector.dy, vector.dx) * 180 / .pi + 90
+                if degrees < 0 { degrees += 360 }
+
+                defer { lastDragAngle = degrees }
+                guard let previous = lastDragAngle else { return }
+
+                // Écart le plus court : passer de 359° à 1° vaut +2°, pas −358°.
+                var delta = degrees - previous
+                if delta > 180 { delta -= 360 }
+                if delta < -180 { delta += 360 }
+
+                let minutes = delta / 360 * Self.minutesPerTurn
+                let seconds = minutes * 60
+                guard abs(seconds) >= 1 else { return }
+
+                onAdjust?(seconds)
+
+                // Un retour toutes les minutes : on sent la valeur défiler sans
+                // quitter l'anneau des yeux.
+                let tick = Int((max(0, elapsed + seconds) / 60).rounded(.down))
+                if tick != lastTick {
+                    lastTick = tick
+                    Haptics.soft()
+                }
+            }
+            .onEnded { _ in
+                lastDragAngle = nil
+            }
+    }
+}
+
+/// Le bouton principal du chrono : un disque, une icône, un mot.
+///
+/// Les deux boutons « Démarrer » et « Enregistrer » avaient le même poids visuel.
+/// Or il y a une action qu'on fait dix fois par session (démarrer, mettre en pause)
+/// et une qu'on fait une fois (enregistrer).
+struct TimerPrimaryButton: View {
+    var isRunning: Bool
+    var hasElapsed: Bool
+    var tint: Color = Theme.accent
+    var action: () -> Void
+
+    @ScaledMetric(relativeTo: .title) private var diameter: CGFloat = 76
+
+    private var title: String {
+        if isRunning { return "Pause" }
+        return hasElapsed ? "Reprendre" : "Démarrer"
+    }
+
+    private var icon: String {
+        if isRunning { return "pause.fill" }
+        return hasElapsed ? "play.fill" : "play.fill"
+    }
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(tint.badgeFill)
+                    Circle().stroke(tint.accessibleMark, lineWidth: 2)
+                    Image(systemName: icon)
+                        .font(.system(size: diameter * 0.34, weight: .bold))
+                        .foregroundStyle(tint.accessibleInk)
+                        // L'icône glisse vers sa nouvelle position au changement
+                        // d'état : le geste se lit sans regarder le libellé.
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: diameter, height: diameter)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+}

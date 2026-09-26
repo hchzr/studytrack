@@ -11,6 +11,8 @@ struct ProfileView: View {
 
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    @Query private var milestones: [AcademicMilestone]
+    @Query private var groups: [StudyGroup]
 
     @State private var appleNonce = ""
     @State private var email = ""
@@ -20,23 +22,31 @@ struct ProfileView: View {
     @State private var exportURL: URL?
     /// Écran « Section et semestre », ouvert par la barre de navigation.
     @State private var showingSchool = false
+    @State private var showingAIImport = false
     @State private var showingReset = false
+    @State private var showingDeleteAccount = false
     @State private var csvURL: URL?
 
     var body: some View {
         NavigationStack {
             Form {
+                // Du plus personnel au plus technique : toi et ton semestre, tes
+                // habitudes, les services branchés, ton compte et tes données, puis
+                // ce qui ne sert qu'en cas de problème.
+                storeSection
                 identitySection(app.settings)
                 sectionPicker(app.settings)
                 calendarSection(app.settings)
-                tasksSection(app.settings)
-                aiSection
-                workloadSection(app.settings)
-                focusSection(app.settings)
                 notificationsSection(app.settings)
+                focusSection(app.settings)
+                workloadSection(app.settings)
+                aiSection
+                tasksSection(app.settings)
+                ankiSection
+                accountSection(app.settings)
                 privacySection(app.settings)
                 dataSection
-                accountSection(app.settings)
+                diagnosticsSection
                 aboutSection
             }
             .navigationTitle("Profil & réglages")
@@ -52,17 +62,75 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $showingSchool) {
                 SchoolSetupView()
             }
+            .navigationDestination(isPresented: $showingAIImport) {
+                AIImportSettingsView()
+            }
             .onAppear {
                 #if DEBUG
                 // `-school` : cet écran est au bout d'un tap, et `simctl` ne sait
                 // pas taper.
                 if PreviewLaunch.isSet(PreviewLaunch.schoolFlag) { showingSchool = true }
+                if PreviewLaunch.isSet(PreviewLaunch.aiImportFlag) { showingAIImport = true }
                 #endif
             }
         }
     }
 
     // MARK: Identité
+
+    /// Avertissement quand la base n'a pas pu être ouverte normalement.
+    ///
+    /// Sans ça, l'app fonctionnait sur une base en mémoire et perdait tout à la
+    /// fermeture — sans que rien ne le dise.
+    @ViewBuilder
+    private var storeSection: some View {
+        if let problem = app.storeError {
+            Section {
+                Label(problem, systemImage: "externaldrive.badge.exclamationmark")
+                    .font(.caption)
+                    .foregroundStyle(Color.orange.accessibleInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Stockage")
+            } footer: {
+                Text("Vérifie l'espace disponible, puis relance l'app. En attendant, cette session risque de ne pas être conservée.")
+            }
+        }
+    }
+
+    /// Anki, à côté des autres intégrations.
+    private var ankiSection: some View {
+        Section {
+            NavigationLink {
+                AnkiSettingsView()
+            } label: {
+                HStack(spacing: Layout.control) {
+                    Label("Anki", systemImage: "rectangle.stack.fill")
+                    Spacer()
+                    Text(app.settings.isAnkiConfigured ? "configuré" : "non configuré")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Révision espacée")
+        } footer: {
+            Text("Envoie tes exercices à refaire et ta théorie à résumer dans un paquet Anki, via AnkiConnect.")
+        }
+    }
+
+    /// Le journal, à côté des intégrations.
+    private var diagnosticsSection: some View {
+        Section {
+            NavigationLink {
+                DiagnosticsView()
+            } label: {
+                Label("Diagnostics", systemImage: "stethoscope")
+            }
+        } footer: {
+            Text("Les erreurs de synchronisation, d'import et d'intégration, horodatées. Utile quand quelque chose ne marche pas et qu'on ne sait pas quoi.")
+        }
+    }
 
     private func identitySection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
@@ -101,6 +169,29 @@ struct ProfileView: View {
             Text("Scolarité")
         } footer: {
             Text("Tout est modifiable : section, cours suivis, heures d'amphi et dates du semestre.")
+        }
+    }
+
+    /// Écrit l'instantané destiné au serveur MCP et ouvre la feuille de partage.
+    private func shareAssistantExport() {
+        let payload = AssistantExport.data(courses: courses,
+                                           sessions: sessions,
+                                           milestones: milestones,
+                                           groups: groups,
+                                           hoursPerCredit: app.settings.hoursPerCredit,
+                                           displayName: app.settings.displayName)
+        guard let payload else {
+            message = "Export impossible."
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(AssistantExport.fileName)
+        do {
+            try payload.write(to: url, options: .atomic)
+            exportURL = url
+            message = "Instantané prêt : enregistre-le sur ton Mac, puis lis-le avec le serveur MCP."
+        } catch {
+            message = "Export impossible — \(error.localizedDescription)"
         }
     }
 
@@ -243,16 +334,29 @@ struct ProfileView: View {
 
     // MARK: Notifications
 
+    /// Un rappel activé sans autorisation ne sonnerait jamais : on la demande au
+    /// moment où elle a un sens, et on dit quoi faire si elle a été refusée.
+    private func askForNotifications() {
+        Task {
+            let granted = await app.notifications.requestAuthorization()
+            if !granted {
+                message = "Notifications refusées. Active-les dans Réglages › StudyTrack."
+            }
+        }
+    }
+
     private func notificationsSection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
         return Section {
             Toggle("Rappel quotidien", isOn: $settings.dailyReminderEnabled)
+                .onChange(of: settings.dailyReminderEnabled) { _, on in if on { askForNotifications() } }
             if settings.dailyReminderEnabled {
                 Stepper(value: $settings.dailyReminderHour, in: 6...23, step: 1) {
                     LabeledContent("Heure", value: "\(settings.dailyReminderHour) h")
                 }
             }
             Toggle("Récap hebdomadaire", isOn: $settings.weeklyRecapEnabled)
+                .onChange(of: settings.weeklyRecapEnabled) { _, on in if on { askForNotifications() } }
 
             Button {
                 Task {
@@ -315,6 +419,12 @@ struct ProfileView: View {
             } label: {
                 Label("Créer une sauvegarde (JSON)", systemImage: "square.and.arrow.down")
             }
+            Button {
+                shareAssistantExport()
+            } label: {
+                Label("Exporter pour un assistant", systemImage: "sparkles")
+            }
+
             if let exportURL {
                 ShareLink(item: exportURL) {
                     Label("Partager la sauvegarde", systemImage: "square.and.arrow.up")
@@ -404,6 +514,28 @@ struct ProfileView: View {
                     }
                 } label: {
                     Label("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                Button(role: .destructive) {
+                    showingDeleteAccount = true
+                } label: {
+                    Label("Supprimer mon compte…", systemImage: "person.crop.circle.badge.xmark")
+                }
+                .confirmationDialog("Supprimer ton compte ?",
+                                    isPresented: $showingDeleteAccount,
+                                    titleVisibility: .visible) {
+                    Button("Supprimer définitivement", role: .destructive) {
+                        Task {
+                            do {
+                                try await app.social.deleteAccount()
+                                message = "Compte supprimé."
+                            } catch {
+                                message = nil
+                            }
+                        }
+                    }
+                    Button("Annuler", role: .cancel) {}
+                } message: {
+                    Text("Ton compte, tes adhésions aux groupes et tout ce que tu y as partagé seront effacés du serveur. Tes cours et tes sessions restent sur cet appareil.")
                 }
             } else if SupabaseConfig.isConfigured {
                 SignInWithAppleButton(.signIn) { request in

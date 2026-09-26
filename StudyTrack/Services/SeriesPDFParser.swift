@@ -1,5 +1,16 @@
 import Foundation
 
+/// Une sous-question repérée sous un exercice : « 1. », « 2. », « (a) ».
+struct DetectedSubQuestion: Equatable, Identifiable {
+    /// L'étiquette telle qu'elle apparaît : « 1 », « a », « ii ».
+    var label: String
+    /// L'énoncé court, s'il a pu être lu. Souvent vide : une sous-question est
+    /// fréquemment une seule formule.
+    var text: String
+
+    var id: String { label }
+}
+
 /// Un exercice repéré dans le texte d'un PDF de série.
 struct DetectedExercise: Equatable, Identifiable {
     /// Numéro tel qu'il sera créé : « 2.1 ».
@@ -7,8 +18,21 @@ struct DetectedExercise: Equatable, Identifiable {
     /// Ce qui suit le numéro sur la même ligne, s'il y a quelque chose.
     var title: String
     var isBonus: Bool
+    /// Les questions regroupées sous ce numéro, dans l'ordre du polycopié.
+    ///
+    /// Un polycopié qui écrit « Calculer : 1. … 2. … » ne propose pas deux
+    /// exercices : il en propose un, en deux questions. Les séparer gonfle la
+    /// liste et coupe le travail en morceaux qui se rendent ensemble.
+    var subQuestions: [DetectedSubQuestion] = []
+    /// Le repère était-il sans ambiguïté (« Exercice 3 », « Ex-02-01 ») ?
+    ///
+    /// Un numéro nu (« 1.2 ») peut être une section de cours ou une ligne de
+    /// démonstration : quand l'IA ne le confirme pas, la fusion l'écarte.
+    var isConfident: Bool = true
 
     var id: String { number }
+
+    var hasSubQuestions: Bool { !subQuestions.isEmpty }
 }
 
 /// Une série repérée, avec ses exercices.
@@ -28,7 +52,8 @@ struct DetectedSeries: Equatable, Identifiable {
 ///
 /// Trois formats réels sont reconnus, relevés sur des polycopiés de l'EPFL :
 ///   • `Ex-02-01:` — Analyse 1 inversée, série et exercice dans le numéro ;
-///   • `Exercice 3 Type : … Défi : ⋆⋆` — Algèbre linéaire inversée ;
+///   • `Exercice 3 Type : … Défi : ⋆⋆` — Algèbre linéaire inversée, où le
+///     numéro est qualifié par sa série (« Exercice 1 » en Série 2 → « 2.1 ») ;
 ///   • `1.2` ou `Exercice 1.2` — le format historique du projet.
 ///
 /// La détection ne sera jamais parfaite — un PDF scanné ne contient aucun texte, et
@@ -52,7 +77,7 @@ enum SeriesPDFParser {
 
     /// « Exercice 1.2 », ou simplement « 1.2 », avec un intitulé facultatif.
     private static let numbered = try! NSRegularExpression(
-        pattern: #"(?m)^[ \t]*(?:(?:exercice|exo|ex|probl[eè]me|question)[ \t]*\.?[ \t]*(?:n[°o][ \t]*)?)?(\d{1,2})[.\-·](\d{1,2})\b[ \t]*[–—:.\-)]?[ \t]*(.*)$"#,
+        pattern: #"(?m)^[ \t]*(?:(?:exercices?|exercises?|exo|ex|probl[eè]mes?|problems?|aufgabe|question)[ \t]*\.?[ \t]*(?:n[°o][ \t]*)?)?(\d{1,2})[.\-·](\d{1,2})\b[ \t]*[–—:.\-)]?[ \t]*(.*)$"#,
         options: [.caseInsensitive]
     )
 
@@ -61,7 +86,7 @@ enum SeriesPDFParser {
     /// `(?!\.\d)` est essentiel : sans lui, « Exercice 3.1 » serait aussi lu comme
     /// l'exercice « 3 », et un exercice fantôme apparaîtrait dans la série.
     private static let bare = try! NSRegularExpression(
-        pattern: #"(?m)^[ \t]*(?:exercice|exo|ex|probl[eè]me|question)[ \t]*\.?[ \t]*(?:n[°o][ \t]*)?(\d{1,2})\b(?!\.\d)[ \t]*[:.\-–—]?[ \t]*(.*)$"#,
+        pattern: #"(?m)^[ \t]*(?:exercices?|exercises?|exo|ex|probl[eè]mes?|problems?|aufgabe|question)[ \t]*\.?[ \t]*(?:n[°o][ \t]*)?(\d{1,2})\b(?!\.\d)[ \t]*[:.\-–—]?[ \t]*(.*)$"#,
         options: [.caseInsensitive]
     )
 
@@ -72,7 +97,7 @@ enum SeriesPDFParser {
     )
 
     private static let bonus = try! NSRegularExpression(
-        pattern: #"(?i)\bbonus\b|\bétoile\b|\bfacultatif\b|\boptionnel\b"#,
+        pattern: #"(?i)\bbonus\b|\bétoile\b|\bfacultatif\b|\boptionnel\b|\boptional\b|\bfreiwillig\b"#,
         options: []
     )
 
@@ -91,7 +116,8 @@ enum SeriesPDFParser {
 
     // MARK: Analyse
 
-    static func parse(_ text: String) -> [DetectedSeries] {
+    static func parse(_ text: String, defaultSeries: Int? = nil) -> [DetectedSeries] {
+        let fallback = defaultSeries ?? 1
         let normalized = normalize(text)
         let ns = normalized as NSString
         let full = NSRange(location: 0, length: ns.length)
@@ -112,12 +138,14 @@ enum SeriesPDFParser {
         var seen = Set<String>()
 
         /// Ajoute un exercice si son numéro n'a pas déjà été vu.
-        func append(number: String, title: String, context: String, series: Int?, at location: Int) {
+        func append(number: String, title: String, context: String, series: Int?, at location: Int,
+                    confident: Bool = true) {
             guard seen.insert(number).inserted else { return }
             entries.append((location,
                             DetectedExercise(number: number,
                                              title: exerciseTitle(title),
-                                             isBonus: isBonus(context)),
+                                             isBonus: isBonus(context),
+                                             isConfident: confident),
                             series))
         }
 
@@ -138,22 +166,36 @@ enum SeriesPDFParser {
             let major = ns.substring(with: match.range(at: 1))
             let minor = ns.substring(with: match.range(at: 2))
             let number = "\(major).\(minor)"
+            // Sans mot-clé, « 1.2 » peut aussi être une section ou une valeur :
+            // le repère est gardé, mais marqué comme incertain.
+            let line = ns.substring(with: ns.lineRange(for: match.range)).lowercased()
+            let hasKeyword = line.range(of: #"^\s*(exercices?|exercises?|exo|ex|probl[eè]mes?|problems?|aufgabe|question)"#,
+                                        options: .regularExpression) != nil
             append(number: number,
                    title: ns.substring(with: match.range(at: 3)),
                    context: lineContext(ns, around: match.range),
                    series: majorComponent(of: number),
-                   at: match.range.location)
+                   at: match.range.location,
+                   confident: hasKeyword)
         }
 
         // 3. « Exercice 3 » — un numéro simple est un numéro d'**exercice**, pas de
         //    série : « Exercice 1 » et « Exercice 2 » appartiennent à la même série.
         //    C'est l'en-tête précédent qui la donne, à défaut la série 1.
+        //
+        //    Le numéro est **qualifié par sa série** : « Exercice 1 » dans la
+        //    Série 2 devient « 2.1 ». Sans ça l'exercice s'appelait « 1 », ce qui
+        //    ne correspond ni à la convention EPFL, ni au numéro utilisé par
+        //    l'analyse par mise en page, ni à celui que partagent les groupes —
+        //    et réimporter le même document par les deux chemins créait des
+        //    doublons.
         for match in bare.matches(in: normalized, options: [], range: full) {
-            let number = ns.substring(with: match.range(at: 1))
-            append(number: number,
+            let value = ns.substring(with: match.range(at: 1))
+            let resolved = headers.last(where: { $0.location < match.range.location })?.number ?? fallback
+            append(number: "\(resolved).\(value)",
                    title: ns.substring(with: match.range(at: 2)),
                    context: lineContext(ns, around: match.range),
-                   series: nil,
+                   series: resolved,
                    at: match.range.location)
         }
 
@@ -161,7 +203,7 @@ enum SeriesPDFParser {
         for entry in entries.sorted(by: { $0.location < $1.location }) {
             let series = entry.series
                 ?? headers.last(where: { $0.location < entry.location })?.number
-                ?? 1
+                ?? fallback
             groups[series, default: []].append(entry.exercise)
         }
 
@@ -227,8 +269,27 @@ enum SeriesPDFParser {
         // commence pas par une majuscule.
         guard let first = value.unicodeScalars.first,
               CharacterSet.uppercaseLetters.contains(first) else { return false }
+        // Une consigne commence par son verbe ou par « Soit » : c'est la première
+        // phrase de l'énoncé, même sans point final (« Soit f une fonction… »).
+        let firstWord = value.split(whereSeparator: { $0 == " " || $0 == "'" || $0 == "’" })
+            .first.map { $0.lowercased() } ?? ""
+        if statementOpeners.contains(firstWord) { return false }
+        // « Ex-03-01 », « Exercice 3 », « Problem 2 » : le numéro, pas un intitulé.
+        // Le modèle le renvoie volontiers comme titre quand le PDF n'en a pas.
+        if let marker = SeriesLayoutParser.exerciseMarker(value, fallbackSeries: 1),
+           cleanTitle(marker.remainder).isEmpty {
+            return false
+        }
         return true
     }
+
+    /// Les mots qui ouvrent un énoncé, jamais un intitulé.
+    private static let statementOpeners: Set<String> = [
+        "soit", "soient", "montrer", "démontrer", "calculer", "déterminer", "trouver", "résoudre",
+        "prouver", "vérifier", "considérons", "considérer", "on", "étant", "supposons", "écrire",
+        "let", "show", "prove", "compute", "determine", "find", "consider", "suppose", "given", "assume",
+        "sei", "seien", "zeigen", "berechnen", "bestimmen"
+    ]
 
     private static func intValue(_ ns: NSString, _ range: NSRange) -> Int? {
         guard range.location != NSNotFound else { return nil }
@@ -251,6 +312,13 @@ enum SeriesPDFParser {
         return ns.substring(with: lineRange) + "\n" + ns.substring(with: nextRange)
     }
 
+    /// Vrai si le texte contient une mention de bonus, d'étoile ou de caractère
+    /// facultatif. Exposé pour que l'analyse par mise en page applique exactement
+    /// les mêmes règles que l'analyse par motifs.
+    static func containsBonusMarker(_ text: String) -> Bool {
+        isBonus(text)
+    }
+
     private static func isBonus(_ context: String) -> Bool {
         bonus.firstMatch(in: context, options: [],
                          range: NSRange(location: 0, length: (context as NSString).length)) != nil
@@ -258,7 +326,7 @@ enum SeriesPDFParser {
 
     /// Nettoie un titre : séparateurs de tête, parenthèses d'en-tête, métadonnées
     /// EPFL, et l'exercice suivant quand l'extraction les a collés.
-    private static func cleanTitle(_ raw: String) -> String {        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func cleanTitle(_ raw: String) -> String {        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // « (Nombres R) » → « Nombres R »
         if value.hasPrefix("("), value.hasSuffix(")"), value.count > 2 {

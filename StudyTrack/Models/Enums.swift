@@ -431,4 +431,14 @@ enum StatsPeriod: String, CaseIterable, Identifiable {
         case .month: return 30
         }
     }
+
+    /// Ce que couvrent les totaux, en toutes lettres : « Semaine » seul laissait
+    /// croire à la semaine du calendrier, et les totaux contredisaient le graphique.
+    var rangeLabel: String {
+        switch self {
+        case .day: return "Aujourd'hui"
+        case .week: return "7 derniers jours"
+        case .month: return "30 derniers jours"
+        }
+    }
 }

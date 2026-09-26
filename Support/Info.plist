@@ -14,12 +14,6 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>StudyTrackAppGroup</key>
-	<string>$(STUDYTRACK_APP_GROUP)</string>
-	<key>SupabaseHost</key>
-	<string>$(SUPABASE_HOST)</string>
-	<key>SupabaseAnonKey</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -39,9 +33,9 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>StudyTrack utilise votre calendrier pour afficher vos cours, vos midterms et vos sessions d'étude, et pour y ajouter vos sessions planifiées.</string>
@@ -53,13 +47,38 @@
 	<string>StudyTrack synchronise vos tâches avec l'app Rappels.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>StudyTrack synchronise vos tâches avec l'app Rappels.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>StudyTrack n'utilise vos données que pour vos statistiques d'étude.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>StudyTrackAppGroup</key>
+	<string>$(STUDYTRACK_APP_GROUP)</string>
+	<key>SupabaseAnonKey</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SupabaseHost</key>
+	<string>$(SUPABASE_HOST)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAdd</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Importer une série</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).importSeries</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypePlay</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Lancer le chrono</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).startTimer</string>
+		</dict>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

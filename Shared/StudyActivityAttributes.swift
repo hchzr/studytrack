@@ -9,22 +9,10 @@ import ActivityKit
 struct StudyActivityAttributes: ActivityAttributes {
 
     /// Ce qui change pendant la session.
-    public struct ContentState: Codable, Hashable {
-        /// Secondes accumulées avant la période en cours.
-        var accumulated: TimeInterval
-        /// Début de la période en cours, `nil` quand le chrono est en pause.
-        ///
-        /// Quand il est présent, l'interface affiche `Text(timerInterval:)` : le
-        /// système fait avancer le compteur tout seul, sans qu'on lui envoie une
-        /// mise à jour par seconde. C'est ce qui rend la Live Activity gratuite en
-        /// batterie et en réseau.
-        var runningSince: Date?
-
-        /// Secondes écoulées à cet instant.
-        var elapsed: TimeInterval {
-            accumulated + (runningSince.map { Date().timeIntervalSince($0) } ?? 0)
-        }
-    }
+    ///
+    /// Le calcul du temps vit dans `ActivityTimerState`, qui est **pur** et donc
+    /// testable sans ActivityKit. Ce type ne fait que le transporter.
+    public typealias ContentState = ActivityTimerState
 
     /// Ce qui ne change pas de la session.
     var courseCode: String

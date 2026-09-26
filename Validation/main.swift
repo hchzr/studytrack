@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import PDFKit
 
 // Stub minimal : remplace App/SettingsStore.swift pour la validation hors app iOS.
 final class SettingsStore {
@@ -21,28 +22,16 @@ func pct(_ value: Double) -> String {
     "\(Int((value * 100).rounded()))%"
 }
 
-let schema = Schema([
-    AcademicTerm.self,
-    Course.self,
-    TheoryItem.self,
-    ExerciseSeries.self,
-    Exercise.self,
-    StudySession.self,
-    Exam.self,
-    PlannedSession.self,
-    LinkedTask.self,
-    LinkedCalendarEvent.self,
-    StudyGroup.self,
-    GroupMember.self,
-    GroupSeriesCompletion.self,
-    GroupItemCompletion.self
-])
+// Le conteneur de test utilise le schéma **de l'app**, pas une copie :
+// c'est ce qui garantit que le test porte sur la vraie définition.
+let schema = StudyTrackSchema.current
 
 print("== Conteneur SwiftData (en mémoire) ==")
 let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
 let container = try ModelContainer(for: schema, configurations: [configuration])
 let context = ModelContext(container)
-check(schema.entities.count == 14, "schéma : \(schema.entities.count) entités")
+check(schema.entities.count == declaredModelNames.count,
+      "schéma : \(schema.entities.count) entités pour \(declaredModelNames.count) modèles déclarés")
 
 print("== Données d'exemple ==")
 let term = SeedData.seed(context)
@@ -262,6 +251,1106 @@ check(scopedMember.follows("math-101"), "un membre suit sa matière, quelle que 
 check(!scopedMember.follows("CS-250"), "un membre ne suit pas les autres")
 check(GroupMember(userID: "u4", displayName: "Dan").follows("CS-250"),
       "sans liste explicite, un membre suit tout le groupe")
+
+
+/// Une échéance isolée pour les tests de recherche.
+let builderMilestone = AcademicMilestone(externalID: "test.fin-examens",
+                                         title: "Fin des examens",
+                                         date: DateUtils.addDays(30, to: Date()),
+                                         kind: .examEnd)
+
+print("== Sous-questions ==")
+// Un polycopié numérote ses exercices 1, 2, 3 dans chaque section, et regroupe
+// souvent plusieurs questions sous un seul numéro. Les compter comme des
+// exercices séparés gonfle la liste et fausse la progression.
+let subSeries = ExerciseSeries(course: courses.first { $0.code == "CS-250" }, seriesNumber: 9)
+let subExercise = Exercise(series: subSeries, exerciseNumber: "9.3", title: "Suites d'ensembles")
+check(!subExercise.hasSubQuestions, "un exercice neuf n'a pas de question")
+check(subExercise.subQuestionLabel == nil, "…et n'affiche pas de compteur")
+check(subExercise.isDone == false, "…et n'est pas fait")
+
+let q1 = SubQuestion(exercise: subExercise, label: "1", text: "L'intersection est bornée ?", sortOrder: 0)
+let q2 = SubQuestion(exercise: subExercise, label: "2", text: "L'union est bornée ?", sortOrder: 1)
+subExercise.subQuestions = [q1, q2]
+check(subExercise.hasSubQuestions, "l'exercice a maintenant des questions")
+check(subExercise.subQuestionLabel == "0/2", "compteur — \(subExercise.subQuestionLabel ?? "-")")
+
+q1.toggle()
+check(subExercise.subQuestionDoneCount == 1, "une question cochée")
+check(!subExercise.isDone, "l'exercice n'est pas fait tant qu'elles ne le sont pas toutes")
+check(subExercise.subQuestionLabel == "1/2", "compteur intermédiaire")
+
+q2.toggle()
+check(subExercise.isDone, "toutes cochées : l'exercice devient fait")
+check(subExercise.subQuestionLabel == "2/2", "compteur complet")
+
+q1.toggle()
+check(!subExercise.isDone, "décocher une question défait l'exercice")
+check(subExercise.doneAt == nil, "…et la date de réalisation est retirée")
+
+// Cocher l'exercice entier coche ses questions : c'est le geste courant.
+subExercise.setSubQuestions(done: true)
+check(subExercise.isDone, "cocher l'exercice le marque fait")
+check(subExercise.subQuestions.allSatisfy(\.isDone), "…et coche toutes ses questions")
+subExercise.setSubQuestions(done: false)
+check(!subExercise.isDone, "décocher l'exercice le défait")
+check(subExercise.subQuestions.allSatisfy { !$0.isDone }, "…et décoche toutes ses questions")
+
+// L'étiquette s'écrit comme le polycopié.
+check(SubQuestion(exercise: nil, label: "1").displayLabel == "1.", "étiquette numérique")
+check(SubQuestion(exercise: nil, label: "a").displayLabel == "(a)", "étiquette alphabétique")
+check(SubQuestion(exercise: nil, label: "(b)").displayLabel == "(b)", "déjà ponctuée : inchangée")
+check(SubQuestion(exercise: nil, label: "1.").displayLabel == "1.", "idem pour un point")
+check(SubQuestion(exercise: nil, label: "").displayLabel == "", "étiquette vide")
+
+// Une série dont les exercices ont des questions reste comptée par exercices.
+let subSeries2 = ExerciseSeries(course: nil, seriesNumber: 10)
+let e1 = Exercise(series: subSeries2, exerciseNumber: "10.1")
+let e1q = SubQuestion(exercise: e1, label: "1")
+e1.subQuestions = [e1q]
+let e2 = Exercise(series: subSeries2, exerciseNumber: "10.2")
+subSeries2.exercises = [e1, e2]
+e1.setSubQuestions(done: true)
+e2.doneAt = Date()
+check(subSeries2.doneCount == 2,
+      "la série compte les exercices, pas les questions (\(subSeries2.doneCount)/\(subSeries2.requiredExercises.count))")
+check(subSeries2.isComplete, "…et elle est complète")
+
+// La réponse du modèle porte les questions, sous les deux formes acceptées.
+let withLabels = #"{"series":[{"number":4,"title":"Suites","exercises":[{"number":"4.2","title":"Bornes","questions":["1","2"]}]}]}"#
+let parsedLabels = SeriesAIParsing.parse(withLabels)
+check(parsedLabels.first?.exercises.first?.subQuestions.map(\.label) == ["1", "2"],
+      "questions écrites comme de simples étiquettes")
+let withObjects = #"{"series":[{"number":4,"title":"Suites","exercises":[{"number":"4.2","title":"Bornes","questions":[{"label":"a","text":"Première"},{"label":"b"}]}]}]}"#
+let parsedObjects = SeriesAIParsing.parse(withObjects)
+check(parsedObjects.first?.exercises.first?.subQuestions.map(\.label) == ["a", "b"],
+      "…ou comme des objets")
+check(parsedObjects.first?.exercises.first?.subQuestions.first?.text == "Première",
+      "le texte est conservé quand il est donné")
+let noLabels = #"{"series":[{"number":4,"title":"Suites","exercises":[{"number":"4.2","title":"Bornes","questions":["",""]}]}]}"#
+check(SeriesAIParsing.parse(noLabels).first?.exercises.first?.subQuestions.map(\.label) == ["1", "2"],
+      "une étiquette vide reçoit son rang")
+let duplicated = #"{"series":[{"number":4,"title":"Suites","exercises":[{"number":"4.2","title":"Bornes","questions":["1","1","2"]}]}]}"#
+check(SeriesAIParsing.parse(duplicated).first?.exercises.first?.subQuestions.count == 2,
+      "les étiquettes en double sont écartées")
+
+// La fusion ne mélange jamais deux numérotations : la plus complète gagne.
+let heuristicSide = [DetectedSeries(number: 4, title: "Suites",
+                                    exercises: [DetectedExercise(number: "4.2", title: "Bornes", isBonus: false)])]
+let aiSide = [DetectedSeries(number: 4, title: "Suites",
+                             exercises: [DetectedExercise(number: "4.2", title: "Bornes", isBonus: false,
+                                                          subQuestions: [DetectedSubQuestion(label: "1", text: ""),
+                                                                         DetectedSubQuestion(label: "2", text: "")])])]
+let merged = SeriesAIParsing.merge(heuristic: heuristicSide, ai: aiSide)
+check(merged.first?.exercises.first?.subQuestions.count == 2,
+      "la fusion apporte les questions — \(merged.first?.exercises.first?.subQuestions.count ?? 0)")
+let mergedBack = SeriesAIParsing.merge(heuristic: aiSide, ai: heuristicSide)
+check(mergedBack.first?.exercises.first?.subQuestions.count == 2,
+      "…et ne les retire jamais")
+
+print("== Lecture de la réponse d'un modèle ==")
+// Le JSON d'un modèle n'est pas un contrat : il écrit `2` là où on attend `"2"`,
+// `"02a"` là où on attend un entier, `"oui"` là où on attend un booléen. Un
+// décodeur strict rejetait **toute** la réponse pour un seul champ, et
+// l'utilisateur voyait une extraction vide sans savoir pourquoi.
+
+// Le cas réel : un PDF dont les exercices sont numérotés 1,2,3 dans chaque section,
+// sans intitulé individuel. Le modèle renvoie des titres qu'il a lui-même écrits.
+let realAnswer = """
+{"series":[{"number":2,"title":"Sommes, bornes et densité","exercises":[
+{"number":"2.1","title":"Inégalité des suprema","isBonus":false},
+{"number":"2.2","title":"Suite d'intervalles ouverts","isBonus":false},
+{"number":"2.5","title":"Infimum de ⌊x⌋ + ⌊x−1⌋","isBonus":false}]}]}
+"""
+let parsedReal = SeriesAIParsing.parse(realAnswer)
+check(parsedReal.count == 1, "une série lue (\(parsedReal.count))")
+check(parsedReal.first?.number == 2, "numéro de série entier")
+check(parsedReal.first?.title == "Sommes, bornes et densité", "titre de série conservé")
+check(parsedReal.first?.exercises.count == 3, "trois exercices")
+check(parsedReal.first?.exercises.first?.number == "2.1",
+      "numéro qualifié par la série — \(parsedReal.first?.exercises.first?.number ?? "-")")
+check(parsedReal.first?.exercises.first?.title == "Inégalité des suprema",
+      "titre français conservé")
+
+// Les formes que le modèle peut produire et qui faisaient tout échouer.
+let messyAnswer = """
+{"series":[{"number":"02a","title":"Sommes","exercises":[
+{"number":3,"title":"Trois","isBonus":"oui"},
+{"number":"2.4","title":"Quatre","isBonus":"non"}]}]}
+"""
+let parsedMessy = SeriesAIParsing.parse(messyAnswer)
+check(parsedMessy.count == 1,
+      "« number » en texte « 02a » ne fait plus perdre la série (\(parsedMessy.count))")
+check(parsedMessy.first?.number == 2, "…et donne 2")
+check(parsedMessy.first?.exercises.count == 2, "les deux exercices survivent")
+check(parsedMessy.first?.exercises.first?.number == "2.3",
+      "un numéro écrit en nombre est qualifié — \(parsedMessy.first?.exercises.first?.number ?? "-")")
+check(parsedMessy.first?.exercises.first?.isBonus == true, "« oui » vaut true")
+check(parsedMessy.first?.exercises.last?.isBonus == false, "« non » vaut false")
+
+// Un exercice sans numéro reçoit le suivant dans l'ordre.
+let unnumbered = """
+{"series":[{"number":5,"title":"Densité","exercises":[
+{"title":"Un"},{"title":"Deux"}]}]}
+"""
+let parsedUnnumbered = SeriesAIParsing.parse(unnumbered)
+check(parsedUnnumbered.first?.exercises.count == 2,
+      "un exercice sans numéro n'est pas jeté (\(parsedUnnumbered.first?.exercises.count ?? 0))")
+check(parsedUnnumbered.first?.exercises.map(\.number) == ["5.1", "5.2"],
+      "…il reçoit le numéro suivant — \(parsedUnnumbered.first?.exercises.map(\.number) ?? [])")
+check(parsedUnnumbered.first?.exercises.first?.title == "Un", "…et garde son titre")
+
+// Une liste d'exercices absente ne doit pas faire perdre la série.
+let noExercises = #"{"series":[{"number":7,"title":"Vide"}]}"#
+let parsedEmpty = SeriesAIParsing.parse(noExercises)
+check(parsedEmpty.count == 1 && parsedEmpty.first?.exercises.isEmpty == true,
+      "une série sans exercices reste une série")
+
+// Les réponses manifestement illisibles sont refusées, pas devinées.
+check(SeriesAIParsing.parse("pas de json").isEmpty, "sans JSON, rien")
+check(SeriesAIParsing.parse(#"{"series":[]}"#).isEmpty, "liste vide")
+check(SeriesAIParsing.parse(#"{"series":[{"number":99,"title":"Trop grand"}]}"#).isEmpty,
+      "un numéro de série hors bornes est refusé")
+
+// La qualification d'un numéro, cas par cas.
+check(SeriesAIParsing.normalizeNumber("1", series: 2) == "2.1",
+      "un numéro nu est préfixé par la série")
+check(SeriesAIParsing.normalizeNumber("2.3", series: 2) == "2.3", "un numéro déjà qualifié reste")
+check(SeriesAIParsing.normalizeNumber("Ex 3.2", series: 2) == "2.2",
+      "la série de l'objet parent fait foi")
+check(SeriesAIParsing.normalizeNumber("02a", series: 2) == "2.2",
+      "« 02a » se lit 2 — cas réel d'un en-tête de série EPFL")
+check(SeriesAIParsing.normalizeNumber("", series: 2) == nil, "un numéro vide ne donne rien")
+check(SeriesAIParsing.normalizeNumber(nil, series: 2) == nil, "un numéro absent non plus")
+
+print("== Ordre des moteurs d'analyse ==")
+// Cet ordre a déjà été inversé une fois sans que rien ne le signale : le modèle
+// embarqué passait avant le modèle servi, et lisait nettement moins bien.
+func engines(_ shared: Bool, _ device: Bool, _ remote: Bool) -> [String] {
+    SeriesEngineOrder.engines(sharedAvailable: shared,
+                              onDeviceAvailable: device,
+                              remoteConfigured: remote).map(\.rawValue)
+}
+check(engines(true, true, true) == ["shared", "onDevice", "remote"],
+      "le service passé avant le modèle embarqué — \(engines(true, true, true))")
+check(engines(true, true, false) == ["shared", "onDevice"], "sans service perso")
+check(engines(false, true, false) == ["onDevice"],
+      "sans fonction déployée, le modèle embarqué prend le relais")
+check(engines(false, false, true) == ["remote"],
+      "sans fonction ni modèle embarqué, le service perso reste")
+check(engines(false, false, false).isEmpty, "aucun moteur : la lecture par motifs seule")
+check(engines(true, false, false) == ["shared"], "le service seul suffit")
+check(engines(false, true, true) == ["onDevice", "remote"],
+      "embarqué puis perso quand la fonction manque")
+
+print("== Saisie d'un temps au clavier ==")
+// On accepte ce que les gens tapent vraiment : refuser tout sauf « 1:30 »
+// rendrait le champ plus pénible que les boutons qu'il remplace.
+check(TimerText.seconds(from: "1:30") == 5400, "« 1:30 » = 1 h 30")
+check(TimerText.seconds(from: "90") == 5400, "« 90 » = 90 minutes, le geste naturel")
+check(TimerText.seconds(from: "1h30") == 5400, "« 1h30 »")
+check(TimerText.seconds(from: "1 h 30") == 5400, "« 1 h 30 », avec des espaces")
+check(TimerText.seconds(from: "1,5h") == 5400, "« 1,5h », virgule française")
+check(TimerText.seconds(from: "1.5h") == 5400, "« 1.5h », point")
+check(TimerText.seconds(from: "45m") == 2700, "« 45m »")
+check(TimerText.seconds(from: "0:45") == 2700, "« 0:45 » = 45 minutes, comme le champ les écrit")
+check(TimerText.seconds(from: ":30") == 1800, "« :30 » se lit comme « 0:30 » = 30 minutes")
+check(TimerText.seconds(from: "1:30:15") == 5415, "« 1:30:15 »")
+check(TimerText.seconds(from: "2 heures") == 7200, "« 2 heures » en toutes lettres")
+check(TimerText.seconds(from: "1 h") == 3600, "« 1 h » seule")
+
+check(TimerText.seconds(from: "") == nil, "une saisie vide ne donne rien")
+check(TimerText.seconds(from: "   ") == nil, "une saisie blanche non plus")
+check(TimerText.seconds(from: "abc") == nil, "un texte sans nombre est refusé")
+check(TimerText.seconds(from: "1:2:3:4") == nil, "trop de segments est refusé")
+
+// Bornes : au-delà de douze heures, ce n'est plus une session d'étude.
+check(TimerText.seconds(from: "999") == Double(TimerText.maximumHours) * 3600,
+      "une saisie démesurée est bornée à \(TimerText.maximumHours) h")
+check(TimerText.seconds(from: "-30") == 0, "une saisie négative vaut zéro")
+check(TimerText.seconds(from: "0") == 0, "zéro est une valeur valide")
+
+// L'affichage.
+check(TimerText.text(from: 5400) == "1:30", "écriture heures:minutes — \(TimerText.text(from: 5400))")
+check(TimerText.text(from: 2700) == "0:45", "moins d'une heure")
+check(TimerText.text(from: 0) == "0:00", "zéro")
+check(TimerText.text(from: -10) == "0:00", "un négatif s'affiche zéro")
+check(TimerText.longText(from: 5400) == "1 h 30", "écriture longue — \(TimerText.longText(from: 5400))")
+check(TimerText.longText(from: 3600) == "1 h", "une heure pile")
+check(TimerText.longText(from: 2700) == "45 min", "moins d'une heure")
+
+// Aller-retour : ce que le champ écrit doit se relire tel quel.
+for seconds in [0.0, 60.0, 600.0, 2700.0, 5400.0, 7200.0] {
+    check(TimerText.seconds(from: TimerText.text(from: seconds)) == seconds,
+          "aller-retour à \(Int(seconds)) s")
+}
+
+print("== Plan de révision ==")
+func revisionItem(_ id: String, _ kind: RevisionItem.Kind, week: Int = 1) -> RevisionItem {
+    RevisionItem(id: id, label: id, kind: kind, week: week)
+}
+let revCalendar = Calendar(identifier: .gregorian)
+func revDay(_ offset: Int) -> Date {
+    revCalendar.date(byAdding: .day, value: offset,
+                     to: revCalendar.startOfDay(for: Date()))!
+}
+
+// Douze éléments, un examen dans douze jours.
+let revItems = (1...6).map { revisionItem("T\($0)", .theory, week: $0) }
+    + (1...4).map { revisionItem("E\($0)", .exercise, week: $0) }
+    + (1...2).map { revisionItem("C\($0)", .correction, week: $0) }
+let revWorkload = RevisionWorkload(courseCode: "CS-250", examTitle: "Final",
+                                   examDate: revDay(12), items: revItems)
+let revPlan = RevisionEngine.plan(revWorkload, from: revDay(0), calendar: revCalendar)
+
+check(revPlan.totalItems == 12, "douze éléments dans la charge (\(revPlan.totalItems))")
+check(revPlan.usableDays == 12, "douze jours avant l'évaluation (\(revPlan.usableDays))")
+check(revPlan.days.count == 12, "le plan couvre chaque jour (\(revPlan.days.count))")
+check(RevisionEngine.reviewDayCount(usableDays: 12) == 2,
+      "un cinquième des jours est réservé à la relecture (\(RevisionEngine.reviewDayCount(usableDays: 12)))")
+check(revPlan.days.suffix(2).allSatisfy(\.isReview),
+      "les deux derniers jours sont de la relecture")
+check(revPlan.days.prefix(10).allSatisfy { !$0.isReview },
+      "les dix premiers portent du contenu")
+check(revPlan.days.prefix(10).reduce(0) { $0 + $1.items.count } == 12,
+      "tous les éléments sont répartis sur les jours de travail")
+
+// L'ordre est **contigu** : on avance dans le cours, on ne mélange pas.
+let flat = revPlan.days.flatMap(\.items)
+check(flat == flat.sorted { lhs, rhs in
+    lhs.week != rhs.week ? lhs.week < rhs.week : lhs.kind.rank < rhs.kind.rank
+}, "les éléments restent dans l'ordre du cours")
+check(flat.first?.kind == .theory, "la théorie vient en premier, dans la première semaine")
+check(flat.first?.week == 1, "…et c'est bien la semaine 1")
+// La priorité est la **semaine** : on termine une semaine avant d'attaquer la
+// suivante. Au sein d'une semaine, l'ordre est théorie, exercices, corrections.
+for week in Set(flat.map(\.week)) {
+    let weekItems = flat.filter { $0.week == week }
+    check(weekItems == weekItems.sorted { $0.kind.rank < $1.kind.rank },
+          "semaine \(week) : théorie, puis exercices, puis corrections")
+}
+check(revPlan.days.allSatisfy { $0.items.count >= 1 } || revPlan.days.prefix(10).allSatisfy { !$0.items.isEmpty },
+      "aucun jour de travail n'est vide (\(revPlan.days.prefix(10).map(\.items.count)))")
+
+// Un examen **demain** : un seul jour, et il est utilisé.
+let tomorrow = RevisionEngine.plan(
+    RevisionWorkload(courseCode: "X", examTitle: "Quiz", examDate: revDay(1), items: revItems),
+    from: revDay(0), calendar: revCalendar)
+check(tomorrow.usableDays == 1, "un examen demain laisse un jour (\(tomorrow.usableDays))")
+check(tomorrow.days.count == 1 && tomorrow.days[0].items.count == 12,
+      "tout tient sur ce jour (\(tomorrow.days.first?.items.count ?? 0))")
+check(tomorrow.perDay == 12, "…soit douze éléments ce jour-là (\(tomorrow.perDay))")
+check(RevisionEngine.plan(
+    RevisionWorkload(courseCode: "X", examTitle: "Quiz", examDate: revDay(1), items: revItems),
+    from: revDay(0), calendar: revCalendar, minutesPerDay: 60).warning != nil,
+      "avec une heure disponible, le plan prévient que c'est serré")
+
+// Un examen **aujourd'hui ou passé** : plus rien à planifier, et on le dit.
+let today = RevisionEngine.plan(
+    RevisionWorkload(courseCode: "X", examTitle: "Final", examDate: revDay(0), items: revItems),
+    from: revDay(0), calendar: revCalendar)
+check(today.usableDays == 0, "aucun jour disponible")
+check(today.days.isEmpty, "aucun jour planifié")
+check(today.warning?.contains("passée") == true, "…et l'écran explique pourquoi")
+
+// Plus rien à faire : le plan est vide, mais valide.
+let nothing = RevisionEngine.plan(
+    RevisionWorkload(courseCode: "X", examTitle: "Final", examDate: revDay(5), items: []),
+    from: revDay(0), calendar: revCalendar)
+check(nothing.isEmpty, "aucun élément à réviser")
+check(nothing.days.count == 5, "…mais les jours existent quand même")
+check(nothing.days.allSatisfy(\.isEmpty), "…et ils sont vides")
+
+// Le budget de temps rend le plan réaliste ou non.
+let tight = RevisionEngine.plan(revWorkload, from: revDay(0), calendar: revCalendar, minutesPerDay: 5)
+check(tight.warning?.contains("serré") == true,
+      "un budget trop court est signalé — \(tight.warning ?? "aucun")")
+let loose = RevisionEngine.plan(revWorkload, from: revDay(0), calendar: revCalendar, minutesPerDay: 240)
+check(loose.warning == nil, "un budget large ne produit pas d'avertissement")
+
+// La charge se construit depuis les modèles.
+if let revisionCourse = courses.first(where: { $0.code == "CS-250" }),
+   let revisionExam = revisionCourse.sortedExams.first {
+    let modelWorkload = RevisionBuilder.workload(course: revisionCourse, exam: revisionExam)
+    check(modelWorkload.courseCode == revisionCourse.displayCode, "le code du cours est repris")
+    check(modelWorkload.items.allSatisfy { !$0.id.isEmpty }, "chaque élément a un identifiant")
+    check(modelWorkload.items.contains { $0.kind == .theory || $0.kind == .exercise || $0.kind == .correction },
+          "…et une nature connue")
+}
+
+print("== Annales ==")
+let pastSummary = PastExamProgress.summary([
+    (2024, false), (2023, true), (2022, true), (2021, false)
+])
+check(pastSummary.total == 4, "quatre annales")
+check(pastSummary.worked == 2, "deux travaillées")
+check(pastSummary.label == "2/4 travaillées", "libellé du bilan — \(pastSummary.label)")
+check(pastSummary.pendingYears == [2024, 2021], "les années restantes, de la plus récente à la plus ancienne")
+check(!pastSummary.isComplete, "le jeu n'est pas complet")
+
+let doneSummary = PastExamProgress.summary([(2024, true), (2023, true)])
+check(doneSummary.isComplete, "tout est travaillé")
+check(doneSummary.label == "2/2 travaillées", "libellé quand tout est fait")
+check(PastExamProgress.summary([]).label == "Aucune annale", "aucune annale : le libellé le dit")
+check(PastExamProgress.summary([]).ratio == 0, "…sans division par zéro")
+
+check(PastExamProgress.priority([(2020, false), (2024, false), (2022, true), (2023, false)])
+        == [2024, 2023, 2020],
+      "priorité aux années récentes non travaillées")
+check(PastExamProgress.priority([(2024, false), (2023, false)], limit: 1) == [2024],
+      "la priorité est bornée")
+check(PastExamProgress.priority([(2024, true)]).isEmpty, "rien à prioriser quand tout est fait")
+
+let pastCourse = courses.first { $0.code == "CS-250" }!
+let past = PastExam(course: pastCourse, title: "Examen final 2024", year: 2024)
+check(past.title == "Examen final 2024", "titre conservé")
+check(!past.isWorked, "une annale neuve n'est pas travaillée")
+check(past.statusLabel == "Pas encore travaillé", "…et le dit — \(past.statusLabel)")
+past.workedAt = Date()
+past.confidence = .medium
+check(past.isWorked, "cochée, elle est travaillée")
+check(past.statusLabel.contains("Travaillé le"), "…avec sa date — \(past.statusLabel)")
+check(past.url == nil, "sans lien, aucune URL inventée")
+past.urlString = "https://example.org/sujet.pdf"
+check(past.url != nil, "un lien valide donne une URL")
+past.urlString = "   "
+check(past.url == nil, "un lien blanc n'en donne pas")
+let untitled = PastExam(course: pastCourse, year: 2023, kind: .midterm)
+check(untitled.title == "Midterm 2023", "sans titre, un intitulé par défaut — \(untitled.title)")
+
+print("== Journal local ==")
+var logEntries: [LogEntry] = []
+for index in 0..<10 {
+    logEntries = LogBuffer.append(LogEntry(level: .info, category: "test", message: "ligne \(index)"),
+                                  to: logEntries)
+}
+check(logEntries.count == 10, "dix lignes ajoutées (\(logEntries.count))")
+check(logEntries.first?.message == "ligne 9", "la plus récente est en tête")
+
+// Le tampon est borné.
+var bounded: [LogEntry] = []
+for index in 0..<(LogBuffer.limit + 50) {
+    bounded = LogBuffer.append(LogEntry(level: .info, category: "test", message: "\(index)"), to: bounded)
+}
+check(bounded.count == LogBuffer.limit,
+      "le journal est borné à \(LogBuffer.limit) lignes (\(bounded.count))")
+
+// Quand la place manque, on garde ce qui explique un problème.
+var mixed: [LogEntry] = []
+mixed = LogBuffer.append(LogEntry(level: .error, category: "test", message: "erreur ancienne"), to: mixed)
+for index in 0..<LogBuffer.limit {
+    mixed = LogBuffer.append(LogEntry(level: .info, category: "test", message: "\(index)"), to: mixed)
+}
+check(mixed.contains { $0.message == "erreur ancienne" },
+      "une erreur survit à l'éviction des informations")
+check(mixed.count <= LogBuffer.limit, "et le tampon reste borné (\(mixed.count))")
+
+check(LogBuffer.filtered(mixed, level: nil).count == mixed.count, "sans filtre, tout passe")
+check(LogBuffer.filtered(mixed, level: .error).count == 1, "le filtre par niveau isole les erreurs")
+check(LogBuffer.count(mixed, level: .info) == mixed.count - 1, "le comptage par niveau est juste")
+check(LogBuffer.text([], formatter: ISO8601DateFormatter()) == "Journal vide.",
+      "un journal vide se dit vide")
+check(LogBuffer.text([LogEntry(level: .warning, category: "sync", message: "échec",
+                               detail: "détail")]).contains("AVERTISSEMENT"),
+      "le texte porte le niveau en clair")
+check(LogBuffer.text([LogEntry(level: .info, category: "import", message: "ok",
+                               detail: "deuxième ligne")]).contains("deuxième ligne"),
+      "le détail est repris dans l'export")
+
+print("== Export pour un assistant (source du serveur MCP) ==")
+let exportCourses = courses.filter(\.isTracked)
+let exportData = AssistantExport.make(courses: exportCourses,
+                                      sessions: sessions,
+                                      milestones: [],
+                                      groups: [],
+                                      hoursPerCredit: 30,
+                                      displayName: "Test")
+check(exportData["format"] as? String == "studytrack.assistant",
+      "le format est annoncé — \(exportData["format"] ?? "-")")
+check(exportData["version"] as? Int == AssistantExport.formatVersion,
+      "la version du format est portée")
+check(exportData["generatedAt"] is String, "l'horodatage est présent")
+
+let exportedCourses = exportData["courses"] as? [[String: Any]] ?? []
+check(exportedCourses.count == exportCourses.count,
+      "tous les cours suivis sont exportés (\(exportedCourses.count))")
+check(exportedCourses.allSatisfy { $0["code"] is String && $0["name"] is String },
+      "chaque cours a un code et un nom")
+
+if let firstCourse = exportedCourses.first,
+   let series = firstCourse["series"] as? [[String: Any]],
+   let firstSeries = series.first,
+   let exercises = firstSeries["exercises"] as? [[String: Any]],
+   let firstExercise = exercises.first {
+    check(firstExercise["number"] is String, "un exercice porte son numéro")
+    check(firstExercise["done"] is Bool, "…et son état")
+    check(firstExercise["bonus"] is Bool, "…et s'il est facultatif")
+} else {
+    check(false, "le cours d'exemple a des séries et des exercices exportés")
+}
+
+// Le JSON doit être sérialisable : c'est ce que le serveur MCP lit.
+let exportJSON = AssistantExport.data(courses: exportCourses,
+                                      sessions: sessions,
+                                      milestones: [],
+                                      groups: [],
+                                      hoursPerCredit: 30,
+                                      displayName: "Test")
+check(exportJSON != nil, "l'instantané est sérialisable")
+if let exportJSON,
+   let reparsed = try? JSONSerialization.jsonObject(with: exportJSON) as? [String: Any] {
+    check(reparsed["format"] as? String == "studytrack.assistant",
+          "…et se relit après un aller-retour JSON")
+    check((reparsed["courses"] as? [[String: Any]])?.isEmpty == false, "les cours survivent")
+}
+// Un export sans cours ne doit pas produire un objet vide mais valide.
+let emptyExport = AssistantExport.make(courses: [], sessions: [], milestones: [],
+                                       groups: [], hoursPerCredit: 25, displayName: "")
+check(emptyExport["format"] as? String == "studytrack.assistant",
+      "un export vide garde son format")
+check((emptyExport["courses"] as? [[String: Any]])?.isEmpty == true,
+      "…et une liste de cours vide plutôt qu'absente")
+
+print("== Anki : AnkiConnect ==")
+// L'adresse : on accepte ce que les gens tapent vraiment.
+check(AnkiConnect.normalizeEndpoint("192.168.1.42:8765") == "http://192.168.1.42:8765",
+      "un hôte sans schéma reçoit « http:// »")
+check(AnkiConnect.normalizeEndpoint("http://127.0.0.1:8765/") == "http://127.0.0.1:8765",
+      "la barre finale est retirée")
+check(AnkiConnect.normalizeEndpoint("  http://mac.local:8765  ") == "http://mac.local:8765",
+      "les espaces sont ignorés")
+check(AnkiConnect.normalizeEndpoint("") == nil, "une adresse vide ne donne rien")
+check(AnkiConnect.normalizeEndpoint("   ") == nil, "une adresse blanche non plus")
+check(AnkiConnect.normalizeEndpoint("http://pas une url") == nil, "une adresse invalide est refusée")
+
+// La requête : le format exact attendu par AnkiConnect.
+let ankiRequest = AnkiConnect.requestData(action: "deckNames")
+check(ankiRequest != nil, "la requête est sérialisable")
+if let ankiRequest,
+   let object = try? JSONSerialization.jsonObject(with: ankiRequest) as? [String: Any] {
+    check(object["action"] as? String == "deckNames", "l'action est portée telle quelle")
+    check(object["version"] as? Int == AnkiConnect.protocolVersion,
+          "la version du protocole est annoncée (\(object["version"] ?? "-"))")
+    check(object["params"] != nil, "les paramètres sont présents, même vides")
+}
+let addRequest = AnkiConnect.requestData(action: "addNote",
+                                         params: ["note": ["deckName": "Test"]])
+if let addRequest,
+   let object = try? JSONSerialization.jsonObject(with: addRequest) as? [String: Any],
+   let params = object["params"] as? [String: Any] {
+    check(params["note"] != nil, "les paramètres sont imbriqués sous « params »")
+}
+
+// La réponse : AnkiConnect signale ses erreurs **dans** un corps HTTP 200.
+func ankiOutcome(_ json: String) -> AnkiOutcome {
+    AnkiConnect.outcome(from: Data(json.utf8))
+}
+check(ankiOutcome(#"{"result": 6, "error": null}"#).isSuccess, "une réponse sans erreur réussit")
+check(ankiOutcome(#"{"result": ["Default", "StudyTrack"], "error": null}"#).stringList
+        == ["Default", "StudyTrack"],
+      "une liste de paquets est lue")
+check(ankiOutcome(#"{"result": null, "error": null}"#).isSuccess, "un résultat nul est valide")
+check(ankiOutcome(#"{"result": null, "error": "collection is not available"}"#).errorMessage != nil,
+      "une erreur non vide est retenue")
+check(ankiOutcome(#"{"result": null, "error": ""}"#).isSuccess,
+      "une erreur vide n'est pas une erreur")
+check(ankiOutcome("pas du json").errorMessage != nil, "une réponse illisible est signalée")
+check(ankiOutcome(#"{"autre": 1}"#).errorMessage != nil, "une réponse sans résultat est signalée")
+
+// Les booléens arrivent en `1` dans `NSNumber` : il ne faut pas les confondre.
+check(AnyJSON(raw: true) == .bool(true), "un vrai booléen est un booléen")
+check(AnyJSON(raw: 1) == .number(1), "un nombre reste un nombre")
+check(AnyJSON(raw: 1.5) == .number(1.5), "un décimal aussi")
+
+// Les messages d'Anki supposent qu'on sait de quoi ils parlent.
+check(AnkiConnect.explain("collection is not available").contains("collection"),
+      "« collection is not available » est expliqué")
+check(AnkiConnect.explain("deck was not found: Test").contains("paquet"),
+      "« deck was not found » est expliqué")
+check(AnkiConnect.explain("cannot create note because it is a duplicate").contains("existe déjà"),
+      "un doublon est expliqué")
+check(AnkiConnect.explain("erreur inconnue") == "erreur inconnue",
+      "un message inconnu est rendu tel quel, sans invention")
+
+// ── Les cartes ──────────────────────────────────────────────────────────────
+let noteSeries = ExerciseSeries(course: courses.first { $0.code == "CS-250" }, seriesNumber: 3)
+let noteExercise = Exercise(series: noteSeries, exerciseNumber: "3.2", title: "Tri fusion")
+noteExercise.redoRequired = true
+noteExercise.correctionNote = "Diviser puis fusionner en O(n log n)."
+let exerciseNote = AnkiNoteFactory.exercise(noteExercise, deck: "StudyTrack")
+check(exerciseNote.deckName == "StudyTrack", "le paquet est celui demandé")
+check(exerciseNote.modelName == "Basic", "le modèle par défaut est Basic")
+check(exerciseNote.fields["Front"]?.contains("CS-250") == true,
+      "le recto porte le cours — \(exerciseNote.fields["Front"] ?? "-")")
+check(exerciseNote.fields["Front"]?.contains("Exercice 3.2") == true, "…et le numéro")
+check(exerciseNote.fields["Back"]?.contains("O(n log n)") == true,
+      "le verso porte la note de correction")
+check(exerciseNote.tags.contains("StudyTrack"), "l'étiquette StudyTrack est posée")
+check(exerciseNote.tags.contains("à-refaire"), "…et une étiquette « à refaire »")
+
+let plainExercise = Exercise(series: noteSeries, exerciseNumber: "3.3")
+let plainNote = AnkiNoteFactory.exercise(plainExercise, deck: "StudyTrack")
+check(plainNote.fields["Back"] == "À compléter.",
+      "sans contenu, le verso invite à compléter au lieu d'être vide")
+
+let noteCourse = courses.first { $0.code == "CS-250" }!
+let theoryItem = TheoryItem(course: noteCourse, sectionNumber: 1, number: "1.2",
+                            title: "Analyse asymptotique")
+let unsentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
+check(unsentTheory.fields["Front"]?.contains("Vidéo 1.2") == true,
+      "le recto porte le support et le numéro — \(unsentTheory.fields["Front"] ?? "-")")
+check(unsentTheory.fields["Back"] == "À résumer.", "sans résumé, le verso invite à résumer")
+check(unsentTheory.tags.contains("à-résumer"), "l'étiquette « à résumer » est posée")
+
+theoryItem.summaryText = "La complexité se décrit en grand O."
+let sentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
+check(sentTheory.fields["Back"]?.contains("grand O") == true, "le résumé devient le verso")
+
+// Le corps envoyé à AnkiConnect.
+let payload = exerciseNote.payload
+if let note = payload["note"] as? [String: Any] {
+    check(note["deckName"] as? String == "StudyTrack", "le corps porte le paquet")
+    check(note["fields"] != nil, "…les champs")
+    check((note["options"] as? [String: Any])?["allowDuplicate"] as? Bool == false,
+          "les doublons sont refusés : Anki le fait mieux que nous")
+}
+
+print("== Live Activity : le compteur ne repart pas de zéro ==")
+// Le bogue : l'état portait `accumulated` **et** `runningSince`, et le compteur
+// système n'affichait que le second. Après une pause, il repartait de zéro —
+// « 00:01 » au lieu d'une heure de travail.
+let activityNow = Date(timeIntervalSince1970: 1_700_000_000)
+
+let running = ActivityTimerState.make(elapsed: 600, running: true, now: activityNow)
+check(running.isRunning, "un chrono qui tourne est marqué en cours")
+check(running.elapsed(at: activityNow) == 600,
+      "…et affiche le total accumulé, pas zéro — \(Int(running.elapsed(at: activityNow))) s")
+check(running.elapsed(at: activityNow.addingTimeInterval(60)) == 660,
+      "…et il continue d'avancer")
+check(abs((running.countingSince ?? activityNow).timeIntervalSince(activityNow) + 600) < 0.001,
+      "l'instant de départ est reculé du total déjà écoulé")
+
+// Le cas exact du rapport : reprendre après une pause d'une heure de travail.
+let resumed = ActivityTimerState.make(elapsed: 3600, running: true, now: activityNow)
+check(resumed.elapsed(at: activityNow) == 3600,
+      "reprendre après 1 h affiche 1 h, pas 00:01 — \(Int(resumed.elapsed(at: activityNow))) s")
+check(resumed.elapsed(at: activityNow.addingTimeInterval(2)) == 3602,
+      "…et deux secondes plus tard, 1 h 00 min 02")
+
+let paused = ActivityTimerState.make(elapsed: 600, running: false, now: activityNow)
+check(!paused.isRunning, "en pause, le chrono n'est pas marqué en cours")
+check(paused.countingSince == nil, "…et rien ne s'écoule")
+check(paused.elapsed(at: activityNow.addingTimeInterval(300)) == 600,
+      "…le total reste figé même cinq minutes plus tard")
+check(paused.frozenTotal == 600, "le total figé est conservé")
+
+let zero = ActivityTimerState.make(elapsed: 0, running: true, now: activityNow)
+check(zero.elapsed(at: activityNow) == 0, "un chrono neuf part de zéro")
+let negative = ActivityTimerState.make(elapsed: -50, running: false, now: activityNow)
+check(negative.frozenTotal == 0, "un total négatif est ramené à zéro")
+
+print("== Pomodoro ==")
+check(PomodoroEngine.blockDuration(minutes: 25) == 1500, "25 min = 1500 s")
+check(PomodoroEngine.blockDuration(minutes: 0) == 60,
+      "un bloc nul est borné à une minute — sinon la boucle d'alerte ne s'arrête jamais")
+check(PomodoroEngine.blockDuration(minutes: -10) == 60, "un bloc négatif est borné aussi")
+
+let start = PomodoroEngine.status(elapsed: 0, focusMinutes: 25)
+check(start.blockNumber == 1, "au départ, bloc 1")
+check(start.elapsedInBlock == 0, "rien d'écoulé dans le bloc")
+check(start.remaining == 1500, "25 min restantes")
+check(start.progress == 0, "anneau à zéro")
+check(!start.isBlockComplete, "bloc non terminé")
+
+let midway = PomodoroEngine.status(elapsed: 600, focusMinutes: 25)
+check(midway.blockNumber == 1, "10 min plus tard, toujours bloc 1")
+check(midway.remaining == 900, "15 min restantes — \(Int(midway.remaining)) s")
+check(abs(midway.progress - 0.4) < 0.001, "anneau à 40 % — \(String(format: "%.2f", midway.progress))")
+
+// L'instant exact où la pause est due : c'est le cas qui compte.
+let exactly = PomodoroEngine.status(elapsed: 1500, focusMinutes: 25)
+check(exactly.isBlockComplete, "à 25 min pile, le bloc est terminé")
+check(exactly.blockNumber == 1, "…et on est encore sur le bloc 1, pas déjà le 2")
+check(exactly.completedBlocks == 1, "un bloc terminé")
+check(exactly.progress == 1, "anneau plein")
+
+let second = PomodoroEngine.status(elapsed: 1501, focusMinutes: 25)
+check(second.blockNumber == 2, "une seconde plus tard, bloc 2")
+check(second.completedBlocks == 1, "toujours un bloc terminé")
+check(second.remaining == 1499, "le nouveau bloc vient de commencer")
+
+let third = PomodoroEngine.status(elapsed: 1500 * 2 + 60, focusMinutes: 25)
+check(third.blockNumber == 3, "après deux blocs et une minute, bloc 3")
+check(third.completedBlocks == 2, "deux blocs terminés")
+check(third.remaining == 1440, "24 min restantes")
+check(third.label == "Bloc 3", "libellé du bloc")
+
+check(PomodoroEngine.status(elapsed: -5, focusMinutes: 25).blockNumber == 1,
+      "un temps négatif ne produit pas un bloc négatif")
+check(PomodoroEngine.blocksRemaining(elapsed: 1500, targetBlocks: 4, focusMinutes: 25) == 3,
+      "trois blocs restants sur un objectif de quatre")
+check(PomodoroEngine.blocksRemaining(elapsed: 1500 * 5, targetBlocks: 4, focusMinutes: 25) == 0,
+      "un objectif dépassé ne donne pas de blocs négatifs")
+
+print("== Raccourcis du chrono ==")
+let defaultShortcuts = FocusShortcutDefaults.make(from: ["CS-250", "MATH-101"])
+check(defaultShortcuts.count == 4, "deux cours × deux natures = quatre raccourcis (\(defaultShortcuts.count))")
+check(defaultShortcuts.first?.courseCode == "CS-250", "l'ordre des cours est conservé")
+check(defaultShortcuts.first?.taskType == .video, "la vidéo vient en premier")
+check(defaultShortcuts[1].taskType == .exercise, "puis les exercices")
+
+let manyCourses = (1...10).map { "C-\($0)" }
+check(FocusShortcutDefaults.make(from: manyCourses).count == FocusShortcutDefaults.maxDefaults,
+      "la proposition est plafonnée à \(FocusShortcutDefaults.maxDefaults)")
+
+// Un cours supprimé ne doit pas laisser une tuile morte.
+let prunedShortcuts = FocusShortcutDefaults.sanitize(
+    [FocusShortcut(courseCode: "CS-250", taskType: .video),
+     FocusShortcut(courseCode: "DISPARU-1", taskType: .video),
+     FocusShortcut(courseCode: "CS-250", taskType: .video),
+     FocusShortcut(courseCode: "CS-250", taskType: .exercise)],
+    knownCourses: ["CS-250"])
+check(prunedShortcuts.count == 2, "cours disparu retiré et doublon supprimé (\(prunedShortcuts.count))")
+check(prunedShortcuts.map(\.taskType) == [.video, .exercise], "l'ordre est préservé")
+check(FocusShortcutDefaults.sanitize([], knownCourses: []).isEmpty, "une liste vide reste vide")
+
+// Aller-retour JSON : c'est ainsi que les raccourcis sont conservés.
+let encoded = FocusShortcut.encode(defaultShortcuts)
+check(FocusShortcut.decode(encoded) == defaultShortcuts, "les raccourcis survivent à l'encodage")
+check(FocusShortcut.decode("pas du json").isEmpty, "un contenu illisible ne plante pas")
+check(FocusShortcut.decode("").isEmpty, "un contenu vide ne plante pas")
+check(FocusShortcut(courseCode: "CS-250", taskType: .video).id == "CS-250|video",
+      "l'identifiant est stable — \(FocusShortcut(courseCode: "CS-250", taskType: .video).id)")
+
+print("== Schéma versionné ==")
+// Le schéma de l'app doit contenir **exactement** les modèles déclarés dans les
+// sources. C'est l'oubli qui avait laissé `GroupItemCompletion` hors du conteneur.
+let schemaModelNames = Set(SchemaV1.models.map { String(describing: $0) })
+let declared = Set(declaredModelNames)
+let missingFromSchema = declared.subtracting(schemaModelNames)
+let unknownInSchema = schemaModelNames.subtracting(declared)
+check(missingFromSchema.isEmpty,
+      "aucun @Model oublié dans SchemaV1 — manquants : \(missingFromSchema.sorted())")
+check(unknownInSchema.isEmpty,
+      "aucun modèle fantôme dans SchemaV1 — en trop : \(unknownInSchema.sorted())")
+check(schemaModelNames.count == declared.count,
+      "\(declared.count) modèles déclarés, \(schemaModelNames.count) dans le schéma")
+check(SchemaV1.versionIdentifier == Schema.Version(1, 0, 0), "version 1.0.0")
+check(StudyTrackSchema.currentVersion == 1, "version courante cohérente")
+check(StudyTrackMigrationPlan.schemas.count == 1,
+      "le plan connaît la version en cours (\(StudyTrackMigrationPlan.schemas.count))")
+check(StudyTrackMigrationPlan.stages.isEmpty || !StudyTrackMigrationPlan.stages.isEmpty,
+      "le plan de migration est interrogeable")
+
+// La liste des modèles déclarés n'est pas vide : un garde-fou qui ne compare rien
+// ne garde rien.
+check(!declared.isEmpty, "la liste générée depuis les sources n'est pas vide")
+check(declared.contains("Course") && declared.contains("AcademicMilestone"),
+      "elle contient bien les modèles attendus")
+
+print("== Recherche globale ==")
+// La recherche doit trouver ce que l'utilisateur **tape**, pas ce qu'il a écrit.
+check(SearchEngine.normalize("Algèbre linéaire") == "algebre lineaire",
+      "accents et casse neutralisés — « \(SearchEngine.normalize("Algèbre linéaire")) »")
+check(SearchEngine.normalize("CS-250") == "cs 250", "ponctuation réduite à un espace")
+check(SearchEngine.normalize("  trop   d'espaces  ") == "trop d espaces", "espaces normalisés")
+check(SearchEngine.tokens("algo exo") == ["algo", "exo"], "mots séparés")
+check(SearchEngine.search("", in: []).isEmpty, "requête vide : aucun résultat")
+check(SearchEngine.search("   ", in: []).isEmpty, "requête blanche : aucun résultat")
+
+let catalogue: [SearchDocument] = [
+    SearchDocument(id: "course.1", kind: .course, title: "Algorithms I",
+                   subtitle: "CS-250 · 6 crédits", detail: "algorithms i cs 250 cs250",
+                   courseCode: "CS-250"),
+    SearchDocument(id: "course.2", kind: .course, title: "Analyse I",
+                   subtitle: "MATH-101 · 7 crédits", detail: "analyse i math 101 math101",
+                   courseCode: "MATH-101"),
+    SearchDocument(id: "exercise.1", kind: .exercise, title: "Exercice 3.2 — Tri fusion",
+                   subtitle: "CS-250 · Série 3", detail: "exercice 3 2 tri fusion algo recursif",
+                   courseCode: "CS-250", date: Date()),
+    SearchDocument(id: "theory.1", kind: .theory, title: "Analyse asymptotique",
+                   subtitle: "CS-250 · Vidéo 1.2", detail: "video 1 2 complexite grand o",
+                   courseCode: "CS-250"),
+    SearchDocument(id: "session.1", kind: .session, title: "Révision récurrences",
+                   subtitle: "CS-250 · Exercices", detail: "revision recurrences exercices",
+                   courseCode: "CS-250", date: Date()),
+    SearchDocument(id: "milestone.1", kind: .milestone, title: "Fin des examens",
+                   subtitle: "Fin des examens · 30 janv.", detail: "fin des examens")
+]
+
+// Trouver par intitulé.
+let algoHits = SearchEngine.search("algorithms", in: catalogue)
+check(algoHits.first?.document.id == "course.1", "le cours sort en premier")
+check(algoHits.first?.match == .title, "…et la correspondance est annoncée comme un intitulé")
+
+// Sans accent ni casse.
+check(SearchEngine.search("ANALYSE", in: catalogue).contains { $0.document.id == "course.2" },
+      "recherche insensible aux accents et à la casse")
+check(SearchEngine.search("asymptotique", in: catalogue).first?.document.id == "theory.1",
+      "un titre de théorie se trouve")
+
+// Par code de cours, sous ses trois écritures.
+for written in ["CS-250", "cs250", "cs 250"] {
+    let found = SearchEngine.search(written, in: catalogue)
+    check(found.contains { $0.document.id == "exercise.1" },
+          "« \(written) » trouve les exercices du cours")
+}
+check(SearchEngine.search("cs250", in: catalogue).contains { $0.document.id == "theory.1" },
+      "…et la théorie du même cours")
+
+// Tous les mots doivent correspondre : c'est ce qui rend la recherche utile.
+let bothWords = SearchEngine.search("tri fusion", in: catalogue)
+check(bothWords.count == 1 && bothWords.first?.document.id == "exercise.1",
+      "deux mots : seul le document qui contient les deux sort (\(bothWords.count))")
+check(SearchEngine.search("tri banane", in: catalogue).isEmpty,
+      "un mot absent disqualifie le document")
+check(SearchEngine.search("algo cours", in: catalogue).isEmpty,
+      "« algo » ne suffit pas si le second mot n'existe nulle part")
+
+// Un mot du détail suffit, mais l'intitulé passe devant.
+let detailHit = SearchEngine.search("recursif", in: catalogue)
+check(detailHit.first?.document.id == "exercise.1", "un mot du détail trouve le document")
+check(detailHit.first?.match == .detail, "…et la correspondance est annoncée comme un détail")
+
+// Le code de cours est un cas intermédiaire, annoncé comme tel.
+let codeOnly = SearchEngine.search("math101", in: catalogue)
+check(codeOnly.first?.match == .course, "correspondance par code annoncée comme telle")
+
+// À score égal, l'ordre des natures est stable : cours, puis exercice.
+let broad = SearchEngine.search("cs", in: catalogue)
+check(broad.first?.kind == .course, "à pertinence comparable, un cours passe avant un exercice")
+check(broad == broad.sorted { lhs, rhs in
+    lhs.score != rhs.score ? lhs.score > rhs.score : lhs.kind <= rhs.kind
+} || broad.count < 2, "le tri est déterministe")
+
+// Groupement et résumé.
+let grouped = SearchEngine.grouped(algoHits)
+check(grouped.count == 1 && grouped.first?.kind == .course, "regroupement par nature")
+check(SearchEngine.summary([], query: "").contains("Tape un code"),
+      "sans requête, l'écran explique quoi taper")
+check(SearchEngine.summary([], query: "zzz").contains("zzz"), "sans résultat, la requête est citée")
+check(SearchEngine.summary(algoHits, query: "algorithms").contains("1 résultat"),
+      "avec résultats, le compte est annoncé")
+
+// Le plafond : au-delà, la liste cesse d'aider.
+let many = (0..<200).map { index in
+    SearchDocument(id: "x.\(index)", kind: .exercise, title: "Exercice \(index) trigonométrie",
+                   detail: "trigonometrie")
+}
+check(SearchEngine.search("trigonometrie", in: many).count == SearchEngine.limit,
+      "les résultats sont plafonnés à \(SearchEngine.limit)")
+
+// ── Index construit depuis les modèles ──────────────────────────────────────
+if let indexCourse = courses.first(where: { $0.code == "CS-250" }) {
+    let documents = SearchIndexBuilder.documents(courses: [indexCourse])
+    check(documents.contains { $0.kind == .course }, "le cours est indexé")
+    check(documents.contains { $0.kind == .series }, "ses séries sont indexées")
+    check(documents.contains { $0.kind == .exercise }, "ses exercices sont indexés")
+    check(documents.contains { $0.kind == .theory }, "sa théorie est indexée")
+    check(documents.contains { $0.kind == .exam }, "ses évaluations sont indexées")
+    check(documents.count > 10, "l'index est fourni (\(documents.count) documents pour un cours)")
+
+    // Le code du cours se retrouve sous ses deux écritures.
+    let codeHit = SearchEngine.search("cs250", in: documents)
+    check(!codeHit.isEmpty, "« cs250 » trouve le cours et son contenu (\(codeHit.count) résultats)")
+
+    // Chercher un titre réel du cours d'exemple.
+    if let series = indexCourse.sortedSeries.first {
+        let found = SearchEngine.search("serie \(series.seriesNumber)", in: documents)
+        check(found.contains { $0.kind == .series || $0.kind == .exercise },
+              "une série se retrouve par son numéro")
+    }
+    check(SearchEngine.search("zzzzintrouvable", in: documents).isEmpty,
+          "un mot absent ne ramène rien")
+}
+
+// Groupes et échéances sont indexables aussi.
+let nonCourseDocuments = SearchIndexBuilder.documents(courses: [],
+                                                     milestones: [builderMilestone],
+                                                     groups: [])
+check(nonCourseDocuments.contains { $0.kind == .milestone },
+      "les échéances de l'EPFL sont cherchables")
+check(SearchEngine.search("examen", in: nonCourseDocuments).contains { $0.kind == .milestone },
+      "…et se trouvent par leur intitulé")
+
+print("== Calendrier académique de l'EPFL : lecture de la vraie page ==")
+// Le HTML est un extrait **authentique** de la page publique : c'est ce qui rend
+// ce test utile. Un parseur testé sur une structure inventée ne prouve rien.
+let epflHTML = """
+<p><strong>Semestre automne 26-27</strong></p>
+<table><tbody>
+<tr><td>Fin juillet 2026</td><td><a href="x">Publication de l&#8217;horaire du semestre</a></td></tr>
+<tr><td>1 ao&#251;t 2026</td><td>F&#234;te nationale (jour f&#233;ri&#233;)</td></tr>
+<tr><td><strong>7 septembre 2026</strong></td><td><strong>D&#233;but des enseignements</strong></td></tr>
+<tr><td>21 septembre 2026</td><td>Lundi du Je&#251;ne f&#233;d&#233;ral (jour f&#233;ri&#233;)</td></tr>
+<tr><td>16 octobre 2026</td><td>Interruption des enseignements (fin de journ&#233;e)</td></tr>
+<tr><td>26 octobre 2026</td><td>Reprise des enseignements</td></tr>
+<tr><td>Mi-novembre 2026</td><td>Publication de l&#8217;horaire des examens</td></tr>
+<tr><td>20 novembre 2026</td><td><a href="y">D&#233;lai pour le&nbsp;retrait des examens</a></td></tr>
+<tr><td>18 d&#233;cembre 2026</td><td>Fin des enseignements</td></tr>
+<tr><td>11 janvier 2027</td><td>D&#233;but des examens</td></tr>
+<tr><td>30 janvier 2027</td><td>Fin des examens</td></tr>
+</tbody></table>
+<p><strong>Semestre printemps 25-26</strong></p>
+<table><tbody>
+<tr><td><strong>16 f&#233;vrier 2026</strong></td><td><strong>D&#233;but des enseignements (sauf mise &#224; niveau)</strong></td></tr>
+<tr><td>3 avril 2026</td><td>Vendredi saint (jour f&#233;ri&#233;)</td></tr>
+<tr><td><strong>4 juillet 2026</strong></td><td><strong>Fin des examens</strong></td></tr>
+</tbody></table>
+"""
+let parsedCalendar = AcademicCalendarParser.parse(html: epflHTML)
+check(parsedCalendar.count == 14, "14 lignes lues sur la page (\(parsedCalendar.count))")
+check(parsedCalendar.allSatisfy { $0.date >= Date(timeIntervalSince1970: 0) },
+      "chaque échéance porte une date")
+
+/// Les deux semestres contiennent un « Début des enseignements » : on cible
+/// celui d'automne, comme le ferait l'écran pour le semestre en cours.
+func milestone(_ title: String, in term: String = "automne") -> AcademicMilestoneValue? {
+    parsedCalendar.first { $0.title.contains(title) && $0.termLabel.contains(term) }
+}
+check(milestone("Début des enseignements")?.title.contains("mise à niveau") == false,
+      "« Début des enseignements » de l'automne est lu — \(milestone("Début des enseignements")?.title ?? "-")")
+check(milestone("Début des enseignements")?.termLabel == "Semestre automne 26-27",
+      "…rattaché à son semestre — \(milestone("Début des enseignements")?.termLabel ?? "-")")
+check(milestone("Début des enseignements")?.kind == .teachingStart, "…classé comme début des cours")
+check(milestone("Début des enseignements")?.isImportant == true,
+      "…et marqué important, comme l'EPFL le fait")
+
+// La date qui commande toute l'app.
+let epflAutumn2026 = AcademicCalendarParser.parseDate("7 septembre 2026")
+let epflCalendar = Calendar(identifier: .gregorian)
+check(epflAutumn2026 != nil, "« 7 septembre 2026 » est lue")
+if let epflAutumn2026 {
+    let parts = epflCalendar.dateComponents([.year, .month, .day, .weekday], from: epflAutumn2026.date)
+    check(parts.year == 2026 && parts.month == 9 && parts.day == 7,
+          "…au 7 septembre 2026 (\(parts.day ?? -1)/\(parts.month ?? -1)/\(parts.year ?? -1))")
+    check(parts.weekday == 2, "…qui est bien un lundi")
+    check(epflAutumn2026.approximate == false, "…comme date exacte")
+}
+check(DateUtils.autumnStart(forYear: 2026) == epflAutumn2026?.date,
+      "la règle de rentrée et la page de l'EPFL donnent la même date")
+
+// Les dates approximatives : l'EPFL ne donne pas de jour, on le dit.
+let midNovember = AcademicCalendarParser.parseDate("Mi-novembre 2026")
+check(midNovember?.approximate == true, "« Mi-novembre » est marquée approximative")
+check(epflCalendar.component(.day, from: midNovember?.date ?? Date()) == 15,
+      "…au 15 du mois — \(midNovember.map { epflCalendar.component(.day, from: $0.date) } ?? -1)")
+let endDecember = AcademicCalendarParser.parseDate("Fin décembre 2025")
+check(epflCalendar.component(.day, from: endDecember?.date ?? Date()) == 31,
+      "« Fin décembre » au dernier jour du mois — \(endDecember.map { epflCalendar.component(.day, from: $0.date) } ?? -1)")
+let earlyMarch = AcademicCalendarParser.parseDate("Début mars 2026")
+check(epflCalendar.component(.day, from: earlyMarch?.date ?? Date()) == 1, "« Début mars » au 1er")
+check(AcademicCalendarParser.parseDate("Fin février 2027").map {
+    epflCalendar.component(.day, from: $0.date)
+} == 28, "février 2027 n'est pas bissextile : 28")
+check(AcademicCalendarParser.parseDate("Fin février 2028").map {
+    epflCalendar.component(.day, from: $0.date)
+} == 29, "février 2028 est bissextile : 29")
+check(AcademicCalendarParser.parseDate("pas une date") == nil, "un texte sans date ne produit rien")
+check(AcademicCalendarParser.parseDate("") == nil, "une cellule vide ne produit rien")
+
+// Classification.
+check(AcademicCalendarParser.kind(for: "Vendredi saint (jour férié)") == .holiday, "jour férié reconnu")
+check(AcademicCalendarParser.kind(for: "Interruption des enseignements (fin de journée)") == .break,
+      "interruption reconnue")
+check(AcademicCalendarParser.kind(for: "Délai pour le retrait des examens") == .deadline, "délai reconnu")
+check(AcademicCalendarParser.kind(for: "Ouverture des inscriptions anticipées") == .opening,
+      "ouverture reconnue")
+check(AcademicCalendarParser.kind(for: "Fin des examens") == .examEnd, "fin des examens reconnue")
+check(AcademicCalendarParser.kind(for: "Envoi des bulletins de notes") == .publication,
+      "envoi de bulletins classé en publication")
+check(AcademicCalendarParser.kind(for: "Autre chose") == .other, "l'inconnu ne force pas une nature")
+
+// HTML : sans les balises ni les entités.
+check(AcademicCalendarParser.plainText("<td>D&#233;lai pour le&nbsp;retrait</td>")
+        == "Délai pour le retrait",
+      "balises et entités retirées — « \(AcademicCalendarParser.plainText("<td>D&#233;lai pour le&nbsp;retrait</td>")) »")
+check(AcademicCalendarParser.plainText("<a href=\"x\">Deux <strong>mots</strong></a>") == "Deux mots",
+      "balises imbriquées retirées")
+check(AcademicCalendarParser.plainText("<td>   espaces   multiples  </td>") == "espaces multiples",
+      "espaces normalisés")
+
+// Clé stable : deux lectures de la même page ne doivent pas dupliquer.
+let idsFirst = Set(AcademicCalendarParser.parse(html: epflHTML).map(\.id))
+let idsAgain = Set(AcademicCalendarParser.parse(html: epflHTML).map(\.id))
+check(idsFirst == idsAgain && idsFirst.count == 14,
+      "les identifiants sont stables d'une lecture à l'autre (\(idsFirst.count))")
+
+// ── Instantané embarqué ─────────────────────────────────────────────────────
+let snapshot = EPFLCalendarSnapshot.milestones()
+check(snapshot.count == 71, "instantané embarqué : 71 échéances (\(snapshot.count))")
+check(snapshot.allSatisfy { $0.id.hasPrefix("epfl.") }, "chaque échéance porte une clé EPFL")
+check(snapshot == snapshot.sorted { $0.date < $1.date }, "l'instantané est chronologique")
+check(!snapshot.isEmpty, "l'instantané n'est pas vide")
+
+// Les quatre bornes du semestre d'automne 2026-2027, vérifiables à la main.
+func snapshotDate(_ title: String, in term: String? = nil) -> Date? {
+    snapshot.first { value in
+        value.title == title && (term == nil || value.termLabel.contains(term!))
+    }?.date
+}
+func day(_ date: Date?) -> String {
+    guard let date else { return "—" }
+    return DateUtils.shortDay.string(from: date)
+}
+check(day(snapshotDate("Début des enseignements", in: "automne 26-27")) == "lun. 7 sept.",
+      "automne 2026 : début des cours le 7 septembre — \(day(snapshotDate("Début des enseignements")))")
+check(day(snapshotDate("Fin des enseignements", in: "automne 26-27")) == "ven. 18 déc.",
+      "…fin des cours le 18 décembre — \(day(snapshotDate("Fin des enseignements")))")
+check(day(snapshotDate("Début des examens", in: "automne 26-27")) == "lun. 11 janv.",
+      "…début des examens le 11 janvier — \(day(snapshotDate("Début des examens")))")
+check(day(snapshotDate("Fin des examens", in: "automne 26-27")) == "sam. 30 janv.",
+      "…fin des examens le 30 janvier — \(day(snapshotDate("Fin des examens")))")
+
+check(EPFLCalendarSnapshot.autumnTeachingStart(year: 2026) == epflAutumn2026?.date,
+      "le début d'automne est extractible de l'instantané")
+check(EPFLCalendarSnapshot.autumnTeachingStart(year: 2025) == nil,
+      "une année non publiée ne rend pas de date inventée")
+
+check(snapshot.contains { $0.kind == .holiday }, "l'instantané contient les jours fériés")
+check(snapshot.contains { $0.kind == .deadline }, "…et les délais")
+check(snapshot.filter(\.isApproximate).count == 13,
+      "13 échéances approximatives, signalées comme telles (\(snapshot.filter(\.isApproximate).count))")
+
+print("== Couverture du suivi : qu'est-ce qui échappe à l'app ? ==")
+// Un cours modèle, volontairement sain : tout est là, rien à signaler.
+func healthyCourse(code: String = "OK-100") -> CourseCoverageInput {
+    CourseCoverageInput(code: code, name: "Cours modèle", isTracked: true, hasTerm: true,
+                        hasLectures: true, currentWeek: 5, termWeeks: 14,
+                        theoryCount: 8, theoryWithoutDuration: 0, theoryWatchedNotSummarized: 0,
+                        seriesNumbersWithNoExercise: [], overdueSeries: [], misplannedSeries: [],
+                        exerciseCount: 20, notDoneExerciseCount: 4,
+                        doneNotCorrectedCount: 0, toRedoCount: 0,
+                        examCount: 1, upcomingExamCount: 1)
+}
+check(CoverageEngine.audit(healthyCourse()).isHealthy,
+      "un cours complet ne produit aucun manque")
+check(CoverageEngine.audit(healthyCourse()).findings.isEmpty,
+      "…et exactement aucun constat")
+
+// Un cours archivé n'a pas à être complet : il n'est plus suivi.
+var archived = healthyCourse(code: "OLD-100")
+archived.isTracked = false
+archived.theoryCount = 0
+archived.examCount = 0
+check(CoverageEngine.audit(archived).findings.isEmpty,
+      "un cours archivé n'est pas audité")
+check(CoverageEngine.audit(archived).isTracked == false, "…et reste distinguable")
+
+// Chaque famille de manque, isolément.
+var noTerm = healthyCourse(); noTerm.hasTerm = false
+check(CoverageEngine.audit(noTerm).blocking.contains { $0.category == .foundation },
+      "cours sans semestre = manque bloquant")
+
+var empty = healthyCourse(); empty.theoryCount = 0; empty.exerciseCount = 0
+check(CoverageEngine.audit(empty).blocking.contains { $0.title.contains("vide") },
+      "cours sans aucun contenu = manque bloquant")
+check(CoverageEngine.audit(empty).blocking.allSatisfy { !$0.title.contains("OK-100") },
+      "le titre du constat ne porte pas le code : l'écran l'affiche à part")
+check(CoverageEngine.audit(empty).blocking.allSatisfy { $0.courseCode == "OK-100" },
+      "…mais le constat sait de quel cours il parle")
+
+var emptySeries = healthyCourse(); emptySeries.seriesNumbersWithNoExercise = [3, 4]
+let emptySeriesFindings = CoverageEngine.audit(emptySeries).findings
+check(emptySeriesFindings.contains { $0.category == .content && $0.title.contains("2 séries") },
+      "séries sans exercice signalées — \(emptySeriesFindings.first { $0.category == .content }?.title ?? "-")")
+
+var overdue = healthyCourse(); overdue.overdueSeries = [3]
+check(CoverageEngine.audit(overdue).warnings.contains { $0.category == .planning },
+      "série en retard = avertissement de planification")
+
+var misplanned = healthyCourse(); misplanned.misplannedSeries = [22]
+check(CoverageEngine.audit(misplanned).findings.contains { $0.category == .planning && $0.severity == .info },
+      "série planifiée hors semestre = remarque, pas un défaut")
+
+var notCorrected = healthyCourse(); notCorrected.doneNotCorrectedCount = 7
+check(CoverageEngine.audit(notCorrected).warnings.contains { $0.category == .correction },
+      "exercices faits non corrigés = incomplet")
+
+var toRedo = healthyCourse(); toRedo.toRedoCount = 2
+check(CoverageEngine.audit(toRedo).warnings.contains { $0.category == .correction },
+      "exercices à refaire = incomplet")
+
+var noExam = healthyCourse(); noExam.examCount = 0; noExam.upcomingExamCount = 0
+check(CoverageEngine.audit(noExam).warnings.contains { $0.category == .exams },
+      "cours sans évaluation = incomplet")
+
+var pastExams = healthyCourse(); pastExams.upcomingExamCount = 0
+let pastFindings = CoverageEngine.audit(pastExams).findings
+check(pastFindings.contains { $0.category == .exams && $0.severity == .info },
+      "évaluations toutes passées = remarque, pas un défaut")
+
+var unwatched = healthyCourse()
+unwatched.theoryWatchedNotSummarized = 3
+unwatched.theoryWithoutDuration = 2
+let theoryFindings = CoverageEngine.audit(unwatched).findings.filter { $0.category == .theory }
+check(theoryFindings.count == 2, "les deux remarques de théorie sont distinctes (\(theoryFindings.count))")
+check(theoryFindings.allSatisfy { $0.severity == .info },
+      "…et aucune n'est comptée comme un manque réel")
+
+// Le cours sain ne doit pas être « incomplet » : c'est tout l'intérêt du score.
+check(CoverageEngine.audit(healthyCourse()).isHealthy,
+      "les remarques de confort ne rendent pas un cours incomplet")
+
+// ── Rapport global ──────────────────────────────────────────────────────────
+let healthyReport = CoverageEngine.report(courses: [healthyCourse()],
+                                          hasTerm: true, hasTimetable: true)
+check(healthyReport.isComplete, "rapport complet quand tout est là")
+check(healthyReport.coverage == 1, "couverture à 100 % — \(Int(healthyReport.coverage * 100)) %")
+check(healthyReport.healthyCourses == 1, "un cours sain compté")
+
+let noTermReport = CoverageEngine.report(courses: [healthyCourse()],
+                                         hasTerm: false, hasTimetable: true)
+check(noTermReport.globalFindings.contains { $0.severity == .blocking },
+      "sans semestre, un manque bloquant est remonté au niveau global")
+check(noTermReport.coverage == 1,
+      "…sans artificiellement pénaliser les cours, qui n'y sont pour rien")
+
+let noTimetableReport = CoverageEngine.report(courses: [healthyCourse()],
+                                              hasTerm: true, hasTimetable: false)
+check(noTimetableReport.globalFindings.contains { $0.id == "socle.horaire" },
+      "sans horaire importé, une suggestion est proposée")
+check(noTimetableReport.globalFindings.allSatisfy { $0.severity != .blocking },
+      "…et ce n'est pas un manque bloquant")
+
+let emptyReport = CoverageEngine.report(courses: [], hasTerm: true, hasTimetable: true)
+check(emptyReport.coverage == 0, "sans cours suivi, la couverture est nulle sans division par zéro")
+check(emptyReport.globalFindings.contains { $0.id == "socle.cours" }, "…et l'absence de cours est dite")
+
+let mixedReport = CoverageEngine.report(courses: [healthyCourse(code: "A-100"),
+                                                  healthyCourse(code: "B-100"),
+                                                  noExam],
+                                        hasTerm: true, hasTimetable: true)
+check(mixedReport.trackedCount == 3, "trois cours suivis")
+check(mixedReport.healthyCourses == 2, "deux cours sans manque (\(mixedReport.healthyCourses))")
+check(abs(mixedReport.coverage - 2.0 / 3.0) < 0.001,
+      "couverture = 2/3 — \(String(format: "%.3f", mixedReport.coverage))")
+check(mixedReport.count(.warning) >= 1, "les avertissements sont comptés (\(mixedReport.count(.warning)))")
+check(mixedReport.allFindings.first?.severity == .blocking
+      || mixedReport.count(.blocking) == 0,
+      "le tri met les manques bloquants en tête")
+check(mixedReport.findings(in: .exams).count == 1, "regroupement par famille")
+
+// ── Lecture des modèles ─────────────────────────────────────────────────────
+let coverageCourse = courses.first { $0.code == "CS-250" }
+if let coverageCourse {
+    let input = CoverageBuilder.input(for: coverageCourse)
+    check(input.code == coverageCourse.displayCode, "code lu depuis le modèle")
+    check(input.hasTerm, "le cours d'exemple a bien un semestre")
+    check(input.exerciseCount == coverageCourse.allExercises.count,
+          "exercices comptés (\(input.exerciseCount))")
+    check(input.examCount == coverageCourse.exams.count, "évaluations comptées (\(input.examCount))")
+    check(input.doneNotCorrectedCount <= input.exerciseCount,
+          "les exercices non corrigés forment un sous-ensemble des exercices")
+    check(input.seriesNumbersWithNoExercise.count <= coverageCourse.series.count,
+          "les séries vides forment un sous-ensemble des séries")
+}
+let modelReport = CoverageBuilder.report(courses: courses,
+                                         term: AcademicTerm.resolve(from: [builderTerm]),
+                                         hasTimetable: true)
+check(modelReport.trackedCount == courses.filter(\.isTracked).count,
+      "tous les cours suivis sont audités (\(modelReport.trackedCount))")
+check(modelReport.courses.count == courses.count, "tous les cours sont représentés")
 
 print("== Diagnostic des erreurs Supabase ==")
 // Ce traducteur a menti deux fois : « politiques RLS » sans dire quelle table, et
@@ -682,8 +1771,8 @@ check(wrappedSeries.first?.exercises.first(where: { $0.number == "4.2" })?.isBon
       "le bonus ne déborde pas sur l'exercice suivant")
 
 let bareSeries = SeriesPDFParser.parse("Exercice 1\nExercice 2\n")
-check(bareSeries.count == 1 && bareSeries[0].exercises.map(\.number) == ["1", "2"],
-      "« Exercice 1 / Exercice 2 » donne deux exercices")
+check(bareSeries.count == 1 && bareSeries[0].exercises.map(\.number) == ["1.1", "1.2"],
+      "« Exercice 1 / Exercice 2 » hors série : numérotés dans la série 1 — \(bareSeries.first?.exercises.map(\.number).joined(separator: ", ") ?? "-")")
 
 check(SeriesPDFParser.parse("Exercice 1.1\nExercice 1.1\n").first?.exercises.count == 1,
       "un doublon ne crée pas deux exercices")
@@ -744,13 +1833,13 @@ let algebreSeries = SeriesPDFParser.parse(algebre)
 check(algebreSeries.count == 1, "Algèbre : une seule série (\(algebreSeries.count))")
 if let s = algebreSeries.first {
     check(s.number == 2, "Algèbre : série 2 lue depuis l'en-tête (\(s.number))")
-    check(s.exercises.map(\.number) == ["1", "2", "3"],
-          "Algèbre : trois exercices — \(s.exercises.map(\.number).joined(separator: ", "))")
+    check(s.exercises.map(\.number) == ["2.1", "2.2", "2.3"],
+          "Algèbre : trois exercices, numérotés par leur série — \(s.exercises.map(\.number).joined(separator: ", "))")
     check(s.exercises.first?.title.isEmpty == true,
           "Algèbre : « solution générale. » n'est pas retenu comme titre — « \(s.exercises.first?.title ?? "") »")
-    check(s.exercises.first { $0.number == "2" }?.title.isEmpty == true,
+    check(s.exercises.first { $0.number == "2.2" }?.title.isEmpty == true,
           "Algèbre : les métadonnées « Type : … Défi : … » ne polluent pas le titre")
-    check(s.exercises.first { $0.number == "3" }?.title.isEmpty == true,
+    check(s.exercises.first { $0.number == "2.3" }?.title.isEmpty == true,
           "Algèbre : « Exercice 3 » seul n'invente pas de titre")
 }
 
@@ -788,6 +1877,109 @@ check(SeriesPDFParser.exerciseTitle("Type : Technique Défi : \u{22c6}\u{22c6}")
       "les métadonnées seules ne font pas un titre")
 check(SeriesPDFParser.exerciseTitle("Diagonalisation") == "Diagonalisation",
       "un vrai intitulé traverse le nettoyage")
+
+print("== Mise en page du PDF : titre ou énoncé ? ==")
+// Le cas signalé sur un vrai polycopié : « Exercice 1 » suivi de la **première
+// phrase de l'énoncé**. Le texte seul ne permet pas de les distinguer ; la taille
+// de police, si. C'est tout l'objet de `SeriesLayoutParser`.
+func layout(_ text: String, _ size: Double, bold: Bool = false, page: Int = 0) -> PDFLayoutLine {
+    PDFLayoutLine(text: text, fontSize: size, isBold: bold, pageIndex: page)
+}
+
+let algebreLayout = [
+    layout("Série 2", 16),
+    layout("Exercice 1", 13),
+    layout("solution générale.", 11),
+    layout("Type : Technique Défi : ⋆⋆", 9),
+    layout("Exercice 2", 13),
+    layout("tions change.", 11),
+    layout("Exercice 3", 13),
+    layout("ou contre-exemple.", 11)
+]
+check(SeriesLayoutParser.bodyFontSize(algebreLayout) == 11,
+      "corps de texte déduit de la police la plus lue (\(SeriesLayoutParser.bodyFontSize(algebreLayout) ?? -1))")
+
+let algebreParsed = SeriesLayoutParser.parse(algebreLayout)
+check(algebreParsed.count == 1, "une seule série (\(algebreParsed.count))")
+check(algebreParsed.first?.number == 2, "série 2 lue depuis l'en-tête")
+check(algebreParsed.first?.exercises.map(\.number) == ["2.1", "2.2", "2.3"],
+      "trois exercices — \(algebreParsed.first?.exercises.map(\.number).joined(separator: ", ") ?? "-")")
+check(algebreParsed.first?.exercises.allSatisfy { $0.title.isEmpty } == true,
+      "aucun énoncé n'est pris pour un intitulé")
+
+// Un vrai intitulé, lui, doit survivre.
+let titréLayout = [
+    layout("Série 3", 16),
+    layout("Exercice 1 : Diagonalisation", 13),
+    layout("Montrer que la matrice est diagonalisable.", 11),
+    layout("Exercice 2", 13),
+    layout("Espaces vectoriels", 13)
+]
+let titréParsed = SeriesLayoutParser.parse(titréLayout)
+check(titréParsed.first?.exercises.first?.title == "Diagonalisation",
+      "intitulé sur la même ligne — « \(titréParsed.first?.exercises.first?.title ?? "") »")
+check(titréParsed.first?.exercises.count == 2, "deux exercices")
+
+// Un titre peut tenir sur deux lignes, à condition que la seconde soit du **même
+// niveau** que la première. C'est ce qui autorise la suite, et interdit l'énoncé.
+let twoLineLayout = [
+    layout("Série 4", 16),
+    layout("Exercice 1", 13),
+    layout("Formes bilinéaires", 13),
+    layout("Montrer que la forme est symétrique.", 11)
+]
+let twoLineParsed = SeriesLayoutParser.parse(twoLineLayout)
+check(twoLineParsed.first?.exercises.first?.title == "Formes bilinéaires",
+      "titre sur deux lignes accepté — « \(twoLineParsed.first?.exercises.first?.title ?? "") »")
+
+// Le bonus est souvent **plus bas** que la ligne suivante : l'ancienne lecture ne
+// regardait qu'une ligne, et le manquait.
+let bonusLayout = [
+    layout("Série 5", 16),
+    layout("Exercice 4", 13),
+    layout("Montrer que l'ensemble est ouvert.", 11),
+    layout("Indication : utiliser la boule unité.", 11),
+    layout("(Cet exercice est facultatif.)", 11),
+    layout("Exercice 5", 13),
+    layout("Calculer la limite.", 11)
+]
+let bonusParsed = SeriesLayoutParser.parse(bonusLayout)
+check(bonusParsed.first?.exercises.first { $0.number == "5.4" }?.isBonus == true,
+      "bonus trouvé trois lignes plus bas")
+check(bonusParsed.first?.exercises.first { $0.number == "5.5" }?.isBonus == false,
+      "le bonus ne déborde pas sur l'exercice suivant")
+
+// Sans information de police — texte collé — on retombe sur les motifs, sans régression.
+let pasted = SeriesLayoutParser.parse("Série 2\nExercice 1 solution générale.\nExercice 2\n"
+                                      .components(separatedBy: "\n").map { PDFLayoutLine(text: $0) })
+check(pasted.first?.exercises.map(\.number) == ["2.1", "2.2"],
+      "texte sans mise en page : les motifs prennent le relais — \(pasted.first?.exercises.map(\.number).joined(separator: ", ") ?? "-")")
+check(pasted.first?.exercises.first?.title.isEmpty == true,
+      "et la règle sur les intitulés s'applique quand même")
+
+// Une tête de série sans exercice reste visible pour être complétée à la main.
+let headerOnlyLayout = [layout("Série 7", 16), layout("Consignes générales.", 11)]
+let headerOnlyParsed = SeriesLayoutParser.parse(headerOnlyLayout)
+check(headerOnlyParsed.count == 1 && headerOnlyParsed.first?.exercises.isEmpty == true,
+      "série annoncée sans exercice : conservée, liste vide")
+
+// « Ex-02-04 » porte la série dans son numéro, même sans en-tête.
+let dashedLayout = [layout("Ex-02-04: Montrer que si n est pair.", 11),
+                    layout("Ex-02-05: En déduire le résultat.", 11)]
+let dashedParsed = SeriesLayoutParser.parse(dashedLayout)
+check(dashedParsed.first?.number == 2, "série déduite du numéro d'exercice")
+check(dashedParsed.first?.exercises.count == 2, "deux exercices « Ex-02-xx »")
+
+// Le corps est en gras partout (diapositives) : le gras ne doit plus servir de
+// signal, sinon chaque ligne deviendrait un titre.
+let allBold = [
+    layout("Série 2", 16, bold: true),
+    layout("Exercice 1", 14, bold: true),
+    layout("solution générale.", 14, bold: true)
+]
+let allBoldParsed = SeriesLayoutParser.parse(allBold)
+check(allBoldParsed.first?.exercises.first?.title.isEmpty == true,
+      "corps entièrement en gras : aucun faux intitulé")
 
 print("== Code de cours dans un horaire iCal ==")
 // Le code n'est pas toujours dans l'intitulé : on le cherche aussi dans la
@@ -1445,6 +2637,221 @@ do {
     check(prepared.contains("Montrer que…"), "la ligne suivant un exercice survit (intitulé possible)")
     check(!prepared.contains("intervalle fermé borné.\nSoit f"), "le bruit répété est retiré")
     check(SeriesAIParsing.prepare("court") == "court", "un texte court passe tel quel")
+}
+
+print("== Import PDF : ce que le document dit de lui-même ==")
+do {
+    func line(_ text: String, _ size: Double = 11, bold: Bool = false, page: Int = 0,
+              indent: Double = 60, startsBold: Bool = false) -> PDFLayoutLine {
+        PDFLayoutLine(text: text, fontSize: size, isBold: bold, pageIndex: page, indent: indent, startsBold: startsBold)
+    }
+
+    // La série n'est pas toujours en début de ligne : c'était la cause de tout
+    // un PDF rangé en « série 1 ».
+    let header = [line("EPFL — Analyse I — Série 4", 9), line("Automne 2026", 9), line("Exercice 1", 13)]
+    check(SeriesDocumentInference.seriesNumberInDocument(header) == 4, "« … — Série 4 » en en-tête : série 4")
+    check(SeriesDocumentInference.seriesNumberInDocument([line("Exercise Set 5", 14)]) == 5, "« Exercise Set 5 » : série 5")
+    check(SeriesDocumentInference.seriesNumberInDocument([line("Problem Sheet 02", 14)]) == 2, "« Problem Sheet 02 » : série 2")
+    check(SeriesDocumentInference.seriesNumberInDocument([line("Série de Taylor", 11)]) == nil, "« série de Taylor » n'est pas un numéro")
+    check(SeriesDocumentInference.seriesNumber(inFilename: "serie03_sol.pdf") == 3, "nom de fichier « serie03_sol » : 3")
+    check(SeriesDocumentInference.seriesNumber(inFilename: "Series_4.pdf") == 4, "nom de fichier « Series_4 » : 4")
+    check(SeriesDocumentInference.seriesNumber(inFilename: "ex7.pdf") == 7, "nom de fichier « ex7 » : 7")
+    check(SeriesDocumentInference.seriesNumber(inFilename: "cs250-notes.pdf") == nil, "un code de cours n'est pas un numéro de série")
+    check(SeriesDocumentInference.seriesNumber(lines: header, filename: "serie09.pdf")?.number == 4,
+          "le document l'emporte sur le nom du fichier")
+
+    // Le cours désigné par le PDF.
+    let cs = SeriesDocumentInference.CourseCandidate(id: UUID(), code: "CS-250", name: "Algorithms I")
+    let math = SeriesDocumentInference.CourseCandidate(id: UUID(), code: "MATH-101", name: "Analyse I")
+    check(SeriesDocumentInference.course(in: header, filename: nil, candidates: [cs, math]) == math.id,
+          "« Analyse I » dans l'en-tête : MATH-101")
+    check(SeriesDocumentInference.course(in: [], filename: "cs250_serie2.pdf", candidates: [cs, math]) == cs.id,
+          "« cs250 » dans le nom de fichier : CS-250")
+    check(SeriesDocumentInference.course(in: [line("Série 3", 14)], filename: "s3.pdf", candidates: [cs, math]) == nil,
+          "aucun indice : on ne choisit pas à la place de l'étudiant·e")
+
+    // Sans en-tête en tête de ligne, la série vient du document.
+    let noHeader = [line("Exercice 1", 13), line("Soit f.", 11), line("Exercice 2", 13), line("Calculer.", 11)]
+    check(SeriesLayoutParser.parse(noHeader, defaultSeries: 4).first?.exercises.map(\.number) == ["4.1", "4.2"],
+          "série déduite du document : 4.1, 4.2")
+
+    // Anglais et allemand.
+    let english = [line("Exercise 1", 13), line("Prove it.", 11), line("Problem 2", 13), line("Compute.", 11)]
+    check(SeriesLayoutParser.parse(english, defaultSeries: 2).first?.exercises.map(\.number) == ["2.1", "2.2"],
+          "« Exercise 1 », « Problem 2 » reconnus")
+    check(SeriesPDFParser.parse("Exercise 1\nExercise 2\n", defaultSeries: 3).first?.exercises.map(\.number) == ["3.1", "3.2"],
+          "texte collé en anglais, série fournie")
+    check(SeriesPDFParser.parse("Aufgabe 1\n").first?.exercises.count == 1, "« Aufgabe 1 » reconnu")
+
+    // Faux positifs : une démonstration numérotée, une citation.
+    let phantoms = [line("Série 3", 16), line("Exercice 1", 13),
+                    line("1.5 Montrer que la suite converge vers zéro quand n tend vers l'infini.", 11),
+                    line("Exercice 2 de la série précédente nous a appris que la limite existe.", 11),
+                    line("Exercice 2", 13)]
+    check(SeriesLayoutParser.parse(phantoms).first?.exercises.map(\.number) == ["3.1", "3.2"],
+          "ni « 1.5 » de corps de texte ni une citation ne créent d'exercice — \(SeriesLayoutParser.parse(phantoms).first?.exercises.map(\.number) ?? [])")
+
+    // Un « 1. » mis en forme de titre, dans un document sans mot-clé : un exercice.
+    let numbered = [line("Série 6", 16), line("1. Suites", 12, bold: true, indent: 60),
+                    line("Soit u.", 11), line("2. Séries", 12, bold: true, indent: 60)]
+    check(SeriesLayoutParser.parse(numbered).first?.exercises.map(\.number) == ["6.1", "6.2"],
+          "« 1. Suites » en gras : exercice 6.1")
+
+    // Titre en ligne (LaTeX) : la ligne commence en gras.
+    let runIn = [line("Série 2", 16),
+                 line("Exercice 1. Soit f une fonction continue.", 11, startsBold: true),
+                 line("Exercice 2. Calculer la limite.", 11, startsBold: true)]
+    check(SeriesLayoutParser.parse(runIn).first?.exercises.count == 2, "titres « en ligne » reconnus")
+
+    // Questions rattachées à l'exercice.
+    let questions = [line("Série 1", 16), line("Exercice 1", 13), line("Soit f.", 11),
+                     line("a) Montrer que f est continue.", 11, indent: 80),
+                     line("b) En déduire la limite.", 11, indent: 80),
+                     line("Exercice 2", 13), line("Question 1 : calculer.", 11), line("Question 2 : conclure.", 11)]
+    let withQuestions = SeriesLayoutParser.parse(questions)
+    check(withQuestions.first?.exercises.map(\.number) == ["1.1", "1.2"],
+          "« Question 1 » n'est pas un exercice quand le document dit « Exercice » — \(withQuestions.first?.exercises.map(\.number) ?? [])")
+    check(withQuestions.first?.exercises.first?.subQuestions.map(\.label) == ["a", "b"],
+          "questions a) b) rattachées à l'exercice 1.1")
+    let onlyQuestions = [line("Série 2", 16), line("Question 1", 13), line("Question 2", 13)]
+    check(SeriesLayoutParser.parse(onlyQuestions).first?.exercises.count == 2,
+          "sans autre mot-clé, « Question N » est un exercice")
+    check(!SeriesLayoutParser.isQuestionSequence(["c", "d"]), "une liste qui ne commence pas par a/1/i n'est pas une liste de questions")
+
+    // Fusion : une seule série, même quand les deux côtés ne s'accordent pas.
+    let heuristicOne = [DetectedSeries(number: 1, title: "", exercises: [
+        DetectedExercise(number: "1.1", title: "", isBonus: false),
+        DetectedExercise(number: "1.2", title: "", isBonus: true),
+        DetectedExercise(number: "1.5", title: "", isBonus: false, isConfident: false)
+    ])]
+    let aiFour = [DetectedSeries(number: 4, title: "Intégrales", exercises: [
+        DetectedExercise(number: "4.1", title: "Changement de variable", isBonus: false),
+        DetectedExercise(number: "4.2", title: "Intégrale impropre", isBonus: false),
+        DetectedExercise(number: "4.3", title: "Fubini", isBonus: false)
+    ])]
+    let reconciled = SeriesAIParsing.merge(heuristic: heuristicOne, ai: aiFour, preferredSeries: 4)
+    check(reconciled.count == 1 && reconciled.first?.number == 4, "une seule série, la 4 — \(reconciled.map(\.number))")
+    check(reconciled.first?.exercises.map(\.number) == ["4.1", "4.2", "4.3"],
+          "le « 1.5 » douteux est écarté, rien n'est dupliqué — \(reconciled.first?.exercises.map(\.number) ?? [])")
+    check(reconciled.first?.exercises.first { $0.number == "4.2" }?.isBonus == true, "le bonus lu par les motifs est gardé")
+    check(SeriesAIParsing.merge(heuristic: heuristicOne, ai: aiFour).first?.number == 4,
+          "sans indice du document, le numéro du modèle l'emporte sur le défaut « 1 »")
+
+    // Entrée de l'IA : mise en page conservée, tout le document dans le budget.
+    var long: [PDFLayoutLine] = [line("Série 8", 16)]
+    for number in 1...12 {
+        long.append(line("Exercice \(number)", 13, page: number / 3))
+        for _ in 0..<40 { long.append(line("Soit f une fonction continue sur un intervalle fermé borné, alors f atteint ses bornes.", 11, page: number / 3)) }
+        long.append(line("a) Première question.", 11, page: number / 3, indent: 84))
+    }
+    let prepared = SeriesAIParsing.prepareLayout(long, seriesHint: 8)
+    check(prepared.count <= SeriesAIParsing.layoutBudget, "entrée IA sous le budget (\(prepared.count) car.)")
+    check(prepared.contains("# Exercice 12"), "le dernier exercice survit, marqué comme titre")
+    check(prepared.contains("  a) Première question."), "le retrait d'une question est conservé")
+    check(prepared.contains("série 8"), "l'indice de série est transmis")
+}
+
+print("== Import PDF de bout en bout : vrais PDF, vraie extraction ==")
+do {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("studytrack-fixtures-\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    func run(_ pages: [[FixtureLine]], filename: String) -> (lines: [PDFLayoutLine], series: [DetectedSeries], hint: Int?) {
+        let url = directory.appendingPathComponent(filename)
+        PDFFixtures.write(pages, to: url)
+        guard let document = PDFDocument(url: url) else { return ([], [], nil) }
+        let lines = PDFLayoutExtractor.lines(from: document)
+        let hint = SeriesDocumentInference.seriesNumber(lines: lines, filename: filename)?.number
+        return (lines, SeriesLayoutParser.parse(lines, defaultSeries: hint), hint)
+    }
+
+    let analyse = run(PDFFixtures.analyse, filename: "polycopie.pdf")
+    check(analyse.lines.contains { $0.fontSize > 11.5 && $0.isBold }, "PDFKit rend taille et gras des titres")
+    check(analyse.lines.contains { $0.startsBold && !$0.isBold }, "un titre en ligne est vu comme commençant en gras")
+    let bodyIndent = analyse.lines.first { $0.trimmed.hasPrefix("Calculer") }?.indent ?? 0
+    let questionIndent = analyse.lines.first { $0.trimmed.hasPrefix("a)") }?.indent ?? 0
+    check(questionIndent > bodyIndent + 10, "le retrait des questions est mesuré (\(Int(bodyIndent)) → \(Int(questionIndent)))")
+    check(analyse.hint == 4, "série 4 lue dans l'en-tête courant — \(analyse.hint.map(String.init) ?? "rien")")
+    let four = analyse.series.first
+    check(analyse.series.count == 1 && four?.number == 4, "une seule série, la 4 — \(analyse.series.map(\.number))")
+    check(four?.exercises.map(\.number) == ["4.1", "4.2", "4.3", "4.4"],
+          "quatre exercices, ni fantôme ni citation — \(four?.exercises.map(\.number) ?? [])")
+    check(four?.exercises.first?.title == "Changement de variable", "intitulé entre parenthèses — « \(four?.exercises.first?.title ?? "") »")
+    check(four?.exercises.first?.subQuestions.map(\.label) == ["a", "b"], "questions a) b) de l'exercice 4.1")
+    check(four?.exercises.first { $0.number == "4.2" }?.isBonus == true, "4.2 facultatif")
+    check(four?.exercises.first { $0.number == "4.3" }?.title == "Intégrale impropre",
+          "titre sur la ligne suivante en page 2 — « \(four?.exercises.first { $0.number == "4.3" }?.title ?? "") »")
+    let prepared = SeriesAIParsing.prepareLayout(analyse.lines, seriesHint: analyse.hint)
+    check(prepared.contains("# Exercice 1") && prepared.contains("--- page 2 ---"),
+          "entrée IA : titres marqués et pages séparées")
+
+    let english = run(PDFFixtures.english, filename: "exercises.pdf")
+    let seven = english.series.first
+    check(english.hint == 7 && seven?.number == 7, "« Exercise Set 7 » : série 7")
+    check(seven?.exercises.map(\.number) == ["7.1", "7.2", "7.3"], "trois « Problem » — \(seven?.exercises.map(\.number) ?? [])")
+    check(seven?.exercises.first?.subQuestions.map(\.label) == ["a", "b"], "questions (a) (b)")
+    check(seven?.exercises.first { $0.number == "7.2" }?.isBonus == true, "« optional » vaut bonus")
+
+    let numbered = run(PDFFixtures.numbered, filename: "MATH-111_s.pdf")
+    let two = numbered.series.first
+    check(two?.exercises.map(\.number) == ["2.1", "2.2", "2.3"], "titres numérotés en gras — \(two?.exercises.map(\.number) ?? [])")
+    check(two?.exercises.first?.title == "Espaces vectoriels", "intitulé d'un titre numéroté")
+
+    check(SeriesDocumentInference.seriesTitle("Analyse I", courseName: "Analyse I", courseCode: "MATH-101") == "",
+          "un titre de série égal au nom du cours est effacé")
+    check(SeriesDocumentInference.seriesTitle("Intégrales", courseName: "Analyse I", courseCode: "MATH-101") == "Intégrales",
+          "un vrai titre de série est gardé")
+    check(!SeriesPDFParser.looksLikeTitle("Soit f une fonction continue sur R"), "« Soit f… » est un énoncé, pas un titre")
+    check(!SeriesPDFParser.looksLikeTitle("Let f be continuous"), "« Let f… » non plus")
+    check(SeriesPDFParser.looksLikeTitle("Calcul d'intégrales"), "un titre nominal reste un titre")
+    check(SeriesAIParsing.parse(#"{"series":[{"number":4,"exercises":[{"number":"4.2","questions":["1.5"]}]}]}"#)
+            .first?.exercises.first?.subQuestions.isEmpty == true, "une seule « question » n'en fait pas une liste")
+
+    // Deux niveaux de questions et une liste en deux colonnes (Analyse I, série 03).
+    let nested = run(PDFFixtures.nested, filename: "Analyse I Serie 03.pdf")
+    let three = nested.series.first
+    check(nested.series.count == 1 && three?.number == 3 && three?.title == "Suites",
+          "série 3 « Suites » — \(nested.series.map { "\($0.number) \($0.title)" })")
+    check(three?.exercises.map(\.number) == ["3.1", "3.2", "3.3"], "trois exercices « Ex-03-xx » — \(three?.exercises.map(\.number) ?? [])")
+    check(three?.exercises.first?.subQuestions.map(\.label) == ["1", "2"],
+          "questions de premier niveau seulement, pas (a)…(e) — \(three?.exercises.first?.subQuestions.map(\.label) ?? [])")
+    check(three?.exercises.first { $0.number == "3.3" }?.subQuestions.map(\.label) == ["1", "2", "3", "4"],
+          "liste en deux colonnes remise dans l'ordre — \(three?.exercises.first { $0.number == "3.3" }?.subQuestions.map(\.label) ?? [])")
+    let nestedInput = SeriesAIParsing.prepareLayout(nested.lines, seriesHint: nested.hint)
+    check(!nestedInput.contains("Compilation"), "le pied de page répété n'est pas envoyé au modèle")
+
+    // Les étiquettes, hors PDF.
+    func marks(_ items: [(String, Double)]) -> [SeriesLayoutParser.QuestionMark] {
+        items.map { SeriesLayoutParser.QuestionMark(label: $0.0, indent: $0.1) }
+    }
+    check(SeriesLayoutParser.topLevelQuestions(marks([("1", 84), ("a", 105), ("b", 105), ("2", 84), ("a", 105), ("b", 105), ("c", 106)])) == ["1", "2"],
+          "premier niveau : 1, 2")
+    check(SeriesLayoutParser.topLevelQuestions(marks([("1", 84), ("3", 315), ("2", 84), ("4", 315)])) == ["1", "2", "3", "4"],
+          "deux colonnes triées")
+    check(SeriesLayoutParser.topLevelQuestions(marks([("a", 0), ("b", 0), ("i", 0), ("j", 0)])) == ["a", "b", "i", "j"],
+          "« i » dans une liste de lettres reste une lettre")
+    check(SeriesLayoutParser.topLevelQuestions(marks([("i", 0), ("ii", 0), ("iii", 0), ("iv", 0)])) == ["i", "ii", "iii", "iv"],
+          "chiffres romains dans l'ordre")
+
+    // Le modèle renvoie le numéro comme titre quand le PDF n'en donne pas.
+    check(!SeriesPDFParser.looksLikeTitle("Ex-03-01"), "« Ex-03-01 » n'est pas un titre")
+    check(!SeriesPDFParser.looksLikeTitle("Exercice 3"), "« Exercice 3 » n'est pas un titre")
+    check(SeriesPDFParser.looksLikeTitle("Exercice de synthèse"), "« Exercice de synthèse » en est un")
+
+    // La lecture du texte l'emporte sur le modèle pour les questions.
+    let local = [DetectedSeries(number: 3, title: "", exercises: [
+        DetectedExercise(number: "3.10", title: "", isBonus: false,
+                         subQuestions: [DetectedSubQuestion(label: "1", text: ""), DetectedSubQuestion(label: "2", text: "")])])]
+    let model = [DetectedSeries(number: 3, title: "Suites", exercises: [
+        DetectedExercise(number: "3.10", title: "", isBonus: false,
+                         subQuestions: ["1", "2", "3"].map { DetectedSubQuestion(label: $0, text: "") })])]
+    check(SeriesAIParsing.merge(heuristic: local, ai: model).first?.exercises.first?.subQuestions.count == 2,
+          "questions lues dans le PDF préférées à celles du modèle")
+
+    // Le même document lu une seconde fois donne le même résultat : l'import
+    // n'a plus rien d'aléatoire côté motifs.
+    check(run(PDFFixtures.analyse, filename: "polycopie.pdf").series == analyse.series, "lecture déterministe")
 }
 
 if CommandLine.arguments.contains("--bench") {

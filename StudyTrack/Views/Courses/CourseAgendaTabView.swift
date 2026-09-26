@@ -13,11 +13,14 @@ struct CourseAgendaTabView: View {
     @State private var showingPlan = false
     @State private var showingAddExam = false
     @State private var editingExam: Exam?
+    @State private var editingPastExam: PastExam?
+    @State private var creatingPastExam = false
     @State private var sessionToDelete: PlannedSession?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
             examsCard
+            pastExamsCard
             plannedCard
             sessionsCard
             tasksCard
@@ -30,6 +33,12 @@ struct CourseAgendaTabView: View {
         }
         .sheet(item: $editingExam) { exam in
             ExamFormSheet(course: course, exam: exam)
+        }
+        .sheet(item: $editingPastExam) { past in
+            PastExamFormSheet(course: course, exam: past)
+        }
+        .sheet(isPresented: $creatingPastExam) {
+            PastExamFormSheet(course: course, exam: nil)
         }
         .confirmationDialog("Supprimer cette session ?",
                             isPresented: Binding(get: { sessionToDelete != nil },
@@ -109,6 +118,79 @@ struct CourseAgendaTabView: View {
         PlannedSessionActions.delete(session, context: context, app: app)
     }
 
+    /// Les sujets passés : ce qu'on travaille pour réviser.
+    private var pastExamsCard: some View {
+        Card(title: "Annales", icon: "archivebox.fill",
+             trailing: course.pastExams.isEmpty ? nil : progress.label) {
+            VStack(alignment: .leading, spacing: Layout.block) {
+                if course.pastExams.isEmpty {
+                    Text("Aucun sujet passé. Ajoute les annales de ton cours : ce sont les meilleurs exercices de révision.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    if let first = progress.pendingYears.first {
+                        Label("À travailler en priorité : \(first)",
+                              systemImage: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundStyle(Color.orange.accessibleInk)
+                    }
+
+                    VStack(spacing: 0) {
+                        ForEach(course.sortedPastExams) { past in
+                            Button {
+                                editingPastExam = past
+                            } label: {
+                                pastExamRow(past)
+                            }
+                            .buttonStyle(.plain)
+                            if past.id != course.sortedPastExams.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+
+                Button {
+                    creatingPastExam = true
+                } label: {
+                    Label("Ajouter une annale", systemImage: "plus.circle")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func pastExamRow(_ past: PastExam) -> some View {
+        HStack(spacing: Layout.control) {
+            Image(systemName: past.kind.icon)
+                .foregroundStyle(past.kind.color.accessibleMark)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(past.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Text(past.statusLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: Layout.inline)
+            ConfidenceDot(level: past.confidence)
+            if past.url != nil {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, Layout.snug)
+        .contentShape(Rectangle())
+    }
+
+    private var progress: PastExamProgress.Summary {
+        PastExamProgress.summary(course.pastExams.map { (year: $0.year, worked: $0.isWorked) })
+    }
+
     private var examsCard: some View {
         Card(title: "Évaluations", icon: "graduationcap.fill",
              trailing: course.exams.isEmpty ? nil : "\(course.exams.count)") {
@@ -119,6 +201,34 @@ struct CourseAgendaTabView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
+                // Le plan se cale sur la **prochaine** échéance : c'est elle qui
+                // décide de ce qu'il faut avoir fini, et quand.
+                if let next = course.nextExam {
+                    NavigationLink {
+                        RevisionPlanView(course: course)
+                    } label: {
+                        HStack(spacing: Layout.control) {
+                            Image(systemName: "target")
+                                .foregroundStyle(Theme.accent.accessibleMark)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Plan de révision")
+                                    .font(.subheadline.weight(.medium))
+                                Text("Jusqu'à \(next.title) · \(DateUtils.countdownLabel(to: next.date))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: Layout.inline)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Divider().padding(.vertical, Layout.snug)
+                }
+
                 VStack(spacing: 0) {
                     ForEach(course.sortedExams) { exam in
                         Button {

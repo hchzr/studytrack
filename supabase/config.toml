@@ -1,0 +1,15 @@
+# Configuration Supabase du projet StudyTrack.
+#
+# `project_id` nomme le projet **local** (celui de `supabase start`) ; le projet
+# distant lié, lui, est retenu dans `supabase/.temp/`, créé par `supabase link`.
+project_id = "studytrack"
+
+[functions.extract-series]
+# La fonction est appelée avec la clé `anon` compilée dans l'app, qui est un JWT
+# valide : `verify_jwt = true` exige donc bien une clé, et refuse un appel anonyme.
+#
+# Attention : la clé `anon` étant **publique**, cette vérification n'authentifie
+# pas un utilisateur — elle écarte seulement les appels sans clé. La fonction
+# consomme des crédits de modèle : garde un œil sur l'usage du fournisseur, et
+# régénère la clé `anon` si tu constates des appels que tu n'as pas faits.
+verify_jwt = true

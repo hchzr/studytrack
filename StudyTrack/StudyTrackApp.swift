@@ -33,6 +33,25 @@ enum PreviewLaunch {
     static let groupSubjectsFlag = "-groupSubjects"
     /// Ouvre « Section et semestre » depuis le profil.
     static let schoolFlag = "-school"
+    /// Ouvre « Import intelligent » depuis le profil.
+    static let aiImportFlag = "-aiImport"
+    /// Avec `-stats`, ouvre en plus « Couverture du suivi ».
+    static let coverageFlag = "-coverage"
+    /// Avec `-stats`, ouvre en plus « Vie de l'EPFL ».
+    static let epflLifeFlag = "-epflLife"
+    /// Avec `-course` et l'onglet exercices, ouvre le détail de l'exercice
+    /// portant ce numéro (`-exerciseDetail 3.1`).
+    static let exerciseDetailFlag = "-exerciseDetail"
+    /// Ouvre l'import de série sur ce PDF (`-importFile /chemin/serie4.pdf`).
+    static let importFileFlag = "-importFile"
+    /// Ouvre la recherche, avec la requête qui suit (`-search cs250`).
+    static let searchFlag = "-search"
+    /// Active le Pomodoro sur le chrono.
+    static let pomodoroFlag = "-pomodoro"
+    /// Pré-remplit le chrono de N secondes et le lance (`-timerSeconds 600`).
+    static let timerSecondsFlag = "-timerSeconds"
+    /// Ouvre l'éditeur de raccourcis du chrono.
+    static let shortcutsFlag = "-shortcuts"
     /// **Casse** volontairement le lien cours ↔ semestre, pour vérifier la
     /// réparation du lancement suivant. Outil de diagnostic, pas fonctionnalité.
     static let breakTermFlag = "-breakTermLink"
@@ -63,14 +82,10 @@ enum PreviewLaunch {
         if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw) {
             container.router.selectedTab = tab
         }
-        // `-profile` ouvre les réglages : les onze écrans de configuration sont
-        // autrement inatteignables sans taper dans l'interface.
-        if isSet(profileFlag) {
-            container.router.showingProfile = true
-        }
-        if isSet(statsFlag) {
-            container.router.showingStats = true
-        }
+        // Les feuilles de prévisualisation sont ouvertes par `TodayView.onAppear`,
+        // pas ici : une feuille dont `isPresented` est déjà vrai **avant** que la
+        // vue existe n'est jamais présentée, SwiftUI attendant un passage de faux
+        // à vrai après l'apparition.
         // Le lien est cassé **après** la réparation faite par `AppContainer.init` :
         // l'état cassé est donc visible pour cette exécution, et le lancement
         // suivant — sans ce drapeau — montre la réparation.
@@ -108,6 +123,8 @@ enum PreviewLaunch {
 
 @main
 struct StudyTrackApp: App {
+    /// Reçoit les raccourcis de l'écran d'accueil d'iOS.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var container: AppContainer
 
     init() {
@@ -116,6 +133,9 @@ struct StudyTrackApp: App {
         // Expose le conteneur aux App Intents (Siri, Raccourcis).
         MainActor.assumeIsolated {
             AppRuntime.container = container
+            // Les boutons de la Live Activity s'exécutent dans ce processus : le
+            // gestionnaire est posé ici, avant que la moindre commande n'arrive.
+            FocusTimerCommandHandler.install(container: container)
         }
 
         #if DEBUG

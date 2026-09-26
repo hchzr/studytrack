@@ -15,3 +15,6 @@ xcuserdata/
 # Build artefacts (appareil)
 build-device/
 .impeccable/
+
+# État local de la CLI Supabase (référence du projet lié)
+supabase/.temp/

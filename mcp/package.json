@@ -1,0 +1,12 @@
+{
+  "name": "studytrack-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serveur MCP local exposant les données d'étude StudyTrack à un assistant",
+  "bin": { "studytrack-mcp": "./server.js" },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": { "node": ">=18" }
+}

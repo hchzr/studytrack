@@ -51,29 +51,41 @@ enum GroupSync {
                     }
                 }
 
-                if let members = try? await social.fetchMembers(groupID: remote.id) {
+                // Les six lectures d'un groupe partent **ensemble**.
+                //
+                // Elles étaient enchaînées : six allers-retours par groupe, soit
+                // vingt-quatre pour quatre groupes, avant que le premier pixel de
+                // la liste ne bouge. Elles ne dépendent pas l'une de l'autre —
+                // seul le rangement en base l'est, et il reste séquentiel.
+                let payload = await fetchPayload(groupID: remote.id, social: social)
+
+                if let members = payload.members {
                     applyMembers(members, to: group, social: social, settings: settings, context: context)
                 }
-                if let courses = try? await social.fetchMemberCourses(groupID: remote.id) {
+                if let courses = payload.memberCourses {
                     applyMemberCourses(courses, to: group)
                 }
-                if let leaderboard = try? await social.fetchLeaderboard(groupID: remote.id) {
+                if let leaderboard = payload.leaderboard {
                     applyLeaderboard(leaderboard, to: group)
                 }
-                if let completions = try? await social.fetchSeriesCompletions(groupID: remote.id) {
+                if let completions = payload.seriesCompletions {
                     applyCompletions(completions, to: group, context: context)
                 }
-                if let items = try? await social.fetchItemCompletions(groupID: remote.id) {
+                if let items = payload.itemCompletions {
                     applyItemCompletions(items, to: group, context: context)
                 }
-                if let sessions = try? await social.fetchPlannedSessions(groupID: remote.id) {
+                if let sessions = payload.plannedSessions {
                     applyPlannedSessions(sessions, group: group, context: context)
                 }
                 group.lastSyncedAt = Date()
             }
             summary.append("\(memberships.count) groupe(s)")
         } catch {
-            return "Erreur de synchronisation : \(GroupSync.explain(error))"
+            let explained = GroupSync.explain(error)
+            AppLog.record(.error, AppLog.Category.sync,
+                          "Synchronisation des groupes impossible",
+                          detail: explained)
+            return "Erreur de synchronisation : \(explained)"
         }
 
         repairedMemberships = await repairOwnedMemberships(context: context, social: social)
@@ -88,6 +100,38 @@ enum GroupSync {
 
         try? context.save()
         return "Synchronisé : " + summary.joined(separator: " · ")
+    }
+
+    /// Tout ce qu'un groupe demande au serveur, ramené en **un seul aller-retour**.
+    ///
+    /// Les six appels ne dépendent pas l'un de l'autre : les lancer ensemble divise
+    /// la latence par six. `async let` garde le contexte de l'appelant, donc rien
+    /// ici n'a besoin d'être `Sendable` — ce qui compte, parce que `SocialService`
+    /// ne l'est pas.
+    private struct GroupPayload {
+        var members: [RemoteMember]?
+        var memberCourses: [RemoteMemberCourse]?
+        var leaderboard: [LeaderboardRow]?
+        var seriesCompletions: [RemoteSeriesCompletion]?
+        var itemCompletions: [RemoteItemCompletion]?
+        var plannedSessions: [RemotePlannedSession]?
+    }
+
+    private static func fetchPayload(groupID: String,
+                                     social: SocialService) async -> GroupPayload {
+        async let members = try? social.fetchMembers(groupID: groupID)
+        async let memberCourses = try? social.fetchMemberCourses(groupID: groupID)
+        async let leaderboard = try? social.fetchLeaderboard(groupID: groupID)
+        async let completions = try? social.fetchSeriesCompletions(groupID: groupID)
+        async let items = try? social.fetchItemCompletions(groupID: groupID)
+        async let sessions = try? social.fetchPlannedSessions(groupID: groupID)
+
+        return await GroupPayload(members: members,
+                                  memberCourses: memberCourses,
+                                  leaderboard: leaderboard,
+                                  seriesCompletions: completions,
+                                  itemCompletions: items,
+                                  plannedSessions: sessions)
     }
 
     // MARK: - Réparation de l'adhésion

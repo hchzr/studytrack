@@ -181,6 +181,9 @@ struct SessionEditSheet: View {
     @State private var taskType: TaskType = .other
     @State private var startedAt = Date()
     @State private var minutes = 30
+    /// La durée se saisit en deux roues : heures et minutes.
+    @State private var hours = 0
+    @State private var minutesPart = 30
     @State private var note = ""
     @State private var targetID: UUID?
     @State private var showingDelete = false
@@ -212,10 +215,44 @@ struct SessionEditSheet: View {
                     }
                 }
 
-                Section("Temps") {
+                Section {
+                    // La **roue** plutôt qu'un sélecteur compact : corriger « 1 h 05
+                    // au lieu de 40 min » demandait treize taps sur un pas-à-pas.
                     DatePicker("Début", selection: $startedAt, displayedComponents: [.date, .hourAndMinute])
-                    Stepper("Durée : \(DateUtils.durationLabel(seconds: minutes * 60))",
-                            value: $minutes, in: 1...720, step: 5)
+                        .datePickerStyle(.wheel)
+                        .frame(maxHeight: 170)
+                        .clipped()
+                } header: {
+                    Text("Début")
+                }
+
+                Section {
+                    HStack(spacing: 0) {
+                        Picker("Heures", selection: $hours) {
+                            ForEach(0...12, id: \.self) { value in
+                                Text("\(value) h").tag(value)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+
+                        Picker("Minutes", selection: $minutesPart) {
+                            ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { value in
+                                Text("\(value) min").tag(value)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                    }
+                    .frame(height: 130)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Durée : \(DateUtils.durationLabel(seconds: minutes * 60))")
+                } header: {
+                    Text("Durée")
+                } footer: {
+                    Text("Total : \(DateUtils.durationLabel(seconds: minutes * 60)) — fin à \(DateUtils.time.string(from: startedAt.addingTimeInterval(TimeInterval(minutes * 60)))).")
                 }
 
                 Section("Note") {
@@ -254,6 +291,8 @@ struct SessionEditSheet: View {
                 Button("Annuler", role: .cancel) {}
             }
             .onAppear(perform: load)
+            .onChange(of: hours) { _, _ in minutes = max(1, hours * 60 + minutesPart) }
+            .onChange(of: minutesPart) { _, _ in minutes = max(1, hours * 60 + minutesPart) }
             .onChange(of: courseID) { _, _ in targetID = nil }
             .onChange(of: taskType) { _, _ in targetID = nil }
         }
@@ -278,7 +317,11 @@ struct SessionEditSheet: View {
         courseID = session.course?.id
         taskType = session.taskType
         startedAt = session.startedAt
-        minutes = max(1, session.durationSeconds / 60)
+        minutes = max(1, Int(session.durationSeconds / 60))
+        hours = minutes / 60
+        // La roue des minutes va de 5 en 5 : on arrondit la valeur existante pour
+        // qu'elle soit atteignable, plutôt que d'afficher une position impossible.
+        minutesPart = min(55, (minutes % 60) / 5 * 5)
         note = session.note
         let target = session.exercise?.id ?? session.theoryItem?.id
         Task { @MainActor in targetID = target }

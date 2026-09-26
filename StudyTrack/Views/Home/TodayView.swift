@@ -12,17 +12,14 @@ import SwiftData
 private struct TodayState {
     let tracked: [Course]
     let todos: [StudyTodo]
-    let lastTodoID: String?
     let term: AcademicTerm?
     let streak: Int
-    let totalXP: Int
     let weekSeconds: Int
     let weeklyVideoMinutes: Int
     let workload: WorkloadDelta
     let upcomingExams: [Exam]
     let upcomingSessions: [PlannedSession]
     let dueTasks: [LinkedTask]
-    let redoExercises: [Exercise]
     /// Le planning du jour : séances, sessions planifiées, évaluations.
     let todayItems: [TodayItem]
 }
@@ -56,10 +53,13 @@ struct TodayView: View {
     @Query private var videos: [TheoryItem]
 
     /// Élément ouvert depuis la liste « À faire » : la fiche, pas le chrono.
+    @State private var searchQuery = ""
+    @State private var sheet: TodaySheet?
     @State private var openedExercise: Exercise?
     @State private var openedVideo: TheoryItem?
     /// Chrono laissé en route dans Focus, relu à chaque passage au premier plan.
     @State private var runningTimer: FocusTimerState?
+    @State private var showAllTodos = false
 
     /// Une seule passe de dérivation, réutilisée par toutes les sections du rendu.
     private func derived() -> TodayState {
@@ -70,10 +70,8 @@ struct TodayView: View {
         return TodayState(
             tracked: tracked,
             todos: todos,
-            lastTodoID: todos.last?.id,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
             streak: GamificationEngine.currentStreak(sessions: sessions),
-            totalXP: GamificationEngine.totalXP(courses: courses, sessions: sessions),
             // Un seul parcours des sessions, au lieu d'un `filter` puis d'un `reduce`.
             weekSeconds: sessions.reduce(0) { total, session in
                 session.startedAt >= week.start && session.startedAt < week.end
@@ -92,7 +90,6 @@ struct TodayView: View {
             dueTasks: Array(tasks.lazy
                 .filter { !$0.isDone && ($0.isOverdue || $0.isDueToday) }
                 .prefix(3)),
-            redoExercises: exercises.filter(\.redoRequired),
             todayItems: todayItems()
         )
     }
@@ -141,13 +138,6 @@ struct TodayView: View {
     /// pour que Split View et Slide Over se comportent correctement.
     private var isWide: Bool { sizeClass == .regular }
 
-    /// Deux colonnes, toujours : cinq tuiles en grille adaptative laissaient une
-    /// case vide et deux tailles de tuile. Trois indicateurs sur deux colonnes,
-    /// puis la charge EPFL sur sa propre ligne, où elle se lit comme une phrase.
-    private var statColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: Layout.block), GridItem(.flexible(), spacing: Layout.block)]
-    }
-
     private var emptyState: some View {
         EmptyCard(icon: "books.vertical",
                   title: "Aucun cours suivi",
@@ -157,7 +147,36 @@ struct TodayView: View {
         }
     }
 
+    /// Les présentations de « Aujourd'hui », en une seule valeur.
+    ///
+    /// Les trois premières viennent d'une **demande** posée sur le routeur par un
+    /// autre écran (la couverture du suivi renvoie vers le profil, par exemple) :
+    /// `onChange` la consomme et la traduit en feuille.
+    private enum TodaySheet: Identifiable, Hashable {
+        case profile
+        case stats
+        case tasks
+        case search
+        case seriesImport(Course?, PendingImport?)
+        case exercise(Exercise)
+        case video(TheoryItem)
+
+        var id: String {
+            switch self {
+            case .profile: return "profile"
+            case .stats: return "stats"
+            case .tasks: return "tasks"
+            case .search: return "search"
+            case .seriesImport(let course, let shared):
+                return "seriesImport-\(course?.id.uuidString ?? "aucun")-\(shared?.receivedAt.timeIntervalSince1970 ?? 0)"
+            case .exercise(let exercise): return "exercise-\(exercise.id)"
+            case .video(let video): return "video-\(video.id)"
+            }
+        }
+    }
+
     var body: some View {
+        @Bindable var router = app.router
         let state = derived()
         return NavigationStack {
             ScrollView {
@@ -171,13 +190,10 @@ struct TodayView: View {
                             timerBanner
                             if state.tracked.isEmpty {
                                 emptyState
-                                quickActions
                             } else {
                                 primaryActionCard(state)
-                                quickActions
                                 todaySchedule(state)
                                 weekOverview(state)
-                                progressSection(state)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,7 +201,6 @@ struct TodayView: View {
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                             if !state.tracked.isEmpty {
                                 weeklyList(state)
-                                redoSection(state)
                                 deadlinesSection(state)
                             }
                         }
@@ -194,24 +209,7 @@ struct TodayView: View {
                     .padding(Layout.screenPadding)
                     .adaptiveColumn(maxWidth: Layout.wideWidth)
                 } else {
-                    LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                        greeting(state)
-                        timerBanner
-
-                        if state.tracked.isEmpty {
-                            emptyState
-                            quickActions
-                        } else {
-                            primaryActionCard(state)
-                            quickActions
-                            todaySchedule(state)
-                            weekOverview(state)
-                            weeklyList(state)
-                            redoSection(state)
-                            deadlinesSection(state)
-                            progressSection(state)
-                        }
-                    }
+                    content(state)
                     .padding(Layout.screenPadding)
                 }
             }
@@ -228,59 +226,274 @@ struct TodayView: View {
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
-                        app.router.showingStats = true
+                        sheet = .search
                     } label: {
-                        Image(systemName: "chart.bar.xaxis")
+                        Image(systemName: "magnifyingglass")
                     }
-                    .accessibilityLabel("Statistiques")
-                    Button {
-                        app.router.showingTasks = true
-                    } label: {
-                        Image(systemName: "checklist")
-                    }
-                    .accessibilityLabel("Tâches")
-                    Button {
-                        app.router.selectedTab = .focus
+                    .accessibilityLabel("Rechercher")
+                    // Toutes les créations derrière un seul « + » : quatre icônes
+                    // côte à côte ne se lisaient pas, et doublaient la barre d'onglets.
+                    Menu {
+                        Button {
+                            app.router.startFocus(courseID: nil, courseCode: "", taskType: .theory, label: "Session libre")
+                        } label: {
+                            Label("Démarrer un chrono", systemImage: "timer")
+                        }
+                        Button {
+                            app.router.selectedTab = .focus
+                            app.router.focusMode = .manual
+                        } label: {
+                            Label("Saisir une session passée", systemImage: "square.and.pencil")
+                        }
+                        Button {
+                            sheet = .seriesImport(nil, nil)
+                        } label: {
+                            Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+                        }
+                        Button {
+                            app.router.showingTasks = true
+                        } label: {
+                            Label("Tâches", systemImage: "checklist")
+                        }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                     }
-                    .accessibilityLabel("Nouvelle session")
+                    .accessibilityLabel("Ajouter")
                 }
             }
-            .sheet(isPresented: Binding(get: { app.router.showingTasks },
-                                        set: { app.router.showingTasks = $0 })) {
-                TasksView()
-            }
-            .sheet(isPresented: Binding(get: { app.router.showingProfile },
-                                        set: { app.router.showingProfile = $0 })) {
-                ProfileView()
-            }
-            .sheet(isPresented: Binding(get: { app.router.showingStats },
-                                        set: { app.router.showingStats = $0 })) {
-                NavigationStack {
-                    StatsView()
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Fermer") { app.router.showingStats = false }
-                            }
-                        }
-                }
-            }
-            .sheet(item: $openedExercise) { exercise in
-                ExerciseDetailSheet(exercise: exercise)
-            }
-            .sheet(item: $openedVideo) { video in
-                VideoDetailSheet(video: video)
+            // **Une seule** feuille pour les six présentations.
+            //
+            // Six `.sheet` enchaînés sur la même vue ne fonctionnent pas de façon
+            // fiable : SwiftUI n'en honore qu'une selon l'ordre, et les autres
+            // restent silencieusement sans effet — un bouton qui « ne fait rien »,
+            // impossible à reproduire pour qui ne connaît pas la cause. Une
+            // présentation pilotée par une valeur supprime le problème.
+            .sheet(item: $sheet) { destination in
+                sheetContent(destination)
             }
             .refreshable {
                 await TaskSync.sync(context: context, settings: app.settings)
             }
-            .onAppear { runningTimer = FocusTimerStore.load() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { runningTimer = FocusTimerStore.load() }
+            .onAppear {
+                runningTimer = FocusTimerStore.load()
+                // Partage reçu avant que l'accueil n'existe (lancement à froid) :
+                // `onChange` ne le verra jamais passer.
+                if let shared = app.router.pendingImport {
+                    app.router.pendingImport = nil
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(300))
+                        sheet = .seriesImport(nil, shared)
+                    }
+                }
+                #if DEBUG
+                // Les captures du simulateur ne peuvent pas taper : ces drapeaux
+                // ouvrent la feuille. Le changement d'état est différé d'un tour :
+                // modifié pendant la première passe de mise en page, il est absorbé
+                // et la feuille ne s'ouvre jamais.
+                if PreviewLaunch.isSet(PreviewLaunch.searchFlag) {
+                    searchQuery = PreviewLaunch.string(PreviewLaunch.searchFlag) ?? ""
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        sheet = .search
+                    }
+                }
+                if let path = PreviewLaunch.string(PreviewLaunch.importFileFlag) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        sheet = .seriesImport(nil, PendingImport(kind: .pdf, fileName: path, text: nil, receivedAt: Date()))
+                    }
+                }
+                if PreviewLaunch.isSet(PreviewLaunch.profileFlag)
+                    || PreviewLaunch.isSet(PreviewLaunch.statsFlag) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        if let path = PreviewLaunch.string(PreviewLaunch.importFileFlag) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        sheet = .seriesImport(nil, PendingImport(kind: .pdf, fileName: path, text: nil, receivedAt: Date()))
+                    }
+                }
+                if PreviewLaunch.isSet(PreviewLaunch.profileFlag) { router.showingProfile = true }
+                        if PreviewLaunch.isSet(PreviewLaunch.statsFlag) { router.showingStats = true }
+                    }
+                }
+                #endif
             }
-            .onChange(of: app.router.selectedTab) { _, _ in runningTimer = FocusTimerStore.load() }
+            .modifier(TodayObservers(sheet: $sheet,
+                                     searchQuery: $searchQuery,
+                                     runningTimer: $runningTimer,
+                                     requests: requests,
+                                     openedExercise: openedExercise,
+                                     openedVideo: openedVideo,
+                                     courses: courses,
+                                     scenePhase: scenePhase,
+                                     app: app,
+                                     applyRequests: apply))
         }
+    }
+
+    /// Le contenu de l'accueil, extrait du corps.
+    ///
+    /// Onze vues empilées dans une seule expression faisaient échouer le
+    /// vérificateur de types (« unable to type-check this expression in reasonable
+    /// time »). Les nommer une par une dans une méthode donne au compilateur des
+    /// expressions courtes, et au lecteur un plan lisible de l'écran.
+    @ViewBuilder
+    private func content(_ state: TodayState) -> some View {
+        LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+            greeting(state)
+            timerBanner
+
+            if state.tracked.isEmpty {
+                emptyState
+            } else {
+                // Par ordre d'urgence : la prochaine chose à faire, ce qui a une
+                // heure aujourd'hui, la liste de la semaine, les échéances, puis
+                // le bilan. La progression par cours vit dans l'onglet Cours.
+                primaryActionCard(state)
+                todaySchedule(state)
+                weeklyList(state)
+                deadlinesSection(state)
+                weekOverview(state)
+            }
+        }
+    }
+
+    /// Les observations de l'accueil, sorties de la chaîne de modificateurs.
+    ///
+    /// Huit `.onChange` à la suite d'une vingtaine d'autres modificateurs font
+    /// échouer le vérificateur de types. Les isoler dans une méthode leur donne un
+    /// contexte court — et le texte des fermetures reste identique.
+    /// Les observations de l'accueil, sorties de la chaîne de modificateurs.
+    ///
+    /// Huit `.onChange` à la suite d'une vingtaine d'autres modificateurs, dans une
+    /// vue qui porte une trentaine de propriétés, font échouer le vérificateur de
+    /// types (« unable to type-check this expression in reasonable time »). Ce
+    /// modificateur ne reçoit que ce dont il a besoin — pas la vue entière, dont
+    /// le seul nom suffisait à alourdir chaque expression.
+    private struct TodayObservers: ViewModifier {
+        @Binding var sheet: TodaySheet?
+        @Binding var searchQuery: String
+        @Binding var runningTimer: FocusTimerState?
+        var requests: Requests
+        var openedExercise: Exercise?
+        var openedVideo: TheoryItem?
+        var courses: [Course]
+        var scenePhase: ScenePhase
+        var app: AppContainer
+        var applyRequests: (Requests) -> Void
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: scenePhase) { _, phase in handleScene(phase) }
+                .onChange(of: requests) { _, state in applyRequests(state) }
+                .onChange(of: app.router.shortcut) { _, shortcut in handleShortcut(shortcut) }
+                .onChange(of: app.router.pendingImport) { _, shared in handleImport(shared) }
+                .onChange(of: openedExercise) { _, exercise in handleExercise(exercise) }
+                .onChange(of: openedVideo) { _, video in handleVideo(video) }
+                .onChange(of: app.router.selectedTab) { _, _ in reloadTimer() }
+        }
+
+        // Chaque fermeture appelle une méthode nommée : sept `.onChange` dont le
+        // corps est écrit sur place font échouer le vérificateur de types, et un
+        // corps d'une ligne se lit mieux qu'un bloc imbriqué.
+
+        private func handleScene(_ phase: ScenePhase) {
+            if phase == .active { reloadTimer() }
+        }
+
+        private func reloadTimer() {
+            runningTimer = FocusTimerStore.load()
+        }
+
+        private func handleShortcut(_ shortcut: ShortcutAction?) {
+            guard let shortcut else { return }
+            switch shortcut {
+            case .importSeries:
+                sheet = .seriesImport(nil, nil)
+            case .startTimer:
+                app.router.startFocus(courseID: nil, courseCode: "",
+                                      taskType: .theory, label: "Session libre")
+            }
+            app.router.shortcut = nil
+        }
+
+        private func handleImport(_ shared: PendingImport?) {
+            guard let shared else { return }
+            sheet = .seriesImport(nil, shared)
+            app.router.pendingImport = nil
+        }
+
+        private func handleExercise(_ exercise: Exercise?) {
+            if let exercise { sheet = .exercise(exercise) }
+        }
+
+        private func handleVideo(_ video: TheoryItem?) {
+            if let video { sheet = .video(video) }
+        }
+    }
+
+    // MARK: Feuilles
+
+    /// Les trois demandes du routeur, réunies pour n'être observées qu'une fois.
+    private struct Requests: Equatable {
+        var profile = false
+        var stats = false
+        var tasks = false
+    }
+
+    private var requests: Requests {
+        Requests(profile: app.router.showingProfile,
+                 stats: app.router.showingStats,
+                 tasks: app.router.showingTasks)
+    }
+
+    private func apply(_ state: Requests) {
+        if state.profile, sheet == nil { sheet = .profile }
+        else if !state.profile, sheet == .profile { sheet = nil }
+        if state.stats, sheet == nil { sheet = .stats }
+        else if !state.stats, sheet == .stats { sheet = nil }
+        if state.tasks, sheet == nil { sheet = .tasks }
+        else if !state.tasks, sheet == .tasks { sheet = nil }
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ destination: TodaySheet) -> some View {
+        switch destination {
+        case .profile:
+            ProfileView()
+        case .stats:
+            NavigationStack {
+                StatsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Fermer") { app.router.showingStats = false }
+                        }
+                    }
+            }
+        case .tasks:
+            TasksView()
+        case .search:
+            SearchView(initialQuery: searchQuery)
+        case .seriesImport(let course, let shared):
+            SeriesImportSheet(course: course,
+                              initialFileURL: shared.flatMap(importFileURL),
+                              initialText: shared?.text)
+        case .exercise(let exercise):
+            ExerciseDetailSheet(exercise: exercise)
+        case .video(let video):
+            VideoDetailSheet(video: video)
+        }
+    }
+
+    private func importFileURL(_ shared: PendingImport) -> URL? {
+        if let url = PendingImportBridge.file(for: shared) { return url }
+        #if DEBUG
+        // `-importFile` : un chemin absolu, le simulateur non signé n'ayant pas de
+        // conteneur de groupe où l'extension de partage déposerait le fichier.
+        if let path = shared.fileName, path.hasPrefix("/") { return URL(fileURLWithPath: path) }
+        #endif
+        return nil
     }
 
     // MARK: Chrono en cours
@@ -353,53 +566,6 @@ struct TodayView: View {
         }
         if !app.settings.sectionCode.isEmpty { parts.append(app.settings.sectionCode) }
         return parts.joined(separator: " · ")
-    }
-
-    // MARK: Actions rapides
-
-    /// Quatre gestes d'un tap, toujours au même endroit : chrono libre, session
-    /// manuelle, planifier, tâches. Le reste de l'écran est de la lecture.
-    private var quickActions: some View {
-        HStack(spacing: Layout.control) {
-            quickAction(icon: "play.fill", title: "Chrono", tint: Theme.accent) {
-                app.router.startFocus(courseID: nil, courseCode: "", taskType: .theory, label: "Session libre")
-            }
-            quickAction(icon: "square.and.pencil", title: "Saisir", tint: .purple) {
-                app.router.selectedTab = .focus
-                app.router.focusMode = .manual
-            }
-            quickAction(icon: "calendar.badge.plus", title: "Planifier", tint: .indigo) {
-                app.router.selectedTab = .agenda
-            }
-            quickAction(icon: "checklist", title: "Tâches", tint: .teal) {
-                app.router.showingTasks = true
-            }
-        }
-    }
-
-    private func quickAction(icon: String, title: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.tap()
-            action()
-        } label: {
-            VStack(spacing: Layout.snug) {
-                ZStack {
-                    Circle().fill(tint.badgeFill).frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(tint.badgeInk)
-                }
-                Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Layout.control)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
     }
 
     // MARK: Planning du jour
@@ -495,33 +661,52 @@ struct TodayView: View {
 
     // MARK: Vue de la semaine
 
+    /// Le bilan de la semaine, en une carte compacte : trois chiffres, la charge
+    /// EPFL en une ligne, et le chemin vers les statistiques détaillées.
     private func weekOverview(_ state: TodayState) -> some View {
         Card(title: "Cette semaine", icon: "calendar") {
             VStack(alignment: .leading, spacing: Layout.cardGap) {
-                LazyVGrid(columns: statColumns, alignment: .leading, spacing: Layout.block) {
-                    StatCard(icon: "list.bullet",
-                             value: "\(state.todos.count)",
-                             title: "à faire",
-                             tint: .blue)
-                    StatCard(icon: "play.rectangle.fill",
-                             value: DateUtils.durationLabel(seconds: state.weeklyVideoMinutes * 60),
-                             title: "de théorie restante",
-                             tint: TaskType.video.tint)
-                    StatCard(icon: "clock.fill",
-                             value: DateUtils.hoursLabel(seconds: state.weekSeconds),
-                             title: "travaillé (7 j)",
-                             tint: .purple)
-                    StatCard(icon: "flame.fill",
-                             value: state.streak > 0 ? "\(state.streak) j" : "—",
-                             title: state.streak > 0 ? "d'affilée" : "pas de série en cours",
-                             tint: .orange)
+                HStack(alignment: .top, spacing: Layout.block) {
+                    weekMetric(value: DateUtils.hoursLabel(seconds: state.weekSeconds), label: "travaillées (7 j)")
+                    weekMetric(value: DateUtils.durationLabel(seconds: state.weeklyVideoMinutes * 60), label: "de théorie à voir")
+                    weekMetric(value: state.streak > 0 ? "\(state.streak) j" : "—", label: "d'affilée")
                 }
 
                 // La charge EPFL sur une ligne, en retrait : c'est un repère, pas
                 // la position du produit. Elle se lit « fait / attendu », puis l'écart.
                 workloadLine(state.workload)
+
+                Button {
+                    app.router.showingStats = true
+                } label: {
+                    HStack {
+                        Text("Statistiques détaillées")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accentInk)
             }
         }
+    }
+
+    private func weekMetric(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: Layout.micro) {
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private func workloadLine(_ workload: WorkloadDelta) -> some View {
@@ -549,14 +734,21 @@ struct TodayView: View {
 
     // MARK: Liste de la semaine
 
+    /// Au-delà de cinq lignes, la liste se replie : en semaine 12 elle en compte
+    /// des dizaines, et l'accueil devenait un mur à faire défiler.
+    private static let collapsedTodoCount = 5
+
     @ViewBuilder
     private func weeklyList(_ state: TodayState) -> some View {
-        if !state.todos.isEmpty {
+        // La première ligne est déjà la carte d'action principale.
+        let rest = Array(state.todos.dropFirst())
+        if !rest.isEmpty {
+            let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "À faire", trailing: "\(state.todos.count) éléments")
+                SectionHeader(title: "Ensuite", trailing: "\(rest.count)")
                 Card {
                     VStack(spacing: 0) {
-                        ForEach(state.todos) { todo in
+                        ForEach(visible) { todo in
                             TodoRow(todo: todo,
                                     onComplete: { complete(todo) },
                                     onOpen: { open(todo) },
@@ -566,46 +758,23 @@ struct TodayView: View {
                                                               taskType: todo.taskType,
                                                               label: "\(todo.courseCode) · \(todo.title)")
                                     })
-                            if todo.id != state.lastTodoID {
+                            if todo.id != visible.last?.id {
                                 Divider().padding(.leading, 56)
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func redoSection(_ state: TodayState) -> some View {
-        if !state.redoExercises.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "À refaire", trailing: "\(state.redoExercises.count)")
-                Card {
-                    VStack(spacing: 0) {
-                        ForEach(state.redoExercises.prefix(4)) { exercise in
+                        if rest.count > Self.collapsedTodoCount {
+                            Divider()
                             Button {
-                                openedExercise = exercise
+                                withAnimation(.snappy) { showAllTodos.toggle() }
                             } label: {
-                            HStack(spacing: 12) {
-                                ConfidenceDot(level: exercise.confidence)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(exercise.series?.course?.displayCode ?? "") · \(exercise.displayNumber)")
-                                        .font(.subheadline.weight(.semibold))
-                                    if let note = exercise.correctionNote, !note.isEmpty {
-                                        Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                }
-                                Spacer(minLength: 8)
-                                if let correctness = exercise.correctness {
-                                    Pill(text: correctness.shortLabel, color: correctness.color)
-                                }
-                            }
-                            .padding(.vertical, 8)
-                            .contentShape(Rectangle())
+                                Text(showAllTodos ? "Afficher moins" : "Tout afficher (\(rest.count))")
+                                    .font(.subheadline.weight(.medium))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, Layout.control)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityHint("Ouvrir l'exercice")
+                            .foregroundStyle(Theme.accentInk)
                         }
                     }
                 }
@@ -619,7 +788,13 @@ struct TodayView: View {
     private func deadlinesSection(_ state: TodayState) -> some View {
         if !state.upcomingExams.isEmpty || !state.upcomingSessions.isEmpty || !state.dueTasks.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Échéances")
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Échéances").font(.headline)
+                    Spacer()
+                    Button("Tâches") { app.router.showingTasks = true }
+                        .font(.subheadline)
+                }
+                .padding(.horizontal, 2)
                 Card {
                     let rows = deadlineRows(state)
                     VStack(spacing: 0) {
@@ -697,33 +872,6 @@ struct TodayView: View {
             }
         }
         .padding(.vertical, 8)
-    }
-
-    // MARK: Progression
-
-    @ViewBuilder
-    private func progressSection(_ state: TodayState) -> some View {
-        if !state.tracked.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Progression",
-                              trailing: "Niv. \(GamificationEngine.level(forXP: state.totalXP))")
-                Card {
-                    VStack(spacing: 0) {
-                        ForEach(state.tracked) { course in
-                            NavigationLink {
-                                CourseDetailView(course: course)
-                            } label: {
-                                CourseProgressRow(course: course)
-                            }
-                            .buttonStyle(.plain)
-                            if course.id != state.tracked.last?.id {
-                                Divider().padding(.vertical, 10)
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     // MARK: Actions

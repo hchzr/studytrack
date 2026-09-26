@@ -25,8 +25,10 @@ struct RootTabView: View {
             }
         }
         .task {
-            await NotificationSchedulerBootstrapper.requestOnce(settings: app.settings,
-                                                                scheduler: app.notifications)
+            // Raccord au lancement : aucune activité d'îlot ne doit survivre à un
+            // chrono éteint. Sans ça, une Live Activity laissée par une exécution
+            // précédente restait affichée indéfiniment.
+            StudyActivityController.reconcile(with: FocusTimerStore.load())
         }
         .onOpenURL { url in
             handle(url)
@@ -41,6 +43,20 @@ struct RootTabView: View {
             // sans passer par un bouton dans les réglages.
             if phase == .background, app.settings.hasCompletedOnboarding {
                 Task { await app.notifications.rescheduleFromStore(context: context, settings: app.settings) }
+            }
+            if phase == .active {
+                // Une commande venue de l'écran verrouillé pendant que l'app
+                // dormait attend dans le dépôt partagé : on la rejoue ici.
+                // Même principe pour un fichier partagé depuis une autre app.
+                Task { @MainActor in
+                    FocusTimerCommandHandler.consumePending(container: app)
+                    // Un PDF partagé depuis une autre app : l'accueil ouvre
+                    // l'import. Il était auparavant retiré du dépôt… et jeté.
+                    if let shared = PendingImportBridge.take() {
+                        app.router.selectedTab = .today
+                        app.router.pendingImport = shared
+                    }
+                }
             }
         }
     }
@@ -97,26 +113,6 @@ struct RootTabView: View {
         case .focus: FocusView()
         case .groups: GroupsView()
         case .agenda: AgendaView()
-        }
-    }
-}
-
-/// Demande l'autorisation de notification une seule fois, au premier lancement.
-enum NotificationSchedulerBootstrapper {
-    private static var hasRun = false
-
-    static func requestOnce(settings: SettingsStore, scheduler: NotificationScheduler) async {
-        guard !hasRun else { return }
-        hasRun = true
-        #if DEBUG
-        // `-seedSampleData` sert à capturer les écrans dans le simulateur : le
-        // prompt système de notifications recouvrirait toute la capture.
-        if PreviewLaunch.isSet(PreviewLaunch.seedFlag) { return }
-        #endif
-        guard settings.hasCompletedOnboarding || settings.dailyReminderEnabled else { return }
-        let status = await scheduler.authorizationStatus()
-        if status == .notDetermined {
-            _ = await scheduler.requestAuthorization()
         }
     }
 }

@@ -29,41 +29,44 @@ final class AppContainer {
         return service
     }
 
-    init() {
-        let schema = Schema([
-            AcademicTerm.self,
-            Course.self,
-            TheoryItem.self,
-            ExerciseSeries.self,
-            Exercise.self,
-            StudySession.self,
-            Exam.self,
-            PlannedSession.self,
-            LinkedTask.self,
-            LinkedCalendarEvent.self,
-            StudyGroup.self,
-            GroupMember.self,
-            GroupSeriesCompletion.self,
-            GroupItemCompletion.self
-        ])
+    /// Pourquoi la base n'a pas pu être ouverte, s'il y a lieu.
+    ///
+    /// Le conteneur retombait **en silence** sur une base en mémoire quand
+    /// l'ouverture échouait : l'app fonctionnait, mais rien ne se conservait d'un
+    /// lancement à l'autre, et personne ne pouvait le savoir. Un échec de
+    /// persistance doit se voir.
+    let storeError: String?
 
+    init() {
+        let schema = StudyTrackSchema.current
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        if let container = try? ModelContainer(for: schema, configurations: [configuration]) {
+        var failure: String?
+
+        if let container = try? ModelContainer(for: schema,
+                                               migrationPlan: StudyTrackMigrationPlan.self,
+                                               configurations: [configuration]) {
             self.modelContainer = container
         } else {
-            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            self.modelContainer = try! ModelContainer(for: schema, configurations: [memory])
+            // Deuxième essai **sans** le plan : un plan mal formé ne doit pas
+            // empêcher l'app de démarrer, mais l'échec est retenu et affiché.
+            if let fallback = try? ModelContainer(for: schema, configurations: [configuration]) {
+                self.modelContainer = fallback
+                failure = "La migration du schéma a échoué ; la base a été ouverte sans plan de migration."
+            } else {
+                let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                self.modelContainer = try! ModelContainer(for: schema, configurations: [memory])
+                failure = "La base n'a pas pu être ouverte : cette session ne sera pas conservée."
+            }
+        }
+        self.storeError = failure
+        if let failure {
+            AppLog.record(.error, AppLog.Category.storage, "Base de données", detail: failure)
         }
 
         let settings = SettingsStore()
         self.settings = settings
         self.notifications = NotificationScheduler()
 
-        // Réparation : les cours importés par l'horaire avant la correction n'ont
-        // aucun semestre, donc affichaient « semaine 1 » en pleine semaine 2. Ce
-        // rattachement est idempotent et ne touche jamais un cours déjà rattaché.
-        let repairContext = ModelContext(self.modelContainer)
-        AcademicTerm.attachOrphanCourses(in: repairContext)
         // La configuration vient de la **build**, jamais des réglages : l'étudiant·e
         // n'a pas à connaître l'URL du projet ni la clé anonyme, qui est publique
         // par conception (elle n'autorise que ce que les politiques RLS permettent).
@@ -71,6 +74,10 @@ final class AppContainer {
                                     anonKey: SupabaseConfig.anonKey)
         self.router = AppRouter()
         self.presence = PresenceService()
+
+        // Réparations de données, nommées et jouées une fois par version.
+        let repairContext = ModelContext(self.modelContainer)
+        DataRepair.run(in: repairContext)
     }
 
     /// Reconfigure le client social — utile après une connexion ou une déconnexion.

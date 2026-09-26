@@ -49,4 +49,5 @@ final class Exam {
         guard let weightPercent else { return nil }
         return "\(Int(weightPercent)) %"
     }
+
 }

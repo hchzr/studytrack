@@ -352,7 +352,10 @@ struct ActionCard: View {
                     .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
-            .tint(tint)
+            // Le bouton est une **action** : toujours l'encre de l'app. La teinte
+            // de l'icône porte le verdict (à refaire, à jour) ; un grand bouton
+            // rouge criait « danger » là où il fallait lire « démarrer ».
+            .tint(Theme.accent)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

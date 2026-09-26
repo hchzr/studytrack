@@ -349,7 +349,7 @@ struct AgendaView: View {
                 Text("\(calendar.component(.day, from: day))")
                     .font(.subheadline.weight(isToday || isSelected ? .bold : .regular))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Color.white : (isToday ? Theme.accentInk : .primary))
+                    .foregroundStyle(isSelected ? Theme.accent.badgeInk : (isToday ? Theme.accentInk : .primary))
                     .frame(width: 32, height: 32)
                     .background(isSelected ? Theme.accent : Color.clear, in: Circle())
                 HStack(spacing: 3) {

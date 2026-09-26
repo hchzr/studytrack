@@ -122,6 +122,7 @@ arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaq
 | `-groupInvite` | avec `-group`, ouvre la feuille d'invitation (QR code et lien) |
 | `-groupSubjects` | avec `-group`, ouvre l'éditeur des matières du groupe |
 | `-groupPage <members\|time\|series\|planning>` | avec `-group`, ouvre une sous-page de la fiche |
+| `-importFile <chemin absolu>` | ouvre l'import de série sur ce PDF, comme un partage depuis une autre app (le simulateur non signé n'a pas de conteneur de groupe) |
 | `-breakTermLink` | **casse** le lien cours ↔ semestre (et remet les séries à la semaine 1) pour vérifier la réparation au lancement suivant |
 | `-breakGroupRole` | **rétrograde** le créateur du groupe à « membre », pour vérifier qu'il garde ses droits |
 
@@ -211,9 +212,73 @@ d'exemple » ajoute un semestre de démonstration si on le souhaite.
 | **Liens profonds** | ✅ | `studytrack://focus?course=CS-250&type=exercise`, `://today`, `://tasks`, `://stats`, `://agenda`, `://courses`, `://groups`, **`://join?code=EPFL-XXXX`** (ouvre « Rejoindre » pré-rempli) |
 | **Sauvegarde / restauration** | ✅ **nouveau** | Profil › Données › *Créer une sauvegarde* produit un JSON **réimportable** (structure + avancement + sessions). Restauration par Importer › JSON, idempotente. Export CSV des sessions pour un tableur |
 | **Import JSON / CSV** | ✅ | Idempotent (upsert par code de cours / numéro) |
-| **Import PDF des séries** | ✅ | `SeriesPDFParser` (fonction pure, 19 cas testés) repère « Série 3 », « Exercice 3.1 », « (bonus) », les numéros seuls et les espaces insécables. **Toujours suivi d'un écran de relecture** : on coche, on corrige le bonus, on crée. Un PDF **scanné** est annoncé comme tel plutôt que de laisser croire à un échec |
-| **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage, **routé automatiquement et sans rien demander à l'étudiant·e** : (1) **sur l'appareil** — Apple Intelligence / FoundationModels, iOS 26, hors ligne ; (2) la **fonction Supabase** `extract-series` de l'app — la clé du fournisseur est côté serveur, l'app n'utilise que sa clé `anon` ; (3) un **service perso** (URL + clé, compatible OpenAI) si l'étudiant·e en a saisi un. Un maillon qui échoue passe au suivant. La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Plusieurs PDF à la fois, ou un énoncé **collé** (Moodle, mail). Réglages : Profil › Import intelligent |
+| **Import PDF des séries** | ✅ | Lecture **par ligne avec la taille de police** (`PDFLayoutExtractor` + `SeriesLayoutParser`) : un titre se distingue d'un énoncé, ce que le texte aplati ne permettait pas. Les exercices sont numérotés **par leur série** (« Exercice 1 » de la Série 2 → « 2.1 »). `SeriesPDFParser` reste le repli pour le texte collé, sans mise en page. **Toujours suivi d'un écran de relecture** : on coche, on corrige le bonus, on crée. Un PDF **scanné** est annoncé comme tel plutôt que de laisser croire à un échec |
+| **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage, **routé automatiquement et sans rien demander à l'étudiant·e** : (1) la **fonction Supabase** `extract-series` — un modèle **servi**, la clé du fournisseur reste côté serveur et l'app n'utilise que sa clé `anon` ; (2) **sur l'appareil** — Apple Intelligence / FoundationModels, iOS 26, **relais hors ligne** ; (3) un **service perso** (URL + clé, compatible OpenAI) si l'étudiant·e en a saisi un. **Le service passe avant le modèle embarqué** : sur une série réelle, l'écart de qualité n'est pas marginal — l'ordre est épinglé par des tests (`SeriesEngineOrder`). Un maillon qui échoue passe au suivant. La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Plusieurs PDF à la fois, ou un énoncé **collé** (Moodle, mail). Réglages : Profil › Import intelligent | Réglages : Profil › Import intelligent |
+| **Ce que l'IA garantit** | ✅ **nouveau** | Une consigne explicite et testée : **un titre pour chaque exercice**, jamais vide — le modèle en écrit un de 2 à 6 mots à partir du titre de section quand le PDF n'en donne pas ; **dans la langue du document** (un PDF français donnait des titres anglais) ; et **un numéro qualifié par la série**, même quand le PDF recommence à 1 dans chaque section. Un exercice **sans aucun numéro** reçoit le suivant libre au lieu d'être jeté. La lecture de la réponse est **tolérante** : un modèle qui écrit `"02a"` au lieu de `2`, ou `"oui"` au lieu de `true`, ne fait plus perdre la réponse entière |
+| **Sous-questions** | ✅ **nouveau** | Un polycopié numérote souvent ses exercices 1, 2, 3 **dans chaque section**, et regroupe plusieurs questions sous un seul numéro. Le modèle `SubQuestion` porte ces questions : chacune se coche, l'exercice devient fait quand elles le sont toutes, et la série, la progression et les statistiques continuent de compter des **exercices**. Un compteur « 2/3 » se lit dans la liste sans ouvrir. L'IA les détecte et les regroupe ; l'import les crée sans jamais dupliquer ce qui existe |
 | ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s : ce connecteur ne pouvait jamais s'authentifier. Remplacé par l'import `.ics`. |
+
+### Chrono et Live Activity
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Compteur de la Live Activity** | ✅ **corrigé** | Il repartait de zéro à chaque reprise : l'état portait le total **et** l'instant de reprise, et le compteur système n'affichait que le second — « 00:01 » après une heure de travail. L'instant de départ est désormais **reculé du total écoulé** (`ActivityTimerState`, pur et testé) |
+| **Îlot compact** | ✅ **corrigé** | Les régions qui entourent la caméra ne portent plus qu'une **icône** : y écrire « en cours » ou le code du cours élargissait l'îlot. Le compteur s'écrit en `MM:SS`, sans les heures |
+| **Ajuster le chrono** | ✅ **nouveau** | Roue heures + minutes pour corriger le temps compté en cours de session : on lance le chrono en oubliant de le lancer avant, ou on le laisse tourner pendant une interruption |
+| **Éditer une session** | ✅ **refait** | Roues pour le début et la durée, au lieu d'un sélecteur compact et d'un pas-à-pas. Corriger « 1 h 05 au lieu de 40 min » demandait treize taps |
+| **Pomodoro visible** | ✅ **refait** | Une pastille sur la carte du chrono, avec la durée du bloc et de la pause. C'était un interrupteur enterré dans « Catégorisation », dont rien n'indiquait l'état |
+| **Analyse IA testable** | ✅ **nouveau** | Un bouton « Tester sur cet appareil » à côté de « Vérifier la fonction » : on sait enfin **quel** moteur répond, et s'il répond. Un échec de l'IA s'affiche en orange dans l'écran d'import au lieu d'une remarque grise |
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Cadran du chrono** | ✅ **refait** | Anneau de progression teinté par le cours, temps au centre, contexte et état Pomodoro. Un anneau **situe** la session là où un texte la laissait abstraite |
+| **Hiérarchie des actions** | ✅ **refait** | Un disque pour l'action qu'on fait dix fois par session (pause/reprise), des boutons discrets pour celles qu'on fait une fois. Et un bouton **Abandonner** — il n'existait aucun moyen de renoncer à une session lancée par erreur |
+| **Pomodoro lisible** | ✅ **refait** | `PomodoroEngine` (pur, 18 cas testés) : numéro de bloc, blocs terminés, temps restant, progression de l'anneau. Le bloc n'était annoncé que par une notification, jamais à l'écran |
+| **Raccourcis composables** | ✅ **refait** | Ils étaient une grille **fixe** de tous les cours × trois types (douze tuiles sur quatre cours, non modifiables). C'est maintenant une liste que l'on compose, ordonne et nettoie (`FocusShortcutsEditor`). Un cours supprimé ne laisse plus de tuile morte |
+| **Îlot dynamique compact** | ✅ **refait** | La forme repliée se contente d'une **icône de largeur fixe** et du temps : y écrire le code du cours élargissait l'îlot en permanence. Le cours vit dans la forme dépliée, qui ne coûte rien tant qu'on ne la déplie pas |
+| **Contrôles sur l'écran verrouillé** | ✅ **nouveau** | Boutons **pause / reprendre / enregistrer** dans la Live Activity et l'îlot, via `LiveActivityIntent` : ils s'exécutent dans le processus de l'app, donc enregistrer une session ne demande pas d'ouvrir l'app. La commande passe par un dépôt partagé, et une commande déposée pendant que l'app dormait est rejouée au retour au premier plan |
+| **Support Live Activity déclaré** | ✅ **corrigé** | `NSSupportsLiveActivities` manquait dans l'Info.plist de l'**extension widget** — celle qui affiche l'activité. L'app le déclarait, pas l'extension : la Live Activity ne s'affichait donc jamais |
+
+### Live Activity et îlot
+
+| Ce qui est vrai | Détail |
+|---|---|
+| L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié |
+| L'îlot replié | Un icône d'état à gauche, le **temps** à droite. Vider ces deux régions ne rétrécit pas l'îlot : il n'affiche **plus rien** |
+| L'intervalle du chrono est **borné** | `Text(timerInterval:)` réserve la largeur du plus grand texte de l'intervalle ; `Date.distantFuture` faisait réserver une place démesurée |
+| Diagnostic | Profil › **Diagnostics** › « Îlot et écran verrouillé » : activités en cours, dernier refus, et un bouton **« Lancer une activité d'essai »** |
+
+
+### Plan, annales, session partagée
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Plan de révision** | ✅ **nouveau** | `RevisionEngine` (pur, 30 cas testés) répartit ce qui reste entre aujourd'hui et l'évaluation : ordre du cours respecté (théorie, exercices, corrections, semaine après semaine), **un cinquième des jours réservé à la relecture**, et un contrôle de réalisme contre le temps disponible par jour |
+| **Annales** | ✅ **nouveau** | Les sujets passés sont enfin suivis : année, lien du sujet, lien du corrigé, travaillé ou non, sureté, notes. Bilan « 2/4 travaillées » et priorité aux années récentes. Pas de note — l'app suit le travail, pas les résultats |
+| **Session partagée** | ✅ **nouveau** | « Rejoindre » sur la présence d'un membre : ton chrono démarre sur le même cours, avec la même nature de travail. Aucun changement serveur — la présence portait déjà tout ce qu'il faut |
+| **Journal local** | ✅ **nouveau** | `AppLog` + écran Diagnostics : erreurs de synchronisation, d'IA, de stockage et d'Anki, horodatées et exportables. Tampon borné qui **garde les erreurs** plus longtemps que les informations |
+| **Annulation d'import** | ✅ **refait** | Un PDF de trente pages peut prendre une minute : bandeau de progression avec un bouton **Arrêter** visible, et la lecture par motifs est toujours conservée |
+
+### Recherche
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Recherche globale** | ✅ **nouveau** | `SearchEngine` (pur, 40 cas testés) indexe cours, séries, exercices, théorie, évaluations, sessions de travail, tâches, échéances de l'EPFL et groupes. **Insensible aux accents et à la casse** (« algebre » trouve « Algèbre »), **tolérante au code collé** (« cs250 » et « cs 250 » trouvent CS-250), et **tous les mots doivent correspondre** — « algo exo 3 » ne ramène pas tout ce qui contient « algo ». Chaque résultat annonce **pourquoi** il sort (intitulé, détail ou code du cours) et mène directement au bon onglet du cours. Accessible par la loupe d'« Aujourd'hui » et de « Cours » |
+
+### Vie de l'EPFL
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Calendrier académique officiel** | ✅ **nouveau** | Les 71 échéances publiées par l'EPFL (bornes d'enseignement, sessions d'examens, vacances, jours fériés, délais, publications) sont **relevées sur la page publique** puis embarquées : l'app les connaît hors ligne, dès l'installation, y compris le jour de la rentrée. Écran « Vie de l'EPFL » : semaine courante, prochaine échéance structurante, délais à ne pas manquer, vacances, déroulé du semestre, et ajout d'échéances personnelles. Un bouton **relit la page** pour rafraîchir |
+| **Rentrée sourcée** | ✅ **nouveau** | `DateUtils.autumnStart` consulte la date **publiée** par l'EPFL avant d'appliquer la règle du premier lundi dès le 7 septembre. Si l'école décale une rentrée, l'app suit sans toucher au code |
+| **Dates approximatives assumées** | ✅ **nouveau** | L'EPFL écrit « Fin décembre », « Mi-novembre », « Début mars ». L'app choisit le dernier jour, le 15 ou le 1er, et affiche **« approximatif »** plutôt que de faire passer une estimation pour une date exacte |
+| **Source relisible** | ✅ **nouveau** | `AcademicCalendarParser` (pur) lit le HTML de la page — balises, entités nommées **et** numériques. Testé sur un extrait **authentique** de la page. `AcademicCalendarService.refresh` met à jour sans dupliquer (clé stable) et retire les échéances officielles à venir qui ne sont plus publiées |
+
+### Suivi : ce qui manque
+
+| Fonction | État | Détail |
+|---|---|---|
+| **Couverture du suivi** | ✅ **nouveau** | `CoverageEngine` (pur, 28 cas testés) audite tout : cours vide, série sans exercice, série en retard, exercice fait non corrigé, exercice à refaire, théorie vue sans résumé, théorie sans durée, évaluation absente, semestre ou horaire manquants. Écran « Couverture du suivi » depuis Statistiques : pourcentage de cours sans aucun manque, constats groupés par famille avec le **code du cours** à côté, et chaque ligne mène au cours concerné |
 
 ### Social
 
@@ -296,6 +361,10 @@ Tout est optionnel : **l'app fonctionne entièrement hors ligne**.
   section 7 du `SPEC.md`.
 - **Charge EPFL** : Profil › Charge de travail (heures par crédit ECTS).
 
+> **Le mode opératoire complet est dans [`Support/SUPABASE.md`](Support/SUPABASE.md)** :
+> création du projet, clés, SQL, vérification, connexion, déploiement de la fonction
+> IA, et un tableau des erreurs courantes avec leur cause réelle.
+
 ### Relier les groupes (configuration de build)
 
 L'URL du projet Supabase et la clé `anon` ne sont **jamais demandées à
@@ -329,6 +398,10 @@ peut remplir. `validate.sh` vérifie qu'une valeur absente, vide, ou restée lit
 
 ### Analyse des PDF par IA : déployer la fonction Supabase (une fois)
 
+> **À vérifier avant tout** : Profil › Import intelligent affiche l'état **réel** de
+> la fonction. S'il dit « Pas encore déployée », l'import se rabat sur la lecture
+> par motifs — ce n'est pas une panne, c'est une fonction jamais installée.
+
 Pour que l'analyse fonctionne **sans jeton** chez les étudiant·e·s dont l'appareil n'a
 pas Apple Intelligence, la clé du fournisseur vit dans une Edge Function du projet
 Supabase — jamais dans l'app :
@@ -341,7 +414,7 @@ supabase secrets set LLM_BASE_URL=https://api.groq.com/openai/v1       # faculta
 supabase secrets set LLM_MODEL=llama-3.1-8b-instant                    # facultatif (défaut)
 ```
 
-Le code est dans `Support/supabase/functions/extract-series/index.ts` ; n'importe quelle
+Le code est dans `supabase/functions/extract-series/index.ts` ; n'importe quelle
 API compatible OpenAI convient (OpenRouter avec un modèle `:free`, Mistral…). Sans
 déploiement, l'app le détecte (HTTP 404) et passe au maillon suivant.
 

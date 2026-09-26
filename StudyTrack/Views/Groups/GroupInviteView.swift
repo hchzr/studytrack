@@ -58,6 +58,8 @@ struct GroupInviteView: View {
                         .scaledToFit()
                         .frame(maxWidth: 240)
                         .padding(Layout.block)
+                        // Blanc en dur, et volontairement : un QR code inversé
+                        // (clair sur sombre) n'est pas lu par tous les lecteurs.
                         .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)

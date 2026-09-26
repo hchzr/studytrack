@@ -1,5 +1,6 @@
 import WidgetKit
 import ActivityKit
+import AppIntents
 import SwiftUI
 import UIKit
 
@@ -92,6 +93,10 @@ struct StudyTrackTimerWidget: Widget {
 /// fait avancer, chaque seconde, sans que l'app envoie quoi que ce soit. Une Live
 /// Activity qui recevrait une mise à jour par seconde coûterait de la batterie et
 /// du réseau pour un résultat identique.
+///
+/// **Forme compacte** : l'îlot se contente d'une icône et du temps. Y écrire le
+/// code du cours l'élargissait en permanence, pour une information qu'on retrouve
+/// dans la forme dépliée — qui, elle, ne coûte rien tant qu'on ne la déplie pas.
 struct StudyActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: StudyActivityAttributes.self) { context in
@@ -100,61 +105,109 @@ struct StudyActivityWidget: Widget {
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
-                // Les régions leading/trailing sont courtes par construction : y
-                // mettre le compteur et l'état évite d'élargir l'îlot, et le texte
-                // long va dans la région basse, qui occupe toute la largeur.
                 DynamicIslandExpandedRegion(.leading) {
-                    StudyActivityTimer(state: context.state, font: .title3)
+                    StudyActivityStateIcon(state: context.state)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    StudyActivityState(state: context.state)
+                    StudyActivityTimer(state: context.state, font: .title3, compact: true)
                         .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(context.attributes.courseCode)
-                                .font(.caption.weight(.bold))
-                                .lineLimit(1)
-                            Text(context.attributes.courseName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        HStack(spacing: 5) {
-                            Image(systemName: context.attributes.taskIcon)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(context.attributes.taskLabel)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            if let target = context.attributes.target {
-                                Text("·")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text(target)
-                                    .font(.caption2.weight(.semibold))
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Le bouton utile, centré, **sans** largeur imposée :
+                    // `maxWidth: .infinity` faisait réclamer toute la place.
+                    StudyActivityControls(state: context.state, compact: true)
                 }
             } compactLeading: {
-                // Le cours plutôt qu'une icône générique : c'est l'information qui
-                // manquait dans la forme compacte.
-                Text(context.attributes.courseCode)
-                    .font(.caption2.weight(.bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                // L'état, à gauche ; le temps, à droite. **Ne plus vider ces deux
+                // régions** : les laisser vides ne rapetissait pas l'îlot, il
+                // n'affichait plus rien du tout.
+                StudyActivityStateIcon(state: context.state, tiny: true)
             } compactTrailing: {
-                StudyActivityTimer(state: context.state, font: .caption2)
+                StudyActivityTimer(state: context.state, font: .caption2, compact: true)
             } minimal: {
-                StudyActivityTimer(state: context.state, font: .caption2)
+                StudyActivityStateIcon(state: context.state, tiny: true)
             }
-            .keylineTint(context.state.runningSince != nil ? .indigo : .orange)
+            .keylineTint(context.state.isRunning ? .indigo : .orange)
         }
+    }
+}
+
+/// L'état du chrono en une icône : elle remplace le liseré de couleur, qui
+/// élargissait l'îlot d'un cadre.
+struct StudyActivityStateIcon: View {
+    let state: StudyActivityAttributes.ContentState
+    var tiny: Bool = false
+
+    var body: some View {
+        Image(systemName: state.isRunning ? "play.circle.fill" : "pause.circle.fill")
+            .font(tiny ? .system(size: 11) : .title3)
+            .foregroundStyle(state.isRunning ? .green : .orange)
+            .accessibilityLabel(state.isRunning ? "Chrono en cours" : "Chrono en pause")
+    }
+}
+
+/// « CS-250 · Exercices · 3.2 » — tout sur une ligne, tronquée au milieu.
+///
+/// Le nom complet du cours est écarté : dans l'îlot, il chassait le reste. Il
+/// reste lisible dans l'écran verrouillé, où la place ne manque pas.
+enum StudyActivityTitle {
+    static func text(for attributes: StudyActivityAttributes) -> String {
+        var parts = [attributes.courseCode, attributes.taskLabel]
+        if let target = attributes.target, !target.isEmpty { parts.append(target) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// « Vidéo · 2.1 » — la version courte, pour l'écran verrouillé.
+enum StudyActivitySubtitle {
+    static func text(for attributes: StudyActivityAttributes) -> String {
+        var parts = [attributes.taskLabel]
+        if let target = attributes.target, !target.isEmpty { parts.append(target) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Les boutons du chrono, dans l'îlot et sur l'écran verrouillé.
+///
+/// Ils exécutent des `LiveActivityIntent`, qui tournent dans le **processus de
+/// l'app** : mettre en pause ou enregistrer une session depuis l'écran verrouillé
+/// ne demande donc pas d'ouvrir l'app.
+struct StudyActivityControls: View {
+    let state: StudyActivityAttributes.ContentState
+    var compact: Bool = false
+
+    var body: some View {
+        // **Un seul** bouton dans l'îlot : deux pastilles côte à côte forcent une
+        // largeur qui se voit. L'enregistrement reste sur l'écran verrouillé, où
+        // il y a la place de deux commandes.
+        HStack(spacing: 10) {
+            if !compact {
+                Button(intent: FinishFocusTimerIntent()) {
+                    Image(systemName: "stop.fill")
+                }
+                .tint(.red)
+                .accessibilityLabel("Enregistrer la session")
+            }
+
+            if state.isRunning {
+                Button(intent: PauseFocusTimerIntent()) {
+                    Image(systemName: "pause.fill")
+                }
+                .tint(.indigo)
+                .accessibilityLabel("Mettre en pause")
+            } else {
+                Button(intent: ResumeFocusTimerIntent()) {
+                    Image(systemName: "play.fill")
+                }
+                .tint(.green)
+                .accessibilityLabel("Reprendre")
+            }
+        }
+        .font(compact ? .caption2.weight(.bold) : .footnote.weight(.bold))
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.circle)
+        .controlSize(compact ? .mini : .small)
     }
 }
 
@@ -168,46 +221,46 @@ struct StudyActivityState: View {
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(state.runningSince != nil ? Color.green : Color.orange)
+                .fill(state.isRunning ? Color.green : Color.orange)
                 .frame(width: 6, height: 6)
-            Text(state.runningSince != nil ? "en cours" : "en pause")
+            Text(state.isRunning ? "en cours" : "en pause")
                 .font(.caption2.weight(.semibold))
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(state.runningSince != nil ? "Chrono en cours" : "Chrono en pause")
+        .accessibilityLabel(state.isRunning ? "Chrono en cours" : "Chrono en pause")
     }
 }
 
 /// Vue de l'écran verrouillé et de la bannière.
+///
+/// Trois informations, dans l'ordre où on les cherche : combien de temps, sur
+/// quoi, et de quoi il s'agit. Les commandes sont à droite, assez grandes pour
+/// être touchées sans regarder.
 struct StudyActivityLockView: View {
     let context: ActivityViewContext<StudyActivityAttributes>
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
+                    Circle()
+                        .fill(context.state.isRunning ? Color.green : Color.orange)
+                        .frame(width: 7, height: 7)
                     Text(context.attributes.courseCode)
                         .font(.subheadline.weight(.bold))
                         .lineLimit(1)
-                    Text(context.attributes.taskLabel)
+                    Text(StudyActivitySubtitle.text(for: context.attributes))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                if let target = context.attributes.target {
-                    Text(target)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Text(context.attributes.courseName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                StudyActivityTimer(state: context.state, font: .title2)
             }
+
             Spacer(minLength: 8)
-            StudyActivityTimer(state: context.state, font: .title2)
+
+            StudyActivityControls(state: context.state)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -215,32 +268,57 @@ struct StudyActivityLockView: View {
 }
 
 /// Le compteur : vivant tant que la session tourne, figé en pause.
+///
+/// `showsHours: false` en forme compacte : à partir d'une heure, le compteur
+/// système écrirait « 1:10:48 » et élargirait l'îlot. « 70:48 » tient dans la
+/// largeur d'origine, et reste juste.
 struct StudyActivityTimer: View {
     let state: StudyActivityAttributes.ContentState
     var font: Font
+    /// Vrai dans l'îlot replié, où la place est comptée.
+    var compact: Bool = false
 
     var body: some View {
         Group {
-            if let since = state.runningSince {
-                // Le système fait avancer ce texte tout seul.
-                Text(timerInterval: since...Date.distantFuture, countsDown: false)
+            if let since = state.countingSince {
+                // Le système fait avancer ce texte tout seul, à partir de l'instant
+                // reculé du total déjà écoulé : la reprise ne repart donc pas de zéro.
+                //
+                // La fin de l'intervalle est **bornée**, et c'est important : SwiftUI
+                // réserve la largeur du plus grand texte possible dans l'intervalle.
+                // Avec `Date.distantFuture`, il réservait la place d'un nombre
+                // d'heures démesuré — d'où une région repliée très large. Une
+                // journée est déjà plus qu'une session d'étude.
+                Text(timerInterval: since...Self.horizon(from: since),
+                     countsDown: false,
+                     showsHours: !compact)
             } else {
-                Text(Self.frozen(state.accumulated))
+                Text(Self.frozen(state.frozenTotal, compact: compact))
             }
         }
         .font(font.monospacedDigit().weight(.semibold))
         .lineLimit(1)
-        .minimumScaleFactor(0.6)
+        .minimumScaleFactor(0.7)
     }
 
-    private static func frozen(_ seconds: TimeInterval) -> String {
+    /// La borne haute de l'intervalle du chrono : une journée.
+    ///
+    /// Elle n'est pas là pour arrêter le temps — le système continue d'avancer —
+    /// mais pour dire à SwiftUI jusqu'où le texte peut grandir, donc quelle largeur
+    /// réserver.
+    static func horizon(from start: Date) -> Date {
+        start.addingTimeInterval(24 * 3600)
+    }
+
+    private static func frozen(_ seconds: TimeInterval, compact: Bool) -> String {
         let total = max(0, Int(seconds))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let secs = total % 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, secs)
-            : String(format: "%02d:%02d", minutes, secs)
+        if hours > 0, !compact {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", hours * 60 + minutes, secs)
     }
 }
 

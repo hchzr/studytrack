@@ -9,6 +9,8 @@ struct ExercisesTabView: View {
     @State private var selectedExercise: Exercise?
     @State private var showingAddSeries = false
     @State private var showingPDFImport = false
+    /// Séries terminées que l'étudiant·e a rouvertes.
+    @State private var expandedSeries: Set<UUID> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
@@ -27,24 +29,34 @@ struct ExercisesTabView: View {
                 }
                 .buttonStyle(.bordered)
             } else {
-                ForEach(course.sortedSeries) { series in
-                    seriesCard(series)
-                }
-                Button {
-                    showingPDFImport = true
-                } label: {
-                    Label("Importer un PDF de série", systemImage: "doc.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
+                // Les actions **en haut** : en semaine 12, importer la série 12
+                // obligeait à faire défiler onze séries terminées.
+                HStack(spacing: Layout.control) {
+                    Button {
+                        showingPDFImport = true
+                    } label: {
+                        Label("Importer un PDF", systemImage: "doc.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
 
-                Button {
-                    showingAddSeries = true
-                } label: {
-                    Label("Ajouter une série à la main", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
+                    Button {
+                        showingAddSeries = true
+                    } label: {
+                        Label("À la main", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+                .font(.subheadline.weight(.medium))
+
+                ForEach(course.sortedSeries) { series in
+                    if isCollapsed(series) {
+                        collapsedSeriesRow(series)
+                    } else {
+                        seriesCard(series)
+                    }
+                }
 
                 // La légende ferme la liste au lieu de l'ouvrir : la structure
                 // numérotée passe en premier, l'explication reste à portée.
@@ -54,6 +66,20 @@ struct ExercisesTabView: View {
         .sheet(item: $selectedExercise) { exercise in
             ExerciseDetailSheet(exercise: exercise)
         }
+        #if DEBUG
+        .onAppear {
+            // Le simulateur ne sait pas taper : ce drapeau ouvre le détail d'un
+            // exercice pour pouvoir le photographier.
+            guard selectedExercise == nil,
+                  let wanted = PreviewLaunch.string(PreviewLaunch.exerciseDetailFlag) else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                selectedExercise = course.sortedSeries
+                    .flatMap(\.sortedExercises)
+                    .first { $0.exerciseNumber == wanted && $0.hasSubQuestions }
+            }
+        }
+        #endif
         .sheet(isPresented: $showingAddSeries) {
             AddSeriesSheet(course: course)
         }
@@ -89,6 +115,45 @@ struct ExercisesTabView: View {
         .padding(.horizontal, Layout.micro)
     }
 
+    /// Une série terminée — sans rien « à refaire » — se replie en une ligne :
+    /// ce qui reste à faire remonte, ce qui est fait ne disparaît pas.
+    private func isCollapsed(_ series: ExerciseSeries) -> Bool {
+        series.isComplete
+            && !series.exercises.contains(where: \.redoRequired)
+            && !expandedSeries.contains(series.id)
+    }
+
+    private func collapsedSeriesRow(_ series: ExerciseSeries) -> some View {
+        Button {
+            withAnimation(.snappy) { _ = expandedSeries.insert(series.id) }
+        } label: {
+            HStack(spacing: Layout.control) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color.green.accessibleMark)
+                Text(series.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("semaine \(series.plannedWeek)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: Layout.inline)
+                Text("\(series.doneCount)/\(series.requiredExercises.count)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Layout.gutter)
+            .padding(.vertical, Layout.block)
+            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(series.title), terminée")
+        .accessibilityHint("Afficher les exercices")
+    }
+
     private func seriesCard(_ series: ExerciseSeries) -> some View {
         Card(title: series.title,
              icon: "list.bullet.rectangle",
@@ -103,6 +168,13 @@ struct ExercisesTabView: View {
                         Pill(text: "Terminée", color: .green, icon: "checkmark.seal.fill")
                     }
                     Spacer(minLength: 0)
+                    if expandedSeries.contains(series.id) {
+                        Button("Replier") {
+                            withAnimation(.snappy) { _ = expandedSeries.remove(series.id) }
+                        }
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.borderless)
+                    }
                 }
 
                 ProgressBar(progress: series.progress, color: TaskType.exercise.tint)
@@ -199,13 +271,31 @@ struct ExerciseRow: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: Layout.tight) {
                 HStack(spacing: Layout.snug) {
-                    Text(exercise.displayNumber)
-                        .font(.subheadline.weight(.semibold))
+                    // Le numéro seul : la liste est déjà celle des exercices, et
+                    // « Exercice 1.3 » plus une pastille ne tenaient plus sur une
+                    // ligne à côté des trois pastilles de sureté.
+                    Text(exercise.exerciseNumber)
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .accessibilityLabel(exercise.displayNumber)
                     if exercise.isBonus {
-                        Pill(text: "BONUS", color: .orange, icon: "star.fill")
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Color.orange.accessibleMark)
+                            .accessibilityLabel("bonus")
                     }
                     if exercise.redoRequired {
                         Pill(text: "à refaire", color: .red, icon: "arrow.counterclockwise")
+                    }
+                    // L'avancement des questions se lit **sans ouvrir** : c'est ce
+                    // qui distingue un exercice entamé d'un exercice intact.
+                    if let label = exercise.subQuestionLabel {
+                        Text(label)
+                            .font(.caption2.monospacedDigit())
+                            .padding(.horizontal, Layout.snug)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.14), in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("\(exercise.subQuestionDoneCount) questions sur \(exercise.subQuestions.count) faites")
                     }
                 }
                 if !exercise.title.isEmpty {
@@ -282,6 +372,42 @@ struct ExerciseDetailSheet: View {
     @State private var scoreText = ""
     @State private var maxScoreText = ""
 
+    /// Une sous-question cochable.
+    ///
+    /// La ligne entière est cliquable, pas seulement la case : viser un carré de
+    /// vingt points sur un écran de téléphone est le genre de détail qui fait
+    /// qu'on ne coche pas.
+    private func subQuestionRow(_ question: SubQuestion) -> some View {
+        Button {
+            question.toggle()
+            Haptics.tap()
+            try? context.save()
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Layout.control) {
+                Image(systemName: question.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(question.isDone ? Color.green.accessibleMark : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(question.displayLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    if !question.text.isEmpty {
+                        Text(question.text)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(question.displayLabel) \(question.text)")
+        .accessibilityValue(question.isDone ? "fait" : "à faire")
+        .accessibilityAddTraits(question.isDone ? [.isSelected] : [])
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -298,6 +424,24 @@ struct ExerciseDetailSheet: View {
                     }
                 }
 
+                if exercise.hasSubQuestions {
+                    Section {
+                        ForEach(exercise.sortedSubQuestions) { question in
+                            subQuestionRow(question)
+                        }
+                    } header: {
+                        HStack {
+                            Text("Questions")
+                            Spacer()
+                            Text(exercise.subQuestionLabel ?? "")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Text("Coche chaque question au fur et à mesure. L'exercice est marqué fait quand elles le sont toutes — c'est le même travail, à rendre ensemble.")
+                    }
+                }
+
                 Section {
                     HStack {
                         Text("Fait le")
@@ -309,10 +453,20 @@ struct ExerciseDetailSheet: View {
                     }
                     Button {
                         if exercise.isDone {
-                            exercise.doneAt = nil
+                            // Décocher l'exercice décoche ses questions : sinon la
+                            // première case reviendrait cochée au prochain passage.
+                            if exercise.hasSubQuestions {
+                                exercise.setSubQuestions(done: false)
+                            } else {
+                                exercise.doneAt = nil
+                            }
                             exercise.confidence = nil
                         } else {
-                            exercise.doneAt = Date()
+                            if exercise.hasSubQuestions {
+                                exercise.setSubQuestions(done: true)
+                            } else {
+                                exercise.doneAt = Date()
+                            }
                             if exercise.confidence == nil { exercise.confidence = .medium }
                         }
                         Haptics.success()
@@ -440,6 +594,42 @@ struct AddSeriesSheet: View {
     @State private var week = 1
     @State private var count = 3
     @State private var bonusCount = 0
+
+    /// Une sous-question cochable.
+    ///
+    /// La ligne entière est cliquable, pas seulement la case : viser un carré de
+    /// vingt points sur un écran de téléphone est le genre de détail qui fait
+    /// qu'on ne coche pas.
+    private func subQuestionRow(_ question: SubQuestion) -> some View {
+        Button {
+            question.toggle()
+            Haptics.tap()
+            try? context.save()
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Layout.control) {
+                Image(systemName: question.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(question.isDone ? Color.green.accessibleMark : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(question.displayLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    if !question.text.isEmpty {
+                        Text(question.text)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(question.displayLabel) \(question.text)")
+        .accessibilityValue(question.isDone ? "fait" : "à faire")
+        .accessibilityAddTraits(question.isDone ? [.isSelected] : [])
+    }
 
     var body: some View {
         NavigationStack {

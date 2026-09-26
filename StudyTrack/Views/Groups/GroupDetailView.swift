@@ -268,9 +268,42 @@ struct GroupDetailView: View {
                 .font(.caption.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
+
+            // Rejoindre : on travaille sur le même cours, au même moment. C'est
+            // tout l'intérêt d'un groupe d'entraide — et ça ne demande rien au
+            // serveur, la présence porte déjà le cours et la nature du travail.
+            if !entry.isMe, !entry.courseCode.isEmpty {
+                Button {
+                    join(entry)
+                } label: {
+                    Text("Rejoindre")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, Layout.snug)
+                        .padding(.vertical, 4)
+                        .background(Theme.accent.badgeFill, in: Capsule())
+                        .foregroundStyle(Theme.accent.badgeInk)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Travailler sur \(entry.courseCode) comme \(entry.displayName)")
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(entry.isMe ? "Toi" : entry.displayName), \(entry.activityLabel), depuis \(elapsed)")
+    }
+
+    /// Lance mon chrono sur le même travail que ce membre.
+    ///
+    /// On retrouve la nature du travail depuis son libellé : c'est le seul champ
+    /// que la présence transporte, et il suffit — « Exercices » désigne le même
+    /// type pour tout le monde.
+    private func join(_ entry: PresenceEntry) {
+        let type = TaskType.allCases.first { $0.label == entry.taskLabel } ?? .exercise
+        let label = "\(entry.courseCode) · \(type.label) · avec \(entry.displayName)"
+        app.router.startFocus(courseID: nil,
+                              courseCode: entry.courseCode,
+                              taskType: type,
+                              label: label)
+        Haptics.success()
     }
 
     private func initials(_ name: String) -> String {

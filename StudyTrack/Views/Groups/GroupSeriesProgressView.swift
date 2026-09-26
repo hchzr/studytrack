@@ -119,7 +119,7 @@ struct GroupSeriesProgressView: View {
                                 .padding(.vertical, Layout.inline)
                                 .background(subject == code ? Theme.accent : Theme.softBackground,
                                             in: Capsule())
-                                .foregroundStyle(subject == code ? Color.white : Color.primary)
+                                .foregroundStyle(subject == code ? Theme.accent.badgeInk : Color.primary)
                         }
                         .buttonStyle(.plain)
                     }

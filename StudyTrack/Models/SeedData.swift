@@ -127,7 +127,7 @@ enum SeedData {
                   exercises: [("1.1", false), ("1.2", false)])
 
         // MARK: Progression d'exemple (théorie + exercices + corrections)
-        applySampleProgress(courses: [cs, math, phys])
+        applySampleProgress(courses: [cs, math, phys], context: context)
 
         // MARK: Sessions de travail des 10 derniers jours
         applySampleSessions(context: context, courses: [cs, math, phys])
@@ -218,7 +218,7 @@ enum SeedData {
     }
 
     /// Marque une partie du contenu comme fait / corrigé pour que l'UI soit parlante.
-    private static func applySampleProgress(courses: [Course]) {
+    private static func applySampleProgress(courses: [Course], context: ModelContext) {
         guard let cs = courses.first(where: { $0.code == "CS-250" }),
               let math = courses.first(where: { $0.code == "MATH-101" }),
               let phys = courses.first(where: { $0.code == "PHYS-101" }) else { return }
@@ -234,6 +234,28 @@ enum SeedData {
             if ["1.1", "1.2", "1.3"].contains(video.number) {
                 video.summarizedAt = DateUtils.addDays(-5, to: today)
                 video.summaryText = "Résumé de la vidéo \(video.number)."
+            }
+        }
+        // Une série dont les exercices portent des questions : c'est le cas des
+        // polycopiés qui numérotent « 1., 2. » à l'intérieur d'un même exercice.
+        // Sans exemple, l'écran de détail ne montrerait jamais cette partie.
+        if let s3 = cs.sortedSeries.first(where: { $0.seriesNumber == 3 }) {
+            let labels = [["1", "2"], ["1", "2", "3"], [], ["1", "2"]]
+            for (index, exercise) in s3.sortedExercises.enumerated() where index < labels.count {
+                let questions = labels[index]
+                guard !questions.isEmpty else { continue }
+                for (order, label) in questions.enumerated() {
+                    let question = SubQuestion(exercise: exercise,
+                                               label: label,
+                                               sortOrder: order)
+                    context.insert(question)
+                }
+            }
+            // Le premier exercice est entamé : une question sur deux cochée.
+            if let first = s3.sortedExercises.first(where: { $0.hasSubQuestions }),
+               let question = first.sortedSubQuestions.first {
+                question.isDone = true
+                question.doneAt = DateUtils.addDays(-1, to: today)
             }
         }
         if let s1 = cs.sortedSeries.first(where: { $0.seriesNumber == 1 }) {

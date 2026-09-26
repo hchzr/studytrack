@@ -9,6 +9,7 @@ struct CoursesView: View {
     @Query(sort: \Course.code) private var courses: [Course]
 
     @State private var showingForm = false
+    @State private var showingSearch = false
     @State private var showingImport = false
     /// Cours sélectionné dans la barre latérale (iPad).
     @State private var selectedCourseID: UUID?
@@ -18,6 +19,8 @@ struct CoursesView: View {
     /// sessions de travail** : un semestre de temps enregistré. Un menu contextuel
     /// sans confirmation était une perte de données à un doigt près.
     @State private var courseToDelete: Course?
+    /// Cours poussé dans la pile iPhone (capture `-course`, lien profond).
+    @State private var pushedCourse: Course?
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
     private var archived: [Course] { courses.sorted { $0.code < $1.code }.filter { !$0.isTracked } }
@@ -34,6 +37,7 @@ struct CoursesView: View {
         Group {
             if isWide { split } else { column }
         }
+        .sheet(isPresented: $showingSearch) { SearchView() }
         .sheet(isPresented: $showingForm) {
             CourseFormView(course: nil, defaultSectionCode: app.settings.sectionCode)
         }
@@ -57,17 +61,24 @@ struct CoursesView: View {
         } message: {
             Text(deleteMessage)
         }
-        .task {
-            #if DEBUG
-            // `-course CS-250` présélectionne un cours : `xcrun simctl` ne sait pas
-            // taper dans la liste, c'est le seul moyen de capturer le volet de détail.
-            if selectedCourseID == nil,
-               let code = PreviewLaunch.string(PreviewLaunch.courseFlag),
-               let match = courses.first(where: { $0.code.caseInsensitiveCompare(code) == .orderedSame }) {
-                selectedCourseID = match.id
-            }
-            #endif
-        }
+        .task { applyPreviewCourse() }
+        // Les cours arrivent parfois après la première passe : `@Query` rend une
+        // liste vide, puis la remplit. Sans ce second essai, le drapeau de
+        // prévisualisation ne trouvait rien et la capture montrait la liste.
+        .onChange(of: courses.count) { _, _ in applyPreviewCourse() }
+    }
+
+    /// `-course CS-250` présélectionne un cours : `xcrun simctl` ne sait pas taper
+    /// dans la liste, c'est le seul moyen de capturer le volet de détail.
+    private func applyPreviewCourse() {
+        #if DEBUG
+        guard selectedCourseID == nil,
+              let code = PreviewLaunch.string(PreviewLaunch.courseFlag),
+              let match = courses.first(where: { $0.code.caseInsensitiveCompare(code) == .orderedSame })
+        else { return }
+        selectedCourseID = match.id
+        if !isWide { pushedCourse = match }
+        #endif
     }
 
     private var deleteMessage: String {
@@ -204,6 +215,9 @@ struct CoursesView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Mes cours")
             .toolbar { toolbarItems }
+            .navigationDestination(item: $pushedCourse) { course in
+                CourseDetailView(course: course)
+            }
         }
     }
 
@@ -218,12 +232,20 @@ struct CoursesView: View {
             .accessibilityLabel("Importer")
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showingForm = true
-            } label: {
-                Image(systemName: "plus")
+            HStack(spacing: Layout.block) {
+                Button {
+                    showingSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Rechercher")
+                Button {
+                    showingForm = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Ajouter un cours")
             }
-            .accessibilityLabel("Ajouter un cours")
         }
     }
 
@@ -244,22 +266,20 @@ struct CoursesView: View {
                                     color: Theme.accent,
                                     countLabel: term.hasEnded ? "terminé" : "\(term.weeksRemaining) sem. restantes")
                 }
-                HStack(spacing: Layout.block) {
-                    StatCard(icon: "books.vertical.fill",
-                             value: "\(tracked.count)",
-                             title: "cours suivis",
-                             tint: Theme.accent)
-                    StatCard(icon: "checkmark.seal.fill",
-                             value: "\(tracked.reduce(0) { $0 + Int($1.credits) })",
-                             title: "crédits ECTS",
-                             tint: .green)
-                    StatCard(icon: "clock.fill",
-                             value: DateUtils.hoursLabel(hours: tracked.reduce(0) { $0 + WorkloadEngine.framedWeeklyHours(for: $1) }),
-                             title: "encadrées / sem.",
-                             tint: .blue)
-                }
+                // Trois chiffres en une ligne : trois tuiles occupaient la moitié
+                // de l'écran avant le premier cours.
+                Text(summaryLine)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
+    }
+
+    private var summaryLine: String {
+        let credits = tracked.reduce(0) { $0 + Int($1.credits) }
+        let framed = DateUtils.hoursLabel(hours: tracked.reduce(0) { $0 + WorkloadEngine.framedWeeklyHours(for: $1) })
+        return "\(tracked.count) cours · \(credits) ECTS · \(framed) encadrées par semaine"
     }
 
     private var trackedSection: some View {
@@ -385,9 +405,6 @@ struct CourseCardRow: View {
                             .lineLimit(1)
                         HStack(spacing: Layout.snug) {
                             Pill(text: "\(Int(course.credits)) ECTS", color: Color(hex: course.colorHex))
-                            Pill(text: course.hasLectures ? "amphi" : "sans amphi",
-                                 color: course.hasLectures ? .blue : .secondary,
-                                 icon: course.hasLectures ? "building.columns.fill" : nil)
                             if let exam = course.nextExam, exam.daysUntil <= 21 {
                                 Pill(text: "\(exam.kind.label) \(DateUtils.countdownLabel(to: exam.date))",
                                      color: exam.kind.color, icon: exam.kind.icon)

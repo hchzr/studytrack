@@ -13,11 +13,14 @@ struct FocusRequest: Equatable {
 @Observable
 final class AppRouter {
     enum Tab: Int, Hashable, CaseIterable {
+        // L'ordre de déclaration est l'ordre de la barre d'onglets : l'agenda
+        // (quotidien) avant les groupes (troisième raison d'être de l'app). Les
+        // valeurs brutes, elles, ne bougent pas — liens et captures en dépendent.
         case today = 0
         case courses = 1
         case focus = 2
-        case groups = 3
         case agenda = 4
+        case groups = 3
 
         var title: String {
             switch self {
@@ -60,6 +63,14 @@ final class AppRouter {
     /// remplie. Sans ça, cliquer sur un lien d'invitation ouvrirait l'app… sans rien
     /// faire, ce qui est pire que de ne pas proposer de lien du tout.
     var pendingJoinCode: String?
+
+    /// Élément partagé depuis une autre app (extension de partage), en attente.
+    var pendingImport: PendingImport?
+
+    /// Raccourci demandé depuis l'écran d'accueil d'iOS, en attente de traitement.
+    ///
+    /// Le routeur le porte ; l'écran qui sait quoi en faire le consomme.
+    var shortcut: ShortcutAction?
 
     func startFocus(courseID: UUID?, courseCode: String, taskType: TaskType, label: String) {
         focusRequest = FocusRequest(courseID: courseID,

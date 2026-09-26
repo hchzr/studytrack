@@ -314,6 +314,24 @@ final class SocialService {
         email = nil
     }
 
+    /// Supprime le compte **et** tout ce qui en dépend sur le serveur (profil,
+    /// adhésions, temps publié, avancement). Exigence App Store : un compte créé
+    /// dans l'app doit pouvoir y être supprimé.
+    ///
+    /// Les données locales (cours, sessions) restent sur l'appareil : elles
+    /// n'ont jamais dépendu du compte.
+    func deleteAccount() async throws {
+        guard let client, isSignedIn else { throw SupabaseError.notConfigured }
+        do {
+            try await client.rpc("delete_my_account", params: [:])
+        } catch {
+            lastError = "La suppression a échoué : \(error.localizedDescription)"
+            throw error
+        }
+        await signOut()
+        lastError = nil
+    }
+
     // MARK: Groupes
 
     func createGroup(name: String,

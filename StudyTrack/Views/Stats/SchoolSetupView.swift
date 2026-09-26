@@ -133,7 +133,7 @@ struct SchoolSetupView: View {
         } header: {
             Text("Dates du semestre")
         } footer: {
-            Text("Le semestre d'automne commence le lundi 7 septembre pour tout le monde — c'est ce que l'app propose par défaut. Corrige ici si ton semestre diffère.")
+            Text("Le semestre d'automne commence le lundi 7 septembre pour tout le monde : cette date vient du calendrier académique **publié par l'EPFL**. Corrige ici si ton semestre diffère.")
         }
     }
 

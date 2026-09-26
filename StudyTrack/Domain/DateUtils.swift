@@ -93,6 +93,12 @@ enum DateUtils {
     /// connue, et une valeur par défaut approximative décalait tout le suivi
     /// hebdomadaire. Le semestre de printemps, lui, varie et reste une question.
     static func autumnStart(forYear year: Int) -> Date {
+        // La date **publiée** par l'EPFL prime sur la règle. Les deux concordent
+        // (7 septembre 2026), mais si l'école décale une rentrée, l'app suit sans
+        // qu'on touche au code.
+        if let official = EPFLCalendarSnapshot.autumnTeachingStart(year: year) {
+            return official
+        }
         let calendar = Calendar.current
         var components = DateComponents()
         components.year = year

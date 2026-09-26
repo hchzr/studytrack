@@ -6,8 +6,13 @@ struct StatsView: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    @Query private var terms: [AcademicTerm]
+    @Query private var events: [LinkedCalendarEvent]
+    @Query(sort: \AcademicMilestone.date) private var milestones: [AcademicMilestone]
 
     @State private var period: StatsPeriod = .week
+    @State private var showingCoverage = false
+    @State private var showingLife = false
 
     private var periodSessions: [StudySession] {
         let range = DateUtils.dateRange(days: period.days)
@@ -61,12 +66,17 @@ struct StatsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Ce pour quoi on ouvre les statistiques d'abord — le temps —,
+                // puis la charge, et seulement ensuite le calendrier de l'école
+                // et l'audit du suivi, qui ne changent pas d'un jour à l'autre.
                 periodPicker
                 totalsCard
                 dailyCard
                 taskTypeCard
                 courseCard
                 workloadCard
+                epflLifeCard
+                coverageCard
                 gamificationCard
             }
             .padding()
@@ -74,6 +84,128 @@ struct StatsView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Statistiques")
+        .navigationDestination(isPresented: $showingCoverage) {
+            CoverageView()
+        }
+        .navigationDestination(isPresented: $showingLife) {
+            EPFLLifeView()
+        }
+        .onAppear {
+            #if DEBUG
+            if PreviewLaunch.isSet(PreviewLaunch.coverageFlag) { showingCoverage = true }
+            if PreviewLaunch.isSet(PreviewLaunch.epflLifeFlag) { showingLife = true }
+            #endif
+        }
+    }
+
+    // MARK: Vie de l'EPFL
+
+    /// La prochaine échéance de l'école : fin des cours, examens, délai.
+    ///
+    /// Un étudiant doit voir arriver « fin des enseignements » et « début des
+    /// examens » sans avoir à ouvrir un navigateur.
+    private var epflLifeCard: some View {
+        let upcoming = AcademicCalendarService.upcoming(milestones)
+        let next = AcademicCalendarService.nextStructural(milestones)
+        return NavigationLink {
+            EPFLLifeView()
+        } label: {
+            Card(title: "Vie de l'EPFL", icon: "building.columns.fill") {
+                VStack(alignment: .leading, spacing: Layout.block) {
+                    if let next {
+                        HStack(alignment: .top, spacing: Layout.control) {
+                            Image(systemName: next.kind.icon)
+                                .foregroundStyle(Theme.accent.accessibleMark)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(next.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("\(DateUtils.shortDay.string(from: next.date)) · \(next.value.countdown())")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: Layout.inline)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    } else {
+                        Text("Aucune échéance connue. Ouvre l'écran pour actualiser depuis la page de l'EPFL.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(upcoming.isEmpty
+                         ? "Calendrier académique officiel"
+                         : "\(upcoming.count) échéance\(upcoming.count > 1 ? "s" : "") à venir · calendrier académique officiel")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(next.map { "Vie de l'EPFL. \($0.title), \($0.value.countdown())" } ?? "Vie de l'EPFL")
+    }
+
+    // MARK: Couverture
+
+    /// Ce qui échappe au suivi, en tête des statistiques.
+    ///
+    /// Un compte de temps ne sert à rien s'il manque la moitié des exercices : la
+    /// première question est « qu'est-ce que je ne suis pas en train de suivre ? ».
+    private var coverageCard: some View {
+        let report = CoverageBuilder.report(courses: courses,
+                                            term: AcademicTerm.resolve(from: terms),
+                                            hasTimetable: !events.isEmpty)
+        return NavigationLink {
+            CoverageView()
+        } label: {
+            Card(title: "Couverture du suivi", icon: "checklist") {
+                VStack(alignment: .leading, spacing: Layout.block) {
+                    HStack(alignment: .firstTextBaseline, spacing: Layout.control) {
+                        Text("\(Int((report.coverage * 100).rounded())) %")
+                            .font(.system(.title, design: .rounded).weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(coverageInk(report.coverage))
+                        Spacer(minLength: Layout.inline)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    LabeledProgress(title: "Cours sans aucun manque",
+                                    progress: report.coverage,
+                                    color: coverageInk(report.coverage),
+                                    countLabel: "\(report.healthyCourses)/\(report.trackedCount)")
+                    Text(coverageSubtitle(report))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Couverture du suivi, \(Int((report.coverage * 100).rounded())) pour cent, \(report.healthyCourses) cours sur \(report.trackedCount) sans manque")
+    }
+
+    private func coverageInk(_ value: Double) -> Color {
+        switch value {
+        case 1: return .green
+        case 0.6...: return .yellow
+        default: return .orange
+        }
+    }
+
+    private func coverageSubtitle(_ report: CoverageReport) -> String {
+        if report.trackedCount == 0 { return "Aucun cours suivi pour l'instant." }
+        if report.isComplete { return "Tout est suivi : rien ne manque." }
+        var parts: [String] = []
+        if report.count(.blocking) > 0 { parts.append("\(report.count(.blocking)) à corriger") }
+        if report.count(.warning) > 0 { parts.append("\(report.count(.warning)) incomplets") }
+        if report.count(.info) > 0 { parts.append("\(report.count(.info)) à compléter") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Période
@@ -90,7 +222,7 @@ struct StatsView: View {
     // MARK: Totaux
 
     private var totalsCard: some View {
-        Card {
+        Card(title: period.rangeLabel, icon: "sum") {
             HStack(spacing: 12) {
                 StatCard(icon: "clock.fill",
                          value: DateUtils.hoursLabel(seconds: totalSeconds),
@@ -100,10 +232,6 @@ struct StatsView: View {
                          value: "\(periodSessions.count)",
                          title: "Sessions",
                          tint: .purple)
-                StatCard(icon: "flame.fill",
-                         value: "\(GamificationEngine.currentStreak(sessions: sessions)) j",
-                         title: "Série actuelle",
-                         tint: .orange)
                 StatCard(icon: "calendar",
                          value: "\(Set(periodSessions.map { Calendar.current.startOfDay(for: $0.startedAt) }).count)",
                          title: "Jours actifs",
