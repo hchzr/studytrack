@@ -153,10 +153,27 @@ Deno.serve(async (request) => {
       for (const image of chunk) {
         content.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } });
       }
-      const outcome = await complete(baseURL, apiKey, visionModel, usesGroq,
-        [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }],
-        preferredVisionModels);
-      if ("error" in outcome) return json({ error: `vision : ${outcome.error}` }, 502);
+      const messages = [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }];
+      let outcome = await complete(baseURL, apiKey, usedModel, usesGroq, messages, preferredVisionModels);
+      // Un modèle de **texte** refuse les images (« content must be a string »,
+      // « does not support image input »…). C'est le cas quand LLM_VISION_MODEL
+      // n'est pas posé et que LLM_MODEL est un modèle de texte : on cherche chez
+      // le fournisseur un modèle qui voit, et on réessaie une fois.
+      if ("error" in outcome && rejectsImages(outcome.error)) {
+        const available = await listModels(baseURL, apiKey);
+        const seeing = pickVisionModel(available, usedModel);
+        if (seeing) {
+          usedModel = seeing;
+          outcome = await complete(baseURL, apiKey, usedModel, usesGroq, messages, preferredVisionModels);
+        } else {
+          return json({
+            error: `vision : le modèle « ${usedModel} » ne lit pas les images, et aucun modèle de vision `
+              + "n'a été trouvé chez ce fournisseur. Pose-en un : "
+              + "`supabase secrets set LLM_VISION_MODEL=<modèle qui accepte les images>`.",
+          }, 502);
+        }
+      }
+      if ("error" in outcome) return json({ error: `vision (${usedModel}) : ${outcome.error}` }, 502);
       usedModel = outcome.model;
       collected.push(...outcome.series);
     }
@@ -340,6 +357,30 @@ function mergeSeries(chunks: unknown[]): unknown[] {
     }
   }
   return [...bySeries.values()];
+}
+
+/** Le fournisseur a-t-il refusé parce que le modèle ne lit pas d'images ? */
+function rejectsImages(error: string): boolean {
+  const text = error.toLowerCase();
+  return text.includes("content must be a string")
+    || text.includes("image input")
+    || text.includes("does not support image")
+    || text.includes("image_url")
+    || text.includes("vision");
+}
+
+/**
+ * Un modèle de vision disponible chez ce fournisseur : d'abord la liste connue,
+ * puis tout identifiant qui le dit dans son nom (« vision », « vl », « llama-4 »,
+ * « gemini », « gpt-4o »…). `null` si rien ne convient.
+ */
+function pickVisionModel(available: string[], tried: string): string | null {
+  const candidates = available.filter((id) => id !== tried);
+  for (const known of preferredVisionModels) {
+    if (candidates.includes(known)) return known;
+  }
+  const hints = ["vision", "-vl", "vl-", "llama-4", "gemini", "gpt-4o", "gpt-4.1", "pixtral", "qwen2.5-vl", "claude"];
+  return candidates.find((id) => hints.some((hint) => id.toLowerCase().includes(hint))) ?? null;
 }
 
 /** Modèles qui voient les images, du plus accessible au plus capable. */
