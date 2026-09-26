@@ -194,7 +194,7 @@ struct SeriesImportSheet: View {
                             title: pageImages.isEmpty ? "Vérification par l'IA" : "Lecture des pages par l'IA",
                             detail: pageImages.isEmpty
                                 ? "Structure, intitulés et bonus."
-                                : "Questions, points (a)(b)(c) et formules, lus sur la page. Compte 10 à 40 s.")
+                                : "Questions, points (a)(b)(c) et formules, lus sur la page. Compte 5 à 20 s.")
                 }
             }
             if phase == .analyzing {

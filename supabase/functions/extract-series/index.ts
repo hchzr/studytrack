@@ -108,7 +108,7 @@ Deno.serve(async (request) => {
     return json({ error: "LLM_API_KEY manquante : `supabase secrets set LLM_API_KEY=…`" }, 503);
   }
 
-  const GROQ = "https://api.groq.com/openai/v1";
+  const GROQ = GROQ_URL;
   const configured = Deno.env.get("LLM_BASE_URL")?.trim();
   const baseURL = (configured && configured.length > 0 ? configured : GROQ).replace(/\/$/, "");
   const usesGroq = baseURL === GROQ;
@@ -185,45 +185,70 @@ Deno.serve(async (request) => {
     if (usesGroq) add({ base: GROQ, key: apiKey, model: GROQ_VISION });
 
     const pages = images.slice(0, MAX_PAGES);
-    const collected: unknown[] = [];
     const failures: string[] = [];
-    let current = 0;
-    let usedModel = candidates[0].model;
+    const timings: string[] = [];
+    const began = Date.now();
 
-    const see = async (first: number, count: number): Promise<Outcome> => {
-      for (; current < candidates.length; current++) {
-        const candidate = candidates[current];
-        const onGroq = candidate.base === GROQ;
-        // Groq gratuit plafonne à 7 000 jetons d'entrée par minute : deux pages
-        // par appel, et sans le texte d'appoint.
-        const step = onGroq ? 2 : count;
-        const series: unknown[] = [];
-        let failed: string | null = null;
-        for (let start = first; start < first + count; start += step) {
-          const slice = pages.slice(start, Math.min(start + step, first + count));
-          const outcome = await complete(candidate.base, candidate.key, candidate.model, onGroq,
-                                         visionMessages(slice, start, seriesHint, onGroq ? "" : text), [], 8192);
-          if ("error" in outcome) { failed = outcome.error; break; }
-          series.push(...outcome.series);
+    // Le modèle qui a répondu la dernière fois passe devant ; ceux qui viennent
+    // d'être saturés (503) ou sans quota (429) attendent leur tour.
+    const ordered = rankCandidates(candidates);
+
+    // Un paquet de pages, lu par **plusieurs** modèles en même temps : le premier
+    // qui répond gagne, les autres sont annulés. Chaque modèle Gemini a son propre
+    // quota gratuit : la course ne coûte rien, et le temps devient celui du plus
+    // rapide des modèles disponibles. Attendre qu'un modèle saturé réponde 503,
+    // puis le suivant, puis le suivant, coûtait l'essentiel des 45 s.
+    const readChunk = async (first: number, count: number): Promise<Outcome & { model?: string }> => {
+      let index = 0;
+      while (index < ordered.length) {
+        const pair = ordered.slice(index, index + RACE_WIDTH);
+        index += pair.length;
+        const controllers = pair.map(() => new AbortController());
+        const attempts = pair.map((candidate, slot) => (async () => {
+          // Les modèles « Lite » lisent moins bien (conditions prises pour des
+          // questions, consigne d'ouverture oubliée) : ils partent après les
+          // modèles complets, et seulement si aucun n'a encore répondu.
+          if (/lite/i.test(candidate.model) && pair.some((other) => !/lite/i.test(other.model))) {
+            await new Promise((resolve) => setTimeout(resolve, LITE_HEAD_START_MS));
+            if (controllers[slot].signal.aborted) throw new Error("annulé");
+          }
+          const start = Date.now();
+          const outcome = await readWith(candidate, pages, first, count, seriesHint, text, controllers[slot].signal);
+          const ms = Date.now() - start;
+          if ("error" in outcome) {
+            if (!controllers[slot].signal.aborted) {
+              failures.push(`${candidate.model} (${ms} ms) : ${outcome.error.slice(0, 140)}`);
+              markUnhealthy(candidate, outcome.error);
+            }
+            throw new Error(outcome.error);
+          }
+          timings.push(`${candidate.model} : ${ms} ms`);
+          markHealthy(candidate);
+          controllers.forEach((controller, other) => { if (other !== slot) controller.abort(); });
+          return { ...outcome, model: candidate.model };
+        })());
+        try {
+          return await Promise.any(attempts);
+        } catch {
+          // Les deux ont échoué : paire suivante.
         }
-        if (failed === null) {
-          usedModel = candidate.model;
-          return { series, model: candidate.model, structured: true };
-        }
-        failures.push(`${candidate.model} : ${failed.slice(0, 160)}`);
-        if (!isRecoverable(failed)) return { error: failed };
       }
       return { error: "aucun modèle de vision n'a répondu" };
     };
 
-    for (let start = 0; start < pages.length; start += MAX_IMAGES_PER_CALL) {
-      const outcome = await see(start, Math.min(MAX_IMAGES_PER_CALL, pages.length - start));
-      if ("error" in outcome) {
-        return json({ error: `vision : ${outcome.error}. Essais : ${failures.join(" | ")}` }, 502);
-      }
-      collected.push(...outcome.series);
+    // Les paquets partent **ensemble** (un PDF de dix pages = deux paquets).
+    const starts: number[] = [];
+    for (let start = 0; start < pages.length; start += MAX_IMAGES_PER_CALL) starts.push(start);
+    const results = await Promise.all(starts.map((start) =>
+      readChunk(start, Math.min(MAX_IMAGES_PER_CALL, pages.length - start))));
+    const failed = results.find((result) => "error" in result);
+    if (failed && "error" in failed) {
+      return json({ error: `vision : ${failed.error}. Essais : ${failures.join(" | ")}` }, 502);
     }
+    const collected = results.flatMap((result) => ("series" in result ? result.series : []));
+    const usedModel = results.map((result) => result.model).find(Boolean) ?? ordered[0].model;
     return json({ series: mergeSeries(collected), model: usedModel, mode: "vision",
+                  ms: Date.now() - began, timings,
                   fallbacks: failures.length > 0 ? failures : undefined });
   }
 
@@ -266,6 +291,7 @@ async function complete(
   messages: Array<{ role: string; content: unknown }>,
   fallbackModels: string[],
   maxTokens = 4096,
+  signal?: AbortSignal,
 ): Promise<Outcome> {
   let usedModel = model;
   let structured = true;
@@ -275,8 +301,11 @@ async function complete(
     // tronqué en pleine chaîne, parce que le raisonnement avait consommé le
     // budget de sortie. Seuls les modèles qui raisonnent (`gpt-oss`) acceptent
     // ce paramètre ; un modèle de vision le refuserait.
+    // Gemini « réfléchit » par défaut : pour lire une feuille d'exercices,
+    // c'est l'essentiel du temps d'attente, sans gain de lecture.
+    const reasons = (usesGroq && usedModel.includes("gpt-oss")) || baseURL.includes("googleapis.com");
     const response = await callProvider(baseURL, apiKey, usedModel, messages,
-                                        structured, usesGroq && usedModel.includes("gpt-oss"), maxTokens);
+                                        structured, reasons, maxTokens, signal);
     detail = await bodyText(response);
     return response;
   };
@@ -409,8 +438,74 @@ function mergeSeries(chunks: unknown[]): unknown[] {
 
 type Candidate = { base: string; key: string; model: string };
 
+const GROQ_URL = "https://api.groq.com/openai/v1";
+
 /** Le modèle de vision de Groq (`llama-4-scout` n'y est plus). */
 const GROQ_VISION = "qwen/qwen3.8-27b";
+
+// ── Santé des modèles ─────────────────────────────────────────────────────────
+//
+// Gardée **en mémoire de l'instance** : une fonction Supabase reste chaude
+// plusieurs minutes entre deux imports. Le modèle qui a répondu passe devant ;
+// un modèle saturé ou sans quota est mis de côté deux minutes au lieu d'être
+// réessayé — et attendu — à chaque import.
+const COOLDOWN_MS = 2 * 60 * 1000;
+/** Modèles lancés ensemble sur un même paquet de pages. */
+const RACE_WIDTH = 5;
+/** Avance donnée aux modèles complets sur les « Lite ». */
+const LITE_HEAD_START_MS = 5000;
+const cooldowns = new Map<string, number>();
+let lastGood: string | null = null;
+
+function keyOf(candidate: Candidate): string {
+  return `${candidate.base}|${candidate.model}`;
+}
+
+function markHealthy(candidate: Candidate) {
+  lastGood = keyOf(candidate);
+  cooldowns.delete(keyOf(candidate));
+}
+
+function markUnhealthy(candidate: Candidate, error: string) {
+  if (/HTTP (429|5\d\d)|high demand|unavailable|quota|rate limit/i.test(error)) {
+    cooldowns.set(keyOf(candidate), Date.now() + COOLDOWN_MS);
+  }
+}
+
+/** Le dernier modèle qui a répondu d'abord, les modèles au repos à la fin. */
+function rankCandidates(candidates: Candidate[]): Candidate[] {
+  const now = Date.now();
+  const resting = (candidate: Candidate) => (cooldowns.get(keyOf(candidate)) ?? 0) > now;
+  const good = candidates.filter((candidate) => keyOf(candidate) === lastGood);
+  const ready = candidates.filter((candidate) => keyOf(candidate) !== lastGood && !resting(candidate));
+  const tired = candidates.filter((candidate) => keyOf(candidate) !== lastGood && resting(candidate));
+  return [...good, ...ready, ...tired];
+}
+
+/**
+ * Un paquet de pages lu par un modèle. Chez Groq gratuit (7 000 jetons
+ * d'entrée par minute), deux pages par appel et sans le texte d'appoint.
+ */
+async function readWith(candidate: Candidate, pages: string[], first: number, count: number,
+                        seriesHint: number | null, text: string, signal: AbortSignal): Promise<Outcome> {
+  const onGroq = candidate.base === GROQ_URL;
+  const step = onGroq ? 2 : count;
+  const series: unknown[] = [];
+  for (let start = first; start < first + count; start += step) {
+    if (signal.aborted) return { error: "annulé" };
+    const slice = pages.slice(start, Math.min(start + step, first + count));
+    let outcome: Outcome;
+    try {
+      outcome = await complete(candidate.base, candidate.key, candidate.model, onGroq,
+                               visionMessages(slice, start, seriesHint, onGroq ? "" : text), [], 8192, signal);
+    } catch (error) {
+      return { error: signal.aborted ? "annulé" : String(error) };
+    }
+    if ("error" in outcome) return outcome;
+    series.push(...outcome.series);
+  }
+  return { series, model: candidate.model, structured: true };
+}
 
 /** Les messages d'un paquet de pages : consigne, repères, images. */
 function visionMessages(pages: string[], first: number, seriesHint: number | null, text: string) {
@@ -452,8 +547,9 @@ function pickVisionModels(available: string[]): string[] {
   const pro = usable.filter((id) => /^gemini-\d+(\.\d+)?-pro$/.test(id)).sort((a, b) => version(b) - version(a));
   const lite = usable.filter((id) => /^gemini-\d+(\.\d+)?-flash-lite$/.test(id)).sort((a, b) => version(b) - version(a));
   const others = usable.filter((id) => preferredVisionModels.includes(id));
-  // Flash récents d'abord (quota gratuit, rapides), puis Pro, puis Lite.
-  return [...flash.slice(0, 3), ...pro.slice(0, 1), ...lite.slice(0, 1), ...others];
+  // Premier départ : trois Flash récents et deux Flash-Lite — les Lite restent
+  // disponibles quand les Flash sont saturés (« high demand »). Pro ensuite.
+  return [...flash.slice(0, 3), ...lite.slice(0, 2), ...pro.slice(0, 1), ...others];
 }
 
 /** Modèles qui voient les images, du plus accessible au plus capable. */
@@ -499,6 +595,7 @@ function callProvider(
   structured = true,
   lowReasoning = false,
   maxTokens = 4096,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const payload: Record<string, unknown> = { model, temperature: 0, messages };
   if (structured) payload.response_format = { type: "json_object" };
@@ -511,6 +608,7 @@ function callProvider(
   // lire une liste d'exercices, et rend le quota au texte utile.
   if (lowReasoning) payload.reasoning_effort = "low";
   return fetch(`${baseURL}/chat/completions`, {
+    signal,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
