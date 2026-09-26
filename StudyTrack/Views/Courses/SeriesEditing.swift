@@ -139,11 +139,17 @@ struct ExerciseDraftSummary: View {
                             .accessibilityLabel("fait")
                     }
                 }
+                if !exercise.statement.isEmpty {
+                    Text(exercise.statement)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 Text(exercise.subQuestions.isEmpty
-                     ? "Sans sous-question"
+                     ? "Un bloc, sans sous-question"
                      : "\(exercise.leafCount) cases · \(SubQuestionTree.outline(exercise.subQuestions))")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -189,6 +195,8 @@ struct ExerciseDraftEditor: View {
                     .font(.body.monospacedDigit())
                 }
                 TextField("Intitulé (facultatif)", text: $exercise.title)
+                TextField("Énoncé : ce qu'il faut faire", text: $exercise.statement, axis: .vertical)
+                    .lineLimit(1...4)
                 Toggle(isOn: $exercise.isBonus) {
                     Label("Bonus", systemImage: "star")
                 }

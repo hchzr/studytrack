@@ -63,6 +63,10 @@ final class Exercise {
     /// Numéro affiché : « 1.1 ».
     var exerciseNumber: String
     var title: String
+    /// Ce que l'exercice demande, en une phrase (« Montrer que (xₙ) est
+    /// croissante ⇔ ad − bc ⩾ 0 »). Sans elle, un exercice sans questions
+    /// numérotées n'était qu'un numéro et un titre. Lue par l'IA sur la page.
+    var statement: String = ""
     var isBonus: Bool
     var sortOrder: Int
     var statementURLString: String

@@ -254,8 +254,9 @@ enum SeriesAIParsing {
             var isBonus: Bool?
             var questions: [Question]?
             var page: Int?
+            var statement: String?
 
-            enum Keys: String, CodingKey { case number, title, isBonus, questions, parts, page }
+            enum Keys: String, CodingKey { case number, title, isBonus, questions, parts, page, statement }
 
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: Keys.self)
@@ -263,6 +264,7 @@ enum SeriesAIParsing {
                 title = Flexible.string(container, Keys.title)
                 isBonus = Flexible.bool(container, Keys.isBonus)
                 page = Flexible.int(container, Keys.page)
+                statement = Flexible.string(container, Keys.statement)
                 questions = (try? container.decodeIfPresent([Question].self, forKey: .parts))
                     ?? (try? container.decodeIfPresent([Question].self, forKey: .questions)) ?? []
             }
@@ -315,6 +317,7 @@ enum SeriesAIParsing {
                 exercises.append(DetectedExercise(number: candidate,
                                                   title: SeriesPDFParser.looksLikeTitle(title) ? title : "",
                                                   isBonus: exercise.isBonus ?? false,
+                                                  statement: (exercise.statement ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                                                   subQuestions: subQuestions(exercise.questions),
                                                   pageIndex: exercise.page.map { max(0, $0 - 1) }))
             }
@@ -434,6 +437,7 @@ enum SeriesAIParsing {
                 if let existing = result[index].exercises.firstIndex(where: { $0.number == exercise.number }) {
                     var merged = result[index].exercises[existing]
                     if merged.title.isEmpty { merged.title = exercise.title }
+                    if merged.statement.isEmpty { merged.statement = exercise.statement }
                     merged.isBonus = merged.isBonus || exercise.isBonus
                     merged.isConfident = true
                     // Les sous-questions ne s'additionnent pas : c'est le même

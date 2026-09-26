@@ -48,6 +48,8 @@ struct DetectedExercise: Equatable, Identifiable {
     /// Ce qui suit le numéro sur la même ligne, s'il y a quelque chose.
     var title: String
     var isBonus: Bool
+    /// Ce que l'exercice demande, en une phrase — lu par le modèle.
+    var statement: String = ""
     /// Les questions regroupées sous ce numéro, dans l'ordre du polycopié.
     ///
     /// Un polycopié qui écrit « Calculer : 1. … 2. … » ne propose pas deux

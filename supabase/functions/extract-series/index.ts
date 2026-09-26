@@ -22,6 +22,12 @@
 //
 //   supabase secrets set LLM_VISION_MODEL=google/gemini-2.5-flash
 //
+// La vision peut aussi passer par **un autre fournisseur** que le texte :
+//
+//   supabase secrets set LLM_VISION_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+//   supabase secrets set LLM_VISION_API_KEY=<clé Google AI Studio>
+//   supabase secrets set LLM_VISION_MODEL=gemini-2.5-flash
+//
 // Groq offre un palier gratuit largement suffisant pour des PDF de séries.
 // N'importe quelle API compatible OpenAI convient (OpenRouter : LLM_BASE_URL=
 // https://openrouter.ai/api/v1 et un modèle « :free »).
@@ -59,7 +65,7 @@ Réponds UNIQUEMENT par un objet JSON :
 // d'un cas réel (Analyse I, série 03).
 const VISION_INSTRUCTIONS = `Tu lis des pages d'une série d'exercices (images) et tu en extrais la STRUCTURE.
 Réponds UNIQUEMENT par un objet JSON :
-{"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]}]}]}
+{"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","statement":"Lire sur les graphes de (x_n) et (y_n) des ensembles d'indices et un rang N","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]},{"number":"3.2","title":"Monotonie d'une suite homographique","statement":"Montrer que x_n = (an+b)/(cn+d) est croissante ⇔ ad − bc ≥ 0","isBonus":false,"page":2}]}]}
 
 Règles :
 - « exercises » = les EXERCICES (Ex-03-01, Exercice 2…). « number » = « série.exercice ».
@@ -72,6 +78,8 @@ Règles :
 - Un exercice sans question numérotée : omets « parts ».
 - « text » : court (≤ 80 caractères), formules en notation simple (x_n, ≤, √, lim), dans la langue du PDF. N'invente rien.
 - « title » : 2 à 6 mots qui nomment la tâche, jamais l'énoncé recopié.
+- « statement » : TOUJOURS rempli, ≤ 140 caractères : ce que l'exercice demande de faire, verbe à l'infinitif, avec les objets mathématiques essentiels (« Montrer que x_n = (an+b)/(cn+d) est croissante ⇔ ad − bc ≥ 0 »). C'est la seule description d'un exercice sans questions : ne le laisse jamais vide.
+- Si un « Texte extrait » est fourni, sers-t'en pour les numéros et le vocabulaire exacts ; ses formules sont souvent abîmées (symboles ≤ ≥ perdus, fractions éclatées) : pour les formules, fie-toi à l'image.
 - « page » : la page (1, 2, …) où l'exercice commence, dans l'ordre des images reçues.
 - « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
 - Aucune série : {"series":[]}.`;
@@ -137,34 +145,50 @@ Deno.serve(async (request) => {
 
   // ── Mode vision : les pages en image, découpées par paquets. ──────────────
   if (images.length > 0) {
-    const visionModel = Deno.env.get("LLM_VISION_MODEL")?.trim()
-      || (usesGroq ? "qwen/qwen3.8-27b" : configuredModel!);
+    // La vision peut avoir **son propre fournisseur** : le texte reste sur un
+    // palier gratuit (Groq), les pages vont à un modèle qui les lit vraiment
+    // bien (Gemini, Claude, GPT-4.1 — toute API compatible OpenAI).
+    const visionBase = (Deno.env.get("LLM_VISION_BASE_URL")?.trim() || baseURL).replace(/\/$/, "");
+    const visionKey = Deno.env.get("LLM_VISION_API_KEY")?.trim() || apiKey;
+    const visionOnGroq = visionBase === GROQ;
+    const explicitVisionModel = Deno.env.get("LLM_VISION_MODEL")?.trim();
+    if (!explicitVisionModel && Deno.env.get("LLM_VISION_BASE_URL")?.trim() && !visionOnGroq) {
+      return json({ error: "LLM_VISION_BASE_URL est posé sans LLM_VISION_MODEL : "
+        + "`supabase secrets set LLM_VISION_MODEL=<modèle de ce fournisseur>`." }, 503);
+    }
+    const visionModel = explicitVisionModel
+      || (visionOnGroq ? "qwen/qwen3.8-27b" : configuredModel!);
     const pages = images.slice(0, MAX_PAGES);
     const collected: unknown[] = [];
     let usedModel = visionModel;
-    for (let start = 0; start < pages.length; start += MAX_IMAGES_PER_CALL) {
-      const chunk = pages.slice(start, start + MAX_IMAGES_PER_CALL);
+    // Groq gratuit plafonne à 7 000 jetons d'entrée **par minute** : trois pages
+    // et la consigne le dépassent déjà. Deux pages par appel y tiennent ; les
+    // appels suivants attendent le délai que Groq indique (repli 429).
+    const perCall = visionOnGroq ? 2 : MAX_IMAGES_PER_CALL;
+    for (let start = 0; start < pages.length; start += perCall) {
+      const chunk = pages.slice(start, start + perCall);
       const content: unknown[] = [{
         type: "text",
         text: `Pages ${start + 1} à ${start + chunk.length} du document`
           + (seriesHint ? ` (série ${seriesHint} d'après l'en-tête ou le nom du fichier)` : "")
-          + ". Numérote « page » à partir de " + (start + 1) + ". Réponds en JSON.",
+          + ". Numérote « page » à partir de " + (start + 1) + ". Réponds en JSON."
+          + (text ? `\n\nTexte extrait du PDF (numéros fiables, formules abîmées) :\n${text}` : ""),
       }];
       for (const image of chunk) {
         content.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } });
       }
       const messages = [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }];
-      let outcome = await complete(baseURL, apiKey, usedModel, usesGroq, messages, preferredVisionModels);
+      let outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, messages, preferredVisionModels, 8192);
       // Un modèle de **texte** refuse les images (« content must be a string »,
       // « does not support image input »…). C'est le cas quand LLM_VISION_MODEL
       // n'est pas posé et que LLM_MODEL est un modèle de texte : on cherche chez
       // le fournisseur un modèle qui voit, et on réessaie une fois.
       if ("error" in outcome && rejectsImages(outcome.error)) {
-        const available = await listModels(baseURL, apiKey);
+        const available = await listModels(visionBase, visionKey);
         const seeing = pickVisionModel(available, usedModel);
         if (seeing) {
           usedModel = seeing;
-          outcome = await complete(baseURL, apiKey, usedModel, usesGroq, messages, preferredVisionModels);
+          outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, messages, preferredVisionModels, 8192);
         } else {
           return json({
             error: `vision : le modèle « ${usedModel} » ne lit pas les images, et aucun modèle de vision `
@@ -173,6 +197,14 @@ Deno.serve(async (request) => {
               + `Modèles disponibles : ${available.join(", ") || "(liste indisponible)"}.`,
           }, 502);
         }
+      }
+      // Trop gros pour le quota (Groq gratuit : 7 000 jetons d'entrée par
+      // minute) : les images suffisent, on retire le texte d'appoint.
+      if ("error" in outcome && /413|too large|tokens per minute/i.test(outcome.error) && text) {
+        const imagesOnly = [{ role: "system", content: VISION_INSTRUCTIONS },
+          { role: "user", content: [{ ...(content[0] as Record<string, unknown>),
+            text: String((content[0] as { text: string }).text).split("\n\nTexte extrait")[0] }, ...content.slice(1)] }];
+        outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, imagesOnly, preferredVisionModels, 8192);
       }
       if ("error" in outcome) return json({ error: `vision (${usedModel}) : ${outcome.error}` }, 502);
       usedModel = outcome.model;
@@ -219,6 +251,7 @@ async function complete(
   usesGroq: boolean,
   messages: Array<{ role: string; content: unknown }>,
   fallbackModels: string[],
+  maxTokens = 4096,
 ): Promise<Outcome> {
   let usedModel = model;
   let structured = true;
@@ -229,7 +262,7 @@ async function complete(
     // budget de sortie. Seuls les modèles qui raisonnent (`gpt-oss`) acceptent
     // ce paramètre ; un modèle de vision le refuserait.
     const response = await callProvider(baseURL, apiKey, usedModel, messages,
-                                        structured, usesGroq && usedModel.includes("gpt-oss"));
+                                        structured, usesGroq && usedModel.includes("gpt-oss"), maxTokens);
     detail = await bodyText(response);
     return response;
   };
@@ -427,12 +460,13 @@ function callProvider(
   messages: Array<{ role: string; content: unknown }>,
   structured = true,
   lowReasoning = false,
+  maxTokens = 4096,
 ): Promise<Response> {
   const payload: Record<string, unknown> = { model, temperature: 0, messages };
   if (structured) payload.response_format = { type: "json_object" };
   // Une limite explicite : le défaut du fournisseur peut être plus court que la
   // liste d'exercices, et un JSON tronqué est un JSON invalide.
-  payload.max_completion_tokens = 4096;
+  payload.max_completion_tokens = maxTokens;
   // Les modèles `gpt-oss` **raisonnent** avant de répondre. Sans bride, ils
   // dépensent le quota en raisonnement et rendent parfois un contenu vide : la
   // réponse existe, mais dans `reasoning_content`. « low » suffit largement pour
@@ -453,14 +487,14 @@ function callProvider(
  *
  * Groq écrit « Please try again in 9.96s ». On le lit plutôt que d'attendre une
  * durée fixe : trop courte, la reprise échoue ; trop longue, on fait patienter
- * pour rien. Borné à 20 s, au-delà desquels mieux vaut rendre la main.
+ * pour rien. Borné à 60 s : le quota de Groq se compte par minute.
  */
 function retryDelay(detail: string): number {
   const match = detail.match(/try again in ([0-9.]+)\s*s/i);
   if (!match) return detail.includes("429") ? 5_000 : 0;
   const seconds = Number(match[1]);
   if (!Number.isFinite(seconds)) return 5_000;
-  return Math.min(20_000, Math.max(1_000, Math.ceil(seconds * 1000) + 500));
+  return Math.min(60_000, Math.max(1_000, Math.ceil(seconds * 1000) + 500));
 }
 
 /** Le corps d'une réponse en texte, borné — sans jamais lever d'exception. */

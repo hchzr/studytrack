@@ -435,7 +435,15 @@ struct ExerciseRow: View {
                     Text(exercise.title)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                }
+                // L'énoncé en une ligne : un exercice sans questions n'était
+                // sinon qu'un numéro. Le détail l'affiche en entier.
+                if !exercise.statement.isEmpty {
+                    Text(exercise.statement)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(exercise.hasSubQuestions ? 1 : 2)
                 }
                 if exercise.isDone, let correctness = exercise.correctness {
                     IconLabel(icon: correctness.icon,
@@ -620,6 +628,11 @@ struct ExerciseDetailSheet: View {
                     VStack(alignment: .leading, spacing: Layout.tight) {
                         if !exercise.title.isEmpty {
                             Text(exercise.title).font(.headline)
+                        }
+                        if !exercise.statement.isEmpty {
+                            Text(exercise.statement)
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Text([exercise.series?.course?.displayCode, exercise.series?.title,
                               exercise.isBonus ? "bonus" : nil].compactMap { $0 }.joined(separator: " · "))

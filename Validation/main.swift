@@ -373,6 +373,9 @@ let visionParsed = SeriesAIParsing.parse(visionAnswer).first?.exercises
 check(DetectedSubQuestion.outline(visionParsed?.first?.subQuestions ?? []) == "1(a,b),2(a,b,c)",
       "réponse « vision » : arbre lu, ponctuation retirée — \(DetectedSubQuestion.outline(visionParsed?.first?.subQuestions ?? []))")
 check(visionParsed?.first?.pageIndex == 0, "la page du modèle (1…) devient un index (0…)")
+let withStatement = SeriesAIParsing.parse(#"{"series":[{"number":3,"exercises":[{"number":"3.2","title":"Monotonie","statement":"Montrer que x_n est croissante ⇔ ad − bc ≥ 0"}]}]}"#)
+check(withStatement.first?.exercises.first?.statement == "Montrer que x_n est croissante ⇔ ad − bc ≥ 0",
+      "l'énoncé d'un exercice sans questions est lu")
 check(DetectedSubQuestion.outline(visionParsed?.last?.subQuestions ?? []) == "part,1,2", "une partie sans numéro est gardée")
 
 // La fusion ne mélange jamais deux numérotations : la plus complète gagne.
@@ -2705,6 +2708,13 @@ do {
     check(merged.series.title == "Suites", "un titre vide à l'import ne l'efface pas")
     let relu = merged.series.exercises.first { $0.exerciseNumber == "2.2" }
     check(relu?.title == "Relu" && relu?.subQuestionLabel == "1/4", "arbre remplacé, case 1.a conservée — \(relu?.subQuestionLabel ?? "-")")
+    relu?.statement = "Montrer la borne"
+    var noStatement = SeriesDraft(series: merged.series)
+    for index in noStatement.exercises.indices { noStatement.exercises[index].statement = "" }
+    SeriesDraftWriter.write(noStatement, to: draftCourse, mode: .importMerge, context: nil)
+    check(relu?.statement == "Montrer la borne", "un import sans énoncé n'efface pas celui qui existe")
+    SeriesDraftWriter.write(noStatement, to: draftCourse, mode: .edit, context: nil)
+    check(relu?.statement == "", "…mais le vider à la main, si")
 }
 
 print("== NextActionEngine : une seule prochaine action ==")

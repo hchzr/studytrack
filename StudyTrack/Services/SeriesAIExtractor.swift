@@ -286,7 +286,7 @@ enum SeriesAIExtractor {
                     // sous-questions. Le texte reste le repli, dans le même maillon.
                     if !pageImages.isEmpty {
                         do {
-                            let seen = try await extractSharedVision(pageImages, seriesHint: seriesHint)
+                            let seen = try await extractSharedVision(pageImages, text: prepared, seriesHint: seriesHint)
                             if !seen.isEmpty { return (seen, .vision) }
                         } catch {
                             if Task.isCancelled { throw error }
@@ -317,10 +317,13 @@ enum SeriesAIExtractor {
 
     /// Les pages en image. Plus lent (un paquet de cinq pages par appel côté
     /// serveur), d'où un délai plus large.
-    private static func extractSharedVision(_ pages: [Data], seriesHint: Int?) async throws -> [DetectedSeries] {
-        var body: [String: Any] = ["images": pages.map { $0.base64EncodedString() }]
+    /// Le texte extrait part avec les images : ses numéros et son vocabulaire
+    /// sont exacts, ses formules non — le modèle prend l'un et l'autre où ils sont
+    /// fiables.
+    private static func extractSharedVision(_ pages: [Data], text: String, seriesHint: Int?) async throws -> [DetectedSeries] {
+        var body: [String: Any] = ["images": pages.map { $0.base64EncodedString() }, "text": text]
         if let seriesHint { body["seriesHint"] = seriesHint }
-        return try await callShared(body, timeout: 120)
+        return try await callShared(body, timeout: 150)
     }
 
     private static func callShared(_ body: [String: Any], timeout: TimeInterval) async throws -> [DetectedSeries] {

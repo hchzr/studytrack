@@ -85,6 +85,8 @@ struct ExerciseDraft: Identifiable, Equatable {
     var minor: String
     var title: String
     var isBonus: Bool
+    /// Ce que l'exercice demande, en une phrase.
+    var statement: String = ""
     var subQuestions: [DetectedSubQuestion] = []
     /// Où l'exercice se trouve dans le PDF importé, pour l'aperçu.
     var pageIndex: Int?
@@ -105,6 +107,7 @@ struct ExerciseDraft: Identifiable, Equatable {
     init(detected: DetectedExercise) {
         self.init(minor: detected.number.split(separator: ".").last.map(String.init) ?? detected.number,
                   title: detected.title, isBonus: detected.isBonus, subQuestions: detected.subQuestions)
+        statement = detected.statement
         pageIndex = detected.pageIndex
         top = detected.verticalPosition
     }
@@ -113,6 +116,7 @@ struct ExerciseDraft: Identifiable, Equatable {
         self.init(minor: exercise.exerciseNumber.split(separator: ".").last.map(String.init) ?? exercise.exerciseNumber,
                   title: exercise.title, isBonus: exercise.isBonus, subQuestions: exercise.detectedSubQuestions)
         existingID = exercise.id
+        statement = exercise.statement
         isDone = exercise.isDone
     }
 
@@ -396,6 +400,9 @@ enum SeriesDraftWriter {
             if let match {
                 match.exerciseNumber = number
                 match.title = itemTitle
+                // Un import sans énoncé (lecture locale) n'efface pas celui qu'on avait.
+                let statement = item.statement.trimmingCharacters(in: .whitespacesAndNewlines)
+                if mode == .edit || !statement.isEmpty { match.statement = statement }
                 match.isBonus = item.isBonus
                 match.sortOrder = order
                 // Réécrire un arbre identique effacerait les dates des cases
@@ -408,6 +415,7 @@ enum SeriesDraftWriter {
             } else {
                 let exercise = Exercise(series: series, exerciseNumber: number, title: itemTitle,
                                         isBonus: item.isBonus, sortOrder: order)
+                exercise.statement = item.statement.trimmingCharacters(in: .whitespacesAndNewlines)
                 context?.insert(exercise)
                 if context == nil { series.exercises.append(exercise) }
                 exercise.replaceSubQuestions(with: item.subQuestions, in: context)
