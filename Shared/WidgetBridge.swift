@@ -16,6 +16,13 @@ struct WidgetSnapshot: Codable, Equatable {
     var nextExamTitle: String?
     var nextExamCourse: String?
     var nextExamDate: Date?
+    /// La prochaine action — la même que l'accueil et le dock (`NextActionEngine`).
+    /// Facultatifs : un instantané écrit par une version précédente se relit.
+    var next: WidgetAction?
+    /// Avancement de la semaine, cours par cours.
+    var courses: [WidgetCourse]?
+    /// Chrono en cours, pour l'écran verrouillé.
+    var timer: WidgetTimer?
 
     static let empty = WidgetSnapshot(updatedAt: .distantPast,
                                       weekSeconds: 0,
@@ -31,6 +38,46 @@ struct WidgetSnapshot: Codable, Equatable {
     var hasContent: Bool {
         updatedAt != .distantPast
     }
+}
+
+/// Une action à faire, avec de quoi la cocher ou la démarrer depuis un widget.
+struct WidgetAction: Codable, Equatable {
+    /// `exercise` ou `theory` quand elle se coche d'un geste ; `nil` sinon
+    /// (réviser pour une évaluation ne se « coche » pas).
+    var targetKind: String?
+    var targetID: String?
+    var courseID: String
+    var courseCode: String
+    var title: String
+    var detail: String
+    var reason: String
+    var colorHex: String
+    var taskType: String
+    var icon: String
+    /// Déjà cochée depuis le widget, en attente de l'app.
+    var isDone: Bool = false
+
+    var canComplete: Bool { targetKind != nil && targetID != nil }
+}
+
+struct WidgetCourse: Codable, Equatable, Identifiable {
+    var id: String
+    var code: String
+    var colorHex: String
+    var done: Int
+    var total: Int
+    /// « reste 2 théorie · 1 exo », « à jour », « rien de prévu ».
+    var summary: String
+}
+
+struct WidgetTimer: Codable, Equatable {
+    var label: String
+    var colorHex: String
+    /// Début équivalent : `Text(timerInterval:)` compte depuis cet instant, le
+    /// temps déjà accumulé inclus.
+    var effectiveStart: Date
+    var isRunning: Bool
+    var elapsedWhenPaused: TimeInterval
 }
 
 struct WidgetTodo: Codable, Equatable, Identifiable {
@@ -119,4 +166,20 @@ enum WidgetLink {
     static let today = URL(string: "studytrack://today")!
     static let courses = URL(string: "studytrack://courses")!
     static let agenda = URL(string: "studytrack://agenda")!
+
+    /// Démarre le chrono sur cette action : `studytrack://focus?course=…&type=…&label=…`.
+    static func start(_ action: WidgetAction) -> URL {
+        var components = URLComponents()
+        components.scheme = "studytrack"
+        components.host = "focus"
+        components.queryItems = [URLQueryItem(name: "course", value: action.courseCode),
+                                 URLQueryItem(name: "type", value: action.taskType),
+                                 URLQueryItem(name: "label", value: "\(action.courseCode) · \(action.title)")]
+        return components.url ?? focus
+    }
+
+    /// Ouvre un cours : `studytrack://course?id=…`.
+    static func course(_ id: String) -> URL {
+        URL(string: "studytrack://course?id=\(id)") ?? courses
+    }
 }

@@ -2529,6 +2529,20 @@ do {
 }
 
 print("== WidgetFormat : heures en dixièmes arrondis ==")
+// Un instantané écrit par la version précédente (sans `next`, `courses`,
+// `timer`) doit se relire : sinon, après une mise à jour, les widgets restent
+// vides jusqu'à la prochaine ouverture de l'app.
+let oldSnapshot = #"{"updatedAt":"2026-09-20T10:00:00Z","weekSeconds":3600,"streak":2,"level":1,"xp":10,"todoCount":1,"todos":[]}"#
+let snapshotDecoder = JSONDecoder()
+snapshotDecoder.dateDecodingStrategy = .iso8601
+let decodedOld = try? snapshotDecoder.decode(WidgetSnapshot.self, from: Data(oldSnapshot.utf8))
+check(decodedOld?.weekSeconds == 3600 && decodedOld?.next == nil && decodedOld?.courses == nil,
+      "un instantané de la version précédente se relit")
+let startLink = WidgetLink.start(WidgetAction(targetKind: "exercise", targetID: "X", courseID: "C", courseCode: "CS-250",
+                                          title: "Exercice 3.2", detail: "", reason: "À refaire", colorHex: "#000000",
+                                          taskType: "exercise", icon: "timer"))
+check(startLink.absoluteString.hasPrefix("studytrack://focus?course=CS-250&type=exercise&label="),
+      "le lien « démarrer » porte le cours, le type et le libellé — \(startLink.absoluteString)")
 check(WidgetFormat.hours(45 * 60) == "45 min", "45 min")
 check(WidgetFormat.hours(2 * 3600) == "2 h", "2 h")
 check(WidgetFormat.hours(95 * 60) == "1,6 h", "1 h 35 → 1,6 h (l'ancien code donnait 1,3 h)")

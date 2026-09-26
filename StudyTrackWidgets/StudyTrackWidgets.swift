@@ -325,9 +325,15 @@ struct StudyActivityTimer: View {
 @main
 struct StudyTrackWidgetsBundle: WidgetBundle {
     var body: some Widget {
+        NextActionWidget()
+        WeekCoursesWidget()
+        ExamCountdownWidget()
         StudyTrackWidget()
         StudyTrackTimerWidget()
         StudyActivityWidget()
+        if #available(iOS 18.0, *) {
+            FocusControl()
+        }
     }
 }
 

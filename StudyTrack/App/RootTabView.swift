@@ -54,6 +54,14 @@ struct RootTabView: View {
         .onOpenURL { url in
             handle(url)
         }
+        // Les widgets suivent **chaque** enregistrement — une question cochée, une
+        // série importée —, pas seulement le passage en arrière-plan.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: FocusTimerStore.didSave)) { _ in
+            WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
+        }
         .onChange(of: scenePhase) { _, phase in
             // Alimente le widget quand l'app passe au premier plan ou en arrière-plan.
             if phase == .active || phase == .background {
@@ -71,6 +79,10 @@ struct RootTabView: View {
                 // Même principe pour un fichier partagé depuis une autre app.
                 Task { @MainActor in
                     FocusTimerCommandHandler.consumePending(container: app)
+                    // Les coches faites dans un widget pendant que l'app dormait.
+                    if WidgetSnapshotWriter.applyPendingCompletions(context: context) > 0 {
+                        WidgetSnapshotWriter.refresh(context: context, settings: app.settings)
+                    }
                     // Un PDF partagé depuis une autre app : l'accueil ouvre
                     // l'import. Il était auparavant retiré du dépôt… et jeté.
                     if let shared = PendingImportBridge.take() {
@@ -121,10 +133,18 @@ struct RootTabView: View {
             }
             let type = TaskType(rawValue: value("type") ?? "") ?? .exercise
             let code = value("course") ?? ""
+            let label = value("label") ?? (code.isEmpty ? "Session libre" : "\(code) · \(type.label)")
             app.router.startFocus(courseID: nil,
                                   courseCode: code,
                                   taskType: type,
-                                  label: code.isEmpty ? "Session libre" : "\(code) · \(type.label)")
+                                  label: label)
+        case "course":
+            // `studytrack://course?id=…` — depuis le widget « Cours de la semaine ».
+            if let id = value("id").flatMap(UUID.init(uuidString:)) {
+                app.router.openCourse(id)
+            } else {
+                app.router.selectedTab = .courses
+            }
         case "tasks":
             app.router.selectedTab = .today
             app.router.showingTasks = true

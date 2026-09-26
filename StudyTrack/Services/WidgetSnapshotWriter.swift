@@ -42,9 +42,99 @@ enum WidgetSnapshotWriter {
             },
             nextExamTitle: nextExam?.title,
             nextExamCourse: nextExam?.course?.code,
-            nextExamDate: nextExam?.date)
+            nextExamDate: nextExam?.date,
+            next: NextActionEngine.actions(for: tracked, limit: 1).first.map(widgetAction),
+            courses: tracked.map(widgetCourse),
+            timer: widgetTimer(FocusTimerStore.load(), courses: courses))
 
         WidgetBridge.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Rafraîchissement **groupé** : plusieurs enregistrements rapprochés (cocher
+    /// trois questions de suite) ne rechargent les widgets qu'une fois.
+    private static var pending: Task<Void, Never>?
+
+    static func scheduleRefresh(context: ModelContext, settings: SettingsStore) {
+        pending?.cancel()
+        pending = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            refresh(context: context, settings: settings)
+        }
+    }
+
+    private static func widgetAction(_ action: NextAction) -> WidgetAction {
+        let kind: String?
+        switch action.reason {
+        case .exam: kind = nil
+        case .planned(let planned) where planned == .video: kind = "theory"
+        case .planned(let planned) where planned == .correction: kind = nil
+        default: kind = "exercise"
+        }
+        return WidgetAction(targetKind: action.targetID == nil ? nil : kind,
+                            targetID: action.targetID?.uuidString,
+                            courseID: action.courseID.uuidString,
+                            courseCode: action.courseCode,
+                            title: MathMarkup.plain(action.title),
+                            detail: MathMarkup.plain(action.detail),
+                            reason: action.reasonLabel,
+                            colorHex: action.colorHex,
+                            taskType: action.taskType.rawValue,
+                            icon: action.icon)
+    }
+
+    private static func widgetCourse(_ course: Course) -> WidgetCourse {
+        let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
+        let total = week.videoCount + week.exerciseCount
+        let done = week.watchedCount + week.doneCount
+        let theory = week.videoCount - week.watchedCount
+        let exercises = week.exerciseCount - week.doneCount
+        var parts: [String] = []
+        if theory > 0 { parts.append("\(theory) théorie") }
+        if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
+        let summary = total == 0 ? "rien de prévu" : (parts.isEmpty ? "à jour" : "reste " + parts.joined(separator: " · "))
+        return WidgetCourse(id: course.id.uuidString, code: course.displayCode, colorHex: course.colorHex,
+                            done: done, total: total, summary: summary)
+    }
+
+    private static func widgetTimer(_ state: FocusTimerState?, courses: [Course]) -> WidgetTimer? {
+        guard let state, state.isRunning || state.isRestorable() else { return nil }
+        let course = courses.first { $0.id == state.courseID }
+        let label = state.contextLabel.isEmpty
+            ? [course?.displayCode ?? "Session libre", state.taskType.label].joined(separator: " · ")
+            : state.contextLabel
+        let elapsed = state.elapsed()
+        return WidgetTimer(label: label, colorHex: course?.colorHex ?? "#5247E6",
+                           effectiveStart: Date().addingTimeInterval(-elapsed),
+                           isRunning: state.isRunning, elapsedWhenPaused: elapsed)
+    }
+
+    /// Applique les coches faites dans un widget pendant que l'app dormait.
+    static func applyPendingCompletions(context: ModelContext) -> Int {
+        var applied = 0
+        for (kind, raw) in PendingWidgetActions.take() {
+            guard let id = UUID(uuidString: raw) else { continue }
+            switch kind {
+            case "exercise":
+                let descriptor = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
+                if let exercise = try? context.fetch(descriptor).first, !exercise.isDone {
+                    if exercise.hasSubQuestions { exercise.setSubQuestions(done: true) } else { exercise.doneAt = Date() }
+                    if exercise.confidence == nil { exercise.confidence = .medium }
+                    if exercise.redoRequired { exercise.redoRequired = false }
+                    applied += 1
+                }
+            case "theory":
+                let descriptor = FetchDescriptor<TheoryItem>(predicate: #Predicate { $0.id == id })
+                if let item = try? context.fetch(descriptor).first, item.watchedAt == nil {
+                    item.watchedAt = Date()
+                    applied += 1
+                }
+            default:
+                continue
+            }
+        }
+        if applied > 0 { try? context.save() }
+        return applied
     }
 }
