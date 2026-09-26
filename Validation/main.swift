@@ -2717,6 +2717,33 @@ do {
     check(relu?.statement == "", "…mais le vider à la main, si")
 }
 
+print("== MathMarkup : formules lisibles ==")
+do {
+    typealias M = MathMarkup
+    func r(_ s: String) -> [String] {
+        M.runs(s).map { run in
+            switch run.style {
+            case .normal: return run.text
+            case .subscripted: return "_[\(run.text)]"
+            case .superscripted: return "^[\(run.text)]"
+            }
+        }
+    }
+    check(r("a_n") == ["a", "_[n]"], "indice simple — \(r("a_n"))")
+    check(r("x_{n+1} = 2") == ["x", "_[n+1]", " = 2"], "indice entre accolades — \(r("x_{n+1} = 2"))")
+    check(r("n^2+1") == ["n", "^[2]", "+1"], "exposant — \(r("n^2+1"))")
+    check(M.plain("|a_n - \\ell| \\le \\varepsilon") == "|an - ℓ| ≤ ε", "symboles — \(M.plain("|a_n - \\ell| \\le \\varepsilon"))")
+    check(r("$\\frac{1}{2}$") == ["^[1]", "⁄", "_[2]"], "fraction courte en forme de fraction — \(r("$\\frac{1}{2}$"))")
+    check(M.plain("\\frac{an+b}{cn+d}") == "(an+b)/(cn+d)", "fraction longue parenthésée — \(M.plain("\\frac{an+b}{cn+d}"))")
+    check(M.plain("\\sqrt{n^2+2}") == "√(n2+2)", "racine d'une expression — \(M.plain("\\sqrt{n^2+2}"))")
+    check(M.plain("\\sqrt{x}") == "√x", "racine simple")
+    check(M.plain("n \\in \\mathbb{N}^*") == "n ∈ ℕ*", "ensembles — \(M.plain("n \\in \\mathbb{N}^*"))")
+    check(M.plain("\\lim_{n \\to \\infty} a_n = L") == "limn → ∞ an = L", "limite — \(M.plain("\\lim_{n \\to \\infty} a_n = L"))")
+    check(r("prix _ unitaire") == ["prix _ unitaire"], "un « _ » isolé entre espaces reste du texte")
+    check(M.plain("\\unknown{x}") == "unknownx", "commande inconnue : son nom, pas un trou")
+    check(!M.hasMarkup("Montrer la borne"), "texte sans formule : rien à faire")
+}
+
 print("== NextActionEngine : une seule prochaine action ==")
 do {
     let now = Date()

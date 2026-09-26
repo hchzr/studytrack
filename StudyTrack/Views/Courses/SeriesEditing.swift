@@ -122,8 +122,7 @@ struct ExerciseDraftSummary: View {
                 .frame(minWidth: 40, alignment: .leading)
             VStack(alignment: .leading, spacing: Layout.micro) {
                 HStack(spacing: Layout.snug) {
-                    Text(exercise.title.isEmpty ? "Sans titre" : exercise.title)
-                        .font(.subheadline)
+                    MathText(exercise.title.isEmpty ? "Sans titre" : exercise.title, font: .subheadline)
                         .foregroundStyle(exercise.title.isEmpty ? .secondary : .primary)
                         .lineLimit(1)
                     if exercise.isBonus {
@@ -140,8 +139,7 @@ struct ExerciseDraftSummary: View {
                     }
                 }
                 if !exercise.statement.isEmpty {
-                    Text(exercise.statement)
-                        .font(.caption)
+                    MathText(exercise.statement, font: .caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -197,6 +195,12 @@ struct ExerciseDraftEditor: View {
                 TextField("Intitulé (facultatif)", text: $exercise.title)
                 TextField("Énoncé : ce qu'il faut faire", text: $exercise.statement, axis: .vertical)
                     .lineLimit(1...4)
+                // Aperçu rendu : on écrit « a_n », on lit aₙ.
+                if MathMarkup.hasMarkup(exercise.statement) {
+                    MathText(exercise.statement, font: .subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHint("Aperçu de l'énoncé")
+                }
                 Toggle(isOn: $exercise.isBonus) {
                     Label("Bonus", systemImage: "star")
                 }

@@ -65,7 +65,7 @@ Réponds UNIQUEMENT par un objet JSON :
 // d'un cas réel (Analyse I, série 03).
 const VISION_INSTRUCTIONS = `Tu lis des pages d'une série d'exercices (images) et tu en extrais la STRUCTURE.
 Réponds UNIQUEMENT par un objet JSON :
-{"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","statement":"Lire sur les graphes de (x_n) et (y_n) des ensembles d'indices et un rang N","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]},{"number":"3.2","title":"Monotonie d'une suite homographique","statement":"Montrer que x_n = (an+b)/(cn+d) est croissante ⇔ ad − bc ≥ 0","isBonus":false,"page":2}]}]}
+{"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","statement":"Lire sur les graphes de (x_n) et (y_n) des ensembles d'indices et un rang N","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]},{"number":"3.2","title":"Monotonie d'une suite homographique","statement":"Montrer que x_n = \\\\frac{an+b}{cn+d} est croissante ⇔ ad − bc ≥ 0","isBonus":false,"page":2}]}]}
 
 Règles :
 - « exercises » = les EXERCICES (Ex-03-01, Exercice 2…). « number » = « série.exercice ».
@@ -76,9 +76,10 @@ Règles :
 - Une consigne APRÈS la liste (« Ensuite, pour la suite … donner … ») → une partie {"label":null,"kind":"part"} en fin.
 - Une liste de CONDITIONS ou d'hypothèses (« satisfait les conditions suivantes : 1) … 2) … ») n'est PAS du travail : pas de « parts ».
 - Un exercice sans question numérotée : omets « parts ».
-- « text » : court (≤ 80 caractères), formules en notation simple (x_n, ≤, √, lim), dans la langue du PDF. N'invente rien.
+- « text » : court (≤ 80 caractères), dans la langue du PDF. N'invente rien.
+- Formules (dans « text » et « statement ») : LaTeX léger SANS $ : indices « x_n », « a_{2k+1} », exposants « n^2 », fractions « \\frac{an+b}{cn+d} », racines « \\sqrt{n^2+2} », « \\lim_{n \\to \\infty} », et les symboles en Unicode (≤ ≥ ≠ ∈ ∞ ℕ ℝ ε ℓ ⇔). Dans le JSON, chaque barre oblique inverse est doublée (« \\\\frac »).
 - « title » : 2 à 6 mots qui nomment la tâche, jamais l'énoncé recopié.
-- « statement » : TOUJOURS rempli, ≤ 140 caractères : ce que l'exercice demande de faire, verbe à l'infinitif, avec les objets mathématiques essentiels (« Montrer que x_n = (an+b)/(cn+d) est croissante ⇔ ad − bc ≥ 0 »). C'est la seule description d'un exercice sans questions : ne le laisse jamais vide.
+- « statement » : TOUJOURS rempli, ≤ 140 caractères : ce que l'exercice demande de faire, verbe à l'infinitif, avec les objets mathématiques essentiels (« Montrer que x_n = \\frac{an+b}{cn+d} est croissante ⇔ ad − bc ≥ 0 »). C'est la seule description d'un exercice sans questions : ne le laisse jamais vide.
 - Si un « Texte extrait » est fourni, sers-t'en pour les numéros et le vocabulaire exacts ; ses formules sont souvent abîmées (symboles ≤ ≥ perdus, fractions éclatées) : pour les formules, fie-toi à l'image.
 - « page » : la page (1, 2, …) où l'exercice commence, dans l'ordre des images reçues.
 - « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
@@ -390,7 +391,7 @@ async function complete(
     };
   }
   try {
-    const parsed = JSON.parse(raw.slice(start, end + 1));
+    const parsed = JSON.parse(latexSafe(raw.slice(start, end + 1)));
     return { series: Array.isArray(parsed?.series) ? parsed.series : [], model: usedModel, structured };
   } catch (error) {
     // `finish_reason` dit **pourquoi** la réponse s'arrête : « length » signifie
@@ -560,6 +561,17 @@ const preferredVisionModels = [
   "google/gemini-2.5-flash",
   "gpt-4o-mini",
 ];
+
+/**
+ * Double la barre oblique d'une commande LaTeX laissée seule dans le JSON.
+ *
+ * `"\frac{a}{b}"` écrit avec **une** barre : `\f` est un saut de page pour JSON
+ * (« rac{a}{b} » à l'écran), `\s` de `\sqrt` une erreur qui fait perdre toute
+ * la réponse. Une barre suivie de deux lettres ou plus est une commande.
+ */
+function latexSafe(json: string): string {
+  return json.replace(/(?<!\\)\\(?=[a-zA-Z]{2,})/g, "\\\\");
+}
 
 /** Les modèles à essayer en premier, du plus léger au plus capable. */
 const preferredModels = [

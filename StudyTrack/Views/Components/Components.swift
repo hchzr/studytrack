@@ -609,3 +609,55 @@ struct FlowLayout: SwiftUI.Layout {
         }
     }
 }
+
+// MARK: - Formules
+
+/// Un texte avec des formules : indices et exposants à leur place, symboles
+/// mathématiques au lieu des commandes (`a_n` → aₙ, `\le` → ≤, `\frac{1}{2}` → ½).
+///
+/// Le découpage vit dans `MathMarkup` (pur, testé) ; cette vue ne fait que
+/// l'afficher. Les indices et exposants prennent une taille de texte plus petite
+/// **du même système** : ils suivent la taille de texte du lecteur.
+struct MathText: View {
+    let source: String
+    var font: Font = .body
+
+    @ScaledMetric(relativeTo: .body) private var superOffset: CGFloat = 5
+    @ScaledMetric(relativeTo: .body) private var subOffset: CGFloat = -3
+
+    init(_ source: String, font: Font = .body) {
+        self.source = source
+        self.font = font
+    }
+
+    var body: some View {
+        rendered
+            .font(font)
+            .accessibilityLabel(MathMarkup.plain(source))
+    }
+
+    private var rendered: Text {
+        guard MathMarkup.hasMarkup(source) else { return Text(source) }
+        return MathMarkup.runs(source).reduce(Text("")) { text, run in
+            switch run.style {
+            case .normal:
+                return text + Text(run.text)
+            case .superscripted:
+                return text + Text(run.text).font(Self.smaller(font)).baselineOffset(superOffset)
+            case .subscripted:
+                return text + Text(run.text).font(Self.smaller(font)).baselineOffset(subOffset)
+            }
+        }
+    }
+
+    /// Le style de texte d'un cran plus petit, pour les indices et exposants.
+    static func smaller(_ font: Font) -> Font {
+        switch font {
+        case .largeTitle, .title: return .title3
+        case .title2, .title3: return .body
+        case .headline, .body: return .footnote
+        case .callout, .subheadline: return .caption
+        default: return .caption2
+        }
+    }
+}
