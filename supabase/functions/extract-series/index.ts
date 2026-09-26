@@ -131,6 +131,7 @@ Deno.serve(async (request) => {
   let text = "";
   let images: string[] = [];
   let seriesHint: number | null = null;
+  let listOnly = false;
   try {
     const body = await request.json();
     text = typeof body?.text === "string" ? body.text : "";
@@ -138,10 +139,23 @@ Deno.serve(async (request) => {
       ? body.images.filter((image: unknown) => typeof image === "string" && image.length > 0)
       : [];
     seriesHint = typeof body?.seriesHint === "number" ? body.seriesHint : null;
+    listOnly = body?.listModels === true;
   } catch {
     return json({ error: "corps JSON attendu : {\"text\": …} ou {\"images\": [...]}" }, 400);
   }
   text = text.slice(0, MAX_CHARACTERS).trim();
+
+  // ── Diagnostic : les modèles que les clés peuvent utiliser (identifiants
+  // seulement, jamais de secret). Sert à choisir LLM_VISION_MODEL.
+  if (listOnly) {
+    const visionBase = (Deno.env.get("LLM_VISION_BASE_URL")?.trim() || baseURL).replace(/\/$/, "");
+    const visionKey = Deno.env.get("LLM_VISION_API_KEY")?.trim() || apiKey;
+    return json({
+      text: { baseURL, model, models: await listModels(baseURL, apiKey) },
+      vision: { baseURL: visionBase, model: Deno.env.get("LLM_VISION_MODEL")?.trim() ?? null,
+                models: await listModels(visionBase, visionKey) },
+    });
+  }
 
   // ── Mode vision : les pages en image, découpées par paquets. ──────────────
   if (images.length > 0) {
@@ -150,67 +164,67 @@ Deno.serve(async (request) => {
     // bien (Gemini, Claude, GPT-4.1 — toute API compatible OpenAI).
     const visionBase = (Deno.env.get("LLM_VISION_BASE_URL")?.trim() || baseURL).replace(/\/$/, "");
     const visionKey = Deno.env.get("LLM_VISION_API_KEY")?.trim() || apiKey;
-    const visionOnGroq = visionBase === GROQ;
     const explicitVisionModel = Deno.env.get("LLM_VISION_MODEL")?.trim();
-    if (!explicitVisionModel && Deno.env.get("LLM_VISION_BASE_URL")?.trim() && !visionOnGroq) {
+    if (!explicitVisionModel && Deno.env.get("LLM_VISION_BASE_URL")?.trim() && visionBase !== GROQ) {
       return json({ error: "LLM_VISION_BASE_URL est posé sans LLM_VISION_MODEL : "
         + "`supabase secrets set LLM_VISION_MODEL=<modèle de ce fournisseur>`." }, 503);
     }
-    const visionModel = explicitVisionModel
-      || (visionOnGroq ? "qwen/qwen3.8-27b" : configuredModel!);
+
+    // La chaîne de secours. Un modèle servi est parfois **saturé** (Gemini :
+    // « high demand », 503) ou **sans quota** (429) : ce n'est pas une raison
+    // de rendre la main. On essaie, dans l'ordre : le modèle choisi, les autres
+    // modèles de vision récents du même fournisseur, puis Qwen chez Groq.
+    const candidates: Candidate[] = [];
+    const add = (candidate: Candidate) => {
+      if (!candidates.some((c) => c.base === candidate.base && c.model === candidate.model)) candidates.push(candidate);
+    };
+    add({ base: visionBase, key: visionKey,
+          model: explicitVisionModel || (visionBase === GROQ ? GROQ_VISION : configuredModel!) });
+    const available = await listModels(visionBase, visionKey);
+    for (const model of pickVisionModels(available)) add({ base: visionBase, key: visionKey, model });
+    if (usesGroq) add({ base: GROQ, key: apiKey, model: GROQ_VISION });
+
     const pages = images.slice(0, MAX_PAGES);
     const collected: unknown[] = [];
-    let usedModel = visionModel;
-    // Groq gratuit plafonne à 7 000 jetons d'entrée **par minute** : trois pages
-    // et la consigne le dépassent déjà. Deux pages par appel y tiennent ; les
-    // appels suivants attendent le délai que Groq indique (repli 429).
-    const perCall = visionOnGroq ? 2 : MAX_IMAGES_PER_CALL;
-    for (let start = 0; start < pages.length; start += perCall) {
-      const chunk = pages.slice(start, start + perCall);
-      const content: unknown[] = [{
-        type: "text",
-        text: `Pages ${start + 1} à ${start + chunk.length} du document`
-          + (seriesHint ? ` (série ${seriesHint} d'après l'en-tête ou le nom du fichier)` : "")
-          + ". Numérote « page » à partir de " + (start + 1) + ". Réponds en JSON."
-          + (text ? `\n\nTexte extrait du PDF (numéros fiables, formules abîmées) :\n${text}` : ""),
-      }];
-      for (const image of chunk) {
-        content.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } });
-      }
-      const messages = [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }];
-      let outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, messages, preferredVisionModels, 8192);
-      // Un modèle de **texte** refuse les images (« content must be a string »,
-      // « does not support image input »…). C'est le cas quand LLM_VISION_MODEL
-      // n'est pas posé et que LLM_MODEL est un modèle de texte : on cherche chez
-      // le fournisseur un modèle qui voit, et on réessaie une fois.
-      if ("error" in outcome && rejectsImages(outcome.error)) {
-        const available = await listModels(visionBase, visionKey);
-        const seeing = pickVisionModel(available, usedModel);
-        if (seeing) {
-          usedModel = seeing;
-          outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, messages, preferredVisionModels, 8192);
-        } else {
-          return json({
-            error: `vision : le modèle « ${usedModel} » ne lit pas les images, et aucun modèle de vision `
-              + "n'a été reconnu chez ce fournisseur. Pose-en un : "
-              + "`supabase secrets set LLM_VISION_MODEL=<modèle qui accepte les images>`. "
-              + `Modèles disponibles : ${available.join(", ") || "(liste indisponible)"}.`,
-          }, 502);
+    const failures: string[] = [];
+    let current = 0;
+    let usedModel = candidates[0].model;
+
+    const see = async (first: number, count: number): Promise<Outcome> => {
+      for (; current < candidates.length; current++) {
+        const candidate = candidates[current];
+        const onGroq = candidate.base === GROQ;
+        // Groq gratuit plafonne à 7 000 jetons d'entrée par minute : deux pages
+        // par appel, et sans le texte d'appoint.
+        const step = onGroq ? 2 : count;
+        const series: unknown[] = [];
+        let failed: string | null = null;
+        for (let start = first; start < first + count; start += step) {
+          const slice = pages.slice(start, Math.min(start + step, first + count));
+          const outcome = await complete(candidate.base, candidate.key, candidate.model, onGroq,
+                                         visionMessages(slice, start, seriesHint, onGroq ? "" : text), [], 8192);
+          if ("error" in outcome) { failed = outcome.error; break; }
+          series.push(...outcome.series);
         }
+        if (failed === null) {
+          usedModel = candidate.model;
+          return { series, model: candidate.model, structured: true };
+        }
+        failures.push(`${candidate.model} : ${failed.slice(0, 160)}`);
+        if (!isRecoverable(failed)) return { error: failed };
       }
-      // Trop gros pour le quota (Groq gratuit : 7 000 jetons d'entrée par
-      // minute) : les images suffisent, on retire le texte d'appoint.
-      if ("error" in outcome && /413|too large|tokens per minute/i.test(outcome.error) && text) {
-        const imagesOnly = [{ role: "system", content: VISION_INSTRUCTIONS },
-          { role: "user", content: [{ ...(content[0] as Record<string, unknown>),
-            text: String((content[0] as { text: string }).text).split("\n\nTexte extrait")[0] }, ...content.slice(1)] }];
-        outcome = await complete(visionBase, visionKey, usedModel, visionOnGroq, imagesOnly, preferredVisionModels, 8192);
+      return { error: "aucun modèle de vision n'a répondu" };
+    };
+
+    for (let start = 0; start < pages.length; start += MAX_IMAGES_PER_CALL) {
+      const outcome = await see(start, Math.min(MAX_IMAGES_PER_CALL, pages.length - start));
+      if ("error" in outcome) {
+        return json({ error: `vision : ${outcome.error}. Essais : ${failures.join(" | ")}` }, 502);
       }
-      if ("error" in outcome) return json({ error: `vision (${usedModel}) : ${outcome.error}` }, 502);
-      usedModel = outcome.model;
       collected.push(...outcome.series);
     }
-    return json({ series: mergeSeries(collected), model: usedModel, mode: "vision" });
+    return json({ series: mergeSeries(collected), model: usedModel, mode: "vision",
+                  fallbacks: failures.length > 0 ? failures : undefined });
   }
 
   if (!text) {
@@ -393,30 +407,53 @@ function mergeSeries(chunks: unknown[]): unknown[] {
   return [...bySeries.values()];
 }
 
-/** Le fournisseur a-t-il refusé parce que le modèle ne lit pas d'images ? */
-function rejectsImages(error: string): boolean {
-  const text = error.toLowerCase();
-  return text.includes("content must be a string")
-    || text.includes("image input")
-    || text.includes("does not support image")
-    || text.includes("image_url")
-    || text.includes("vision");
+type Candidate = { base: string; key: string; model: string };
+
+/** Le modèle de vision de Groq (`llama-4-scout` n'y est plus). */
+const GROQ_VISION = "qwen/qwen3.8-27b";
+
+/** Les messages d'un paquet de pages : consigne, repères, images. */
+function visionMessages(pages: string[], first: number, seriesHint: number | null, text: string) {
+  const content: unknown[] = [{
+    type: "text",
+    text: `Pages ${first + 1} à ${first + pages.length} du document`
+      + (seriesHint ? ` (série ${seriesHint} d'après l'en-tête ou le nom du fichier)` : "")
+      + ". Numérote « page » à partir de " + (first + 1) + ". Réponds en JSON."
+      + (text ? `\n\nTexte extrait du PDF (numéros fiables, formules abîmées) :\n${text}` : ""),
+  }];
+  for (const image of pages) {
+    content.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } });
+  }
+  return [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }];
 }
 
 /**
- * Un modèle de vision disponible chez ce fournisseur : d'abord la liste connue,
- * puis tout identifiant qui le dit dans son nom (« vision », « vl », « llama-4 »,
- * « gemini », « gpt-4o »…). `null` si rien ne convient.
+ * Une erreur qui vaut la peine d'essayer le modèle suivant : saturé, sans
+ * quota, inconnu, trop gros pour lui, ou qui ne lit pas les images. Une réponse
+ * illisible, elle, ne s'améliorera pas ailleurs — si, en fait : on essaie aussi.
  */
-function pickVisionModel(available: string[], tried: string): string | null {
-  const candidates = available.filter((id) => id !== tried);
-  for (const known of preferredVisionModels) {
-    if (candidates.includes(known)) return known;
-  }
-  // « qwen3.x » : les Qwen récents sont multimodaux (constaté chez Groq,
-  // `qwen/qwen3.8-27b`, quand `llama-4-scout` en a disparu).
-  const hints = ["vision", "-vl", "vl-", "llama-4", "gemini", "gpt-4o", "gpt-4.1", "pixtral", "qwen3", "claude"];
-  return candidates.find((id) => hints.some((hint) => id.toLowerCase().includes(hint))) ?? null;
+function isRecoverable(error: string): boolean {
+  return /HTTP (400|404|408|413|429|5\d\d)|high demand|unavailable|quota|rate limit|too large|not found|does not exist|content must be a string|image|JSON illisible|pas renvoyé de JSON/i.test(error);
+}
+
+/**
+ * Les modèles de vision **récents** d'un fournisseur, du meilleur au plus léger.
+ *
+ * Gemini publie des dizaines d'identifiants (audio, TTS, embeddings, robotique,
+ * « computer use »…) : prendre « le premier qui contient gemini » avait choisi
+ * un aperçu sans quota. On ne garde que les familles qui lisent des pages.
+ */
+function pickVisionModels(available: string[]): string[] {
+  const ids = available.map((id) => id.replace(/^models\//, ""));
+  const excluded = /tts|audio|embedding|live|transcribe|robotics|computer-use|image-preview|-image$|-image-|customtools|translate|omni/i;
+  const usable = ids.filter((id) => !excluded.test(id));
+  const version = (id: string) => Number(id.match(/(\d+(?:\.\d+)?)/)?.[1] ?? 0);
+  const flash = usable.filter((id) => /^gemini-\d+(\.\d+)?-flash$/.test(id)).sort((a, b) => version(b) - version(a));
+  const pro = usable.filter((id) => /^gemini-\d+(\.\d+)?-pro$/.test(id)).sort((a, b) => version(b) - version(a));
+  const lite = usable.filter((id) => /^gemini-\d+(\.\d+)?-flash-lite$/.test(id)).sort((a, b) => version(b) - version(a));
+  const others = usable.filter((id) => preferredVisionModels.includes(id));
+  // Flash récents d'abord (quota gratuit, rapides), puis Pro, puis Lite.
+  return [...flash.slice(0, 3), ...pro.slice(0, 1), ...lite.slice(0, 1), ...others];
 }
 
 /** Modèles qui voient les images, du plus accessible au plus capable. */
@@ -445,7 +482,8 @@ const preferredModels = [
  * réponse du tout.
  */
 function pickModel(available: string[], preferred: string[]): string | null {
-  if (available.length === 0) return null;
+  // Liste vide = « pas de repli au hasard » (vision : la chaîne s'en charge).
+  if (available.length === 0 || preferred.length === 0) return null;
   for (const candidate of preferred) {
     if (available.includes(candidate)) return candidate;
   }
