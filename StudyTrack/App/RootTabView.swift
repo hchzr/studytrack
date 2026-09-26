@@ -16,8 +16,29 @@ struct RootTabView: View {
                 TabView(selection: $router.selectedTab) {
                     ForEach(AppRouter.Tab.allCases, id: \.self) { tab in
                         tabContent(tab)
+                            .modifier(LegacyFocusDockInset())
                             .tabItem { Label(tab.title, systemImage: tab.icon) }
                             .tag(tab)
+                    }
+                }
+                .modifier(FocusDockPlacement())
+                // Focus, profil et bilan s'ouvrent depuis **n'importe quel** onglet :
+                // une seule présentation, pilotée par le routeur.
+                .sheet(item: rootSheet) { sheet in
+                    switch sheet {
+                    case .focus:
+                        FocusView(onClose: { app.router.showingFocus = false })
+                    case .profile:
+                        ProfileView()
+                    case .stats:
+                        NavigationStack {
+                            StatsView()
+                                .toolbar {
+                                    ToolbarItem(placement: .confirmationAction) {
+                                        Button("Fermer") { app.router.showingStats = false }
+                                    }
+                                }
+                        }
                     }
                 }
             } else {
@@ -61,6 +82,28 @@ struct RootTabView: View {
         }
     }
 
+    enum RootSheet: String, Identifiable {
+        case focus, profile, stats
+        var id: String { rawValue }
+    }
+
+    /// Les trois drapeaux du routeur, vus comme une seule feuille. Fermer la
+    /// feuille remet le drapeau à faux — sinon le bouton ne rouvrirait plus rien.
+    private var rootSheet: Binding<RootSheet?> {
+        Binding(get: {
+            if app.router.showingFocus { return .focus }
+            if app.router.showingProfile { return .profile }
+            if app.router.showingStats { return .stats }
+            return nil
+        }, set: { value in
+            if value == nil {
+                app.router.showingFocus = false
+                app.router.showingProfile = false
+                app.router.showingStats = false
+            }
+        })
+    }
+
     /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.
     private func handle(_ url: URL) {
         guard url.scheme?.lowercased() == "studytrack" else { return }
@@ -72,6 +115,10 @@ struct RootTabView: View {
 
         switch (url.host ?? "").lowercased() {
         case "focus":
+            if items.isEmpty {
+                app.router.openFocus()
+                return
+            }
             let type = TaskType(rawValue: value("type") ?? "") ?? .exercise
             let code = value("course") ?? ""
             app.router.startFocus(courseID: nil,
@@ -110,9 +157,23 @@ struct RootTabView: View {
         switch tab {
         case .today: TodayView()
         case .courses: CoursesView()
-        case .focus: FocusView()
         case .groups: GroupsView()
         case .agenda: AgendaView()
         }
+    }
+}
+
+/// L'accès au profil, aux réglages et au bilan, en haut à gauche de **chaque**
+/// onglet — il n'existait que sur « Aujourd'hui ».
+struct ProfileButton: View {
+    @Environment(AppContainer.self) private var app
+
+    var body: some View {
+        Button {
+            app.router.showingProfile = true
+        } label: {
+            Image(systemName: "person.crop.circle")
+        }
+        .accessibilityLabel("Profil, réglages et bilan")
     }
 }

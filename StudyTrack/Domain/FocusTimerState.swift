@@ -77,6 +77,9 @@ struct FocusTimerState: Codable, Equatable {
 /// toucher au disque.
 enum FocusTimerStore {
     static let key = "focus.timerState"
+    /// Posté à chaque écriture : le bandeau « chrono en cours » suit l'état
+    /// sans que l'écran Focus soit ouvert.
+    static let didSave = Notification.Name("studytrack.focusTimerDidSave")
 
     static func load(defaults: UserDefaults = .standard) -> FocusTimerState? {
         guard let data = defaults.data(forKey: key) else { return nil }
@@ -86,6 +89,7 @@ enum FocusTimerStore {
     }
 
     static func save(_ state: FocusTimerState?, defaults: UserDefaults = .standard) {
+        defer { NotificationCenter.default.post(name: didSave, object: nil) }
         guard let state else {
             defaults.removeObject(forKey: key)
             return

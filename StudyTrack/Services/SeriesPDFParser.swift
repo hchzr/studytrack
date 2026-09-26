@@ -1,14 +1,44 @@
 import Foundation
 
 /// Une sous-question repérée sous un exercice : « 1. », « 2. », « (a) ».
+///
+/// Deux niveaux : « 1) » porte ses points « (a) (b) » dans `children`.
 struct DetectedSubQuestion: Equatable, Identifiable {
-    /// L'étiquette telle qu'elle apparaît : « 1 », « a », « ii ».
+    /// L'étiquette telle qu'elle apparaît : « 1 », « a », « ii ». Vide pour une
+    /// partie sans numéro (« Ensuite, … »).
     var label: String
     /// L'énoncé court, s'il a pu être lu. Souvent vide : une sous-question est
     /// fréquemment une seule formule.
     var text: String
+    var kind: SubQuestionKind = .question
+    var children: [DetectedSubQuestion] = []
 
-    var id: String { label }
+    /// Identité d'édition, propre à l'écran de relecture : deux parties sans
+    /// étiquette doivent rester deux lignes distinctes. Hors de l'égalité.
+    var id = UUID()
+
+    init(label: String, text: String = "", kind: SubQuestionKind = .question,
+         children: [DetectedSubQuestion] = []) {
+        self.label = label
+        self.text = text
+        self.kind = kind
+        self.children = children
+    }
+
+    static func == (lhs: DetectedSubQuestion, rhs: DetectedSubQuestion) -> Bool {
+        lhs.label == rhs.label && lhs.text == rhs.text && lhs.kind == rhs.kind && lhs.children == rhs.children
+    }
+
+    /// Les cases réelles : une question à points compte par ses points.
+    var leafCount: Int { children.isEmpty ? 1 : children.count }
+
+    /// Arbre lisible pour les tests et le diagnostic : « 1(a,b),2,part ».
+    static func outline(_ questions: [DetectedSubQuestion]) -> String {
+        questions.map { question in
+            let head = question.kind == .part ? "part" : question.label
+            return question.children.isEmpty ? head : "\(head)(\(question.children.map(\.label).joined(separator: ",")))"
+        }.joined(separator: ",")
+    }
 }
 
 /// Un exercice repéré dans le texte d'un PDF de série.
@@ -29,10 +59,15 @@ struct DetectedExercise: Equatable, Identifiable {
     /// Un numéro nu (« 1.2 ») peut être une section de cours ou une ligne de
     /// démonstration : quand l'IA ne le confirme pas, la fusion l'écarte.
     var isConfident: Bool = true
+    /// Où l'exercice commence dans le PDF, pour l'aperçu de la relecture.
+    /// Page (0…) et position verticale (0 = haut, 1 = bas).
+    var pageIndex: Int?
+    var verticalPosition: Double?
 
     var id: String { number }
 
     var hasSubQuestions: Bool { !subQuestions.isEmpty }
+    var leafQuestionCount: Int { subQuestions.reduce(0) { $0 + $1.leafCount } }
 }
 
 /// Une série repérée, avec ses exercices.

@@ -219,11 +219,17 @@ enum SeriesAIParsing {
         /// JSON invalide. Mais un modèle bavard répond parfois
         /// `[{"label":"1","text":"…"}]` : on accepte les deux plutôt que de perdre
         /// la structure pour une question de forme.
+        ///
+        /// Le chemin « vision » répond avec un arbre : `{"label":"1","kind":"question",
+        /// "text":"…","children":[{"label":"a",…}]}`, et `"label": null` pour une
+        /// partie sans numéro (`"kind":"part"`).
         struct Question: Decodable {
             var label: String?
             var text: String?
+            var kind: String?
+            var children: [Question]?
 
-            enum Keys: String, CodingKey { case label, text }
+            enum Keys: String, CodingKey { case label, text, kind, children, parts, questions }
 
             init(from decoder: Decoder) throws {
                 if let single = try? decoder.singleValueContainer(),
@@ -235,6 +241,10 @@ enum SeriesAIParsing {
                 let container = try decoder.container(keyedBy: Keys.self)
                 label = Flexible.string(container, Keys.label)
                 text = Flexible.string(container, Keys.text)
+                kind = Flexible.string(container, Keys.kind)
+                children = (try? container.decodeIfPresent([Question].self, forKey: .children))
+                    ?? (try? container.decodeIfPresent([Question].self, forKey: .parts))
+                    ?? (try? container.decodeIfPresent([Question].self, forKey: .questions))
             }
         }
 
@@ -243,15 +253,18 @@ enum SeriesAIParsing {
             var title: String?
             var isBonus: Bool?
             var questions: [Question]?
+            var page: Int?
 
-            enum Keys: String, CodingKey { case number, title, isBonus, questions }
+            enum Keys: String, CodingKey { case number, title, isBonus, questions, parts, page }
 
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: Keys.self)
                 number = Flexible.string(container, Keys.number)
                 title = Flexible.string(container, Keys.title)
                 isBonus = Flexible.bool(container, Keys.isBonus)
-                questions = (try? container.decodeIfPresent([Question].self, forKey: .questions)) ?? []
+                page = Flexible.int(container, Keys.page)
+                questions = (try? container.decodeIfPresent([Question].self, forKey: .parts))
+                    ?? (try? container.decodeIfPresent([Question].self, forKey: .questions)) ?? []
             }
         }
 
@@ -302,7 +315,8 @@ enum SeriesAIParsing {
                 exercises.append(DetectedExercise(number: candidate,
                                                   title: SeriesPDFParser.looksLikeTitle(title) ? title : "",
                                                   isBonus: exercise.isBonus ?? false,
-                                                  subQuestions: subQuestions(exercise.questions)))
+                                                  subQuestions: subQuestions(exercise.questions),
+                                                  pageIndex: exercise.page.map { max(0, $0 - 1) }))
             }
             exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
             if let existing = result.firstIndex(where: { $0.number == number }) {
@@ -317,23 +331,37 @@ enum SeriesAIParsing {
         return result.sorted { $0.number < $1.number }
     }
 
-    /// Les sous-questions d'un exercice, étiquetées et dédoublonnées.
+    /// Les sous-questions d'un exercice, étiquetées et dédoublonnées, sur deux
+    /// niveaux au plus.
     ///
-    /// Une sous-question sans étiquette reçoit son rang : le polycopié les numérote
-    /// presque toujours, et une case sans nom reste utilisable.
-    private static func subQuestions(_ raw: [Payload.Question]?) -> [DetectedSubQuestion] {
+    /// Une sous-question sans étiquette reçoit son rang — sauf une **partie**
+    /// (`"kind":"part"`), qui n'a pas de numéro dans le polycopié et n'en reçoit pas.
+    private static func subQuestions(_ raw: [Payload.Question]?, depth: Int = 0) -> [DetectedSubQuestion] {
+        guard let raw else { return [] }
+        let hasTree = raw.contains { !($0.children ?? []).isEmpty || $0.kind == "part" }
         // Une seule « question », c'est l'exercice lui-même : pas de case à part.
-        guard let raw, raw.count >= 2 else { return [] }
+        guard raw.count >= 2 || hasTree else { return [] }
         var seen = Set<String>()
         var result: [DetectedSubQuestion] = []
-        for (index, question) in raw.enumerated() {
+        var rank = 0
+        for question in raw {
+            let isPart = question.kind?.lowercased() == "part"
             let label = (question.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let resolved = label.isEmpty ? String(index + 1) : label
-            guard seen.insert(resolved).inserted else { continue }
+                .trimmingCharacters(in: CharacterSet(charactersIn: "().:"))
             let text = (question.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            result.append(DetectedSubQuestion(label: resolved, text: text))
+            if isPart {
+                guard !text.isEmpty else { continue }
+                result.append(DetectedSubQuestion(label: "", text: text, kind: .part))
+                continue
+            }
+            rank += 1
+            let resolved = label.isEmpty ? String(rank) : label
+            guard seen.insert(resolved).inserted else { continue }
+            let children = depth == 0 ? subQuestions(question.children, depth: 1).filter { $0.kind == .question } : []
+            result.append(DetectedSubQuestion(label: resolved, text: text, children: children.count >= 2 ? children : []))
         }
-        return result
+        // Des parties seules, sans question numérotée : c'est l'exercice lui-même.
+        return result.contains { $0.kind == .question } ? result : []
     }
 
     /// « 2 » dans la série 3 → « 3.2 » ; « 3.2 » reste ; « Ex 3.2 » → « 3.2 ».
@@ -373,7 +401,7 @@ enum SeriesAIParsing {
     ///      le modèle ne retrouve pas est écarté : c'était, le plus souvent, une
     ///      ligne de démonstration.
     static func merge(heuristic: [DetectedSeries], ai: [DetectedSeries],
-                      preferredSeries: Int? = nil) -> [DetectedSeries] {
+                      preferredSeries: Int? = nil, aiReadsLayout: Bool = false) -> [DetectedSeries] {
         guard !ai.isEmpty, ai.contains(where: { !$0.exercises.isEmpty }) else { return heuristic }
         var heuristic = heuristic
         var ai = ai
@@ -409,12 +437,24 @@ enum SeriesAIParsing {
                     merged.isBonus = merged.isBonus || exercise.isBonus
                     merged.isConfident = true
                     // Les sous-questions ne s'additionnent pas : c'est le même
-                    // exercice, décrit deux fois. La lecture du texte l'emporte
-                    // quand elle en a trouvé — elle est déterministe, et le modèle
-                    // se trompe sur les listes en deux colonnes. Le modèle ne
-                    // comble que l'absence.
-                    if !exercise.subQuestions.isEmpty {
+                    // exercice, décrit deux fois. Un modèle de **texte** se trompe
+                    // sur les listes en deux colonnes : la lecture de la mise en
+                    // page l'emporte alors quand elle a trouvé quelque chose. Un
+                    // modèle qui **voit** les pages (`aiReadsLayout`) lit les
+                    // colonnes, les points imbriqués et les formules : il l'emporte,
+                    // et la lecture locale ne comble que son silence.
+                    if aiReadsLayout {
+                        if merged.subQuestions.isEmpty { merged.subQuestions = exercise.subQuestions }
+                    } else if !exercise.subQuestions.isEmpty {
                         merged.subQuestions = exercise.subQuestions
+                    }
+                    // La position vient de la mise en page lue localement : page et
+                    // hauteur vont ensemble, le modèle ne donne que la page.
+                    if exercise.verticalPosition != nil {
+                        merged.pageIndex = exercise.pageIndex
+                        merged.verticalPosition = exercise.verticalPosition
+                    } else if merged.pageIndex == nil {
+                        merged.pageIndex = exercise.pageIndex
                     }
                     result[index].exercises[existing] = merged
                 } else if exercise.isConfident {

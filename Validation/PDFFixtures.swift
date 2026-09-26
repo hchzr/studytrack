@@ -116,6 +116,19 @@ enum PDFFixtures {
             FixtureLine(text: "Ex-03-03: Pour chacune des suites ci-dessous, montrer la limite.", boldPrefix: 9),
             FixtureLine(text: "1) an = n/(n+1)", indent: 14, column2: "3) an = (-1)^n/n"),
             FixtureLine(text: "2) an = 1/n", indent: 14, column2: "4) an = n/(n^2+1)"),
+            FixtureLine(text: "Ensuite, pour la suite an = 2n/(n+1), donner l'ensemble des n."),
+            FixtureLine(text: "Compilation: 2026-09-19. Version Web", size: 6, footer: true)
+        ],
+        [
+            // Une consigne avant la liste, séparée d'elle par « Ensuite ».
+            FixtureLine(text: "Ex-03-11: Soit an = 3n/(n+2). Calculer la limite de an, à l'aide de la définition.", boldPrefix: 9),
+            FixtureLine(text: "Ensuite, en utilisant les propriétés de la limite, calculer :"),
+            FixtureLine(text: "1) lim 1/an", indent: 14, column2: "3) lim 9n^2/(n^2+4n+4)"),
+            FixtureLine(text: "2) lim (an/3 + 3/an)", indent: 14),
+            // Une liste de conditions : l'énoncé, pas du travail à cocher.
+            FixtureLine(text: "Ex-03-12: Montrer qu'il existe une suite (xn) qui satisfait les conditions suivantes :", boldPrefix: 9),
+            FixtureLine(text: "1) xn est dans A pour tout n,", indent: 14),
+            FixtureLine(text: "2) xn tend vers s.", indent: 14),
             FixtureLine(text: "Compilation: 2026-09-19. Version Web", size: 6, footer: true)
         ]
     ]

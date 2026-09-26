@@ -81,6 +81,13 @@ enum PreviewLaunch {
     static func apply(to container: AppContainer) {
         if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw) {
             container.router.selectedTab = tab
+        } else if int(tabFlag) == 2 {
+            // 2 était l'onglet Focus : il s'ouvre maintenant en feuille, après
+            // l'apparition de l'interface (une feuille demandée avant n'apparaît pas).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(600))
+                container.router.showingFocus = true
+            }
         }
         // Les feuilles de prévisualisation sont ouvertes par `TodayView.onAppear`,
         // pas ici : une feuille dont `isPresented` est déjà vrai **avant** que la

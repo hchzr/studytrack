@@ -223,6 +223,7 @@ struct CoursesView: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) { ProfileButton() }
         ToolbarItem(placement: .topBarLeading) {
             Button {
                 showingImport = true

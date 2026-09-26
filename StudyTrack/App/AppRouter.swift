@@ -12,13 +12,16 @@ struct FocusRequest: Equatable {
 /// Navigation applicative partagée (onglet actif, demandes de chrono, feuilles).
 @Observable
 final class AppRouter {
+    /// Quatre onglets. Focus n'en est plus un : c'est une **action**, disponible
+    /// partout par le bouton flottant au-dessus de la barre — et, pendant une
+    /// session, le mini-lecteur qui la montre.
     enum Tab: Int, Hashable, CaseIterable {
         // L'ordre de déclaration est l'ordre de la barre d'onglets : l'agenda
         // (quotidien) avant les groupes (troisième raison d'être de l'app). Les
-        // valeurs brutes, elles, ne bougent pas — liens et captures en dépendent.
+        // valeurs brutes, elles, ne bougent pas — liens et captures en dépendent
+        // (2 était Focus).
         case today = 0
         case courses = 1
-        case focus = 2
         case agenda = 4
         case groups = 3
 
@@ -26,7 +29,6 @@ final class AppRouter {
             switch self {
             case .today: return "Aujourd'hui"
             case .courses: return "Cours"
-            case .focus: return "Focus"
             case .groups: return "Groupes"
             case .agenda: return "Agenda"
             }
@@ -36,7 +38,6 @@ final class AppRouter {
             switch self {
             case .today: return "sun.max.fill"
             case .courses: return "books.vertical.fill"
-            case .focus: return "timer"
             case .groups: return "person.3.fill"
             case .agenda: return "calendar"
             }
@@ -52,6 +53,8 @@ final class AppRouter {
 
     enum FocusMode { case timer, manual, journal }
 
+    /// L'écran Focus (chrono, saisie, journal), en feuille au-dessus de l'onglet.
+    var showingFocus = false
     var showingProfile = false
     var showingTasks = false
     /// Statistiques et récapitulatif, ouverts depuis « Aujourd'hui ».
@@ -77,7 +80,13 @@ final class AppRouter {
                                     courseCode: courseCode,
                                     taskType: taskType,
                                     label: label)
-        selectedTab = .focus
+        showingFocus = true
+    }
+
+    /// Ouvre Focus sur un segment (« Manuel », « Journal »).
+    func openFocus(_ mode: FocusMode? = nil) {
+        focusMode = mode
+        showingFocus = true
     }
 
     func consumeFocusRequest() -> FocusRequest? {

@@ -153,8 +153,6 @@ struct TodayView: View {
     /// autre écran (la couverture du suivi renvoie vers le profil, par exemple) :
     /// `onChange` la consomme et la traduit en feuille.
     private enum TodaySheet: Identifiable, Hashable {
-        case profile
-        case stats
         case tasks
         case search
         case seriesImport(Course?, PendingImport?)
@@ -163,8 +161,6 @@ struct TodayView: View {
 
         var id: String {
             switch self {
-            case .profile: return "profile"
-            case .stats: return "stats"
             case .tasks: return "tasks"
             case .search: return "search"
             case .seriesImport(let course, let shared):
@@ -216,14 +212,7 @@ struct TodayView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Aujourd'hui")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        app.router.showingProfile = true
-                    } label: {
-                        Image(systemName: "person.crop.circle")
-                    }
-                    .accessibilityLabel("Profil et réglages")
-                }
+                ToolbarItem(placement: .topBarLeading) { ProfileButton() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         sheet = .search
@@ -240,8 +229,7 @@ struct TodayView: View {
                             Label("Démarrer un chrono", systemImage: "timer")
                         }
                         Button {
-                            app.router.selectedTab = .focus
-                            app.router.focusMode = .manual
+                            app.router.openFocus(.manual)
                         } label: {
                             Label("Saisir une session passée", systemImage: "square.and.pencil")
                         }
@@ -268,7 +256,11 @@ struct TodayView: View {
             // restent silencieusement sans effet — un bouton qui « ne fait rien »,
             // impossible à reproduire pour qui ne connaît pas la cause. Une
             // présentation pilotée par une valeur supprime le problème.
-            .sheet(item: $sheet) { destination in
+            .sheet(item: $sheet, onDismiss: {
+                // Sans ce retour à faux, « Tâches » ne s'ouvrait qu'une fois :
+                // le drapeau restait vrai, et le toucher à nouveau ne changeait rien.
+                app.router.showingTasks = false
+            }) { destination in
                 sheetContent(destination)
             }
             .refreshable {
@@ -436,23 +428,17 @@ struct TodayView: View {
     // MARK: Feuilles
 
     /// Les trois demandes du routeur, réunies pour n'être observées qu'une fois.
+    /// Profil, statistiques et Focus sont présentés par `RootTabView` : ils
+    /// s'ouvrent depuis n'importe quel onglet. Il ne reste ici que les tâches.
     private struct Requests: Equatable {
-        var profile = false
-        var stats = false
         var tasks = false
     }
 
     private var requests: Requests {
-        Requests(profile: app.router.showingProfile,
-                 stats: app.router.showingStats,
-                 tasks: app.router.showingTasks)
+        Requests(tasks: app.router.showingTasks)
     }
 
     private func apply(_ state: Requests) {
-        if state.profile, sheet == nil { sheet = .profile }
-        else if !state.profile, sheet == .profile { sheet = nil }
-        if state.stats, sheet == nil { sheet = .stats }
-        else if !state.stats, sheet == .stats { sheet = nil }
         if state.tasks, sheet == nil { sheet = .tasks }
         else if !state.tasks, sheet == .tasks { sheet = nil }
     }
@@ -460,17 +446,6 @@ struct TodayView: View {
     @ViewBuilder
     private func sheetContent(_ destination: TodaySheet) -> some View {
         switch destination {
-        case .profile:
-            ProfileView()
-        case .stats:
-            NavigationStack {
-                StatsView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Fermer") { app.router.showingStats = false }
-                        }
-                    }
-            }
         case .tasks:
             TasksView()
         case .search:
@@ -504,7 +479,7 @@ struct TodayView: View {
     private var timerBanner: some View {
         if let timer = runningTimer, timer.isRestorable() {
             Button {
-                app.router.selectedTab = .focus
+                app.router.openFocus()
             } label: {
                 HStack(spacing: Layout.block) {
                     Image(systemName: timer.isRunning ? "timer" : "pause.circle.fill")
@@ -634,16 +609,18 @@ struct TodayView: View {
 
     @ViewBuilder
     private func primaryActionCard(_ state: TodayState) -> some View {
-        if let next = state.todos.first {
+        // Le même classement que le dock et les widgets : l'accueil ne propose
+        // jamais autre chose que le bouton « ▶ » au bas de l'écran.
+        if let next = NextActionEngine.actions(for: state.tracked, limit: 1).first {
             ActionCard(icon: next.icon,
                        title: "\(next.courseCode) · \(next.title)",
-                       subtitle: "\(next.kind.label) · \(next.detail)",
+                       subtitle: "\(next.reasonLabel) · \(next.detail)",
                        actionTitle: "Démarrer le chrono",
-                       tint: next.tint) {
+                       tint: next.reason == .redo ? .red : Color(hex: next.colorHex)) {
                 app.router.startFocus(courseID: next.courseID,
                                       courseCode: next.courseCode,
                                       taskType: next.taskType,
-                                      label: "\(next.courseCode) · \(next.title)")
+                                      label: next.focusLabel)
             }
         } else {
             ActionCard(icon: "checkmark.seal.fill",

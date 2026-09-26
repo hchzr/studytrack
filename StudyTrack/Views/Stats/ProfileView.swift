@@ -29,25 +29,54 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
+            // Une page par sujet. Les quinze sections empilées faisaient un
+            // formulaire de plusieurs écrans où rien ne se retrouvait ; la racine
+            // ne garde que qui tu es, ton bilan, et un sommaire.
             Form {
-                // Du plus personnel au plus technique : toi et ton semestre, tes
-                // habitudes, les services branchés, ton compte et tes données, puis
-                // ce qui ne sert qu'en cas de problème.
                 storeSection
                 identitySection(app.settings)
-                sectionPicker(app.settings)
-                calendarSection(app.settings)
-                notificationsSection(app.settings)
-                focusSection(app.settings)
-                workloadSection(app.settings)
-                aiSection
-                tasksSection(app.settings)
-                ankiSection
-                accountSection(app.settings)
-                privacySection(app.settings)
-                dataSection
-                diagnosticsSection
-                aboutSection
+                Section {
+                    NavigationLink {
+                        StatsView()
+                    } label: {
+                        Label("Bilan et statistiques", systemImage: "chart.bar.xaxis")
+                    }
+                }
+                Section {
+                    page("Semestre et cours", icon: "graduationcap") {
+                        sectionPicker(app.settings)
+                        workloadSection(app.settings)
+                    }
+                    page("Calendrier et tâches", icon: "calendar.badge.checkmark") {
+                        calendarSection(app.settings)
+                        tasksSection(app.settings)
+                        ankiSection
+                    }
+                    page("Notifications", icon: "bell.badge") {
+                        notificationsSection(app.settings)
+                    }
+                    page("Focus et chrono", icon: "timer") {
+                        focusSection(app.settings)
+                    }
+                    page("Import intelligent", icon: "sparkles") {
+                        aiSection
+                    }
+                }
+                Section {
+                    page("Compte et groupes", icon: "person.2") {
+                        accountSection(app.settings)
+                    }
+                    page("Confidentialité et données", icon: "lock.shield") {
+                        privacySection(app.settings)
+                        dataSection
+                    }
+                    page("Diagnostic", icon: "stethoscope") {
+                        diagnosticsSection
+                    }
+                    page("À propos", icon: "info.circle") {
+                        aboutSection
+                    }
+                }
             }
             .navigationTitle("Profil & réglages")
             .navigationBarTitleDisplayMode(.inline)
@@ -129,6 +158,18 @@ struct ProfileView: View {
             }
         } footer: {
             Text("Les erreurs de synchronisation, d'import et d'intégration, horodatées. Utile quand quelque chose ne marche pas et qu'on ne sait pas quoi.")
+        }
+    }
+
+    /// Une sous-page de réglages : ses sections, dans un formulaire à elle.
+    private func page<Content: View>(_ title: String, icon: String,
+                                     @ViewBuilder content: @escaping () -> Content) -> some View {
+        NavigationLink {
+            Form { content() }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+        } label: {
+            Label(title, systemImage: icon)
         }
     }
 

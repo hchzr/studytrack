@@ -3,6 +3,9 @@ import SwiftData
 
 /// Focus : un chrono évident, catégorisé, plus le journal du jour.
 struct FocusView: View {
+    /// Présenté en feuille par le dock : le bouton qui la ferme.
+    var onClose: (() -> Void)? = nil
+
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
@@ -141,6 +144,13 @@ struct FocusView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Focus")
+            .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fermer", action: onClose)
+                    }
+                }
+            }
             .task {
                 restoreIfNeeded()
                 applyFocusRequest()

@@ -17,6 +17,11 @@
 //   supabase secrets set LLM_BASE_URL=https://openrouter.ai/api/v1
 //   supabase secrets set LLM_MODEL=meta-llama/llama-3.1-8b-instruct:free
 //
+// Mode vision (pages envoyées en image, `{"images":[base64…]}`) : le modèle par
+// défaut chez Groq est `meta-llama/llama-4-scout-17b-16e-instruct`. Ailleurs :
+//
+//   supabase secrets set LLM_VISION_MODEL=google/gemini-2.5-flash
+//
 // Groq offre un palier gratuit largement suffisant pour des PDF de séries.
 // N'importe quelle API compatible OpenAI convient (OpenRouter : LLM_BASE_URL=
 // https://openrouter.ai/api/v1 et un modèle « :free »).
@@ -44,6 +49,36 @@ Réponds UNIQUEMENT par un objet JSON :
 - « title » toujours rempli, et **court** : 2 à 6 mots, jamais une phrase, jamais le nom du cours. Reprends l'intitulé du PDF s'il en donne un. Sinon nomme la tâche toi-même, à partir du titre de section ou de l'objet (« Comparer des bornes supérieures », « Somme des parties entières »). **Ne recopie jamais l'énoncé** : il commence par un verbe à l'infinitif ou à l'impératif et se termine par un point, ce n'est pas un titre.
 - « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
 - Aucune série : {"series":[]}.`;
+
+// Consigne du mode **vision** : le modèle voit les pages rendues en image.
+//
+// Le texte d'un PDF LaTeX est inutilisable pour les sous-questions : « ≤ » et
+// « ⩾ » disparaissent, les fractions éclatent sur trois lignes, les indices
+// réordonnent les lignes, et deux colonnes de questions se mélangent. L'image,
+// elle, montre la structure telle qu'on la lit. Chaque règle ci-dessous vient
+// d'un cas réel (Analyse I, série 03).
+const VISION_INSTRUCTIONS = `Tu lis des pages d'une série d'exercices (images) et tu en extrais la STRUCTURE.
+Réponds UNIQUEMENT par un objet JSON :
+{"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]}]}]}
+
+Règles :
+- « exercises » = les EXERCICES (Ex-03-01, Exercice 2…). « number » = « série.exercice ».
+- « parts » = le travail à cocher dans l'exercice, sur DEUX niveaux au plus : une question numérotée « 1) » avec ses points « (a) (b) » dans « children ».
+- Deux colonnes (« 1) … 3) » sur une ligne, « 2) … 4) » sur la suivante) : range par numéro, 1, 2, 3, 4.
+- Plusieurs questions sur une même ligne (« 1) … 2) … 3) ») : ce sont des questions séparées.
+- Une consigne à faire AVANT la liste et séparée d'elle (« Calculer lim aₙ. Ensuite, calculer : 1) 2) 3) ») → une partie {"label":null,"kind":"part","text":"…"} en tête.
+- Une consigne APRÈS la liste (« Ensuite, pour la suite … donner … ») → une partie {"label":null,"kind":"part"} en fin.
+- Une liste de CONDITIONS ou d'hypothèses (« satisfait les conditions suivantes : 1) … 2) … ») n'est PAS du travail : pas de « parts ».
+- Un exercice sans question numérotée : omets « parts ».
+- « text » : court (≤ 80 caractères), formules en notation simple (x_n, ≤, √, lim), dans la langue du PDF. N'invente rien.
+- « title » : 2 à 6 mots qui nomment la tâche, jamais l'énoncé recopié.
+- « page » : la page (1, 2, …) où l'exercice commence, dans l'ordre des images reçues.
+- « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
+- Aucune série : {"series":[]}.`;
+
+/** Groq accepte 5 images par requête : au-delà, on découpe. */
+const MAX_IMAGES_PER_CALL = 5;
+const MAX_PAGES = 20;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,13 +121,48 @@ Deno.serve(async (request) => {
   const model = configuredModel || "openai/gpt-oss-20b";
 
   let text = "";
+  let images: string[] = [];
+  let seriesHint: number | null = null;
   try {
     const body = await request.json();
     text = typeof body?.text === "string" ? body.text : "";
+    images = Array.isArray(body?.images)
+      ? body.images.filter((image: unknown) => typeof image === "string" && image.length > 0)
+      : [];
+    seriesHint = typeof body?.seriesHint === "number" ? body.seriesHint : null;
   } catch {
-    return json({ error: "corps JSON attendu : {\"text\": …}" }, 400);
+    return json({ error: "corps JSON attendu : {\"text\": …} ou {\"images\": [...]}" }, 400);
   }
   text = text.slice(0, MAX_CHARACTERS).trim();
+
+  // ── Mode vision : les pages en image, découpées par paquets. ──────────────
+  if (images.length > 0) {
+    const visionModel = Deno.env.get("LLM_VISION_MODEL")?.trim()
+      || (usesGroq ? "meta-llama/llama-4-scout-17b-16e-instruct" : configuredModel!);
+    const pages = images.slice(0, MAX_PAGES);
+    const collected: unknown[] = [];
+    let usedModel = visionModel;
+    for (let start = 0; start < pages.length; start += MAX_IMAGES_PER_CALL) {
+      const chunk = pages.slice(start, start + MAX_IMAGES_PER_CALL);
+      const content: unknown[] = [{
+        type: "text",
+        text: `Pages ${start + 1} à ${start + chunk.length} du document`
+          + (seriesHint ? ` (série ${seriesHint} d'après l'en-tête ou le nom du fichier)` : "")
+          + ". Numérote « page » à partir de " + (start + 1) + ". Réponds en JSON.",
+      }];
+      for (const image of chunk) {
+        content.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } });
+      }
+      const outcome = await complete(baseURL, apiKey, visionModel, usesGroq,
+        [{ role: "system", content: VISION_INSTRUCTIONS }, { role: "user", content }],
+        preferredVisionModels);
+      if ("error" in outcome) return json({ error: `vision : ${outcome.error}` }, 502);
+      usedModel = outcome.model;
+      collected.push(...outcome.series);
+    }
+    return json({ series: mergeSeries(collected), model: usedModel, mode: "vision" });
+  }
+
   if (!text) {
     return json({ series: [] });
   }
@@ -111,16 +181,37 @@ Deno.serve(async (request) => {
     },
   ];
 
+  const outcome = await complete(baseURL, apiKey, model, usesGroq, messages, preferredModels);
+  if ("error" in outcome) return json({ error: outcome.error }, 502);
+  return json({ series: outcome.series, model: outcome.model, structured: outcome.structured });
+});
+
+type Outcome =
+  | { series: unknown[]; model: string; structured: boolean }
+  | { error: string };
+
+/**
+ * Une complétion, avec ses trois replis — modèle introuvable, limite de débit,
+ * garantie JSON refusée — et la lecture tolérante de la réponse.
+ */
+async function complete(
+  baseURL: string,
+  apiKey: string,
+  model: string,
+  usesGroq: boolean,
+  messages: Array<{ role: string; content: unknown }>,
+  fallbackModels: string[],
+): Promise<Outcome> {
   let usedModel = model;
   let structured = true;
-  // Bride **dès le premier essai** : `failed_generation` montrait un JSON tronqué
-  // en pleine chaîne, parce que le raisonnement avait consommé le budget de
-  // sortie. Lire une liste d'exercices ne demande pas de délibérer longuement.
-  let lowReasoning = true;
   let detail = "";
   const attempt = async (): Promise<Response> => {
+    // Bride **dès le premier essai** : `failed_generation` montrait un JSON
+    // tronqué en pleine chaîne, parce que le raisonnement avait consommé le
+    // budget de sortie. Seuls les modèles qui raisonnent (`gpt-oss`) acceptent
+    // ce paramètre ; un modèle de vision le refuserait.
     const response = await callProvider(baseURL, apiKey, usedModel, messages,
-                                        structured, lowReasoning && usesGroq);
+                                        structured, usesGroq && usedModel.includes("gpt-oss"));
     detail = await bodyText(response);
     return response;
   };
@@ -136,7 +227,7 @@ Deno.serve(async (request) => {
   // ne bouge ici. On demande au fournisseur ce qu'il accepte, puis on réessaie.
   if (!upstream.ok && (upstream.status === 404 || detail.includes("model_not_found"))) {
     const available = await listModels(baseURL, apiKey);
-    const fallback = pickModel(available, preferredModels);
+    const fallback = pickModel(available, fallbackModels);
     if (fallback && fallback !== usedModel) {
       usedModel = fallback;
       upstream = await attempt();
@@ -158,7 +249,8 @@ Deno.serve(async (request) => {
   // sortie (`json_validate_failed`) alors que le texte contient un objet valide.
   // On retire alors la garantie : la réponse est de toute façon relue en isolant
   // le premier objet, donc rien ne dépend d'elle.
-  if (!upstream.ok && (detail.includes("json_validate_failed") || detail.includes("Failed to validate JSON"))) {
+  if (!upstream.ok && (detail.includes("json_validate_failed") || detail.includes("Failed to validate JSON")
+    || detail.includes("response_format"))) {
     structured = false;
     upstream = await attempt();
   }
@@ -173,13 +265,12 @@ Deno.serve(async (request) => {
       if (available.length > 0) {
         hint = ` Modèles disponibles chez ce fournisseur : ${available.slice(0, 8).join(", ")}`
           + (available.length > 8 ? ` (et ${available.length - 8} autres)` : "")
-          + ". Corrige avec `supabase secrets set LLM_MODEL=<modèle>`.";
+          + ". Corrige avec `supabase secrets set LLM_MODEL=<modèle>` (ou LLM_VISION_MODEL).";
       } else {
         hint = " Vérifie `supabase secrets list`, puis pose `LLM_MODEL` avec un modèle du fournisseur.";
       }
     }
-
-    return json({ error: `fournisseur : HTTP ${upstream.status} ${detail}${hint}` }, 502);
+    return { error: `fournisseur : HTTP ${upstream.status} ${detail}${hint}` };
   }
 
   const payload = await upstream.json();
@@ -199,27 +290,65 @@ Deno.serve(async (request) => {
     // Une réponse illisible n'est **pas** « ce PDF n'a pas de série ». Les
     // confondre laissait l'utilisateur devant une extraction vide sans savoir
     // que le modèle avait répondu autre chose — on dit donc ce qu'il a répondu.
-    return json({
+    return {
       error: `le modèle n'a pas renvoyé de JSON (modèle ${usedModel}, mode strict ${structured}). `
         + `Début de sa réponse : ${raw.slice(0, 200) || "(vide)"}`,
-    }, 502);
+    };
   }
   try {
     const parsed = JSON.parse(raw.slice(start, end + 1));
-    return json({ series: Array.isArray(parsed?.series) ? parsed.series : [],
-                  model: usedModel, structured });
+    return { series: Array.isArray(parsed?.series) ? parsed.series : [], model: usedModel, structured };
   } catch (error) {
     // `finish_reason` dit **pourquoi** la réponse s'arrête : « length » signifie
     // une limite de sortie atteinte, et non un modèle qui écrit mal. Sans lui, on
     // chercherait longtemps.
     const finish = payload?.choices?.[0]?.finish_reason ?? "?";
     const usage = payload?.usage;
-    return json({
+    return {
       error: `JSON illisible de ${usedModel} (strict ${structured}, fin « ${finish} », `
         + `usage ${JSON.stringify(usage ?? {})}) : ${String(error)}. Début : ${raw.slice(0, 200)}`,
-    }, 502);
+    };
   }
-});
+}
+
+/**
+ * Les séries de plusieurs paquets de pages, réunies.
+ *
+ * Un exercice à cheval sur deux paquets apparaît deux fois : on garde la version
+ * qui porte le plus de questions.
+ */
+function mergeSeries(chunks: unknown[]): unknown[] {
+  type Exercise = { number?: unknown; parts?: unknown[] };
+  type Series = { number?: unknown; title?: unknown; exercises?: Exercise[] };
+  const bySeries = new Map<string, Series>();
+  for (const item of chunks as Series[]) {
+    if (!item || typeof item !== "object") continue;
+    const key = String(item.number ?? "");
+    const existing = bySeries.get(key);
+    if (!existing) {
+      bySeries.set(key, { ...item, exercises: [...(item.exercises ?? [])] });
+      continue;
+    }
+    if (!existing.title && item.title) existing.title = item.title;
+    for (const exercise of item.exercises ?? []) {
+      const index = (existing.exercises ?? []).findIndex((e) => String(e.number) === String(exercise.number));
+      if (index < 0) {
+        existing.exercises!.push(exercise);
+      } else if ((exercise.parts?.length ?? 0) > (existing.exercises![index].parts?.length ?? 0)) {
+        existing.exercises![index] = exercise;
+      }
+    }
+  }
+  return [...bySeries.values()];
+}
+
+/** Modèles qui voient les images, du plus accessible au plus capable. */
+const preferredVisionModels = [
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "meta-llama/llama-4-maverick-17b-128e-instruct",
+  "google/gemini-2.5-flash",
+  "gpt-4o-mini",
+];
 
 /** Les modèles à essayer en premier, du plus léger au plus capable. */
 const preferredModels = [
@@ -250,7 +379,7 @@ function callProvider(
   baseURL: string,
   apiKey: string,
   model: string,
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: unknown }>,
   structured = true,
   lowReasoning = false,
 ): Promise<Response> {

@@ -73,6 +73,7 @@ struct GroupsView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { ProfileButton() }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         joinCode = ""

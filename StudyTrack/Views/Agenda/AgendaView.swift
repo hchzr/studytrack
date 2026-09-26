@@ -226,6 +226,7 @@ struct AgendaView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) { ProfileButton() }
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 Toggle(isOn: $filter.lectures) { Label("Séances et cours", systemImage: "building.columns.fill") }

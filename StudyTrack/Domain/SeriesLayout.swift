@@ -134,16 +134,15 @@ enum SeriesLayoutParser {
         var order: [Int] = []
         /// Position de l'exercice en cours, pour y rattacher ses questions.
         var current: (series: Int, index: Int)?
-        var labels: [QuestionMark] = []
+        /// Les lignes de l'exercice en cours, dans l'ordre : questions et texte.
+        var events: [QuestionEvent] = []
 
         func closeExercise() {
-            let top = topLevelQuestions(labels)
-            if let current, isQuestionSequence(top) {
-                groups[current.series]?[current.index].subQuestions =
-                    top.map { DetectedSubQuestion(label: $0, text: "") }
+            if let current {
+                groups[current.series]?[current.index].subQuestions = questionTree(events)
             }
             current = nil
-            labels = []
+            events = []
         }
 
         for (index, line) in lines.enumerated() {
@@ -192,15 +191,18 @@ enum SeriesLayoutParser {
                                      title: title(for: marker, line: line, next: nextLine(lines, after: index),
                                                   body: body, boldBody: boldBody),
                                      isBonus: bonus(lines, from: index, body: body, boldBody: boldBody),
-                                     isConfident: marker.kind != .numeric))
+                                     isConfident: marker.kind != .numeric,
+                                     pageIndex: line.pageIndex,
+                                     verticalPosition: line.verticalPosition))
                 current = (resolvedSeries, groups[resolvedSeries]!.count - 1)
+                events = [QuestionEvent(text: marker.remainder, nearMargin: true)]
                 continue
             }
 
-            // 3. Question d'un exercice : « a) », « (b) », « 1. » décalé.
-            if current != nil, let label = questionLabel(text, allowNumbers: usesKeywords) {
-                labels.append(QuestionMark(label: label, indent: line.indent))
-            }
+            // 3. Question d'un exercice : « a) », « (b) », « 1. » décalé — ou texte.
+            guard current != nil else { continue }
+            events.append(QuestionEvent(marks: questionMark(text, allowNumbers: usesKeywords, indent: line.indent) ?? [],
+                                        text: text, nearMargin: nearMargin))
         }
         closeExercise()
 
@@ -254,8 +256,42 @@ enum SeriesLayoutParser {
     // MARK: Questions
 
     private static let questionPattern = try! NSRegularExpression(
-        pattern: #"^[ \t]*(?:\(([a-hA-H]|[ivx]{1,4}|\d{1,2})\)|([a-hA-H]|[ivx]{1,4})\)|([a-h])\.[ \t]|(\d{1,2})[.)][ \t])"#,
+        pattern: #"^[ \t]*(?:\(([a-hA-H]|[ivx]{1,4}|\d{1,2})\)|([a-hA-H]|[ivx]{1,4})\)|([a-h])\.[ \t]|(\d{1,2})([.)])[ \t])"#,
         options: [])
+
+    /// Les questions d'une ligne, avec leur texte et leur ponctuation.
+    ///
+    /// Une ligne peut en porter plusieurs quand le polycopié les met côte à côte
+    /// (« 1) aₙ = … 2) aₙ = … 3) aₙ = … ») : on les sépare, mais seulement si
+    /// elles **se suivent** et ont la même ponctuation — « (aₙ) » au milieu d'une
+    /// phrase n'est pas une question.
+    static func questionMark(_ text: String, allowNumbers: Bool, indent: Double) -> [QuestionMark]? {
+        let ns = text as NSString
+        guard let match = questionPattern.firstMatch(in: text, options: [],
+                                                     range: NSRange(location: 0, length: ns.length)),
+              let label = questionLabel(text, allowNumbers: allowNumbers) else { return nil }
+        let delimiter: String
+        if match.range(at: 1).location != NSNotFound { delimiter = "()" }
+        else if match.range(at: 2).location != NSNotFound { delimiter = ")" }
+        else if match.range(at: 3).location != NSNotFound { delimiter = "." }
+        else { delimiter = ns.substring(with: match.range(at: 5)) }
+        let rest = ns.substring(from: match.range.location + match.range.length)
+            .trimmingCharacters(in: .whitespaces)
+
+        var marks = [QuestionMark(label: label, indent: indent, delimiter: delimiter, text: rest)]
+        // Suivantes sur la même ligne : « 2) », « 3) »… dans l'ordre.
+        guard let first = Int(label), delimiter == ")" else { return marks }
+        var expected = first + 1
+        var remaining = rest
+        while let range = remaining.range(of: #"(?:^|\s)"# + "\(expected)" + #"\)\s"#, options: .regularExpression) {
+            let before = String(remaining[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            marks[marks.count - 1].text = before
+            remaining = String(remaining[range.upperBound...])
+            marks.append(QuestionMark(label: String(expected), indent: indent, delimiter: ")", text: remaining))
+            expected += 1
+        }
+        return marks
+    }
 
     /// L'étiquette d'une question en tête de ligne : « a) », « (ii) », « 3. ».
     static func questionLabel(_ text: String, allowNumbers: Bool) -> String? {
@@ -276,6 +312,10 @@ enum SeriesLayoutParser {
     struct QuestionMark: Equatable {
         var label: String
         var indent: Double
+        /// « ) », « . », « () » : « 1. » et « 1) » ne sont pas la même liste.
+        var delimiter: String = ""
+        /// Ce qui suit l'étiquette sur la ligne.
+        var text: String = ""
     }
 
     enum LabelStyle { case number, letter, roman }
@@ -290,37 +330,9 @@ enum SeriesLayoutParser {
         return .letter
     }
 
-    /// Les questions **du premier niveau**, dans l'ordre de leur numéro.
-    ///
-    /// Un polycopié imbrique souvent deux niveaux — « 1) … (a) (b) (c) 2) … (a)
-    /// (b) » — et les lire à plat mélangeait tout (« 1, a, b, c, d, 2, e ») : les
-    /// sous-points du second bloc disparaissaient même, pris pour des doublons.
-    /// Le premier niveau est le plus à gauche ; à retrait égal, le style de la
-    /// première étiquette. Deux colonnes (« 1) … 3) » sur une ligne, puis « 2) …
-    /// 4) ») arrivent dans le désordre : on trie.
+    /// Les étiquettes du premier niveau, dans l'ordre de leur numéro.
     static func topLevelQuestions(_ marks: [QuestionMark]) -> [String] {
-        guard let first = marks.first else { return [] }
-        let hasLayout = marks.contains { $0.indent > 0 }
-        let minIndent = marks.map(\.indent).min() ?? 0
-        let anchor = hasLayout ? (marks.first { $0.indent <= minIndent + 6 } ?? first) : first
-        var anchorStyle = style(of: anchor.label)
-        // « i) » qui ouvre une liste de lettres (a, b, … h, i) reste une lettre.
-        if anchorStyle == .roman, marks.contains(where: { style(of: $0.label) == .letter && $0.label != "i" }) {
-            anchorStyle = .letter
-        }
-
-        var seen = Set<String>()
-        var result: [String] = []
-        for mark in marks {
-            // La deuxième colonne est plus à droite, mais au même niveau : le
-            // style suffit à la reconnaître. Le retrait ne sert qu'à écarter un
-            // niveau imbriqué **du même style** (rare, mais « 1. » sous « 1) »).
-            let markStyle: LabelStyle = style(of: mark.label) == .roman && anchorStyle == .letter ? .letter : style(of: mark.label)
-            guard markStyle == anchorStyle else { continue }
-            guard seen.insert(mark.label).inserted else { continue }
-            result.append(mark.label)
-        }
-        return result.sorted { order(of: $0, style: anchorStyle) < order(of: $1, style: anchorStyle) }
+        questionTree(marks).filter { $0.kind == .question }.map(\.label)
     }
 
     private static func order(of label: String, style: LabelStyle) -> Int {
@@ -338,6 +350,166 @@ enum SeriesLayoutParser {
             }
             return total
         }
+    }
+
+    /// Une ligne sous un exercice : des étiquettes de question, ou du texte.
+    struct QuestionEvent: Equatable {
+        var marks: [QuestionMark] = []
+        var text: String
+        /// Alignée sur la marge gauche du document.
+        var nearMargin: Bool
+    }
+
+    /// L'arbre des questions à partir des seules étiquettes (tests, texte collé).
+    static func questionTree(_ marks: [QuestionMark]) -> [DetectedSubQuestion] {
+        questionTree(marks.map { QuestionEvent(marks: [$0], text: $0.label, nearMargin: false) })
+    }
+
+    /// L'arbre des questions d'un exercice : premier niveau, et ses points.
+    ///
+    /// « 1) … (a) (b) 2) … (a) (b) (c) » donne 1(a,b) et 2(a,b,c) — la version
+    /// précédente ne gardait que 1 et 2, et les cases réelles disparaissaient.
+    /// S'y ajoutent les **parties sans numéro** : une consigne d'ouverture suivie de
+    /// « Ensuite » (« Calculer lim aₙ. Ensuite, … calculer : 1) 2) 3) »), et un
+    /// « Ensuite, … » après la liste. Une liste de **conditions** (« satisfait les
+    /// conditions suivantes : 1) … 2) … ») n'est pas une liste de questions.
+    static func questionTree(_ events: [QuestionEvent]) -> [DetectedSubQuestion] {
+        let marks = events.flatMap(\.marks)
+        guard let first = marks.first else { return [] }
+
+        // Le premier niveau : l'étiquette la plus à gauche, et sa ponctuation.
+        let hasLayout = marks.contains { $0.indent > 0 }
+        let minIndent = marks.map(\.indent).min() ?? 0
+        let anchor = hasLayout ? (marks.first { $0.indent <= minIndent + 6 } ?? first) : first
+        var topStyle = style(of: anchor.label)
+        if topStyle == .roman, marks.contains(where: { style(of: $0.label) == .letter && $0.label != "i" }) {
+            topStyle = .letter
+        }
+        var childStyle: LabelStyle?
+
+        func resolved(_ mark: QuestionMark) -> LabelStyle {
+            let raw = style(of: mark.label)
+            // « i » après « h » reste une lettre.
+            if raw == .roman, mark.label.count == 1, topStyle == .letter || childStyle == .letter { return .letter }
+            return raw
+        }
+        func isTop(_ mark: QuestionMark) -> Bool {
+            resolved(mark) == topStyle && (mark.delimiter == anchor.delimiter || anchor.delimiter.isEmpty)
+        }
+
+        var intro = ""
+        var trailing: [String] = []
+        var extendsTrailing = false
+        var questions: [DetectedSubQuestion] = []
+        for event in events {
+            if questions.isEmpty {
+                // Avant la liste : tout est consigne, y compris une étiquette qui
+                // n'est pas du premier niveau (« n ⩾ 1. Calculer » lu « 1. Calculer »).
+                if let top = event.marks.firstIndex(where: isTop) {
+                    for mark in event.marks[..<top] { intro = joinLines(intro, mark.text) }
+                } else {
+                    intro = joinLines(intro, event.marks.isEmpty ? event.text : (event.marks.first?.text ?? event.text))
+                    continue
+                }
+            }
+            if event.marks.isEmpty {
+                if event.nearMargin, startsWithTransition(event.text) {
+                    trailing.append(event.text)
+                    extendsTrailing = true
+                } else if extendsTrailing, let last = trailing.indices.last, trailing[last].count < 160 {
+                    // La suite de la phrase « Ensuite, … » sur la ligne d'après.
+                    trailing[last] = joinLines(trailing[last], event.text)
+                }
+                continue
+            }
+            // Une question interrompt la phrase « Ensuite » — mais ne l'annule pas :
+            // PDFKit rend la seconde colonne **après** le texte qui suit la liste.
+            extendsTrailing = false
+            for mark in event.marks {
+                if isTop(mark) {
+                    guard !questions.contains(where: { $0.label == mark.label }) else { continue }
+                    questions.append(DetectedSubQuestion(label: mark.label, text: shortText(mark.text)))
+                } else if resolved(mark) != topStyle, !questions.isEmpty {
+                    let markStyle = resolved(mark)
+                    if childStyle == nil { childStyle = markStyle }
+                    guard markStyle == childStyle else { continue }
+                    // Les points vont à la dernière question **dans l'ordre de lecture**.
+                    let last = questions.count - 1
+                    guard !questions[last].children.contains(where: { $0.label == mark.label }) else { continue }
+                    questions[last].children.append(DetectedSubQuestion(label: mark.label, text: shortText(mark.text)))
+                }
+            }
+        }
+
+        if introListsConditions(intro) { return [] }
+
+        // Deux colonnes arrivent dans le désordre : on remet l'ordre du numéro.
+        questions.sort { order(of: $0.label, style: topStyle) < order(of: $1.label, style: topStyle) }
+        for index in questions.indices {
+            let style = childStyle ?? .letter
+            questions[index].children.sort { order(of: $0.label, style: style) < order(of: $1.label, style: style) }
+            if !isQuestionSequence(questions[index].children.map(\.label)) {
+                questions[index].children = []
+            }
+        }
+        guard isQuestionSequence(questions.map(\.label)) else { return [] }
+
+        if let lead = leadingTask(intro) {
+            questions.insert(DetectedSubQuestion(label: "", text: lead, kind: .part), at: 0)
+        }
+        for text in trailing {
+            questions.append(DetectedSubQuestion(label: "", text: shortText(text), kind: .part))
+        }
+        return questions
+    }
+
+    private static let transitionPattern = try! NSRegularExpression(
+        pattern: #"^(Ensuite|Puis|Enfin|Finalement|De plus|Then|Next|Finally|Afterwards)\b"#,
+        options: [.caseInsensitive])
+
+    static func startsWithTransition(_ text: String) -> Bool {
+        let ns = text as NSString
+        return transitionPattern.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length)) != nil
+    }
+
+    private static let imperativePattern = try! NSRegularExpression(
+        pattern: #"\b(Calculer|Montrer|Démontrer|Déterminer|Prouver|Trouver|Étudier|Donner|Résoudre|Vérifier|Compute|Show|Prove|Find|Determine|Solve)\b[^.]*?(?=[.;]?\s*(Ensuite|Puis|Then|Next)\b)"#,
+        options: [.caseInsensitive])
+
+    /// Une tâche demandée **avant** la liste, et séparée d'elle par « Ensuite ».
+    static func leadingTask(_ intro: String) -> String? {
+        let ns = intro as NSString
+        guard let match = imperativePattern.firstMatch(in: intro, options: [],
+                                                       range: NSRange(location: 0, length: ns.length)) else { return nil }
+        let text = ns.substring(with: match.range).trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        return text.isEmpty ? nil : shortText(text)
+    }
+
+    /// « …qui satisfait les deux conditions suivantes : » — la liste qui suit est
+    /// l'énoncé, pas du travail à cocher.
+    static func introListsConditions(_ intro: String) -> Bool {
+        let tail = String(intro.lowercased().suffix(160))
+        let patterns = [#"(conditions?|hypoth[eè]ses?|propri[eé]t[eé]s?|axiomes?)\s+suivant"#,
+                        #"following\s+(conditions?|properties|assumptions)"#,
+                        #"satisf\w*\s.*suivant"#]
+        return patterns.contains { tail.range(of: $0, options: .regularExpression) != nil }
+    }
+
+    /// Recolle deux lignes, sans l'espace d'une césure (« li- » + « mite »).
+    static func joinLines(_ a: String, _ b: String) -> String {
+        let a = a.trimmingCharacters(in: .whitespaces)
+        let b = b.trimmingCharacters(in: .whitespaces)
+        if a.isEmpty { return b }
+        if b.isEmpty { return a }
+        if a.hasSuffix("-") { return String(a.dropLast()) + b }
+        return a + " " + b
+    }
+
+    /// Un énoncé court : la ligne lue, bornée. Le texte d'un PDF LaTeX perd ses
+    /// symboles mathématiques ; il sert de repère, pas de copie.
+    static func shortText(_ text: String) -> String {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.count > 90 ? String(clean.prefix(89)) + "…" : clean
     }
 
     /// Des étiquettes forment-elles une vraie liste de questions ?

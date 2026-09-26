@@ -3,13 +3,13 @@ import SwiftData
 import PDFKit
 import UniformTypeIdentifiers
 
-/// Import d'une série depuis un PDF : lecture, puis **relecture éditable**.
+/// Import d'une série en trois temps : **choisir**, **analyser**, **relire**.
 ///
-/// La détection n'est jamais parfaite — les polycopiés varient, et un PDF scanné
-/// ne contient aucun texte. Tout ce qui est proposé se corrige donc ici, avant
-/// que rien ne soit créé : le cours, le numéro de série, la semaine, et chaque
-/// exercice (numéro, intitulé, bonus). Un numéro mal lu ne reste plus faux pour
-/// toujours.
+/// La version précédente affichait la lecture rapide tout de suite, puis la
+/// remplaçait quand l'IA répondait : la liste changeait sous le doigt, pendant
+/// qu'on la corrigeait. L'analyse a maintenant son écran, avec ses étapes et un
+/// « Continuer sans attendre » ; la relecture n'apparaît qu'une fois la lecture
+/// choisie, et elle utilise le même formulaire que « Modifier la série ».
 struct SeriesImportSheet: View {
     /// Cours d'où l'import est lancé. `nil` depuis l'accueil : le PDF le désigne
     /// souvent lui-même, sinon l'écran le demande — il ne choisit jamais seul.
@@ -26,26 +26,33 @@ struct SeriesImportSheet: View {
 
     @State private var selectedCourseID: UUID?
     @State private var courseWasDetected = false
-    @State private var phase: Phase = .empty
+    @State private var phase: Phase = .source
     @State private var sourceName = ""
+    @State private var pageCount = 0
     @State private var drafts: [SeriesDraft] = []
+    /// Ce qui a été appliqué en dernier : s'en écarter, c'est avoir corrigé.
+    @State private var lastApplied: [SeriesDraft] = []
     /// Ce que la lecture locale a trouvé, pour pouvoir y revenir.
     @State private var localResult: [DetectedSeries] = []
     @State private var aiResult: [DetectedSeries]?
     @State private var preferredSeries: Int?
     @State private var aiInput = ""
+    /// Les pages en JPEG : envoyées au modèle qui lit la mise en page, et
+    /// affichées dans l'aperçu de chaque exercice.
+    @State private var pageImages: [Data] = []
     @State private var ai: AIState = .idle
     @State private var analysisTask: Task<Void, Never>?
-    /// L'étudiant·e a modifié la liste : un résultat d'IA arrivé ensuite est
-    /// proposé, jamais imposé par-dessus ses corrections.
-    @State private var hasEdited = false
+    @State private var previewing: SourcePreview?
     @State private var showingPicker = false
     @State private var showingPaste = false
     @State private var pastedText = ""
+    @State private var saveError: String?
 
     private enum Phase: Equatable {
-        case empty
+        case source
         case reading
+        /// Lecture locale faite, l'IA lit les pages.
+        case analyzing
         case review
         case noText
         case failed(String)
@@ -63,51 +70,22 @@ struct SeriesImportSheet: View {
 
     private var trackedCourses: [Course] { courses.filter(\.isTracked) }
     private var selectedCourse: Course? { courses.first { $0.id == selectedCourseID } }
-
-    private var chosenCount: Int {
-        drafts.reduce(0) { $0 + $1.exercises.filter(\.isIncluded).count }
-    }
+    private var exerciseCount: Int { drafts.reduce(0) { $0 + $1.exercises.count } }
+    private var hasEdited: Bool { drafts != lastApplied }
+    private var problems: [String] { drafts.flatMap { $0.problems(takenNumbers: []) } }
 
     var body: some View {
         NavigationStack {
-            List {
-                sourceSection
+            Group {
                 switch phase {
-                case .empty:
-                    EmptyView()
-                case .reading:
-                    Section {
-                        HStack(spacing: Layout.control) {
-                            ProgressView()
-                            Text("Lecture du PDF…").foregroundStyle(.secondary)
-                        }
-                    }
-                case .noText:
-                    Section {
-                        Label("Aucun texte lisible", systemImage: "doc.text.magnifyingglass")
-                            .font(.subheadline.weight(.semibold))
-                    } footer: {
-                        Text("C'est le cas des documents scannés : ils contiennent une image, pas du texte. Ajoute les exercices à la main ci-dessous ou depuis l'onglet Exercices.")
-                    }
-                    addSeriesSection
-                case .failed(let message):
-                    Section {
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.orange.accessibleInk)
-                    }
-                case .review:
-                    courseSection
-                    analysisSection
-                    ForEach($drafts) { $draft in
-                        seriesSection($draft)
-                    }
-                    addSeriesSection
+                case .source: sourceStep
+                case .reading, .analyzing: analysisStep
+                case .review: reviewStep
+                case .noText: noTextStep
+                case .failed(let message): failedStep(message)
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Importer une série")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -116,10 +94,12 @@ struct SeriesImportSheet: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(chosenCount > 0 ? "Créer (\(chosenCount))" : "Créer") { create() }
-                        .fontWeight(.semibold)
-                        .disabled(chosenCount == 0 || selectedCourse == nil)
+                if phase == .review {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(exerciseCount > 0 ? "Importer (\(exerciseCount))" : "Importer") { create() }
+                            .fontWeight(.semibold)
+                            .disabled(exerciseCount == 0 || selectedCourse == nil || !problems.isEmpty)
+                    }
                 }
             }
             .fileImporter(isPresented: $showingPicker,
@@ -128,9 +108,12 @@ struct SeriesImportSheet: View {
                 handle(result)
             }
             .sheet(isPresented: $showingPaste) { pasteSheet }
+            .sheet(item: $previewing) { preview in
+                SourcePreviewSheet(preview: preview, pages: pageImages)
+            }
             .task {
                 if selectedCourseID == nil { selectedCourseID = course?.id }
-                guard phase == .empty else { return }
+                guard phase == .source else { return }
                 if let initialFileURL {
                     read([initialFileURL])
                 } else if let initialText, !initialText.isEmpty {
@@ -139,127 +122,216 @@ struct SeriesImportSheet: View {
             }
             .onDisappear { analysisTask?.cancel() }
         }
+        .interactiveDismissDisabled(phase == .review && hasEdited)
     }
 
-    // MARK: Source
+    private var title: String {
+        switch phase {
+        case .review: return "Vérifier l'import"
+        case .reading, .analyzing: return "Analyse"
+        default: return "Importer une série"
+        }
+    }
 
-    @ViewBuilder
-    private var sourceSection: some View {
-        if phase == .empty || phase == .reading || !sourceName.isEmpty || phase == .noText {
+    // MARK: 1. Source
+
+    private var sourceStep: some View {
+        List {
             Section {
-                if phase == .empty {
-                    Button {
-                        showingPicker = true
-                    } label: {
-                        Label("Choisir un PDF", systemImage: "doc.badge.plus")
-                    }
-                    Button {
-                        pastedText = ""
-                        showingPaste = true
-                    } label: {
-                        Label("Coller le texte d'une série", systemImage: "doc.on.clipboard")
-                    }
-                } else {
-                    HStack(spacing: Layout.control) {
-                        Image(systemName: "doc.richtext")
-                            .foregroundStyle(Theme.accentInk)
-                        Text(sourceName.isEmpty ? "Document" : sourceName)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: Layout.inline)
-                        if phase != .reading {
-                            Button("Changer") { showingPicker = true }
-                                .font(.subheadline)
-                                .buttonStyle(.borderless)
-                        }
-                    }
+                Button {
+                    showingPicker = true
+                } label: {
+                    bigChoice(icon: "doc.badge.plus", title: "Choisir un PDF",
+                              detail: "Une série ou plusieurs à la fois, depuis Fichiers.")
+                }
+                Button {
+                    pastedText = ""
+                    showingPaste = true
+                } label: {
+                    bigChoice(icon: "doc.on.clipboard", title: "Coller l'énoncé",
+                              detail: "Depuis Moodle, un mail ou une page web.")
                 }
             } footer: {
-                if phase == .empty {
-                    Text("Les exercices sont détectés automatiquement. Tu vérifies et corriges la liste avant que quoi que ce soit ne soit créé.")
+                Text("Les exercices, leurs questions et leurs points sont repérés automatiquement. Tu vérifies tout avant que quoi que ce soit ne soit créé.")
+            }
+            if let course {
+                Section {
+                    LabeledContent("Cours", value: "\(course.displayCode) · \(course.name)")
                 }
             }
         }
+        .listStyle(.insetGrouped)
     }
 
-    // MARK: Cours
-
-    private var courseSection: some View {
-        Section {
-            Picker("Cours", selection: $selectedCourseID) {
-                if selectedCourseID == nil {
-                    Text("Choisir…").tag(UUID?.none)
-                }
-                ForEach(trackedCourses) { course in
-                    Text("\(course.displayCode) · \(course.name)").tag(Optional(course.id))
-                }
+    private func bigChoice(icon: String, title: String, detail: String) -> some View {
+        HStack(spacing: Layout.block) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(Theme.accentInk)
+                .frame(width: 36)
+            VStack(alignment: .leading, spacing: Layout.micro) {
+                Text(title).font(.headline).foregroundStyle(.primary)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
             }
-            .pickerStyle(.menu)
-            .onChange(of: selectedCourseID) { _, _ in courseWasDetected = false }
-        } footer: {
-            if selectedCourse == nil {
-                Text("Choisis le cours auquel ajouter cette série.")
-                    .foregroundStyle(Color.orange.accessibleInk)
-            } else if courseWasDetected {
-                Text("Cours reconnu dans le document.")
-            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
         }
+        .padding(.vertical, Layout.snug)
+        .contentShape(Rectangle())
     }
 
-    // MARK: Analyse
+    // MARK: 2. Analyse
 
-    @ViewBuilder
-    private var analysisSection: some View {
-        switch ai {
-        case .idle:
-            EmptyView()
-        case .unavailable:
+    private var analysisStep: some View {
+        List {
             Section {
-                statusRow(icon: "text.magnifyingglass", tint: .secondary,
-                          title: "Lecture locale",
-                          detail: "L'analyse IA est désactivée (Profil › Import intelligent).")
+                stepRow(done: phase == .analyzing, running: phase == .reading,
+                        title: "Lecture du document",
+                        detail: phase == .reading ? sourceName
+                            : "\(sourceName)\(pageCount > 0 ? " · \(pageCount) page\(pageCount > 1 ? "s" : "")" : "") · \(localSummary)")
+                if phase == .analyzing {
+                    stepRow(done: false, running: true,
+                            title: pageImages.isEmpty ? "Vérification par l'IA" : "Lecture des pages par l'IA",
+                            detail: pageImages.isEmpty
+                                ? "Structure, intitulés et bonus."
+                                : "Questions, points (a)(b)(c) et formules, lus sur la page. Compte 10 à 40 s.")
+                }
             }
-        case .running:
-            Section {
-                HStack(spacing: Layout.control) {
-                    ProgressView()
-                    VStack(alignment: .leading, spacing: Layout.micro) {
-                        Text("Vérification par l'IA…").font(.subheadline.weight(.semibold))
-                        Text("Tu peux déjà relire la liste.").font(.caption).foregroundStyle(.secondary)
+            if phase == .analyzing {
+                Section {
+                    Button {
+                        continueWithoutWaiting()
+                    } label: {
+                        Label("Continuer sans attendre", systemImage: "forward.fill")
                     }
-                    Spacer(minLength: Layout.inline)
-                    Button("Arrêter", role: .destructive) { cancelAnalysis() }
-                        .font(.subheadline)
-                        .buttonStyle(.borderless)
+                    Button(role: .destructive) {
+                        cancelAnalysis()
+                    } label: {
+                        Label("Arrêter l'IA et garder la lecture rapide", systemImage: "stop.fill")
+                    }
+                } footer: {
+                    Text("Sans attendre, tu relis la lecture rapide ; si l'IA trouve autre chose ensuite, elle te le proposera sans rien écraser.")
                 }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func stepRow(done: Bool, running: Bool, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: Layout.block) {
+            Group {
+                if running {
+                    ProgressView()
+                } else {
+                    Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(done ? Color.green.accessibleMark : .secondary)
+                }
+            }
+            .frame(width: 24)
+            VStack(alignment: .leading, spacing: Layout.micro) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, Layout.tight)
+    }
+
+    private var localSummary: String {
+        let exercises = localResult.reduce(0) { $0 + $1.exercises.count }
+        return "\(exercises) exercice\(exercises > 1 ? "s" : "") repéré\(exercises > 1 ? "s" : "")"
+    }
+
+    // MARK: 3. Relecture
+
+    private var reviewStep: some View {
+        List {
+            Section {
+                Picker("Cours", selection: $selectedCourseID) {
+                    if selectedCourseID == nil {
+                        Text("Choisir…").tag(UUID?.none)
+                    }
+                    ForEach(trackedCourses) { course in
+                        Text("\(course.displayCode) · \(course.name)").tag(Optional(course.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .onChange(of: selectedCourseID) { _, _ in courseWasDetected = false }
+                analysisStatus
+            } footer: {
+                if selectedCourse == nil {
+                    Text("Choisis le cours auquel ajouter cette série.")
+                        .foregroundStyle(Color.orange.accessibleInk)
+                } else if courseWasDetected {
+                    Text("Cours reconnu dans le document.")
+                }
+            }
+
+            ForEach($drafts) { $draft in
+                SeriesDraftForm(draft: $draft,
+                                maxWeek: selectedCourse?.term?.totalWeeks ?? 14,
+                                mergesInto: selectedCourse?.series.first { $0.seriesNumber == draft.number },
+                                showSource: pageImages.isEmpty ? nil : { exercise in preview(exercise, in: draft) })
+            }
+
+            Section {
+                Button {
+                    let next = (drafts.map(\.number).max() ?? preferredSeries.map { $0 - 1 } ?? 0) + 1
+                    var draft = SeriesDraft(number: next, title: "", plannedWeek: defaultWeek(for: next), exercises: [])
+                    draft.addExercise()
+                    drafts.append(draft)
+                    Haptics.tap()
+                } label: {
+                    Label(drafts.isEmpty ? "Ajouter une série à la main" : "Ajouter une autre série",
+                          systemImage: "plus.rectangle.on.rectangle")
+                }
+            } footer: {
+                if let saveError {
+                    Text(saveError).foregroundStyle(Color.orange.accessibleInk)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// Qui a lu le document, en une ligne — et ce qu'on peut y faire.
+    @ViewBuilder
+    private var analysisStatus: some View {
+        switch ai {
+        case .idle, .unavailable:
+            statusRow(icon: "text.magnifyingglass", tint: .secondary, title: "Lecture rapide",
+                      detail: ai == .unavailable ? "IA désactivée (Profil › Import intelligent). Vérifie les questions." : "")
+        case .running:
+            HStack(spacing: Layout.control) {
+                ProgressView()
+                Text("L'IA lit encore les pages…").font(.subheadline)
+                Spacer(minLength: 0)
+                Button("Arrêter") { cancelAnalysis() }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
             }
         case .applied(let detail):
-            Section {
-                statusRow(icon: "checkmark.seal.fill", tint: .green, title: "Vérifié par l'IA", detail: detail)
-                Button("Revenir à la lecture locale") {
-                    apply(localResult)
-                    ai = .idle
-                    Haptics.tap()
-                }
-                .font(.subheadline)
+            statusRow(icon: "checkmark.seal.fill", tint: .green, title: "Lu par l'IA", detail: detail)
+            Button("Revenir à la lecture rapide") {
+                apply(localResult)
+                ai = .idle
+                Haptics.tap()
             }
+            .font(.subheadline)
         case .pending(let detail):
-            Section {
-                statusRow(icon: "sparkles", tint: Theme.accent, title: "L'IA propose une autre lecture", detail: detail)
-                Button("Utiliser la lecture de l'IA") {
-                    if let aiResult { apply(aiResult) }
-                    ai = .applied(detail)
-                    Haptics.success()
-                }
-                .font(.subheadline)
+            statusRow(icon: "sparkles", tint: Theme.accent, title: "L'IA propose une autre lecture", detail: detail)
+            Button("Utiliser la lecture de l'IA (remplace tes corrections)") {
+                if let aiResult { apply(aiResult) }
+                ai = .applied(detail)
+                Haptics.success()
             }
+            .font(.subheadline)
         case .failed(let message):
-            Section {
-                statusRow(icon: "exclamationmark.triangle.fill", tint: .orange,
-                          title: "IA indisponible — lecture locale", detail: message)
-                Button("Réessayer") { runAI() }
-                    .font(.subheadline)
-            }
+            statusRow(icon: "exclamationmark.triangle.fill", tint: .orange,
+                      title: "Lecture rapide — l'IA n'a pas abouti", detail: message)
+            Button("Réessayer l'IA") { runAI() }
+                .font(.subheadline)
         }
     }
 
@@ -280,72 +352,51 @@ struct SeriesImportSheet: View {
         }
     }
 
-    // MARK: Séries
-
-    private func seriesSection(_ draft: Binding<SeriesDraft>) -> some View {
-        let existing = selectedCourse?.series.first { $0.seriesNumber == draft.wrappedValue.number }
-        let maxWeek = max(selectedCourse?.term?.totalWeeks ?? 14, draft.wrappedValue.plannedWeek)
-        return Section {
-            Stepper(value: draft.number.edited(by: markEdited), in: 1...60) {
-                LabeledContent("Série", value: "\(draft.wrappedValue.number)")
-            }
-            TextField("Titre de la série (facultatif)", text: draft.title.edited(by: markEdited))
-            Stepper(value: draft.plannedWeek.edited(by: markEdited), in: 1...maxWeek) {
-                LabeledContent("Semaine prévue", value: "\(draft.wrappedValue.plannedWeek)")
-            }
-
-            ForEach(draft.exercises) { $exercise in
-                ExerciseDraftRow(exercise: $exercise.edited(by: markEdited),
-                                 seriesNumber: draft.wrappedValue.number,
-                                 alreadyThere: existing?.exercises.contains {
-                                     $0.exerciseNumber == "\(draft.wrappedValue.number).\(exercise.minor)"
-                                 } ?? false)
-            }
-            .onDelete { offsets in
-                draft.wrappedValue.exercises.remove(atOffsets: offsets)
-                markEdited()
-            }
-
-            Button {
-                draft.wrappedValue.addExercise()
-                markEdited()
-                Haptics.tap()
-            } label: {
-                Label("Ajouter un exercice", systemImage: "plus.circle")
-            }
-        } header: {
-            HStack {
-                Text("Série \(draft.wrappedValue.number)")
-                Spacer()
-                Text("\(draft.wrappedValue.exercises.filter(\.isIncluded).count) exercice\(draft.wrappedValue.exercises.filter(\.isIncluded).count > 1 ? "s" : "")")
-            }
-        } footer: {
-            if existing != nil {
-                Text("Cette série existe déjà : les exercices présents seront mis à jour, les autres ajoutés.")
-            } else if draft.wrappedValue.exercises.isEmpty {
-                Text("Aucun exercice reconnu. Ajoute-les à la main.")
-            }
-        }
+    private func preview(_ exercise: ExerciseDraft, in draft: SeriesDraft) {
+        guard let page = exercise.pageIndex, page < pageImages.count, !pageImages[page].isEmpty else { return }
+        previewing = SourcePreview(title: "Exercice \(draft.number).\(exercise.minor)",
+                                   page: page, top: exercise.top, bottom: exercise.bottom)
     }
 
-    @ViewBuilder
-    private var addSeriesSection: some View {
-        if phase == .review || phase == .noText {
+    // MARK: États sans relecture
+
+    private var noTextStep: some View {
+        List {
+            Section {
+                Label("Aucun texte lisible", systemImage: "doc.text.magnifyingglass")
+                    .font(.subheadline.weight(.semibold))
+            } footer: {
+                Text("C'est le cas des documents scannés : ils contiennent une image, pas du texte. Crée la série à la main — le plan rapide « 1(a-d) 2 3 » va vite.")
+            }
             Section {
                 Button {
-                    let next = (drafts.map(\.number).max() ?? preferredSeries.map { $0 - 1 } ?? 0) + 1
-                    var draft = SeriesDraft(number: next, title: "", plannedWeek: defaultWeek(for: next), exercises: [])
+                    let number = preferredSeries ?? 1
+                    var draft = SeriesDraft(number: number, title: "", plannedWeek: defaultWeek(for: number), exercises: [])
                     draft.addExercise()
-                    drafts.append(draft)
-                    if phase == .noText { phase = .review }
-                    markEdited()
-                    Haptics.tap()
+                    drafts = [draft]
+                    lastApplied = []
+                    phase = .review
                 } label: {
-                    Label(drafts.isEmpty ? "Ajouter une série à la main" : "Ajouter une autre série",
-                          systemImage: "plus.rectangle.on.rectangle")
+                    Label("Créer la série à la main", systemImage: "plus.rectangle.on.rectangle")
                 }
+                Button("Choisir un autre fichier") { showingPicker = true }
             }
         }
+        .listStyle(.insetGrouped)
+    }
+
+    private func failedStep(_ message: String) -> some View {
+        List {
+            Section {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.orange.accessibleInk)
+            }
+            Section {
+                Button("Choisir un autre fichier") { showingPicker = true }
+            }
+        }
+        .listStyle(.insetGrouped)
     }
 
     // MARK: Collage
@@ -396,6 +447,7 @@ struct SeriesImportSheet: View {
 
     private struct ReadResult: Sendable {
         var lines: [PDFLayoutLine]
+        var pages: [Data]
         var unreadable: Int
     }
 
@@ -405,14 +457,13 @@ struct SeriesImportSheet: View {
         analysisTask?.cancel()
         phase = .reading
         ai = .idle
-        sourceName = urls.count == 1
-            ? urls[0].lastPathComponent
-            : "\(urls.count) documents"
+        sourceName = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) documents"
         let filename = urls.first?.lastPathComponent
 
         analysisTask = Task {
             let result = await Task.detached(priority: .userInitiated) { () -> ReadResult in
                 var allLines: [PDFLayoutLine] = []
+                var pages: [Data] = []
                 var unreadable = 0
                 for url in urls {
                     // Un fichier choisi hors du bac à sable doit être ouvert explicitement.
@@ -424,13 +475,19 @@ struct SeriesImportSheet: View {
                     }
                     var lines = PDFLayoutExtractor.lines(from: document)
                     // Les numéros de page repartent de zéro à chaque fichier.
-                    let offset = (allLines.last?.pageIndex ?? -1) + 1
+                    let offset = pages.count
                     for index in lines.indices { lines[index].pageIndex += offset }
                     allLines.append(contentsOf: lines)
+                    // Une image par page, pour garder les index alignés sur les lignes.
+                    let rendered = PDFPageRenderer.jpegPages(of: document)
+                    pages.append(contentsOf: rendered)
+                    pages.append(contentsOf: Array(repeating: Data(), count: max(0, document.pageCount - rendered.count)))
                 }
-                return ReadResult(lines: allLines, unreadable: unreadable)
+                return ReadResult(lines: allLines, pages: pages, unreadable: unreadable)
             }.value
             guard !Task.isCancelled else { return }
+            pageImages = result.pages
+            pageCount = result.pages.count
 
             if result.lines.allSatisfy(\.isEmpty) {
                 if result.unreadable == urls.count {
@@ -448,6 +505,8 @@ struct SeriesImportSheet: View {
     }
 
     private func analyze(text: String) {
+        pageImages = []
+        pageCount = 0
         // Texte collé (Moodle, mail) : aucune information de police. L'analyse
         // retombe sur les motifs.
         analyze(lines: text.components(separatedBy: .newlines).map { PDFLayoutLine(text: $0) },
@@ -476,14 +535,12 @@ struct SeriesImportSheet: View {
         let parsed = SeriesLayoutParser.parse(lines, defaultSeries: preferredSeries)
         localResult = parsed
         aiResult = nil
-        hasEdited = false
         apply(parsed)
         if drafts.isEmpty, let preferredSeries {
             // Rien de reconnu, mais le numéro est connu : une série vide à remplir.
             drafts = [SeriesDraft(number: preferredSeries, title: "", plannedWeek: defaultWeek(for: preferredSeries), exercises: [])]
+            lastApplied = drafts
         }
-        phase = .review
-        Haptics.success()
 
         let hasLayout = lines.contains { $0.fontSize > 0 }
         aiInput = hasLayout
@@ -491,14 +548,17 @@ struct SeriesImportSheet: View {
             : (preferredSeries.map { "[Indice : ce document semble être la série \($0)]\n" } ?? "")
                 + SeriesAIParsing.prepare(lines.map(\.text).joined(separator: "\n"))
         if app.settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(app.settings) != nil {
+            phase = .analyzing
             runAI()
         } else {
             ai = .unavailable
+            phase = .review
+            Haptics.success()
         }
     }
 
-    /// Demande au modèle de vérifier la lecture locale. Le résultat est fusionné :
-    /// les exercices sûrs restent, les repères douteux doivent être confirmés.
+    /// Demande au modèle de lire le document. Le résultat est fusionné : les
+    /// exercices sûrs restent, les repères douteux doivent être confirmés.
     private func runAI() {
         guard !aiInput.isEmpty else { return }
         analysisTask?.cancel()
@@ -506,52 +566,62 @@ struct SeriesImportSheet: View {
         let input = aiInput
         let base = localResult
         let preferred = preferredSeries
+        let pages = pageImages.allSatisfy { !$0.isEmpty } ? pageImages : []
         analysisTask = Task {
             do {
-                let result = try await SeriesAIExtractor.extract(prepared: input, settings: app.settings)
+                let result = try await SeriesAIExtractor.extract(prepared: input, pageImages: pages,
+                                                                 seriesHint: preferred, settings: app.settings)
                 guard !Task.isCancelled else { return }
-                let merged = SeriesAIParsing.merge(heuristic: base, ai: result.series, preferredSeries: preferred)
+                let merged = SeriesAIParsing.merge(heuristic: base, ai: result.series, preferredSeries: preferred,
+                                                   aiReadsLayout: result.source.readsLayout)
                 aiResult = merged
                 let detail = summary(local: base, merged: merged, source: result.source)
-                if hasEdited {
+                if phase == .review, hasEdited {
                     ai = merged == base ? .applied(detail) : .pending(detail)
                 } else {
                     apply(merged)
                     ai = .applied(detail)
                 }
+                phase = .review
                 Haptics.success()
             } catch {
                 guard !Task.isCancelled else { return }
                 // La lecture locale reste valable : on la garde, et on dit
                 // pourquoi le modèle n'a rien ajouté.
                 ai = .failed(error.localizedDescription)
-                AppLog.record(.warning, AppLog.Category.ai,
-                              "Analyse IA sans résultat",
+                phase = .review
+                AppLog.record(.warning, AppLog.Category.ai, "Analyse IA sans résultat",
                               detail: error.localizedDescription)
             }
         }
     }
 
-    private func summary(local: [DetectedSeries], merged: [DetectedSeries], source: SeriesExtractionSource) -> String {
-        let before = local.reduce(0) { $0 + $1.exercises.count }
-        let after = merged.reduce(0) { $0 + $1.exercises.count }
-        let titled = merged.reduce(0) { $0 + $1.exercises.filter { !$0.title.isEmpty }.count }
-        var parts: [String] = []
-        if after > before { parts.append("\(after - before) exercice\(after - before > 1 ? "s" : "") ajouté\(after - before > 1 ? "s" : "")") }
-        if after < before { parts.append("\(before - after) repère\(before - after > 1 ? "s" : "") douteux écarté\(before - after > 1 ? "s" : "")") }
-        if titled > 0 { parts.append("\(titled) intitulé\(titled > 1 ? "s" : "")") }
-        if parts.isEmpty { parts.append("Structure confirmée") }
-        return parts.joined(separator: " · ") + " — \(source.label)"
+    private func continueWithoutWaiting() {
+        // L'IA continue ; son résultat sera proposé, pas imposé.
+        phase = .review
+        Haptics.tap()
     }
 
     private func cancelAnalysis() {
         analysisTask?.cancel()
         analysisTask = nil
         ai = .failed("Analyse arrêtée.")
+        phase = .review
         Haptics.warning()
     }
 
-    private func markEdited() { hasEdited = true }
+    private func summary(local: [DetectedSeries], merged: [DetectedSeries], source: SeriesExtractionSource) -> String {
+        let before = local.reduce(0) { $0 + $1.exercises.count }
+        let after = merged.reduce(0) { $0 + $1.exercises.count }
+        let leaves = merged.flatMap(\.exercises).reduce(0) { $0 + max(1, $1.leafQuestionCount) }
+        let changed = zip(local.flatMap(\.exercises), merged.flatMap(\.exercises))
+            .filter { $0.number == $1.number && $0.subQuestions != $1.subQuestions }.count
+        var parts = ["\(after) exercice\(after > 1 ? "s" : ""), \(leaves) cases"]
+        if changed > 0 { parts.append("questions relues pour \(changed)") }
+        if after > before { parts.append("\(after - before) ajouté\(after - before > 1 ? "s" : "")") }
+        if after < before { parts.append("\(before - after) repère\(before - after > 1 ? "s" : "") douteux écarté\(before - after > 1 ? "s" : "")") }
+        return parts.joined(separator: " · ") + " — \(source.label)"
+    }
 
     // MARK: Brouillons
 
@@ -562,8 +632,17 @@ struct SeriesImportSheet: View {
                                                                    courseName: selectedCourse?.name ?? "",
                                                                    courseCode: selectedCourse?.code ?? ""),
                         plannedWeek: defaultWeek(for: detected.number),
-                        exercises: detected.exercises.map { ExerciseDraft(detected: $0) })
+                        exercises: detected.exercises.enumerated().map { index, exercise in
+                            var draft = ExerciseDraft(detected: exercise)
+                            // L'aperçu s'arrête où commence l'exercice suivant, s'il est sur la même page.
+                            let next = detected.exercises.dropFirst(index + 1).first
+                            if let next, next.pageIndex == exercise.pageIndex {
+                                draft.bottom = next.verticalPosition
+                            }
+                            return draft
+                        })
         }
+        lastApplied = drafts
     }
 
     /// La semaine où la série est prévue : son numéro, quand il tient dans le
@@ -576,72 +655,10 @@ struct SeriesImportSheet: View {
 
     // MARK: Création
 
-    /// Crée les sous-questions d'un exercice, sans jamais dupliquer.
-    ///
-    /// Un réimport ne doit pas doubler les cases : on complète par étiquette
-    /// manquante, et on laisse l'état « fait » de celles qui existent — c'est du
-    /// travail de l'étudiant·e, pas de l'import.
-    private func attach(_ questions: [DetectedSubQuestion], to exercise: Exercise) {
-        guard !questions.isEmpty else { return }
-        for (index, question) in questions.enumerated() {
-            guard !exercise.subQuestions.contains(where: { $0.label == question.label }) else { continue }
-            context.insert(SubQuestion(exercise: exercise,
-                                       label: question.label,
-                                       text: question.text,
-                                       sortOrder: index))
-        }
-    }
-
     private func create() {
         guard let course = selectedCourse else { return }
-        for draft in drafts {
-            let chosen = draft.exercises.filter(\.isIncluded)
-            guard !chosen.isEmpty else { continue }
-
-            let target: ExerciseSeries
-            if let existing = course.series.first(where: { $0.seriesNumber == draft.number }) {
-                target = existing
-                let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !title.isEmpty { existing.title = title }
-            } else {
-                let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                let new = ExerciseSeries(course: course,
-                                         seriesNumber: draft.number,
-                                         title: title.isEmpty ? "Série \(draft.number)" : title,
-                                         plannedWeek: draft.plannedWeek)
-                context.insert(new)
-                target = new
-            }
-
-            var created = Set<String>()
-            for exercise in chosen {
-                let minor = exercise.minor.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !minor.isEmpty else { continue }
-                let number = "\(draft.number).\(minor)"
-                guard created.insert(number).inserted else { continue }
-                let title = exercise.title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                // Un exercice déjà présent n'est **pas** dupliqué — mais il est mis
-                // à jour : c'est ainsi qu'un réimport corrige un intitulé erroné.
-                if let existing = target.exercises.first(where: { $0.exerciseNumber == number }) {
-                    if !title.isEmpty {
-                        existing.title = title
-                    } else if !existing.title.isEmpty, !SeriesPDFParser.looksLikeTitle(existing.title) {
-                        existing.title = ""
-                    }
-                    existing.isBonus = exercise.isBonus
-                    attach(exercise.subQuestions, to: existing)
-                    continue
-                }
-
-                let item = Exercise(series: target,
-                                    exerciseNumber: number,
-                                    title: title,
-                                    isBonus: exercise.isBonus,
-                                    sortOrder: target.exercises.count)
-                context.insert(item)
-                attach(exercise.subQuestions, to: item)
-            }
+        for draft in drafts where !draft.exercises.isEmpty {
+            SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
         }
         do {
             try context.save()
@@ -650,118 +667,7 @@ struct SeriesImportSheet: View {
         } catch {
             AppLog.record(.error, AppLog.Category.storage, "Import de série non enregistré",
                           detail: error.localizedDescription)
-            phase = .failed("L'enregistrement a échoué : \(error.localizedDescription)")
+            saveError = "L'enregistrement a échoué : \(error.localizedDescription)"
         }
-    }
-}
-
-// MARK: - Brouillons éditables
-
-/// Une série telle qu'elle sera créée — modifiable avant création.
-struct SeriesDraft: Identifiable, Equatable {
-    let id = UUID()
-    var number: Int
-    var title: String
-    var plannedWeek: Int
-    var exercises: [ExerciseDraft]
-
-    /// Ajoute la ligne suivante : « 4.3 » après « 4.2 ».
-    mutating func addExercise() {
-        let next = (exercises.compactMap { Int($0.minor) }.max() ?? 0) + 1
-        exercises.append(ExerciseDraft(minor: "\(next)", title: "", isBonus: false))
-    }
-}
-
-/// Un exercice tel qu'il sera créé. Le numéro est stocké **sans** la série :
-/// changer le numéro de série renumérote toute la liste d'un coup.
-struct ExerciseDraft: Identifiable, Equatable {
-    let id = UUID()
-    var minor: String
-    var title: String
-    var isBonus: Bool
-    var isIncluded = true
-    var subQuestions: [DetectedSubQuestion] = []
-
-    init(minor: String, title: String, isBonus: Bool) {
-        self.minor = minor
-        self.title = title
-        self.isBonus = isBonus
-    }
-
-    init(detected: DetectedExercise) {
-        minor = detected.number.split(separator: ".").last.map(String.init) ?? detected.number
-        title = detected.title
-        isBonus = detected.isBonus
-        subQuestions = detected.subQuestions
-    }
-}
-
-/// Une ligne : inclure, numéro, intitulé, bonus.
-private struct ExerciseDraftRow: View {
-    @Binding var exercise: ExerciseDraft
-    let seriesNumber: Int
-    let alreadyThere: Bool
-
-    var body: some View {
-        HStack(spacing: Layout.control) {
-            Button {
-                exercise.isIncluded.toggle()
-                Haptics.tap()
-            } label: {
-                Image(systemName: exercise.isIncluded ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(exercise.isIncluded ? Theme.accent.accessibleMark : Color.secondary)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel(exercise.isIncluded ? "Exclure l'exercice" : "Inclure l'exercice")
-
-            HStack(spacing: 0) {
-                Text("\(seriesNumber).")
-                    .foregroundStyle(.secondary)
-                TextField("n°", text: $exercise.minor)
-                    .keyboardType(.numbersAndPunctuation)
-                    .frame(width: 34)
-            }
-            .font(.subheadline.monospacedDigit().weight(.semibold))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Numéro de l'exercice")
-
-            VStack(alignment: .leading, spacing: Layout.micro) {
-                TextField("Sans titre", text: $exercise.title)
-                    .font(.subheadline)
-                if alreadyThere || !exercise.subQuestions.isEmpty {
-                    HStack(spacing: Layout.snug) {
-                        if alreadyThere { Text("déjà présent") }
-                        if !exercise.subQuestions.isEmpty {
-                            Text("\(exercise.subQuestions.count) questions")
-                        }
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            Button {
-                exercise.isBonus.toggle()
-                Haptics.tap()
-            } label: {
-                Image(systemName: exercise.isBonus ? "star.fill" : "star")
-                    .foregroundStyle(exercise.isBonus ? Color.orange.accessibleMark : Color.secondary)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Bonus")
-            .accessibilityValue(exercise.isBonus ? "facultatif" : "obligatoire")
-        }
-        .opacity(exercise.isIncluded ? 1 : 0.45)
-    }
-}
-
-private extension Binding {
-    /// La même liaison, qui signale chaque écriture — pour savoir que la liste a
-    /// été corrigée à la main.
-    func edited(by mark: @escaping () -> Void) -> Binding<Value> {
-        Binding(get: { wrappedValue }, set: { wrappedValue = $0; mark() })
     }
 }

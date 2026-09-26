@@ -9,6 +9,9 @@ enum SeriesExtractionSource: Equatable {
     case onDevice
     /// La fonction Supabase de l'app : la clé du fournisseur est côté serveur.
     case shared
+    /// La même fonction, qui a lu les **pages en image** : colonnes, points
+    /// imbriqués et formules compris. Sa lecture des questions fait foi.
+    case vision
     /// Un service configuré par l'étudiant·e, avec sa propre clé.
     case remote(model: String)
 
@@ -17,15 +20,21 @@ enum SeriesExtractionSource: Equatable {
         case .heuristic: return "détection par motifs"
         case .onDevice: return "IA sur l'appareil"
         case .shared: return "IA StudyTrack (sans clé)"
+        case .vision: return "IA StudyTrack · lecture des pages"
         case .remote(let model): return "IA perso · \(model)"
         }
     }
+
+    /// Le moteur a-t-il vu la mise en page ? Sa lecture des sous-questions
+    /// l'emporte alors sur celle du texte (`SeriesAIParsing.merge`).
+    var readsLayout: Bool { self == .vision }
 
     var icon: String {
         switch self {
         case .heuristic: return "text.magnifyingglass"
         case .onDevice: return "apple.intelligence"
         case .shared: return "sparkles"
+        case .vision: return "eye"
         case .remote: return "cloud"
         }
     }
@@ -258,7 +267,8 @@ enum SeriesAIExtractor {
     /// Extraction d'un texte **déjà préparé** — celui de `prepareLayout`, qui
     /// garde titres, retraits et l'indice de série. Le préparer une seconde fois
     /// le ramènerait à un texte aplati.
-    static func extract(prepared: String, settings: SettingsStore) async throws -> (series: [DetectedSeries], source: SeriesExtractionSource) {
+    static func extract(prepared: String, pageImages: [Data] = [], seriesHint: Int? = nil,
+                        settings: SettingsStore) async throws -> (series: [DetectedSeries], source: SeriesExtractionSource) {
         let engines = chain(settings)
         guard !engines.isEmpty else { throw ExtractionError.unavailable }
         var lastError: Error = ExtractionError.emptyAnswer
@@ -271,9 +281,23 @@ enum SeriesAIExtractor {
                 let series: [DetectedSeries]
                 switch engine {
                 case .onDevice: series = try await extractOnDevice(prepared)
-                case .shared: series = try await extractShared(prepared)
+                case .shared:
+                    // Les pages d'abord : c'est la seule lecture fiable des
+                    // sous-questions. Le texte reste le repli, dans le même maillon.
+                    if !pageImages.isEmpty {
+                        do {
+                            let seen = try await extractSharedVision(pageImages, seriesHint: seriesHint)
+                            if !seen.isEmpty { return (seen, .vision) }
+                        } catch {
+                            if Task.isCancelled { throw error }
+                            if case ExtractionError.sharedNotDeployed = error { throw error }
+                            AppLog.record(.warning, AppLog.Category.ai, "Lecture des pages impossible",
+                                          detail: error.localizedDescription)
+                        }
+                    }
+                    series = try await extractShared(prepared)
                 case .remote: series = try await extractRemote(prepared, settings: settings)
-                case .heuristic: continue
+                case .heuristic, .vision: continue
                 }
                 if !series.isEmpty { return (series, engine) }
                 lastError = ExtractionError.emptyAnswer
@@ -288,17 +312,29 @@ enum SeriesAIExtractor {
     // MARK: Fonction Supabase partagée
 
     private static func extractShared(_ text: String) async throws -> [DetectedSeries] {
+        try await callShared(["text": text], timeout: 45)
+    }
+
+    /// Les pages en image. Plus lent (un paquet de cinq pages par appel côté
+    /// serveur), d'où un délai plus large.
+    private static func extractSharedVision(_ pages: [Data], seriesHint: Int?) async throws -> [DetectedSeries] {
+        var body: [String: Any] = ["images": pages.map { $0.base64EncodedString() }]
+        if let seriesHint { body["seriesHint"] = seriesHint }
+        return try await callShared(body, timeout: 120)
+    }
+
+    private static func callShared(_ body: [String: Any], timeout: TimeInterval) async throws -> [DetectedSeries] {
         guard SupabaseConfig.isConfigured,
               let url = URL(string: "\(SupabaseConfig.urlString)/functions/v1/extract-series") else {
             throw ExtractionError.unavailable
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ExtractionError.remote("réponse invalide") }

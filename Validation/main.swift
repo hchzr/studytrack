@@ -296,6 +296,41 @@ subExercise.setSubQuestions(done: false)
 check(!subExercise.isDone, "décocher l'exercice le défait")
 check(subExercise.subQuestions.allSatisfy { !$0.isDone }, "…et décoche toutes ses questions")
 
+// Deux niveaux : « 1) (a) (b) » et « 2) » font trois cases, pas cinq.
+let nestedExercise = Exercise(series: subSeries, exerciseNumber: "9.4")
+nestedExercise.replaceSubQuestions(with: [
+    DetectedSubQuestion(label: "1", children: [DetectedSubQuestion(label: "a"), DetectedSubQuestion(label: "b")]),
+    DetectedSubQuestion(label: "2"),
+    DetectedSubQuestion(label: "", text: "Ensuite, représenter", kind: .part)
+], in: nil)
+check(nestedExercise.subQuestions.count == 5, "cinq nœuds enregistrés — \(nestedExercise.subQuestions.count)")
+check(nestedExercise.sortedSubQuestions.map(\.label) == ["1", "2", ""], "trois au premier niveau")
+check(nestedExercise.subQuestionLabel == "0/4", "quatre cases réelles — \(nestedExercise.subQuestionLabel ?? "-")")
+let pointA = nestedExercise.sortedSubQuestions[0].sortedChildren[0]
+check(pointA.path == "1.a", "chemin d'un point — \(pointA.path)")
+pointA.toggle()
+check(!nestedExercise.sortedSubQuestions[0].isDone, "une question à moitié faite ne l'est pas")
+nestedExercise.sortedSubQuestions[0].sortedChildren[1].toggle()
+check(nestedExercise.sortedSubQuestions[0].isDone, "tous ses points faits : la question l'est")
+check(nestedExercise.subQuestionLabel == "2/4", "compteur par les points — \(nestedExercise.subQuestionLabel ?? "-")")
+nestedExercise.sortedSubQuestions[0].toggle()
+check(nestedExercise.subQuestionLabel == "0/4", "décocher la question décoche ses points")
+nestedExercise.sortedSubQuestions[0].toggle()
+nestedExercise.sortedSubQuestions[1].toggle()
+nestedExercise.sortedSubQuestions[2].toggle()
+check(nestedExercise.isDone, "toutes les cases faites : l'exercice l'est")
+
+// Un réimport remplace l'arbre et garde ce qui était coché, par chemin.
+nestedExercise.sortedSubQuestions[1].toggle()
+nestedExercise.replaceSubQuestions(with: [
+    DetectedSubQuestion(label: "1", children: [DetectedSubQuestion(label: "a"), DetectedSubQuestion(label: "b"),
+                                               DetectedSubQuestion(label: "c")]),
+    DetectedSubQuestion(label: "2")
+], in: nil)
+check(nestedExercise.subQuestionLabel == "2/4", "1.a et 1.b restent cochés, 1.c est neuf — \(nestedExercise.subQuestionLabel ?? "-")")
+check(!nestedExercise.isDone, "…et l'exercice n'est plus fait")
+check(nestedExercise.detectedSubQuestions.map(\.label) == ["1", "2"], "l'arbre se relit pour être modifié")
+
 // L'étiquette s'écrit comme le polycopié.
 check(SubQuestion(exercise: nil, label: "1").displayLabel == "1.", "étiquette numérique")
 check(SubQuestion(exercise: nil, label: "a").displayLabel == "(a)", "étiquette alphabétique")
@@ -333,6 +368,12 @@ check(SeriesAIParsing.parse(noLabels).first?.exercises.first?.subQuestions.map(\
 let duplicated = #"{"series":[{"number":4,"title":"Suites","exercises":[{"number":"4.2","title":"Bornes","questions":["1","1","2"]}]}]}"#
 check(SeriesAIParsing.parse(duplicated).first?.exercises.first?.subQuestions.count == 2,
       "les étiquettes en double sont écartées")
+let visionAnswer = #"{"series":[{"number":3,"exercises":[{"number":"3.1","page":1,"parts":[{"label":"1)","kind":"question","children":[{"label":"(a)"},{"label":"(b)"}]},{"label":"2","children":[{"label":"a"},{"label":"b"},{"label":"c"}]}]},{"number":"3.11","parts":[{"label":null,"kind":"part","text":"Calculer lim a_n"},{"label":"1"},{"label":"2"}]}]}]}"#
+let visionParsed = SeriesAIParsing.parse(visionAnswer).first?.exercises
+check(DetectedSubQuestion.outline(visionParsed?.first?.subQuestions ?? []) == "1(a,b),2(a,b,c)",
+      "réponse « vision » : arbre lu, ponctuation retirée — \(DetectedSubQuestion.outline(visionParsed?.first?.subQuestions ?? []))")
+check(visionParsed?.first?.pageIndex == 0, "la page du modèle (1…) devient un index (0…)")
+check(DetectedSubQuestion.outline(visionParsed?.last?.subQuestions ?? []) == "part,1,2", "une partie sans numéro est gardée")
 
 // La fusion ne mélange jamais deux numérotations : la plus complète gagne.
 let heuristicSide = [DetectedSeries(number: 4, title: "Suites",
@@ -2589,6 +2630,116 @@ do {
     check(GroupSeriesEngine.gapToLeader([]) == nil, "sans tableau, pas d'écart")
 }
 
+print("== Brouillons de série : plan rapide, gestes sur l'arbre, enregistrement ==")
+do {
+    typealias Tree = SubQuestionTree
+    func plan(_ text: String) -> String { Tree.parse(text).map(Tree.outline) ?? "illisible" }
+    check(plan("1(a-d) 2(a-e) 3") == "1(a-d) 2(a-e) 3", "plan lu et réécrit à l'identique — \(plan("1(a-d) 2(a-e) 3"))")
+    check(Tree.parse("1-4")?.map(\.label) == ["1", "2", "3", "4"], "plage de questions")
+    check(Tree.parse("1(a,b) 2")?.first?.children.map(\.label) == ["a", "b"], "liste de points")
+    check(Tree.parse("i-iv")?.map(\.label) == ["i", "ii", "iii", "iv"], "plage romaine")
+    check(Tree.parse("+ 1 2 +")?.map(\.kind) == [.part, .question, .question, .part], "parties sans numéro")
+    check(Tree.parse("1(a-") == nil, "parenthèse non fermée : illisible")
+    check(plan("1(a,b)") == "1(a,b)", "deux points restent écrits en liste")
+    let kept = Tree.parse("1(a-b)", keeping: [DetectedSubQuestion(label: "1", text: "Soit x",
+                                                                   children: [DetectedSubQuestion(label: "a", text: "borne")])])
+    check(kept?.first?.text == "Soit x" && kept?.first?.children.first?.text == "borne",
+          "réécrire le plan garde les énoncés déjà saisis")
+
+    var tree = Tree.parse("1 2 3")!
+    let two = tree[1].id
+    Tree.indent(two, in: &tree)
+    check(Tree.outline(tree) == "1(2) 3", "« 2 » devient un point de « 1 » — \(Tree.outline(tree))")
+    Tree.outdent(two, in: &tree)
+    check(Tree.outline(tree) == "1 2 3", "…et remonte à sa place — \(Tree.outline(tree))")
+    Tree.addChild(to: tree[0].id, in: &tree)
+    Tree.addChild(to: tree[0].id, in: &tree)
+    check(Tree.outline(tree) == "1(a,b) 2 3", "points ajoutés a, b — \(Tree.outline(tree))")
+    Tree.remove(tree[0].children[0].id, from: &tree)
+    Tree.relabel(&tree)
+    check(Tree.outline(tree) == "1(a) 2 3", "renumérotation — \(Tree.outline(tree))")
+    check(Tree.rows(tree).map(\.depth) == [0, 1, 0, 0], "affichage à plat avec profondeur")
+    check(Tree.rows(tree)[2].canIndent && !Tree.rows(tree)[0].canIndent, "seule une question précédée d'une autre peut devenir un point")
+
+    // Problèmes signalés avant d'enregistrer.
+    var draft = SeriesDraft(number: 5, title: "", plannedWeek: 5, exercises: [])
+    draft.addExercise(); draft.addExercise()
+    check(draft.exercises.map(\.minor) == ["1", "2"], "exercices ajoutés 5.1, 5.2")
+    draft.exercises[1].minor = "1"
+    check(draft.problems(takenNumbers: []).contains { $0.contains("5.1") }, "numéro en double signalé")
+    check(draft.problems(takenNumbers: [5]).contains { $0.contains("série 5") }, "série en double signalée")
+    draft.renumberExercises()
+    check(draft.problems(takenNumbers: []).isEmpty, "renuméroter corrige")
+
+    // Modification : renuméroter garde l'avancement, retirer supprime.
+    let draftCourse = Course(code: "TST-100", name: "Test", credits: 4)
+    let written = SeriesDraftWriter.write(SeriesDraft(number: 2, title: "Suites", plannedWeek: 2, exercises: [
+        ExerciseDraft(minor: "1", title: "", isBonus: false, subQuestions: Tree.parse("1(a-b) 2")!),
+        ExerciseDraft(minor: "2", title: "", isBonus: false),
+        ExerciseDraft(minor: "3", title: "", isBonus: true)
+    ]), to: draftCourse, mode: .edit, context: nil)
+    check(written.outcome.created == 3 && written.series.exercises.count == 3, "série créée avec trois exercices")
+    check(written.series.sortedExercises.first?.subQuestionLabel == "0/3", "questions créées avec l'exercice")
+    let first = written.series.sortedExercises[0]
+    first.sortedSubQuestions[0].sortedChildren[0].toggle()
+    written.series.sortedExercises[1].doneAt = Date()
+
+    var edit = SeriesDraft(series: written.series)
+    check(edit.title == "Suites" && edit.exercises.count == 3, "le brouillon relit la série")
+    edit.exercises.remove(at: 2)
+    edit.exercises.swapAt(0, 1)
+    edit.renumberExercises()
+    let second = SeriesDraftWriter.write(edit, to: draftCourse, mode: .edit, context: nil)
+    check(second.outcome.deleted == 1 && second.series.exercises.count == 2, "l'exercice retiré est supprimé")
+    let reordered = second.series.sortedExercises
+    check(reordered.map(\.exerciseNumber) == ["2.1", "2.2"], "renumérotés dans le nouvel ordre")
+    check(reordered[0].isDone, "l'ancien 2.2, devenu 2.1, garde son « fait »")
+    check(reordered[1].subQuestionLabel == "1/3", "l'ancien 2.1, devenu 2.2, garde ses cases cochées — \(reordered[1].subQuestionLabel ?? "-")")
+
+    // Import : ne supprime jamais, met à jour par numéro.
+    let merged = SeriesDraftWriter.write(SeriesDraft(number: 2, title: "", plannedWeek: 2, exercises: [
+        ExerciseDraft(minor: "2", title: "Relu", isBonus: false, subQuestions: Tree.parse("1(a-c) 2")!),
+        ExerciseDraft(minor: "4", title: "", isBonus: false)
+    ]), to: draftCourse, mode: .importMerge, context: nil)
+    check(merged.outcome == .init(created: 1, updated: 1, deleted: 0), "import : un mis à jour, un créé, aucun supprimé — \(merged.outcome)")
+    check(merged.series.title == "Suites", "un titre vide à l'import ne l'efface pas")
+    let relu = merged.series.exercises.first { $0.exerciseNumber == "2.2" }
+    check(relu?.title == "Relu" && relu?.subQuestionLabel == "1/4", "arbre remplacé, case 1.a conservée — \(relu?.subQuestionLabel ?? "-")")
+}
+
+print("== NextActionEngine : une seule prochaine action ==")
+do {
+    let now = Date()
+    let course = Course(code: "NXT-101", name: "Next", credits: 5)
+    course.isTracked = true
+    let later = ExerciseSeries(course: course, seriesNumber: 1, title: "Série 1", plannedWeek: 1)
+    let soon = ExerciseSeries(course: course, seriesNumber: 2, title: "Série 2", plannedWeek: 2,
+                              dueDate: now.addingTimeInterval(20 * 3600))
+    let e1 = Exercise(series: later, exerciseNumber: "1.1", sortOrder: 0)
+    e1.redoRequired = true
+    e1.doneAt = now
+    let e2 = Exercise(series: soon, exerciseNumber: "2.1", sortOrder: 0)
+    e2.doneAt = now
+    let e3 = Exercise(series: soon, exerciseNumber: "2.2", sortOrder: 1)
+    later.exercises = [e1]
+    soon.exercises = [e2, e3]
+    course.series = [later, soon]
+    let exam = Exam(course: course, kind: .midterm, title: "Midterm", date: now.addingTimeInterval(3 * 86400))
+    course.exams = [exam]
+
+    let actions = NextActionEngine.actions(for: [course], now: now)
+    check(actions.first?.title == e3.displayNumber, "la série à rendre dans 20 h passe en premier — \(actions.first?.title ?? "-")")
+    if case .seriesDue = actions.first?.reason {} else { check(false, "raison : série à rendre") }
+    check(actions.first?.detail.contains("1 exercice restant") == true, "…avec ce qui reste — \(actions.first?.detail ?? "")")
+    check(actions.dropFirst().first?.reason == .redo, "puis l'exercice à refaire")
+    check(actions.contains { if case .exam = $0.reason { return true } else { return false } }, "une évaluation dans 3 jours propose une révision")
+    check(Set(actions.map(\.id)).count == actions.count, "aucune action en double")
+    soon.dueDate = now.addingTimeInterval(5 * 86400)
+    check(NextActionEngine.actions(for: [course], now: now).first?.reason == .redo,
+          "une échéance lointaine ne passe plus devant « à refaire »")
+    check(NextActionEngine.relativeDay(now.addingTimeInterval(86400), now: now) == "demain", "« demain »")
+}
+
 print("== SeriesAIParsing : lecture de la réponse d'un modèle ==")
 do {
     let answer = """
@@ -2813,11 +2964,23 @@ do {
     let three = nested.series.first
     check(nested.series.count == 1 && three?.number == 3 && three?.title == "Suites",
           "série 3 « Suites » — \(nested.series.map { "\($0.number) \($0.title)" })")
-    check(three?.exercises.map(\.number) == ["3.1", "3.2", "3.3"], "trois exercices « Ex-03-xx » — \(three?.exercises.map(\.number) ?? [])")
-    check(three?.exercises.first?.subQuestions.map(\.label) == ["1", "2"],
-          "questions de premier niveau seulement, pas (a)…(e) — \(three?.exercises.first?.subQuestions.map(\.label) ?? [])")
-    check(three?.exercises.first { $0.number == "3.3" }?.subQuestions.map(\.label) == ["1", "2", "3", "4"],
-          "liste en deux colonnes remise dans l'ordre — \(three?.exercises.first { $0.number == "3.3" }?.subQuestions.map(\.label) ?? [])")
+    check(three?.exercises.map(\.number) == ["3.1", "3.2", "3.3", "3.11", "3.12"],
+          "cinq exercices « Ex-03-xx » — \(three?.exercises.map(\.number) ?? [])")
+    func outline(_ number: String) -> String {
+        DetectedSubQuestion.outline(three?.exercises.first { $0.number == number }?.subQuestions ?? [])
+    }
+    check(outline("3.1") == "1(a,b,c),2(a,b,c,d,e)",
+          "deux niveaux : 1(a–c) et 2(a–e), plus seulement 1 et 2 — \(outline("3.1"))")
+    check(three?.exercises.first?.leafQuestionCount == 8, "huit cases réelles pour 3.1")
+    check(outline("3.3") == "1,2,3,4,part",
+          "liste en deux colonnes remise dans l'ordre, puis « Ensuite » — \(outline("3.3"))")
+    check(outline("3.11") == "part,1,2,3",
+          "la consigne avant « Ensuite » est une partie à cocher — \(outline("3.11"))")
+    check(three?.exercises.first { $0.number == "3.11" }?.subQuestions.first?.text.hasPrefix("Calculer la limite") == true,
+          "…avec son texte — « \(three?.exercises.first { $0.number == "3.11" }?.subQuestions.first?.text ?? "") »")
+    check(outline("3.12") == "", "une liste de conditions n'est pas une liste de questions — \(outline("3.12"))")
+    check(three?.exercises.first?.subQuestions.first?.text.hasPrefix("Soit (xn)") == true,
+          "le texte d'une question est lu — « \(three?.exercises.first?.subQuestions.first?.text ?? "") »")
     let nestedInput = SeriesAIParsing.prepareLayout(nested.lines, seriesHint: nested.hint)
     check(!nestedInput.contains("Compilation"), "le pied de page répété n'est pas envoyé au modèle")
 
@@ -2827,6 +2990,15 @@ do {
     }
     check(SeriesLayoutParser.topLevelQuestions(marks([("1", 84), ("a", 105), ("b", 105), ("2", 84), ("a", 105), ("b", 105), ("c", 106)])) == ["1", "2"],
           "premier niveau : 1, 2")
+    check(DetectedSubQuestion.outline(SeriesLayoutParser.questionTree(marks([("1", 84), ("a", 105), ("b", 105), ("2", 84), ("a", 105), ("b", 105), ("c", 106)])))
+            == "1(a,b),2(a,b,c)", "second niveau rattaché à sa question")
+    check(SeriesLayoutParser.questionMark("1) an = 1 2) an = n 3) an = 2", allowNumbers: true, indent: 84)?.map(\.label) == ["1", "2", "3"],
+          "trois questions sur une même ligne")
+    check(SeriesLayoutParser.questionMark("1) Si (an) est croissante", allowNumbers: true, indent: 84)?.map(\.label) == ["1"],
+          "« (an) » dans le texte n'est pas une question")
+    check(SeriesLayoutParser.introListsConditions("Montrer qu'il existe une suite qui satisfait simultanément aux deux conditions suivantes :"),
+          "liste de conditions reconnue")
+    check(!SeriesLayoutParser.introListsConditions("Calculer les limites suivantes :"), "« limites suivantes » reste une liste de questions")
     check(SeriesLayoutParser.topLevelQuestions(marks([("1", 84), ("3", 315), ("2", 84), ("4", 315)])) == ["1", "2", "3", "4"],
           "deux colonnes triées")
     check(SeriesLayoutParser.topLevelQuestions(marks([("a", 0), ("b", 0), ("i", 0), ("j", 0)])) == ["a", "b", "i", "j"],
@@ -2846,6 +3018,8 @@ do {
     let model = [DetectedSeries(number: 3, title: "Suites", exercises: [
         DetectedExercise(number: "3.10", title: "", isBonus: false,
                          subQuestions: ["1", "2", "3"].map { DetectedSubQuestion(label: $0, text: "") })])]
+    check(SeriesAIParsing.merge(heuristic: local, ai: model, aiReadsLayout: true).first?.exercises.first?.subQuestions.count == 3,
+          "un modèle qui voit les pages l'emporte sur la lecture du texte")
     check(SeriesAIParsing.merge(heuristic: local, ai: model).first?.exercises.first?.subQuestions.count == 2,
           "questions lues dans le PDF préférées à celles du modèle")
 
