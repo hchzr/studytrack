@@ -3020,6 +3020,24 @@ do {
                          subQuestions: ["1", "2", "3"].map { DetectedSubQuestion(label: $0, text: "") })])]
     check(SeriesAIParsing.merge(heuristic: local, ai: model, aiReadsLayout: true).first?.exercises.first?.subQuestions.count == 3,
           "un modèle qui voit les pages l'emporte sur la lecture du texte")
+    let localWithPart = [DetectedSeries(number: 3, title: "", exercises: [DetectedExercise(
+        number: "3.11", title: "", isBonus: false,
+        subQuestions: [DetectedSubQuestion(label: "", text: "Calculer lim an", kind: .part),
+                       DetectedSubQuestion(label: "1"), DetectedSubQuestion(label: "2")])])]
+    let seenNoPart = [DetectedSeries(number: 3, title: "", exercises: [DetectedExercise(
+        number: "3.11", title: "", isBonus: false,
+        subQuestions: ["1", "2", "3"].map { DetectedSubQuestion(label: $0, text: "lu") })])]
+    let withPart = SeriesAIParsing.merge(heuristic: localWithPart, ai: seenNoPart, aiReadsLayout: true)
+        .first?.exercises.first?.subQuestions ?? []
+    check(DetectedSubQuestion.outline(withPart) == "part,1,2,3",
+          "la partie sans numéro trouvée localement est remise devant les questions lues — \(DetectedSubQuestion.outline(withPart))")
+
+    // L'identifiant se lit dans le jeton : une session sans `user_id` enregistré
+    // n'est pas « non configurée ».
+    let jwt = "eyJhbGciOiJIUzI1NiJ9." + Data(#"{"sub":"1b2c-uuid","role":"authenticated"}"#.utf8)
+        .base64EncodedString().replacingOccurrences(of: "=", with: "") + ".sig"
+    check(StoredSession.subject(ofJWT: jwt) == "1b2c-uuid", "identifiant lu dans le jeton")
+    check(StoredSession.subject(ofJWT: "pas-un-jeton") == nil, "un jeton illisible ne donne rien")
     check(SeriesAIParsing.merge(heuristic: local, ai: model).first?.exercises.first?.subQuestions.count == 2,
           "questions lues dans le PDF préférées à celles du modèle")
 

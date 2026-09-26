@@ -30,6 +30,21 @@ struct StoredSession: Codable, Equatable {
     /// parte : la marge évite un aller-retour perdu sur deux.
     static let leeway: TimeInterval = 60
 
+    /// L'identifiant de l'utilisateur (`sub`) lu dans un jeton d'accès JWT.
+    ///
+    /// Le jeton porte l'identifiant : une session où il manque n'a pas à être
+    /// traitée comme une absence de configuration.
+    static func subject(ofJWT token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload += "=" }
+        guard let data = Data(base64Encoded: payload),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let subject = object["sub"] as? String, !subject.isEmpty else { return nil }
+        return subject
+    }
+
     func isExpired(at now: Date = Date()) -> Bool {
         expiresAt <= now.addingTimeInterval(Self.leeway)
     }

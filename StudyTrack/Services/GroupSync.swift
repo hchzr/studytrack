@@ -29,8 +29,8 @@ enum GroupSync {
         guard social.isConfigured else {
             return "Supabase non configuré — ouvrez Profil › Compte pour le connecter."
         }
-        guard social.isSignedIn else {
-            return "Connectez-vous (Profil › Compte) pour synchroniser vos groupes."
+        guard social.isSignedIn, social.userID != nil else {
+            return "Connecte-toi (Profil › Compte et groupes) pour synchroniser tes groupes."
         }
 
         var summary: [String] = []

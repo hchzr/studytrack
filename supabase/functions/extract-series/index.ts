@@ -18,7 +18,7 @@
 //   supabase secrets set LLM_MODEL=meta-llama/llama-3.1-8b-instruct:free
 //
 // Mode vision (pages envoyées en image, `{"images":[base64…]}`) : le modèle par
-// défaut chez Groq est `meta-llama/llama-4-scout-17b-16e-instruct`. Ailleurs :
+// défaut chez Groq est `qwen/qwen3.8-27b` (`llama-4-scout` n'y est plus). Ailleurs :
 //
 //   supabase secrets set LLM_VISION_MODEL=google/gemini-2.5-flash
 //
@@ -138,7 +138,7 @@ Deno.serve(async (request) => {
   // ── Mode vision : les pages en image, découpées par paquets. ──────────────
   if (images.length > 0) {
     const visionModel = Deno.env.get("LLM_VISION_MODEL")?.trim()
-      || (usesGroq ? "meta-llama/llama-4-scout-17b-16e-instruct" : configuredModel!);
+      || (usesGroq ? "qwen/qwen3.8-27b" : configuredModel!);
     const pages = images.slice(0, MAX_PAGES);
     const collected: unknown[] = [];
     let usedModel = visionModel;
@@ -168,8 +168,9 @@ Deno.serve(async (request) => {
         } else {
           return json({
             error: `vision : le modèle « ${usedModel} » ne lit pas les images, et aucun modèle de vision `
-              + "n'a été trouvé chez ce fournisseur. Pose-en un : "
-              + "`supabase secrets set LLM_VISION_MODEL=<modèle qui accepte les images>`.",
+              + "n'a été reconnu chez ce fournisseur. Pose-en un : "
+              + "`supabase secrets set LLM_VISION_MODEL=<modèle qui accepte les images>`. "
+              + `Modèles disponibles : ${available.join(", ") || "(liste indisponible)"}.`,
           }, 502);
         }
       }
@@ -379,12 +380,15 @@ function pickVisionModel(available: string[], tried: string): string | null {
   for (const known of preferredVisionModels) {
     if (candidates.includes(known)) return known;
   }
-  const hints = ["vision", "-vl", "vl-", "llama-4", "gemini", "gpt-4o", "gpt-4.1", "pixtral", "qwen2.5-vl", "claude"];
+  // « qwen3.x » : les Qwen récents sont multimodaux (constaté chez Groq,
+  // `qwen/qwen3.8-27b`, quand `llama-4-scout` en a disparu).
+  const hints = ["vision", "-vl", "vl-", "llama-4", "gemini", "gpt-4o", "gpt-4.1", "pixtral", "qwen3", "claude"];
   return candidates.find((id) => hints.some((hint) => id.toLowerCase().includes(hint))) ?? null;
 }
 
 /** Modèles qui voient les images, du plus accessible au plus capable. */
 const preferredVisionModels = [
+  "qwen/qwen3.8-27b",
   "meta-llama/llama-4-scout-17b-16e-instruct",
   "meta-llama/llama-4-maverick-17b-128e-instruct",
   "google/gemini-2.5-flash",

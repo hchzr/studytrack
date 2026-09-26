@@ -3,6 +3,9 @@ import Foundation
 /// Erreurs du client Supabase.
 enum SupabaseError: LocalizedError {
     case notConfigured
+    /// Configuré, mais sans session utilisable : jamais connecté·e, ou session
+    /// expirée et refusée au rafraîchissement.
+    case notSignedIn
     case invalidURL
     case invalidResponse
     case server(status: Int, message: String)
@@ -11,6 +14,7 @@ enum SupabaseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "Supabase n'est pas configuré (URL ou clé manquante)."
+        case .notSignedIn: return "Session expirée ou absente : reconnecte-toi dans Profil › Compte et groupes."
         case .invalidURL: return "URL Supabase invalide."
         case .invalidResponse: return "Réponse invalide du serveur."
         case .server(let status, let message): return "Erreur serveur (\(status)) : \(message)"
@@ -59,6 +63,11 @@ final class SupabaseClient {
 
     var isSignedIn: Bool { accessToken != nil }
 
+    /// Appelé à chaque changement de session — connexion, rafraîchissement,
+    /// effacement. `SocialService` en tenait une copie figée au lancement : une
+    /// session effacée pendant l'exécution le laissait se croire connecté.
+    var onSessionChange: (() -> Void)?
+
     /// Hôte, utilisé comme clé de trousseau.
     private var host: String { baseURL.host ?? baseURL.absoluteString }
 
@@ -75,7 +84,9 @@ final class SupabaseClient {
         if let stored = SupabaseSessionStore.load(host: url.host ?? trimmedURL) {
             self.accessToken = stored.accessToken
             self.refreshToken = stored.refreshToken
-            self.userID = stored.userID
+            // Une session enregistrée avant que l'identifiant ne le soit : il est
+            // dans le jeton lui-même.
+            self.userID = stored.userID ?? StoredSession.subject(ofJWT: stored.accessToken)
             self.userEmail = stored.email
             self.expiresAt = stored.expiresAt
         }
@@ -189,6 +200,7 @@ final class SupabaseClient {
         userEmail = nil
         expiresAt = nil
         SupabaseSessionStore.clear(host: host)
+        onSessionChange?()
     }
 
     // MARK: - Authentification
@@ -239,7 +251,7 @@ final class SupabaseClient {
             let session = try JSONDecoder().decode(SupabaseSession.self, from: data)
             self.accessToken = session.accessToken
             self.refreshToken = session.refreshToken ?? self.refreshToken
-            self.userID = session.user?.id ?? self.userID
+            self.userID = session.user?.id ?? StoredSession.subject(ofJWT: session.accessToken) ?? self.userID
             self.userEmail = session.user?.email ?? self.userEmail
             // Sans `expires_in`, on suppose une heure : c'est la valeur par défaut
             // de Supabase, et se tromper vers le bas ne coûte qu'un rafraîchissement.
@@ -254,6 +266,7 @@ final class SupabaseClient {
                                   expiresAt: expiresAt),
                     host: host)
             }
+            onSessionChange?()
         } catch {
             throw SupabaseError.decoding(error.localizedDescription)
         }

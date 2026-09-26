@@ -246,6 +246,17 @@ final class SocialService {
         // La session est restaurée depuis le trousseau par le client : sans ce
         // report, l'app se croyait déconnectée à chaque lancement, et ni les
         // groupes ni la présence ne fonctionnaient — sans le moindre message.
+        syncSession()
+        // …et elle **suit** le client ensuite : un jeton refusé au
+        // rafraîchissement efface la session, et l'app doit le savoir au lieu de
+        // continuer à se croire connectée (« URL ou clé manquante » à chaque
+        // synchronisation, alors que seule la connexion manquait).
+        client?.onSessionChange = { [weak self] in
+            Task { @MainActor in self?.syncSession() }
+        }
+    }
+
+    private func syncSession() {
         isSignedIn = client?.isSignedIn ?? false
         userID = client?.userID
         email = client?.userEmail
@@ -321,7 +332,8 @@ final class SocialService {
     /// Les données locales (cours, sessions) restent sur l'appareil : elles
     /// n'ont jamais dépendu du compte.
     func deleteAccount() async throws {
-        guard let client, isSignedIn else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard isSignedIn else { throw SupabaseError.notSignedIn }
         do {
             try await client.rpc("delete_my_account", params: [:])
         } catch {
@@ -339,7 +351,8 @@ final class SocialService {
                      courseCode: String,
                      courseCodes: [String] = [],
                      displayName: String) async throws -> RemoteGroup {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
 
         // Le profil **d'abord**. `study_groups.created_by` et `group_members.user_id`
         // référencent `profiles(id)` : insérer avant que la ligne existe viole la
@@ -384,7 +397,8 @@ final class SocialService {
     }
 
     func joinGroup(inviteCode: String, displayName: String) async throws -> RemoteGroup {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
 
         // Même raison que dans `createGroup` : le profil avant l'adhésion.
         _ = try? await client.upsert("profiles",
@@ -412,7 +426,8 @@ final class SocialService {
     }
 
     func fetchMyGroups() async throws -> [RemoteMembership] {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
         func decode(_ data: Data?) -> [RemoteMembership] {
             guard let data else { return [] }
             return (try? JSONDecoder().decode([RemoteMembership].self, from: data)) ?? []
@@ -488,7 +503,8 @@ final class SocialService {
     /// row-level security policy for table group_members » sur une insertion
     /// pourtant autorisée. Un doublon (23505) veut dire « déjà membre » : succès.
     func ensureMembership(groupID: String, role: GroupRole) async throws {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
         do {
             _ = try await client.insert("group_members",
                                         values: ["group_id": groupID,
@@ -527,7 +543,8 @@ final class SocialService {
     /// À ne pas confondre avec `deleteGroup`, réservé au créateur : quitter ne
     /// détruit rien pour les autres, et c'est l'action que veut 99 % des gens.
     func leaveGroup(groupID: String) async throws {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
         try await removeMember(groupID: groupID, userID: userID)
     }
 
@@ -568,7 +585,8 @@ final class SocialService {
 
     /// Déclare les matières que **je** suis dans ce groupe.
     func setMyCourses(groupID: String, codes: [String]) async throws {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
         _ = try await client.delete("member_courses",
                                     query: [URLQueryItem(name: "group_id", value: "eq.\(groupID)"),
                                             URLQueryItem(name: "user_id", value: "eq.\(userID)")])
@@ -591,7 +609,8 @@ final class SocialService {
     /// (SQL non relancé), et une présence qui ne se publie pas en silence est
     /// indétectable depuis l'app — c'est exactement ce qui s'est produit.
     func publishPresence(_ entry: PresenceEntry?, groupIDs: [String]) async throws {
-        guard let client, let me = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let me = client.userID else { throw SupabaseError.notSignedIn }
         guard !groupIDs.isEmpty else { return }
         let formatter = ISO8601DateFormatter()
         for groupID in groupIDs {
@@ -735,7 +754,8 @@ final class SocialService {
                               startsAt: Date,
                               durationMinutes: Int,
                               location: String) async throws -> RemotePlannedSession {
-        guard let client, let userID = client.userID else { throw SupabaseError.notConfigured }
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
         let payload: [String: Any] = [
             "group_id": groupID,
             "course_code": courseCode,

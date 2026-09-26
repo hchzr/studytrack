@@ -444,7 +444,19 @@ enum SeriesAIParsing {
                     // colonnes, les points imbriqués et les formules : il l'emporte,
                     // et la lecture locale ne comble que son silence.
                     if aiReadsLayout {
-                        if merged.subQuestions.isEmpty { merged.subQuestions = exercise.subQuestions }
+                        if merged.subQuestions.isEmpty {
+                            merged.subQuestions = exercise.subQuestions
+                        } else if !merged.subQuestions.contains(where: { $0.kind == .part }) {
+                            // Le modèle voit les questions, mais oublie parfois la
+                            // consigne sans numéro (« Calculer lim aₙ. Ensuite… ») que
+                            // la lecture locale a trouvée : on la remet à sa place.
+                            let local = exercise.subQuestions
+                            let leading = local.prefix { $0.kind == .part }
+                            let trailing = local.reversed().prefix { $0.kind == .part }.reversed()
+                            if leading.count < local.count {
+                                merged.subQuestions = Array(leading) + merged.subQuestions + Array(trailing)
+                            }
+                        }
                     } else if !exercise.subQuestions.isEmpty {
                         merged.subQuestions = exercise.subQuestions
                     }
