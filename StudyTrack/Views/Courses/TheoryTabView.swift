@@ -41,59 +41,67 @@ struct TheoryTabView: View {
 
     // MARK: Semaine
 
+    /// La semaine en une ligne : ce qu'il reste, et une barre.
+    ///
+    /// La carte affichait la même information trois fois — un anneau à 0 %, une
+    /// barre à 0 % et « 0/2 » — plus deux durées côte à côte. Il reste la seule
+    /// chose qu'on vient chercher ici : combien de temps de vidéo il reste à
+    /// regarder cette semaine, et où l'on en est.
     private var weekCard: some View {
         let total = weekVideos.reduce(0) { $0 + $1.durationSeconds }
         let remaining = weekVideos.filter { !$0.isWatched }.reduce(0) { $0 + $1.durationSeconds }
         let watched = weekVideos.filter(\.isWatched).count
-        return Card(title: "Théorie cette semaine",
-                    icon: "play.rectangle.fill",
-                    trailing: course.isTermRunning ? "S\(week)" : "hors semestre") {
-            VStack(alignment: .leading, spacing: 14) {
-                if weekVideos.isEmpty {
-                    Text(course.isTermRunning
-                         ? "Rien de planifié pour la semaine \(week)."
-                         : "Le semestre n'est pas en cours : le plan hebdomadaire est en pause.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    HStack(alignment: .center, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Restant")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(DateUtils.durationLabel(seconds: remaining))
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(remaining == 0 ? Color.green.accessibleInk : Color.orange.accessibleInk)
-                                .monospacedDigit()
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Total de la semaine")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(DateUtils.durationLabel(seconds: total))
-                                .font(.title3.weight(.bold))
-                                .monospacedDigit()
-                        }
-                        Spacer(minLength: 0)
-                        ProgressRing(progress: CourseProgress.ratio(watched, max(weekVideos.count, 1)),
-                                     color: TaskType.video.tint,
-                                     size: 54,
-                                     lineWidth: 6)
-                    }
-                    LabeledProgress(title: "Théorie faite",
-                                    progress: CourseProgress.ratio(watched, max(weekVideos.count, 1)),
-                                    color: TaskType.video.tint,
-                                    countLabel: "\(watched)/\(weekVideos.count)")
-                }
-
+        return VStack(alignment: .leading, spacing: Layout.block) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Cette semaine")
+                    .font(.headline)
+                Text(course.isTermRunning ? "S\(week)" : "hors semestre")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
                 Button {
                     showingAdd = true
                 } label: {
-                    Label("Ajouter un élément de théorie", systemImage: "plus")
-                        .font(.subheadline)
+                    Label("Ajouter", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
                 }
-                .buttonStyle(.bordered)
+                .accessibilityLabel("Ajouter un élément de théorie")
+            }
+            .padding(.horizontal, Layout.micro)
+
+            if weekVideos.isEmpty {
+                Text(course.isTermRunning
+                     ? "Rien de planifié pour la semaine \(week)."
+                     : "Le semestre n'est pas en cours : le plan hebdomadaire est en pause.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Layout.micro)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Card {
+                    VStack(alignment: .leading, spacing: Layout.control) {
+                        HStack(alignment: .firstTextBaseline) {
+                            if remaining == 0 {
+                                Label("Tout est vu", systemImage: "checkmark.circle.fill")
+                                    .font(.title3.weight(.bold))
+                                    .foregroundStyle(Color.green.accessibleInk)
+                            } else {
+                                Text(DateUtils.durationLabel(seconds: remaining))
+                                    .font(.title3.weight(.bold).monospacedDigit())
+                                Text("à regarder sur \(DateUtils.durationLabel(seconds: total))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: Layout.inline)
+                            Text("\(watched)/\(weekVideos.count)")
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .contentTransition(.numericText())
+                        }
+                        ProgressBar(progress: CourseProgress.ratio(watched, max(weekVideos.count, 1)),
+                                    color: TaskType.video.tint)
+                    }
+                }
             }
         }
     }

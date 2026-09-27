@@ -348,13 +348,22 @@ struct AgendaView: View {
             VStack(spacing: Layout.tight) {
                 Text(DateUtils.weekdayInitial(day))
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(isSelected ? Theme.accent.badgeInk : .secondary)
+                    .foregroundStyle(isSelected || isToday ? Theme.accentInk : .secondary)
+                // Le jour choisi est un disque plein, son numéro évidé dedans.
+                // L'encre claire du badge posée sur le disque plein rendait le
+                // numéro invisible : indigo sur indigo.
                 Text("\(calendar.component(.day, from: day))")
                     .font(.subheadline.weight(isToday || isSelected ? .bold : .regular))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Theme.accent.badgeInk : (isToday ? Theme.accentInk : .primary))
-                    .frame(width: 32, height: 32)
-                    .background(isSelected ? Theme.accent : Color.clear, in: Circle())
+                    .foregroundStyle(isSelected ? Theme.knockedOutInk : (isToday ? Theme.accentInk : .primary))
+                    .frame(width: 34, height: 34)
+                    .background {
+                        if isSelected {
+                            Circle().fill(Theme.accent.accessibleMark)
+                        } else if isToday {
+                            Circle().strokeBorder(Theme.accent.accessibleMark, lineWidth: 1.5)
+                        }
+                    }
                 HStack(spacing: 3) {
                     if seen.isEmpty {
                         Circle().fill(Color.clear).frame(width: 5, height: 5)
@@ -367,11 +376,9 @@ struct AgendaView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Layout.tight)
-            .background(isSelected ? Theme.accent.badgeFill : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel("\(DateUtils.fullDayLabel(day))\(isToday ? ", aujourd'hui" : ""), \(dayEntries.count) élément\(dayEntries.count > 1 ? "s" : "")")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

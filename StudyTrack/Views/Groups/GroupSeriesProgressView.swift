@@ -138,16 +138,13 @@ struct GroupSeriesProgressView: View {
                 HStack(spacing: Layout.block) {
                     StatCard(icon: "list.bullet.rectangle",
                              value: "\(boards.count)",
-                             title: "séries connues",
-                             tint: .blue)
+                             title: "séries connues", onCard: true)
                     StatCard(icon: "checkmark.circle.fill",
                              value: "\(completedByMe)",
-                             title: "terminées par toi",
-                             tint: .green)
+                             title: "terminées par toi", onCard: true)
                     StatCard(icon: "person.3.fill",
                              value: "\(group.members.count)",
-                             title: "membres",
-                             tint: .purple)
+                             title: "membres", onCard: true)
                 }
                 if let gap {
                     Label("\(gap.name) a \(gap.gap) exercice\(gap.gap > 1 ? "s" : "") d'avance sur toi",

@@ -173,12 +173,45 @@ struct ProfileView: View {
         }
     }
 
+    /// L'en-tête du profil : qui, dans quelle section, où en est le semestre.
+    ///
+    /// C'était un champ texte nu sous le mot « Profil » — le premier écran des
+    /// réglages ressemblait à un formulaire vide.
     private func identitySection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
+        let name = settings.displayName.trimmingCharacters(in: .whitespaces)
+        let initial = name.first.map { String($0).uppercased() }
         return Section {
-            TextField("Prénom (affiché dans l'app)", text: $settings.displayName)
-        } header: {
-            Text("Profil")
+            HStack(spacing: Layout.gutter) {
+                ZStack {
+                    Circle().fill(Theme.accent.accessibleMark)
+                    if let initial {
+                        Text(initial)
+                            .font(.system(.title2, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.knockedOutInk)
+                    } else {
+                        Image(systemName: "person.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.knockedOutInk)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: Layout.tight) {
+                    TextField("Ton prénom", text: $settings.displayName)
+                        .font(.title3.weight(.semibold))
+                        .textContentType(.givenName)
+                        .submitLabel(.done)
+                    Text(settings.section.map { "\($0.name)" } ?? "Section non renseignée")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.vertical, Layout.tight)
+        } footer: {
+            Text("Ton prénom apparaît dans l'accueil et dans tes groupes.")
         }
     }
 

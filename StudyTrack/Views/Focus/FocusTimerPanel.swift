@@ -195,10 +195,10 @@ struct FocusTimerPanel: View {
 
     private var contextSection: some View {
         VStack(spacing: Layout.block) {
-            // Cours, type et cible sur une ligne qui défile : trois pastilles à
-            // menu, lisibles d'un coup d'œil, modifiables en deux touchers.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Layout.inline) {
+            // Cours, type et cible : trois pastilles à menu, lisibles d'un coup
+            // d'œil, modifiables en deux touchers. Elles passent à la ligne au
+            // lieu d'être coupées au bord de l'écran.
+            FlowLayout(spacing: Layout.inline) {
                     Menu {
                         Picker("Cours", selection: courseBinding) {
                             Label("Sans cours", systemImage: "circle.dashed").tag(UUID?.none)
@@ -243,10 +243,8 @@ struct FocusTimerPanel: View {
                         .accessibilityLabel("Cible")
                         .accessibilityValue(targetLabel ?? "tout le cours")
                     }
-                }
-                .padding(.horizontal, 1)
             }
-            .scrollClipDisabled()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: Layout.control) {
                 Picker("Mode", selection: pomodoroBinding) {
@@ -364,7 +362,9 @@ struct FocusTimerPanel: View {
                       tint: content.tint,
                       isRunning: focus.isRunning || phase.isBreak,
                       caption: content.caption,
-                      context: dialContext,
+                      // Le contexte est déjà dans les pastilles au-dessus : le
+                      // répéter dans le cadran n'était que du bruit.
+                      context: nil,
                       elapsed: focus.elapsed(at: now),
                       isAdjusting: isAdjusting,
                       onAdjust: { focus.adjust(by: $0) },
@@ -393,14 +393,6 @@ struct FocusTimerPanel: View {
         let inCycle = done % every
         // Pile sur la pause longue : le cycle est plein, pas vide.
         return inCycle == 0 ? every : inCycle
-    }
-
-    private var dialContext: String? {
-        guard focus.hasSession else { return nil }
-        if let label = focus.state?.contextLabel, !label.isEmpty { return label }
-        var parts = [course?.displayCode ?? "Session libre", taskType.label]
-        if let targetLabel { parts.append(targetLabel) }
-        return parts.joined(separator: " · ")
     }
 
     // MARK: Boutons

@@ -222,20 +222,20 @@ struct StatsView: View {
     // MARK: Totaux
 
     private var totalsCard: some View {
-        Card(title: period.rangeLabel, icon: "sum") {
-            HStack(spacing: 12) {
+        // Des tuiles posées sur la page, pas dans une carte : une tuile de la
+        // couleur de la carte qui la contient disparaissait.
+        VStack(alignment: .leading, spacing: Layout.control) {
+            SectionHeader(title: period.rangeLabel)
+            HStack(alignment: .top, spacing: Layout.control) {
                 StatCard(icon: "clock.fill",
                          value: DateUtils.hoursLabel(seconds: totalSeconds),
-                         title: "Temps total",
-                         tint: .blue)
+                         title: "Temps total")
                 StatCard(icon: "list.bullet",
                          value: "\(periodSessions.count)",
-                         title: "Sessions",
-                         tint: .purple)
+                         title: "Sessions")
                 StatCard(icon: "calendar",
                          value: "\(Set(periodSessions.map { Calendar.current.startOfDay(for: $0.startedAt) }).count)",
-                         title: "Jours actifs",
-                         tint: .green)
+                         title: "Jours actifs")
             }
         }
     }
@@ -293,26 +293,24 @@ struct StatsView: View {
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .bottom, spacing: 8) {
-                        ForEach(byTaskType, id: \.type) { entry in
-                            VStack(spacing: 4) {
-                                RoundedRectangle(cornerRadius: 3)
+                    // Une barre de composition : la part de chaque type d'un
+                    // coup d'œil. Le petit histogramme qui la précédait répétait
+                    // la liste juste en dessous, avec des barres minuscules sous
+                    // un grand vide.
+                    GeometryReader { geo in
+                        let total = Double(max(totalSeconds, 1))
+                        let gaps = CGFloat(max(0, byTaskType.count - 1)) * 2
+                        HStack(spacing: 2) {
+                            ForEach(byTaskType, id: \.type) { entry in
+                                Rectangle()
                                     .fill(entry.type.tint.accessibleMark)
-                                    .frame(width: 26,
-                                           height: max(4, 90 * Double(entry.seconds) / Double(max(totalSeconds, 1))))
-                                Image(systemName: entry.type.icon)
-                                    .font(.caption2)
-                                    .foregroundStyle(entry.type.tint.accessibleMark)
-                                Text(entry.type.shortLabel)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .frame(width: max(3, (geo.size.width - gaps) * Double(entry.seconds) / total))
                             }
                         }
-                        Spacer()
+                        .clipShape(Capsule())
                     }
-                    .frame(height: 140, alignment: .bottom)
-
-                    Divider()
+                    .frame(height: 12)
+                    .accessibilityHidden(true)
 
                     ForEach(byTaskType, id: \.type) { entry in
                         LabeledProgress(title: entry.type.label,

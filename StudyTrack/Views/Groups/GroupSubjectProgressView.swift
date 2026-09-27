@@ -88,16 +88,13 @@ struct GroupSubjectProgressView: View {
             HStack(spacing: Layout.block) {
                 StatCard(icon: "person.3.fill",
                          value: "\(comparison.rows.filter(\.isPresent).count)",
-                         title: "membres",
-                         tint: .blue)
+                         title: "membres", onCard: true)
                 StatCard(icon: "checkmark.circle.fill",
                          value: "\(comparison.rows.filter { $0.isPresent && $0.doneTotal > 0 }.count)",
-                         title: "ont commencé",
-                         tint: .green)
+                         title: "ont commencé", onCard: true)
                 StatCard(icon: "hourglass",
                          value: "\(comparison.notStarted)",
-                         title: "rien fait",
-                         tint: .orange)
+                         title: "rien fait", onCard: true)
             }
 
             if comparison.reference.isEmpty {

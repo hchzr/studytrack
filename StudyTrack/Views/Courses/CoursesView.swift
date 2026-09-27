@@ -284,7 +284,7 @@ struct CoursesView: View {
              trailing: term?.statusLabel) {
             VStack(alignment: .leading, spacing: Layout.block) {
                 if let term {
-                    LabeledProgress(title: "Avancement du semestre",
+                    LabeledProgress(title: "Écoulé",
                                     progress: term.timeProgress,
                                     color: Theme.accent,
                                     countLabel: term.hasEnded ? "terminé" : "\(term.weeksRemaining) sem. restantes")
@@ -302,7 +302,7 @@ struct CoursesView: View {
     private var summaryLine: String {
         let credits = tracked.reduce(0) { $0 + Int($1.credits) }
         let framed = DateUtils.hoursLabel(hours: tracked.reduce(0) { $0 + WorkloadEngine.framedWeeklyHours(for: $1) })
-        return "\(tracked.count) cours · \(credits) ECTS · \(framed) encadrées par semaine"
+        return "\(tracked.count) cours · \(credits) ECTS · \(framed) encadrées / sem."
     }
 
     private var trackedSection: some View {
@@ -488,7 +488,7 @@ struct CourseCardRow: View {
         if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
         if redo > 0 { parts.append("\(redo) à refaire") }
         if parts.isEmpty { return "À jour pour la semaine \(course.currentWeek)" }
-        return "Reste cette semaine : " + parts.joined(separator: " · ")
+        return "Cette semaine : " + parts.joined(separator: " · ")
     }
 
     private func weekIcon(theory: Int, exercises: Int, redo: Int) -> String {

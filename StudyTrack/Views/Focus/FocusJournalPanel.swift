@@ -30,12 +30,10 @@ struct FocusJournalPanel: View {
                          tint: Theme.accent)
                 StatCard(icon: "list.bullet",
                          value: "\(today.count)",
-                         title: today.count > 1 ? "sessions" : "session",
-                         tint: .purple)
+                         title: today.count > 1 ? "sessions" : "session")
                 StatCard(icon: "flame.fill",
                          value: "\(streak) j",
-                         title: "série",
-                         tint: .orange)
+                         title: "série")
             }
 
             if today.isEmpty {

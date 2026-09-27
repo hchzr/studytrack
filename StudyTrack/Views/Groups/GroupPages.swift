@@ -261,12 +261,10 @@ struct GroupStudyTimeView: View {
                      tint: Theme.accent)
             StatCard(icon: "clock.fill",
                      value: DateUtils.hoursLabel(seconds: total),
-                     title: "groupe entier",
-                     tint: .blue)
+                     title: "groupe entier")
             StatCard(icon: "chart.bar.fill",
                      value: DateUtils.hoursLabel(seconds: average),
-                     title: "par membre",
-                     tint: .purple)
+                     title: "par membre")
         }
     }
 

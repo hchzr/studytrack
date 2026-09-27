@@ -197,16 +197,13 @@ struct SchoolSetupView: View {
             HStack(spacing: Layout.block) {
                 StatCard(icon: "books.vertical.fill",
                          value: "\(trackedCourses.count)",
-                         title: "cours suivis",
-                         tint: .blue)
+                         title: "cours suivis")
                 StatCard(icon: "building.columns.fill",
                          value: "\(lectureCourses.count)",
-                         title: "avec amphi",
-                         tint: .purple)
+                         title: "avec amphi")
                 StatCard(icon: "clock.fill",
                          value: DateUtils.hoursLabel(hours: app.settings.hoursPerCredit),
-                         title: "par crédit",
-                         tint: .green)
+                         title: "par crédit")
             }
             if let resultMessage {
                 Text(resultMessage)

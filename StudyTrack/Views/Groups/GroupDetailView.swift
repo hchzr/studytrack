@@ -322,16 +322,13 @@ struct GroupDetailView: View {
         return HStack(spacing: Layout.block) {
             StatCard(icon: "person.3.fill",
                      value: "\(group.members.count)",
-                     title: "membre\(group.members.count > 1 ? "s" : "")",
-                     tint: .purple)
+                     title: "membre\(group.members.count > 1 ? "s" : "")")
             StatCard(icon: "trophy.fill",
                      value: myRank.map { "#\($0)" } ?? "—",
-                     title: "ta place (7 j)",
-                     tint: .orange)
+                     title: "ta place (7 j)")
             StatCard(icon: "calendar",
                      value: "\(upcoming)",
-                     title: upcoming == 1 ? "session à venir" : "sessions à venir",
-                     tint: .indigo)
+                     title: upcoming == 1 ? "session à venir" : "sessions à venir")
         }
     }
 

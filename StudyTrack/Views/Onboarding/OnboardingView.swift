@@ -306,16 +306,13 @@ struct OnboardingView: View {
                         HStack(spacing: 12) {
                             StatCard(icon: "building.columns.fill",
                                      value: "\(lectureCourses.count)/\(courses.count)",
-                                     title: "avec amphi",
-                                     tint: .blue)
+                                     title: "avec amphi", onCard: true)
                             StatCard(icon: "clock.fill",
                                      value: DateUtils.hoursLabel(hours: courses.reduce(0) { $0 + ($1.hasLectures ? $1.weeklyLectureHours : 0) }),
-                                     title: "par semaine",
-                                     tint: .purple)
+                                     title: "par semaine", onCard: true)
                             StatCard(icon: "book.fill",
                                      value: DateUtils.hoursLabel(hours: courses.reduce(0) { $0 + $1.weeklyExerciseHours }),
-                                     title: "exercices / sem.",
-                                     tint: .green)
+                                     title: "exercices / sem.", onCard: true)
                         }
                     }
                 }

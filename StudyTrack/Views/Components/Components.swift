@@ -206,15 +206,21 @@ struct LabeledProgress: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.tight) {
             HStack(spacing: 8) {
+                // Une ligne, toujours : un titre qui passait à la ligne à côté
+                // d'un compte long décalait la barre et tout ce qui suit.
                 Text(title)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Spacer()
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: Layout.inline)
                 if let countLabel {
                     Text(countLabel)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Text("\(Int((min(1, max(0, progress)) * 100).rounded()))%")
                     .font(.subheadline.weight(.semibold))
@@ -463,24 +469,34 @@ struct StatCard: View {
     var value: String
     var title: String
     var tint: Color = Theme.accent
+    /// Posée **dans** une carte : un fond de la couleur de la carte y
+    /// disparaîtrait, la tuile prend donc un fond de remplissage.
+    var onCard: Bool = false
 
     var body: some View {
+        // Icône dans une case de hauteur fixe : des glyphes de hauteurs
+        // différentes décalaient les valeurs d'une tuile à l'autre.
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon).font(.subheadline).foregroundStyle(tint.accessibleMark)
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint.accessibleMark)
+                .frame(height: 20, alignment: .leading)
             Text(value)
-                .font(.title3.weight(.bold))
+                .font(.system(.title3, design: .rounded).weight(.bold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
-        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(onCard ? Color(.tertiarySystemFill) : Theme.softBackground,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

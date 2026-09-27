@@ -15,8 +15,9 @@ struct ExercisesTabView: View {
     @State private var showingPDFImport = false
     @State private var deletingSeries: ExerciseSeries?
     @State private var deletingExercise: Exercise?
-    /// Séries terminées que l'étudiant·e a rouvertes.
-    @State private var expandedSeries: Set<UUID> = []
+    /// Séries dont l'étudiant·e a inversé le pliage par défaut (une série
+    /// terminée rouverte, une série en cours repliée).
+    @State private var toggledSeries: Set<UUID> = []
     /// Exercices dont les questions sont dépliées dans la liste.
     @State private var expandedExercises: Set<UUID> = []
 
@@ -43,31 +44,34 @@ struct ExercisesTabView: View {
                 }
                 .buttonStyle(.bordered)
             } else {
-                // Les actions **en haut** : en semaine 12, importer la série 12
-                // obligeait à faire défiler onze séries terminées.
-                HStack(spacing: Layout.control) {
-                    Button {
-                        showingPDFImport = true
+                // L'ajout **en haut**, mais discret : en semaine 12, importer la
+                // série 12 obligeait à faire défiler onze séries terminées. Deux
+                // gros boutons pleins, eux, faisaient concurrence au chrono de
+                // la fiche — un menu suffit à un geste hebdomadaire.
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Séries")
+                        .font(.headline)
+                    Text("\(course.series.count)")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        Button { showingPDFImport = true } label: {
+                            Label("Importer le PDF d'une série", systemImage: "doc.badge.plus")
+                        }
+                        Button { editingSeries = SeriesEditTarget(series: nil) } label: {
+                            Label("Créer une série à la main", systemImage: "square.and.pencil")
+                        }
                     } label: {
-                        Label("Importer un PDF", systemImage: "doc.badge.plus")
-                            .frame(maxWidth: .infinity)
+                        Label("Ajouter", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
                     }
-                    .buttonStyle(.borderedProminent)
-
-                    Button {
-                        editingSeries = SeriesEditTarget(series: nil)
-                    } label: {
-                        Label("Nouvelle série", systemImage: "plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Ajouter une série")
                 }
-                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, Layout.micro)
 
-                ForEach(course.sortedSeries) { series in
-                    if isCollapsed(series) {
-                        collapsedSeriesRow(series)
-                    } else {
+                VStack(spacing: Layout.control) {
+                    ForEach(course.sortedSeries) { series in
                         seriesCard(series)
                     }
                 }
@@ -157,69 +161,110 @@ struct ExercisesTabView: View {
     /// Une série terminée — sans rien « à refaire » — se replie en une ligne :
     /// ce qui reste à faire remonte, ce qui est fait ne disparaît pas.
     private func isCollapsed(_ series: ExerciseSeries) -> Bool {
-        series.isComplete
-            && !series.exercises.contains(where: \.redoRequired)
-            && !expandedSeries.contains(series.id)
+        let collapsedByDefault = series.isComplete && !series.exercises.contains(where: \.redoRequired)
+        return collapsedByDefault != toggledSeries.contains(series.id)
     }
 
-    private func collapsedSeriesRow(_ series: ExerciseSeries) -> some View {
-        Button {
-            withAnimation(Motion.snappy) { _ = expandedSeries.insert(series.id) }
-        } label: {
-            HStack(spacing: Layout.control) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Color.green.accessibleMark)
-                Text(series.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("semaine \(series.plannedWeek)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: Layout.inline)
-                Text("\(series.doneCount)/\(series.requiredExercises.count)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+    private func toggleCollapsed(_ series: ExerciseSeries) {
+        withAnimation(Motion.snappy) {
+            if toggledSeries.contains(series.id) {
+                toggledSeries.remove(series.id)
+            } else {
+                toggledSeries.insert(series.id)
             }
-            .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, Layout.block)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .contextMenu { seriesMenuItems(series) }
-        .accessibilityLabel("\(series.title), terminée")
-        .accessibilityHint("Afficher les exercices")
+        Haptics.soft()
     }
 
+    /// Une série, repliée ou dépliée : **le même en-tête** dans les deux cas.
+    ///
+    /// La série repliée était une ligne à part, avec son propre dessin, et la
+    /// dépliée une carte à barre de progression : deux objets pour une seule
+    /// chose. L'en-tête porte maintenant l'avancement (un anneau, ou le sceau
+    /// d'une série finie), et toucher l'en-tête plie ou déplie.
     private func seriesCard(_ series: ExerciseSeries) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline, spacing: Layout.inline) {
+        let collapsed = isCollapsed(series)
+        return VStack(alignment: .leading, spacing: 0) {
+            seriesHeader(series, collapsed: collapsed)
+
+            if !collapsed {
+                seriesBody(series)
+                    .padding(.horizontal, Layout.gutter)
+                    .padding(.bottom, Layout.block)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+    }
+
+    private func seriesHeader(_ series: ExerciseSeries, collapsed: Bool) -> some View {
+        HStack(spacing: Layout.block) {
+            Button {
+                toggleCollapsed(series)
+            } label: {
+                HStack(spacing: Layout.block) {
+                    Group {
+                        if series.isComplete {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.green.accessibleMark)
+                        } else {
+                            ProgressRing(progress: series.progress,
+                                         color: TaskType.exercise.tint,
+                                         size: 28,
+                                         lineWidth: 4,
+                                         showsLabel: false)
+                        }
+                    }
+                    .frame(width: 30)
+
                     VStack(alignment: .leading, spacing: Layout.micro) {
-                        Text(series.title).font(.headline)
+                        Text(series.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
                         Text(seriesSubtitle(series))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     Spacer(minLength: Layout.inline)
                     Text("\(series.doneCount)/\(series.requiredExercises.count)")
                         .font(.subheadline.monospacedDigit().weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Menu {
-                        seriesMenuItems(series)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.title3)
-                            .frame(width: Layout.minTouch, height: Layout.minTouch)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Actions sur \(series.title)")
+                        .contentTransition(.numericText())
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 180))
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(series.title), \(series.doneCount) sur \(series.requiredExercises.count)")
+            .accessibilityHint(collapsed ? "Afficher les exercices" : "Replier la série")
 
-                ProgressBar(progress: series.progress, color: TaskType.exercise.tint)
+            Menu {
+                seriesMenuItems(series)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: Layout.minTouch)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Actions sur \(series.title)")
+        }
+        .padding(.leading, Layout.gutter)
+        .padding(.trailing, Layout.control)
+        .padding(.vertical, Layout.tight)
+        .contextMenu { seriesMenuItems(series) }
+    }
+
+    @ViewBuilder
+    private func seriesBody(_ series: ExerciseSeries) -> some View {
+        VStack(alignment: .leading, spacing: Layout.block) {
+                Divider()
 
                 if series.exercises.isEmpty {
                     Button {
@@ -260,7 +305,6 @@ struct ExercisesTabView: View {
                         }
                     }
                 }
-            }
         }
     }
 
@@ -289,11 +333,6 @@ struct ExercisesTabView: View {
                 Button { setAll(series, done: true) } label: {
                     Label("Tout marquer fait", systemImage: "checkmark.circle")
                 }
-            }
-        }
-        if isCollapsed(series) == false, series.isComplete, expandedSeries.contains(series.id) {
-            Button { withAnimation(Motion.snappy) { _ = expandedSeries.remove(series.id) } } label: {
-                Label("Replier", systemImage: "chevron.up")
             }
         }
         Divider()
