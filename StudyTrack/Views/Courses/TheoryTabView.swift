@@ -127,7 +127,7 @@ struct TheoryTabView: View {
         } else {
             video.watchedAt = Date()
         }
-        Haptics.success()
+        // Pas de vibration ici : `CheckCircleButton` a déjà la sienne.
         try? context.save()
     }
 }

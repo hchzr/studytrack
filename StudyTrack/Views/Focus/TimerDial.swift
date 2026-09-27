@@ -70,8 +70,9 @@ struct TimerDial: View {
                     .rotationEffect(.degrees(-90))
                     // La progression doit glisser, pas sauter d'un coup à chaque
                     // battement : c'est ce qui rend l'anneau lisible pendant
-                    // qu'on travaille.
-                    .animation(.easeOut(duration: 0.35), value: clamped)
+                    // qu'on travaille. Sauf sous le doigt : une courbe qui
+                    // traîne derrière le geste se bat contre lui.
+                    .animation(isAdjusting ? nil : Motion.progress, value: clamped)
             }
 
             if isAdjusting {
@@ -245,13 +246,16 @@ struct TimerPrimaryButton: View {
                         // L'icône glisse vers sa nouvelle position au changement
                         // d'état : le geste se lit sans regarder le libellé.
                         .contentTransition(.symbolEffect(.replace))
+                        // Le triangle a sa masse à gauche : centré au pixel, il
+                        // paraît décalé. On le pousse vers son centre optique.
+                        .offset(x: isRunning ? 0 : diameter * 0.03)
                 }
                 .frame(width: diameter, height: diameter)
                 Text(title)
                     .font(.subheadline.weight(.semibold))
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel(title)
     }
 }

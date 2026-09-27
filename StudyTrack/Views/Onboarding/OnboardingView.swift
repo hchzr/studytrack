@@ -19,6 +19,10 @@ struct OnboardingView: View {
     @Query private var terms: [AcademicTerm]
 
     @State private var step = OnboardingView.initialStep
+    /// Le sens du dernier changement d'étape : « Continuer » pousse vers la
+    /// droite, « Retour » revient par la gauche.
+    @State private var goingForward = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sectionCode = ""
     @State private var search = ""
     /// Par défaut, le semestre commence **cette semaine**. Pré-remplir « il y a
@@ -70,6 +74,10 @@ struct OnboardingView: View {
                     // L'étape « section » est une grille et gagne à occuper la
                     // largeur ; les étapes de texte restent à une mesure lisible.
                     .adaptiveColumn(maxWidth: step == 0 ? Layout.wideWidth : Layout.readableWidth)
+                    .id(step)
+                    .transition(reduceMotion
+                                ? .opacity
+                                : .push(from: goingForward ? .trailing : .leading))
                 }
                 footer
             }
@@ -161,7 +169,7 @@ struct OnboardingView: View {
                         }
                         Spacer(minLength: 0)
                         Button(editingTerm ? "OK" : "Modifier") {
-                            withAnimation(.snappy) { editingTerm.toggle() }
+                            withAnimation(Motion.snappy) { editingTerm.toggle() }
                         }
                         .font(.subheadline)
                         .buttonStyle(.borderless)
@@ -397,7 +405,8 @@ struct OnboardingView: View {
             if step > 0 {
                 Button {
                     Haptics.tap()
-                    withAnimation { step -= 1 }
+                    goingForward = false
+                    withAnimation(Motion.step) { step -= 1 }
                 } label: {
                     Text("Retour")
                         .frame(maxWidth: .infinity)
@@ -424,7 +433,8 @@ struct OnboardingView: View {
 
     private func advance() {
         if step < lastStep {
-            withAnimation { step += 1 }
+            goingForward = true
+            withAnimation(Motion.step) { step += 1 }
         } else {
             finish()
         }

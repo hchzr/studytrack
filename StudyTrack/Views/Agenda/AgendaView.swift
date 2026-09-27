@@ -302,7 +302,7 @@ struct AgendaView: View {
 
             if !calendar.isDate(selectedDay, inSameDayAs: Date()) {
                 Button("Revenir à aujourd'hui") {
-                    withAnimation {
+                    withAnimation(Motion.snappy) {
                         selectedDay = DateUtils.startOfDay(Date())
                         weekStart = DateUtils.startOfWeek(Date())
                     }
@@ -342,7 +342,7 @@ struct AgendaView: View {
             seen.append(entry.color)
         }
         return Button {
-            withAnimation(.snappy) { selectedDay = day }
+            withAnimation(Motion.snappy) { selectedDay = day }
             Haptics.soft()
         } label: {
             VStack(spacing: Layout.tight) {
@@ -377,7 +377,7 @@ struct AgendaView: View {
     }
 
     private func shiftWeek(_ delta: Int) {
-        withAnimation(.snappy) {
+        withAnimation(Motion.snappy) {
             weekStart = DateUtils.addWeeks(delta, to: weekStart)
             // Le jour choisi suit la semaine : même jour de la semaine.
             selectedDay = DateUtils.addWeeks(delta, to: selectedDay)

@@ -339,7 +339,7 @@ struct ExerciseDraftEditor: View {
         .onChange(of: exercise.subQuestions) { _, new in
             if !outlineFocused { outline = SubQuestionTree.outline(new) }
         }
-        .animation(.snappy, value: exercise.subQuestions.map(\.id))
+        .animation(Motion.snappy, value: exercise.subQuestions.map(\.id))
     }
 
     private func applyOutline() {

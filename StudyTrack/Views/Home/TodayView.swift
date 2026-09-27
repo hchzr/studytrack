@@ -58,6 +58,10 @@ struct TodayView: View {
     @State private var openedVideo: TheoryItem?
     /// Chrono laissé en route dans Focus, relu à chaque passage au premier plan.
     @State private var showAllTodos = false
+    /// Les lignes cochées à l'instant : leur coche se remplit avant qu'elles
+    /// ne quittent la liste, sinon la ligne disparaît sous le doigt.
+    @State private var justDone: Set<String> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Une seule passe de dérivation, réutilisée par toutes les sections du rendu.
     private func derived() -> TodayState {
@@ -592,8 +596,10 @@ struct TodayView: View {
                 Card {
                     VStack(spacing: 0) {
                         ForEach(visible) { todo in
+                          VStack(spacing: 0) {
                             TodoRow(todo: todo,
-                                    onComplete: { complete(todo) },
+                                    isDone: justDone.contains(todo.id),
+                                    onComplete: { checkOff(todo) },
                                     onOpen: { open(todo) },
                                     onStart: {
                                         app.router.startFocus(courseID: todo.courseID,
@@ -604,11 +610,15 @@ struct TodayView: View {
                             if todo.id != visible.last?.id {
                                 Divider().padding(.leading, 56)
                             }
+                          }
+                          .transition(reduceMotion
+                                      ? .opacity
+                                      : .opacity.combined(with: .move(edge: .leading)))
                         }
                         if rest.count > Self.collapsedTodoCount {
                             Divider()
                             Button {
-                                withAnimation(.snappy) { showAllTodos.toggle() }
+                                withAnimation(Motion.snappy) { showAllTodos.toggle() }
                             } label: {
                                 Text(showAllTodos ? "Afficher moins" : "Tout afficher (\(rest.count))")
                                     .font(.subheadline.weight(.medium))
@@ -719,6 +729,23 @@ struct TodayView: View {
 
     // MARK: Actions
 
+    /// Cocher depuis la liste : la coche se remplit, puis la ligne s'en va.
+    ///
+    /// La correction ne se coche pas d'un geste — elle demande un jugement — et
+    /// ouvre donc la fiche tout de suite.
+    private func checkOff(_ todo: StudyTodo) {
+        guard todo.kind != .correction else { return complete(todo) }
+        guard !justDone.contains(todo.id) else { return }
+        justDone.insert(todo.id)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.35))
+            withAnimation(Motion.snappy) {
+                complete(todo)
+            }
+            justDone.remove(todo.id)
+        }
+    }
+
     private func complete(_ todo: StudyTodo) {
         switch todo.kind {
         case .video:
@@ -744,7 +771,7 @@ struct TodayView: View {
             }
             return
         }
-        Haptics.success()
+        // Pas de vibration ici : `CheckCircleButton` a déjà la sienne.
         try? context.save()
     }
 
@@ -765,13 +792,14 @@ struct TodayView: View {
 /// Une ligne = une chose. Coche à gauche, action au centre, chrono à droite.
 struct TodoRow: View {
     let todo: StudyTodo
+    var isDone: Bool = false
     var onComplete: () -> Void
     var onOpen: () -> Void
     var onStart: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            CheckCircleButton(isOn: false,
+            CheckCircleButton(isOn: isDone,
                               tint: todo.tint,
                               label: "Marquer \(todo.title) terminé",
                               action: onComplete)

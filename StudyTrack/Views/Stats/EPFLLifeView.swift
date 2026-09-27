@@ -171,7 +171,7 @@ struct EPFLLifeView: View {
 
                 if upcoming.count > 6 {
                     Button {
-                        withAnimation { showingEverything.toggle() }
+                        withAnimation(Motion.snappy) { showingEverything.toggle() }
                     } label: {
                         Label(showingEverything
                               ? "Réduire"

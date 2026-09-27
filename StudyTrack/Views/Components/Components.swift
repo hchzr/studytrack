@@ -77,6 +77,43 @@ extension View {
     }
 }
 
+// MARK: - Mouvement
+
+/// Les courbes de l'app, nommées une fois.
+///
+/// Deux écrans voisins qui s'ouvrent à deux rythmes différents se lisent comme
+/// deux apps. Tout ce qui se déplie, se coche ou progresse passe donc par ici.
+///
+/// Avec « Réduire les animations », les courbes qui déplacent deviennent un
+/// fondu court. Le réglage est lu à chaque appel : il suit le lecteur sans
+/// qu'aucun écran ait à le relayer.
+enum Motion {
+    /// Déplier, replier, changer de jour : la courbe par défaut.
+    static var snappy: Animation { reduced ?? .snappy(duration: 0.28) }
+    /// Une barre ou un anneau qui avance, et le pourcentage qui l'accompagne :
+    /// une seule courbe pour les deux, sinon le chiffre et la barre divergent.
+    static let progress = Animation.smooth(duration: 0.35)
+    /// Passer d'une étape à l'autre d'un parcours.
+    static var step: Animation { reduced ?? .smooth(duration: 0.4) }
+
+    private static var reduced: Animation? {
+        UIAccessibility.isReduceMotionEnabled ? .easeInOut(duration: 0.2) : nil
+    }
+}
+
+/// Le bouton s'enfonce sous le doigt dès le contact.
+///
+/// Plat, conformément au système : une échelle, jamais une ombre.
+struct PressableStyle: ButtonStyle {
+    var scale: CGFloat = 0.94
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .animation(.spring(duration: 0.16, bounce: 0), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Retour haptique
 
 /// Les générateurs sont **réutilisés** et réarmés après chaque coup.
@@ -128,8 +165,10 @@ struct ProgressRing: View {
                 Text("\(Int((clamped * 100).rounded()))%")
                     .font(.system(size: size * scale * 0.27, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: clamped))
             }
         }
+        .animation(Motion.progress, value: clamped)
         .frame(width: size * scale, height: size * scale)
         .accessibilityElement()
         .accessibilityLabel("Progression")
@@ -153,6 +192,7 @@ struct ProgressBar: View {
             }
         }
         .frame(height: height)
+        .animation(Motion.progress, value: clamped)
     }
 }
 
@@ -179,7 +219,9 @@ struct LabeledProgress: View {
                 Text("\(Int((min(1, max(0, progress)) * 100).rounded()))%")
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: progress))
             }
+            .animation(Motion.progress, value: progress)
             ProgressBar(progress: progress, color: color)
         }
     }
@@ -222,16 +264,19 @@ struct CheckCircleButton: View {
 
     var body: some View {
         Button {
-            Haptics.tap()
+            // La coche est **seule** à vibrer : les gestionnaires n'ajoutent rien.
+            // Un tic net pour cocher, plus doux pour décocher.
+            if isOn { Haptics.soft() } else { Haptics.tap() }
             action()
         } label: {
             Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: glyphSize))
                 .foregroundStyle(isOn ? tint.accessibleMark : Color.secondary)
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: Layout.minTouch, height: Layout.minTouch)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "fait" : "à faire")
     }
@@ -264,6 +309,7 @@ struct ConfidenceControl: View {
                             Image(systemName: level.glyph)
                                 .font(.caption.weight(.bold))
                                 .foregroundStyle(Theme.knockedOutInk)
+                                .transition(.scale(scale: 0.6).combined(with: .opacity))
                         } else {
                             Circle()
                                 .stroke(level.color.accessibleMark, lineWidth: 1.5)
@@ -279,6 +325,7 @@ struct ConfidenceControl: View {
                 .accessibilityAddTraits(isOn ? [.isSelected] : [])
             }
         }
+        .animation(.snappy(duration: 0.2), value: value)
         .opacity(isEnabled ? 1 : 0.35)
     }
 }
@@ -561,6 +608,7 @@ struct ChoiceCard: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? tint.badgeInk : Color.secondary)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -574,7 +622,7 @@ struct ChoiceCard: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.98))
     }
 }
 

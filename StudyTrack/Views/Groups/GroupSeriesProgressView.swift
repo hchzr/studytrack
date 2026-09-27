@@ -64,7 +64,7 @@ struct GroupSeriesProgressView: View {
                         }
                         if !showAll, visible(all).count < all.count {
                             Button {
-                                withAnimation { showAll = true }
+                                withAnimation(Motion.snappy) { showAll = true }
                             } label: {
                                 Label("Voir les \(all.count - visible(all).count) séries à venir", systemImage: "chevron.down")
                                     .frame(maxWidth: .infinity)

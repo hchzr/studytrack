@@ -164,7 +164,7 @@ struct ExercisesTabView: View {
 
     private func collapsedSeriesRow(_ series: ExerciseSeries) -> some View {
         Button {
-            withAnimation(.snappy) { _ = expandedSeries.insert(series.id) }
+            withAnimation(Motion.snappy) { _ = expandedSeries.insert(series.id) }
         } label: {
             HStack(spacing: Layout.control) {
                 Image(systemName: "checkmark.seal.fill")
@@ -292,7 +292,7 @@ struct ExercisesTabView: View {
             }
         }
         if isCollapsed(series) == false, series.isComplete, expandedSeries.contains(series.id) {
-            Button { withAnimation(.snappy) { _ = expandedSeries.remove(series.id) } } label: {
+            Button { withAnimation(Motion.snappy) { _ = expandedSeries.remove(series.id) } } label: {
                 Label("Replier", systemImage: "chevron.up")
             }
         }
@@ -316,7 +316,7 @@ struct ExercisesTabView: View {
     }
 
     private func toggleExpanded(_ exercise: Exercise) {
-        withAnimation(.snappy) {
+        withAnimation(Motion.snappy) {
             if expandedExercises.contains(exercise.id) {
                 expandedExercises.remove(exercise.id)
             } else {
@@ -334,7 +334,7 @@ struct ExercisesTabView: View {
             if exercise.hasSubQuestions { exercise.setSubQuestions(done: true) } else { exercise.doneAt = Date() }
             if exercise.confidence == nil { exercise.confidence = .medium }
         }
-        Haptics.success()
+        // Pas de vibration ici : `CheckCircleButton` a déjà la sienne.
         try? context.save()
     }
 

@@ -498,7 +498,7 @@ struct FocusView: View {
                 .accessibilityValue(pomodoro ? "activé" : "désactivé")
 
                 Button {
-                    withAnimation { isAdjusting.toggle() }
+                    withAnimation(Motion.snappy) { isAdjusting.toggle() }
                     Haptics.tap()
                 } label: {
                     HStack(spacing: Layout.snug) {
