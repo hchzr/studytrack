@@ -80,3 +80,169 @@ enum PomodoroEngine {
         return max(0, targetBlocks - done)
     }
 }
+
+// MARK: - Le cycle : travail, pause, travail
+
+/// Ce que dure chaque temps du cycle, lu dans les réglages.
+struct PomodoroSettings: Equatable {
+    var focusMinutes: Int = 25
+    var shortBreakMinutes: Int = 5
+    var longBreakMinutes: Int = 15
+    /// Une pause longue tous les `longBreakEvery` blocs.
+    var longBreakEvery: Int = 4
+    /// À la fin d'une pause, le bloc suivant démarre-t-il seul ?
+    ///
+    /// Non par défaut : revenir à sa table est un geste, et un chrono qui
+    /// repartirait pendant qu'on est encore à la machine à café compterait du
+    /// travail qui n'a pas eu lieu.
+    var autoStartFocus: Bool = false
+
+    var blockDuration: TimeInterval { PomodoroEngine.blockDuration(minutes: focusMinutes) }
+
+    func breakDuration(_ kind: PomodoroBreak) -> TimeInterval {
+        TimeInterval(max(1, kind == .long ? longBreakMinutes : shortBreakMinutes) * 60)
+    }
+
+    /// La pause qui suit le bloc numéro `completedBlocks`.
+    func breakKind(afterBlock completedBlocks: Int) -> PomodoroBreak {
+        let every = max(2, longBreakEvery)
+        return completedBlocks > 0 && completedBlocks % every == 0 ? .long : .short
+    }
+}
+
+enum PomodoroBreak: String, Codable, Equatable {
+    case short, long
+
+    var label: String { self == .long ? "Pause longue" : "Pause" }
+}
+
+/// Ce qui vient de se passer dans le cycle — pour l'haptique et le journal.
+enum PomodoroEvent: Equatable {
+    /// Un bloc de travail vient de finir ; la pause démarre.
+    case blockEnded(block: Int, kind: PomodoroBreak)
+    /// La pause est finie ; le bloc suivant attend (ou démarre, si réglé ainsi).
+    case breakEnded(nextBlock: Int)
+}
+
+/// Où en est une session, du point de vue de ce qu'il faut afficher.
+///
+/// Déduit de l'état persisté, jamais stocké : il ne peut pas diverger.
+enum FocusPhase: Equatable {
+    /// Rien n'a encore été compté.
+    case idle
+    /// Le travail est compté.
+    case working
+    /// Le travail est suspendu, en dehors de toute pause Pomodoro.
+    case paused
+    /// Une pause Pomodoro décompte jusqu'à `endsAt`.
+    case onBreak(PomodoroBreak, startedAt: Date, endsAt: Date)
+    /// La pause est finie : le bloc suivant attend un geste.
+    case readyForBlock(Int)
+
+    var isBreak: Bool {
+        if case .onBreak = self { return true }
+        return false
+    }
+}
+
+extension FocusTimerState {
+
+    /// La pause en cours, s'il y en a une.
+    var currentBreak: (kind: PomodoroBreak, startedAt: Date, endsAt: Date)? {
+        guard let raw = breakKindRaw, let kind = PomodoroBreak(rawValue: raw),
+              let start = breakStartedAt, let end = breakEndsAt else { return nil }
+        return (kind, start, end)
+    }
+
+    /// La phase à afficher à l'instant `now`, **après** `advance`.
+    func phase(settings: PomodoroSettings, at now: Date = Date()) -> FocusPhase {
+        if let current = currentBreak {
+            return .onBreak(current.kind, startedAt: current.startedAt, endsAt: current.endsAt)
+        }
+        if isRunning { return .working }
+        let total = elapsed(at: now)
+        guard total >= 1 else { return .idle }
+        if pomodoro {
+            let block = settings.blockDuration
+            let completed = Int((total / block).rounded(.down))
+            // Pile sur une frontière de bloc, à l'arrêt : c'est la fin d'une pause.
+            if completed > 0, abs(total - Double(completed) * block) < 0.5 {
+                return .readyForBlock(completed + 1)
+            }
+        }
+        return .paused
+    }
+
+    /// Fait avancer le cycle jusqu'à `now`, et dit ce qui s'est passé.
+    ///
+    /// **Tout se déduit des dates.** Une app fermée pendant la fin d'un bloc ne
+    /// rate rien : au retour, on retrouve l'instant exact où le bloc a fini, le
+    /// travail est coupé **à cet instant** — les minutes passées en pause ne sont
+    /// pas comptées comme du travail — et la pause a commencé là.
+    ///
+    /// Hors Pomodoro, la fonction ne fait rien.
+    @discardableResult
+    mutating func advance(settings: PomodoroSettings, to now: Date = Date()) -> [PomodoroEvent] {
+        guard pomodoro else {
+            clearBreak()
+            return []
+        }
+        var events: [PomodoroEvent] = []
+        let block = settings.blockDuration
+        // Borne de sécurité : une session ne compte jamais des centaines de
+        // cycles, mais une date corrompue ne doit pas faire boucler l'app.
+        for _ in 0..<64 {
+            if let current = currentBreak {
+                guard now >= current.endsAt else { break }
+                clearBreak()
+                let next = Int((accumulated / block).rounded(.down)) + 1
+                events.append(.breakEnded(nextBlock: next))
+                if settings.autoStartFocus {
+                    runningSince = current.endsAt
+                    continue
+                }
+                break
+            }
+            guard let since = runningSince else { break }
+            let nextBoundary = ((accumulated / block).rounded(.down) + 1) * block
+            let boundaryDate = since.addingTimeInterval(nextBoundary - accumulated)
+            guard now >= boundaryDate else { break }
+            accumulated = nextBoundary
+            runningSince = nil
+            let completed = Int((nextBoundary / block).rounded())
+            let kind = settings.breakKind(afterBlock: completed)
+            breakKindRaw = kind.rawValue
+            breakStartedAt = boundaryDate
+            breakEndsAt = boundaryDate.addingTimeInterval(settings.breakDuration(kind))
+            events.append(.blockEnded(block: completed, kind: kind))
+        }
+        return events
+    }
+
+    /// Termine la pause maintenant et relance le travail.
+    mutating func skipBreak(at now: Date = Date()) {
+        guard currentBreak != nil else { return }
+        clearBreak()
+        start(at: now)
+    }
+
+    /// Allonge la pause en cours.
+    mutating func extendBreak(by seconds: TimeInterval) {
+        guard let end = breakEndsAt else { return }
+        breakEndsAt = end.addingTimeInterval(seconds)
+    }
+
+    mutating func clearBreak() {
+        breakKindRaw = nil
+        breakStartedAt = nil
+        breakEndsAt = nil
+    }
+
+    /// Quand le bloc en cours finira, si le travail est compté.
+    func blockEndDate(settings: PomodoroSettings) -> Date? {
+        guard pomodoro, let since = runningSince else { return nil }
+        let block = settings.blockDuration
+        let nextBoundary = ((accumulated / block).rounded(.down) + 1) * block
+        return since.addingTimeInterval(nextBoundary - accumulated)
+    }
+}

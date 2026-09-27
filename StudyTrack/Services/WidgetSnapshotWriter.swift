@@ -109,7 +109,9 @@ enum WidgetSnapshotWriter {
         let elapsed = state.elapsed()
         return WidgetTimer(label: label, colorHex: course?.colorHex ?? "#5247E6",
                            effectiveStart: Date().addingTimeInterval(-elapsed),
-                           isRunning: state.isRunning, elapsedWhenPaused: elapsed)
+                           isRunning: state.isRunning, elapsedWhenPaused: elapsed,
+                           breakEndsAt: state.currentBreak?.endsAt,
+                           breakLabel: state.currentBreak?.kind.label)
     }
 
     /// Applique les coches faites dans un widget pendant que l'app dormait.

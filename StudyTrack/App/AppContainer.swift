@@ -3,6 +3,7 @@ import SwiftData
 import Observation
 
 /// Conteneur de dépendances de l'app (persistance + réglages + services + navigation).
+@MainActor
 @Observable
 final class AppContainer {
     let modelContainer: ModelContainer
@@ -12,6 +13,8 @@ final class AppContainer {
     let router: AppRouter
     /// Présence en direct dans les groupes (« untel travaille sur CS-250 »).
     let presence: PresenceService
+    /// Le chrono : un seul, partagé par Focus, le dock et l'écran verrouillé.
+    let focus: FocusController
 
     @ObservationIgnored private var cachedCalendar: CalendarService? = nil
 
@@ -74,10 +77,12 @@ final class AppContainer {
                                     anonKey: SupabaseConfig.anonKey)
         self.router = AppRouter()
         self.presence = PresenceService()
+        self.focus = FocusController()
 
         // Réparations de données, nommées et jouées une fois par version.
         let repairContext = ModelContext(self.modelContainer)
         DataRepair.run(in: repairContext)
+        focus.app = self
     }
 
     /// Reconfigure le client social — utile après une connexion ou une déconnexion.

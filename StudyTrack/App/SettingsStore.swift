@@ -8,6 +8,10 @@ final class SettingsStore {
         static let hoursPerCredit = "settings.hoursPerCredit"
         static let pomodoroFocusMinutes = "settings.pomodoroFocusMinutes"
         static let pomodoroBreakMinutes = "settings.pomodoroBreakMinutes"
+        static let pomodoroLongBreakMinutes = "settings.pomodoroLongBreakMinutes"
+        static let pomodoroLongBreakEvery = "settings.pomodoroLongBreakEvery"
+        static let pomodoroAutoStartFocus = "settings.pomodoroAutoStartFocus"
+        static let pomodoroDefault = "settings.pomodoroDefault"
         static let displayName = "settings.displayName"
         static let sectionCode = "settings.sectionCode"
         static let hasCompletedOnboarding = "settings.hasCompletedOnboarding"
@@ -61,7 +65,23 @@ final class SettingsStore {
 
     // MARK: Pomodoro
     var pomodoroFocusMinutes: Int { didSet { defaults.set(pomodoroFocusMinutes, forKey: Key.pomodoroFocusMinutes) } }
+    /// La pause courte. La clé historique est conservée : les réglages déjà
+    /// faits ne sont pas perdus.
     var pomodoroBreakMinutes: Int { didSet { defaults.set(pomodoroBreakMinutes, forKey: Key.pomodoroBreakMinutes) } }
+    var pomodoroLongBreakMinutes: Int { didSet { defaults.set(pomodoroLongBreakMinutes, forKey: Key.pomodoroLongBreakMinutes) } }
+    var pomodoroLongBreakEvery: Int { didSet { defaults.set(pomodoroLongBreakEvery, forKey: Key.pomodoroLongBreakEvery) } }
+    var pomodoroAutoStartFocus: Bool { didSet { defaults.set(pomodoroAutoStartFocus, forKey: Key.pomodoroAutoStartFocus) } }
+    /// Une nouvelle session démarre-t-elle en Pomodoro ?
+    var pomodoroDefault: Bool { didSet { defaults.set(pomodoroDefault, forKey: Key.pomodoroDefault) } }
+
+    /// Le cycle tel que la logique pure l'attend.
+    var pomodoro: PomodoroSettings {
+        PomodoroSettings(focusMinutes: pomodoroFocusMinutes,
+                         shortBreakMinutes: pomodoroBreakMinutes,
+                         longBreakMinutes: pomodoroLongBreakMinutes,
+                         longBreakEvery: pomodoroLongBreakEvery,
+                         autoStartFocus: pomodoroAutoStartFocus)
+    }
 
     // MARK: Suivi
     /// Suivre la présence en amphi (heures de cours réelles).
@@ -134,6 +154,10 @@ final class SettingsStore {
         self.hoursPerCredit = defaults.object(forKey: Key.hoursPerCredit) as? Double ?? 30
         self.pomodoroFocusMinutes = defaults.object(forKey: Key.pomodoroFocusMinutes) as? Int ?? 25
         self.pomodoroBreakMinutes = defaults.object(forKey: Key.pomodoroBreakMinutes) as? Int ?? 5
+        self.pomodoroLongBreakMinutes = defaults.object(forKey: Key.pomodoroLongBreakMinutes) as? Int ?? 15
+        self.pomodoroLongBreakEvery = defaults.object(forKey: Key.pomodoroLongBreakEvery) as? Int ?? 4
+        self.pomodoroAutoStartFocus = defaults.object(forKey: Key.pomodoroAutoStartFocus) as? Bool ?? false
+        self.pomodoroDefault = defaults.object(forKey: Key.pomodoroDefault) as? Bool ?? false
         self.displayName = defaults.string(forKey: Key.displayName) ?? ""
         self.sectionCode = defaults.string(forKey: Key.sectionCode) ?? ""
         self.hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)

@@ -49,7 +49,8 @@ struct RootTabView: View {
             // Raccord au lancement : aucune activité d'îlot ne doit survivre à un
             // chrono éteint. Sans ça, une Live Activity laissée par une exécution
             // précédente restait affichée indéfiniment.
-            StudyActivityController.reconcile(with: FocusTimerStore.load())
+            app.focus.reload()
+            StudyActivityController.reconcile(with: app.focus.state)
             // Même raccord pour le jour d'examen : une activité laissée par une
             // épreuve passée doit disparaître, et une épreuve qui arrive dans les
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
@@ -87,6 +88,9 @@ struct RootTabView: View {
                 // dormait attend dans le dépôt partagé : on la rejoue ici.
                 // Même principe pour un fichier partagé depuis une autre app.
                 Task { @MainActor in
+                    // Le chrono rattrape ce qui s'est passé app fermée : une fin
+                    // de bloc, une pause écoulée.
+                    app.focus.reload()
                     FocusTimerCommandHandler.consumePending(container: app)
                     // Les coches faites dans un widget pendant que l'app dormait.
                     if WidgetSnapshotWriter.applyPendingCompletions(context: context) > 0 {

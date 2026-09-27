@@ -355,22 +355,10 @@ struct ProfileView: View {
 
     // MARK: Focus
 
+    /// Le cycle Pomodoro : le même formulaire que depuis le chrono.
+    @ViewBuilder
     private func focusSection(_ settings: SettingsStore) -> some View {
-        @Bindable var settings = settings
-        return Section("Focus") {
-            Stepper(value: Binding(
-                get: { settings.pomodoroFocusMinutes },
-                set: { settings.pomodoroFocusMinutes = $0 }
-            ), in: 10...90, step: 5) {
-                LabeledContent("Durée Pomodoro", value: "\(settings.pomodoroFocusMinutes) min")
-            }
-            Stepper(value: Binding(
-                get: { settings.pomodoroBreakMinutes },
-                set: { settings.pomodoroBreakMinutes = $0 }
-            ), in: 1...30, step: 1) {
-                LabeledContent("Pause", value: "\(settings.pomodoroBreakMinutes) min")
-            }
-        }
+        PomodoroSettingsForm(settings: settings)
     }
 
     // MARK: Notifications
@@ -522,7 +510,7 @@ struct ProfileView: View {
         for item in (try? context.fetch(FetchDescriptor<AcademicTerm>())) ?? [] { context.delete(item) }
         try? context.save()
         app.settings.hasSeededSampleData = false
-        FocusTimerStore.save(nil)
+        app.focus.discard()
         Task { await app.notifications.cancelScheduled() }
         WidgetSnapshotWriter.refresh(context: context, settings: app.settings)
         Haptics.removed()

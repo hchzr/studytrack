@@ -130,10 +130,8 @@ enum StudyActivityController {
         let context = ModelContext(container.modelContainer)
         let course = course(for: state, context: context)
         let exercise = exercise(for: state, course: course)
-        let content = makeState(elapsed: state.elapsed(),
-                                running: state.isRunning,
-                                pomodoro: state.pomodoro,
-                                focusMinutes: container.settings.pomodoroFocusMinutes,
+        let content = makeState(timer: state,
+                                settings: container.settings.pomodoro,
                                 exercise: exercise)
         sync(attributes: attributes(for: state, course: course), state: content)
     }
@@ -149,10 +147,8 @@ enum StudyActivityController {
               state.isRestorable() || state.isRunning else { return }
         let context = ModelContext(container.modelContainer)
         let exercise = exercise(for: state, course: course(for: state, context: context))
-        let label = makeState(elapsed: state.elapsed(),
-                              running: state.isRunning,
-                              pomodoro: state.pomodoro,
-                              focusMinutes: container.settings.pomodoroFocusMinutes,
+        let label = makeState(timer: state,
+                              settings: container.settings.pomodoro,
                               exercise: exercise).questionsLabel
         guard label != publishedQuestions else { return }
         publish(state, container: container)
@@ -193,41 +189,49 @@ enum StudyActivityController {
 
     /// Construit l'état à publier depuis le chrono et sa cible.
     ///
-    /// Une seule fonction pour les deux appelants — l'écran Focus et le
-    /// gestionnaire des commandes de l'écran verrouillé. Avant, chacun composait
-    /// son `ContentState` : mettre en pause depuis l'îlot effaçait donc le compte
-    /// de sous-questions et l'anneau, que seul l'écran savait remplir.
+    /// Une seule fonction pour tous les appelants — le contrôleur du chrono et
+    /// les commandes de l'écran verrouillé. Avant, chacun composait son
+    /// `ContentState` : mettre en pause depuis l'îlot effaçait donc le compte de
+    /// sous-questions et l'anneau, que seul l'écran savait remplir.
     ///
     /// - Parameters:
-    ///   - elapsed: temps de travail compté.
-    ///   - running: le chrono tourne-t-il ?
-    ///   - pomodoro: la session est-elle structurée en blocs ?
-    ///   - focusMinutes: la durée d'un bloc, depuis les réglages.
+    ///   - timer: le chrono persisté, cycle Pomodoro compris.
+    ///   - settings: les durées du cycle.
     ///   - exercise: la cible, quand c'est un exercice — seul porteur de
     ///     sous-questions.
-    static func makeState(elapsed: TimeInterval,
-                          running: Bool,
-                          pomodoro: Bool,
-                          focusMinutes: Int,
-                          exercise: Exercise?) -> StudyActivityAttributes.ContentState {
+    static func makeState(timer: FocusTimerState,
+                          settings: PomodoroSettings,
+                          exercise: Exercise?,
+                          now: Date = Date()) -> StudyActivityAttributes.ContentState {
+        let elapsed = timer.elapsed(at: now)
         var block: ActivityPomodoro?
-        if pomodoro {
-            let status = PomodoroEngine.status(elapsed: elapsed, focusMinutes: focusMinutes)
-            block = ActivityPomodoro.make(blockNumber: status.blockNumber,
-                                          elapsedInBlock: status.elapsedInBlock,
-                                          remaining: status.remaining,
-                                          completedBlocks: status.completedBlocks,
-                                          running: running)
+        if timer.pomodoro {
+            if let pause = timer.currentBreak {
+                let completed = Int((timer.accumulated / settings.blockDuration).rounded())
+                block = .onBreak(kind: pause.kind.rawValue,
+                                 startedAt: pause.startedAt,
+                                 endsAt: pause.endsAt,
+                                 completedBlocks: completed)
+            } else {
+                let status = PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes)
+                block = ActivityPomodoro.make(blockNumber: status.blockNumber,
+                                              elapsedInBlock: status.elapsedInBlock,
+                                              remaining: status.remaining,
+                                              completedBlocks: status.completedBlocks,
+                                              running: timer.isRunning,
+                                              now: now)
+            }
         }
         // `hasSubQuestions` et non `leafSubQuestions.isEmpty` : un exercice sans
         // sous-questions ne doit pas publier « 0/0 », qui allumerait le bouton
         // « question suivante » sur une cible qui n'en a aucune.
         let leaves = exercise?.hasSubQuestions == true ? exercise?.leafSubQuestions : nil
         return .make(elapsed: elapsed,
-                     running: running,
+                     running: timer.isRunning,
                      questionsDone: leaves.map { $0.filter(\.isDone).count },
                      questionsTotal: leaves.map(\.count),
-                     pomodoro: block)
+                     pomodoro: block,
+                     now: now)
     }
 
     /// Lance une activité d'essai, pour vérifier l'îlot sans attendre un chrono.
@@ -253,7 +257,15 @@ enum StudyActivityController {
 
     private static func content(_ state: StudyActivityAttributes.ContentState)
         -> ActivityContent<StudyActivityAttributes.ContentState> {
-        ActivityContent(state: state,
-                        staleDate: state.isRunning ? nil : Date().addingTimeInterval(pausedFreshness))
+        // Pendant une pause Pomodoro, l'activité est périmée à la fin de la
+        // pause : le compte à rebours est arrivé à zéro, et seule l'app peut
+        // dire la suite.
+        let stale: Date?
+        if let breakEnd = state.pomodoro?.breakEndsAt {
+            stale = breakEnd
+        } else {
+            stale = state.isRunning ? nil : Date().addingTimeInterval(pausedFreshness)
+        }
+        return ActivityContent(state: state, staleDate: stale)
     }
 }

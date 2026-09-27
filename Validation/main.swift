@@ -1006,6 +1006,79 @@ check(!ExamActivityState.isRelevant(examDate: examAt,
 check(ExamActivityState.make(examDate: examAt, now: examAt.addingTimeInterval(-600)).phase == .upcoming,
       "l'état publié reprend la phase déduite")
 
+print("== Pomodoro : le cycle travail / pause ==")
+do {
+    let cfg = PomodoroSettings(focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15,
+                               longBreakEvery: 4, autoStartFocus: false)
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    var s = FocusTimerState(runningSince: t0, sessionStartedAt: t0, pomodoro: true)
+
+    check(s.advance(settings: cfg, to: t0.addingTimeInterval(600)).isEmpty,
+          "à 10 min, rien ne se passe")
+    check(s.phase(settings: cfg, at: t0.addingTimeInterval(600)) == .working, "on travaille")
+    check(s.blockEndDate(settings: cfg) == t0.addingTimeInterval(1500), "le bloc finira à 25 min")
+
+    // L'app revient 28 min après le départ : le bloc a fini à 25 min, pas à 28.
+    let back = t0.addingTimeInterval(28 * 60)
+    let events = s.advance(settings: cfg, to: back)
+    check(events == [.blockEnded(block: 1, kind: .short)], "le bloc 1 est annoncé fini — \(events)")
+    check(s.accumulated == 1500, "le travail est coupé **au terme** : 25 min, pas 28")
+    check(!s.isRunning, "le chrono de travail est arrêté pendant la pause")
+    check(s.breakStartedAt == t0.addingTimeInterval(1500), "la pause a commencé à la fin du bloc")
+    check(s.breakEndsAt == t0.addingTimeInterval(1500 + 300), "…et dure 5 min")
+    if case .onBreak(.short, _, _) = s.phase(settings: cfg, at: back) {
+        check(true, "la phase affichée est la pause")
+    } else { check(false, "la phase affichée est la pause") }
+    check(s.isRestorable(at: back), "une session en pause Pomodoro reste une session vivante")
+
+    // Fin de pause sans démarrage automatique : on attend un geste.
+    let afterBreak = t0.addingTimeInterval(1500 + 360)
+    check(s.advance(settings: cfg, to: afterBreak) == [.breakEnded(nextBlock: 2)], "la pause s'achève")
+    check(s.phase(settings: cfg, at: afterBreak) == .readyForBlock(2), "le bloc 2 attend un geste")
+    check(s.accumulated == 1500, "la pause n'a rien ajouté au travail")
+
+    // Passer la pause relance le travail tout de suite.
+    var skip = FocusTimerState(runningSince: t0, sessionStartedAt: t0, pomodoro: true)
+    skip.advance(settings: cfg, to: t0.addingTimeInterval(1510))
+    skip.skipBreak(at: t0.addingTimeInterval(1520))
+    check(skip.isRunning && skip.currentBreak == nil, "passer la pause relance le travail")
+    check(skip.elapsed(at: t0.addingTimeInterval(1580)) == 1560, "…à partir des 25 min comptées")
+
+    // Allonger la pause.
+    var longer = FocusTimerState(runningSince: t0, sessionStartedAt: t0, pomodoro: true)
+    longer.advance(settings: cfg, to: t0.addingTimeInterval(1500))
+    longer.extendBreak(by: 300)
+    check(longer.breakEndsAt == t0.addingTimeInterval(1500 + 600), "+5 min allonge la pause")
+
+    // Démarrage automatique : plusieurs cycles rattrapés d'un coup.
+    var auto = cfg
+    auto.autoStartFocus = true
+    var chain = FocusTimerState(runningSince: t0, sessionStartedAt: t0, pomodoro: true)
+    // 4 blocs de 25 + 3 pauses de 5 = 115 min ; on revient à 116 min.
+    let chained = chain.advance(settings: auto, to: t0.addingTimeInterval(116 * 60))
+    check(chained.filter { if case .blockEnded = $0 { return true } else { return false } }.count == 4,
+          "quatre blocs rattrapés — \(chained.count) événements")
+    check(chained.last == .blockEnded(block: 4, kind: .long), "le quatrième bloc ouvre la pause longue")
+    check(chain.accumulated == 4 * 1500, "exactement 100 min de travail comptées")
+    check(chain.breakEndsAt == t0.addingTimeInterval(115 * 60 + 900), "la pause longue dure 15 min")
+
+    // Hors Pomodoro : aucune pause, jamais.
+    var plain = FocusTimerState(runningSince: t0, sessionStartedAt: t0, pomodoro: false)
+    check(plain.advance(settings: cfg, to: t0.addingTimeInterval(4000)).isEmpty, "hors Pomodoro, rien")
+    check(plain.isRunning, "…et le chrono continue")
+
+    // Un état écrit avant l'ajout des pauses se relit.
+    let legacyJSON = #"{"accumulated":60,"sessionStartedAt":"2027-01-15T08:00:00Z","taskTypeRaw":"exercise","note":"","contextLabel":"","pomodoro":true}"#
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let legacyState = try? decoder.decode(FocusTimerState.self, from: Data(legacyJSON.utf8))
+    check(legacyState?.currentBreak == nil && legacyState?.accumulated == 60,
+          "un chrono enregistré par l'ancienne version se relit")
+
+    check(cfg.breakKind(afterBlock: 3) == .short && cfg.breakKind(afterBlock: 8) == .long,
+          "pause longue tous les quatre blocs")
+}
+
 print("== Pomodoro ==")
 check(PomodoroEngine.blockDuration(minutes: 25) == 1500, "25 min = 1500 s")
 check(PomodoroEngine.blockDuration(minutes: 0) == 60,

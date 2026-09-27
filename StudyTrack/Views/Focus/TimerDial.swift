@@ -210,52 +210,78 @@ struct TimerDial: View {
 
 /// Le bouton principal du chrono : un disque, une icône, un mot.
 ///
-/// Les deux boutons « Démarrer » et « Enregistrer » avaient le même poids visuel.
-/// Or il y a une action qu'on fait dix fois par session (démarrer, mettre en pause)
-/// et une qu'on fait une fois (enregistrer).
+/// Il y a une action qu'on fait dix fois par session (démarrer, mettre en pause,
+/// reprendre après une pause) et une qu'on fait une fois (terminer). La première
+/// est ce disque ; la seconde, un bouton discret à côté.
 struct TimerPrimaryButton: View {
-    var isRunning: Bool
-    var hasElapsed: Bool
+    var title: String
+    var icon: String
     var tint: Color = Theme.accent
     var action: () -> Void
 
-    @ScaledMetric(relativeTo: .title) private var diameter: CGFloat = 76
-
-    private var title: String {
-        if isRunning { return "Pause" }
-        return hasElapsed ? "Reprendre" : "Démarrer"
-    }
-
-    private var icon: String {
-        if isRunning { return "pause.fill" }
-        return hasElapsed ? "play.fill" : "play.fill"
-    }
+    @ScaledMetric(relativeTo: .title) private var diameter: CGFloat = 84
 
     var body: some View {
         Button {
             Haptics.tap()
             action()
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: Layout.inline) {
                 ZStack {
-                    Circle().fill(tint.badgeFill)
-                    Circle().stroke(tint.accessibleMark, lineWidth: 2)
+                    Circle().fill(tint.accessibleMark)
                     Image(systemName: icon)
                         .font(.system(size: diameter * 0.34, weight: .bold))
-                        .foregroundStyle(tint.accessibleInk)
-                        // L'icône glisse vers sa nouvelle position au changement
-                        // d'état : le geste se lit sans regarder le libellé.
+                        .foregroundStyle(Theme.knockedOutInk)
                         .contentTransition(.symbolEffect(.replace))
                         // Le triangle a sa masse à gauche : centré au pixel, il
                         // paraît décalé. On le pousse vers son centre optique.
-                        .offset(x: isRunning ? 0 : diameter * 0.03)
+                        .offset(x: icon.hasPrefix("play") ? diameter * 0.03 : 0)
                 }
                 .frame(width: diameter, height: diameter)
                 Text(title)
                     .font(.subheadline.weight(.semibold))
+                    .contentTransition(.opacity)
             }
         }
         .buttonStyle(PressableStyle())
+        .accessibilityLabel(title)
+    }
+}
+
+/// Les boutons qui entourent le disque : plus petits, neutres, un seul mot.
+///
+/// La disposition est celle du chronomètre d'iOS — l'action rare à gauche,
+/// l'action fréquente au centre, la conclusion à droite — pour que le pouce les
+/// trouve sans lire.
+struct TimerSideButton: View {
+    var title: String
+    var icon: String
+    var role: ButtonRole? = nil
+    var isEnabled: Bool = true
+    var action: () -> Void
+
+    @ScaledMetric(relativeTo: .title) private var diameter: CGFloat = 56
+
+    var body: some View {
+        Button(role: role) {
+            action()
+        } label: {
+            VStack(spacing: Layout.inline) {
+                Image(systemName: icon)
+                    .font(.system(size: diameter * 0.36, weight: .semibold))
+                    .foregroundStyle(role == .destructive ? Color.red.accessibleInk : Color.primary)
+                    .frame(width: diameter, height: diameter)
+                    .background(Theme.softBackground, in: Circle())
+                    .contentTransition(.symbolEffect(.replace))
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 72)
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.35)
         .accessibilityLabel(title)
     }
 }

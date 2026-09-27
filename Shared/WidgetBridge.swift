@@ -78,6 +78,11 @@ struct WidgetTimer: Codable, Equatable {
     var effectiveStart: Date
     var isRunning: Bool
     var elapsedWhenPaused: TimeInterval
+    /// Fin de la pause Pomodoro en cours, s'il y en a une. Facultatif : un
+    /// instantané écrit par une version précédente se relit.
+    var breakEndsAt: Date? = nil
+    /// « Pause », « Pause longue ».
+    var breakLabel: String? = nil
 }
 
 struct WidgetTodo: Codable, Equatable, Identifiable {

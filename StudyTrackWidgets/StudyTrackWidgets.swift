@@ -51,6 +51,12 @@ struct StudyTrackProvider: TimelineProvider {
         if let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
             entries.append(StudyTrackEntry(date: midnight, snapshot: snapshot))
         }
+        // Une pause Pomodoro qui finit : le widget quitte le compte à rebours à
+        // l'instant exact, au lieu de rester sur « 0:00 ».
+        if let breakEnd = snapshot?.timer?.breakEndsAt, breakEnd > now {
+            entries.append(StudyTrackEntry(date: breakEnd, snapshot: snapshot))
+            entries.sort { $0.date < $1.date }
+        }
         // L'app recharge explicitement les timelines ; ce rafraîchissement périodique
         // n'est qu'un filet de sécurité.
         let next = calendar.date(byAdding: .minute, value: 30, to: now)
@@ -140,7 +146,8 @@ struct StudyActivityWidget: Widget {
             } minimal: {
                 StudyActivityLeading(state: context.state, tiny: true)
             }
-            .keylineTint(context.state.isRunning ? .indigo : .orange)
+            .keylineTint(context.state.pomodoro?.isOnBreak == true ? .teal
+                         : (context.state.isRunning ? .indigo : .orange))
         }
     }
 }
@@ -159,6 +166,15 @@ struct StudyActivityLeading: View {
             StudyActivityPomodoroRing(pomodoro: pomodoro,
                                       isRunning: state.isRunning,
                                       tiny: tiny)
+                .overlay {
+                    // Une tasse au centre de l'anneau qui se vide : c'est la
+                    // pause, et on le voit sans lire.
+                    if pomodoro.isOnBreak {
+                        Image(systemName: "cup.and.saucer.fill")
+                            .font(.system(size: tiny ? 7 : 11, weight: .bold))
+                            .foregroundStyle(.teal)
+                    }
+                }
         } else {
             StudyActivityStateIcon(state: state, tiny: tiny)
         }
@@ -183,13 +199,22 @@ struct StudyActivityPomodoroRing: View {
     var tiny: Bool = false
 
     private var tint: Color {
+        if pomodoro.isOnBreak { return .teal }
         if pomodoro.isBlockComplete { return .orange }
         return isRunning ? .green : .orange
     }
 
     var body: some View {
         Group {
-            if let interval = pomodoro.interval {
+            if let breakInterval = pomodoro.breakInterval, Date() < breakInterval.upperBound {
+                // La pause se **vide** : le système anime l'anneau jusqu'à sa fin.
+                ProgressView(timerInterval: breakInterval, countsDown: true) {
+                    EmptyView()
+                } currentValueLabel: {
+                    EmptyView()
+                }
+                .progressViewStyle(.circular)
+            } else if let interval = pomodoro.interval {
                 ProgressView(timerInterval: interval, countsDown: false) {
                     EmptyView()
                 } currentValueLabel: {
@@ -265,10 +290,23 @@ struct StudyActivityControls: View {
                 .accessibilityLabel("Enregistrer la session")
             }
 
+            // Pendant une pause Pomodoro, un seul geste compte : s'y remettre.
+            if state.pomodoro?.isOnBreak == true {
+                Button(intent: SkipBreakIntent()) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "forward.fill")
+                        if !compact { Text("Reprendre") }
+                    }
+                }
+                .tint(.teal)
+                .buttonBorderShape(.capsule)
+                .accessibilityLabel("Terminer la pause et reprendre le travail")
+            }
+
             // « Question suivante » : le geste réel d'une série. Il n'apparaît que
             // s'il reste une case à cocher — un bouton qui ne fait rien est pire
             // qu'un bouton absent. Avec le compte à côté, on sait ce qu'il coche.
-            if state.hasNextQuestion {
+            if state.hasNextQuestion, state.pomodoro?.isOnBreak != true {
                 Button(intent: NextQuestionIntent()) {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
@@ -285,7 +323,9 @@ struct StudyActivityControls: View {
                 .accessibilityValue(state.questionsLabel ?? "")
             }
 
-            if state.isRunning {
+            if state.pomodoro?.isOnBreak == true {
+                EmptyView()
+            } else if state.isRunning {
                 Button(intent: PauseFocusTimerIntent()) {
                     Image(systemName: "pause.fill")
                 }
@@ -353,7 +393,8 @@ struct StudyActivityLockView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(context.state.isRunning ? Color.green : Color.orange)
+                        .fill(context.state.pomodoro?.isOnBreak == true ? Color.teal
+                              : (context.state.isRunning ? Color.green : Color.orange))
                         .frame(width: 7, height: 7)
                     Text(context.attributes.courseCode)
                         .font(.subheadline.weight(.bold))
@@ -421,7 +462,16 @@ struct StudyActivityTimer: View {
 
     var body: some View {
         Group {
-            if let since = state.countingSince {
+            if let breakEnd = state.pomodoro?.breakEndsAt {
+                // La pause décompte ; passé son terme, elle attend l'app.
+                let now = Date()
+                if now < breakEnd {
+                    Text(timerInterval: now...breakEnd, countsDown: true, showsHours: false)
+                        .foregroundStyle(.teal)
+                } else {
+                    Text("0:00").foregroundStyle(.teal)
+                }
+            } else if let since = state.countingSince {
                 // Le système fait avancer ce texte tout seul, à partir de l'instant
                 // reculé du total déjà écoulé : la reprise ne repart donc pas de zéro.
                 //

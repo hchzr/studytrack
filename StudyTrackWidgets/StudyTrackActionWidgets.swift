@@ -47,6 +47,52 @@ struct NextActionWidgetView: View {
 
     @ViewBuilder
     private func timerView(_ timer: WidgetTimer) -> some View {
+        if let breakEnd = timer.breakEndsAt, breakEnd > entry.date {
+            breakView(timer, endsAt: breakEnd)
+        } else {
+            workView(timer)
+        }
+    }
+
+    /// Une pause Pomodoro : ce qu'il en reste, en compte à rebours système.
+    @ViewBuilder
+    private func breakView(_ timer: WidgetTimer, endsAt: Date) -> some View {
+        let label = timer.breakLabel ?? "Pause"
+        switch family {
+        case .accessoryInline:
+            Label {
+                Text(timerInterval: entry.date...endsAt, countsDown: true)
+            } icon: {
+                Image(systemName: "cup.and.saucer.fill")
+            }
+        case .accessoryRectangular:
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.headline).lineLimit(1)
+                Text(timerInterval: entry.date...endsAt, countsDown: true)
+                    .font(.title3.monospacedDigit().weight(.semibold))
+                Text(timer.label).font(.caption2).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            VStack(alignment: .leading, spacing: 6) {
+                Label(label, systemImage: "cup.and.saucer.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.teal.widgetInk)
+                Text(timer.label)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                Text(timerInterval: entry.date...endsAt, countsDown: true)
+                    .font(.title.monospacedDigit().weight(.bold))
+                    .foregroundStyle(Color.teal.widgetInk)
+                    .widgetAccentable()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    @ViewBuilder
+    private func workView(_ timer: WidgetTimer) -> some View {
         switch family {
         case .accessoryInline:
             Label {

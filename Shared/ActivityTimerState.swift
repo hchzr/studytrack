@@ -120,18 +120,59 @@ struct ActivityPomodoro: Codable, Hashable {
     var endsAt: Date?
     /// Part du bloc déjà faite, figée — ce qu'on montre en pause.
     var frozenProgress: Double
+    /// La pause Pomodoro en cours : son type (`short`, `long`) et ses bornes.
+    ///
+    /// Optionnels, pour qu'une activité publiée avant l'ajout des pauses se
+    /// décode encore. Pendant une pause, le compteur de l'îlot **descend** vers
+    /// `breakEndsAt` : c'est le système qui l'anime, comme le chrono.
+    var breakKind: String?
+    var breakStartedAt: Date?
+    var breakEndsAt: Date?
 
     init(blockNumber: Int,
          completedBlocks: Int,
          startedAt: Date?,
          endsAt: Date?,
-         frozenProgress: Double) {
+         frozenProgress: Double,
+         breakKind: String? = nil,
+         breakStartedAt: Date? = nil,
+         breakEndsAt: Date? = nil) {
         self.blockNumber = blockNumber
         self.completedBlocks = completedBlocks
         self.startedAt = startedAt
         self.endsAt = endsAt
         self.frozenProgress = frozenProgress
+        self.breakKind = breakKind
+        self.breakStartedAt = breakStartedAt
+        self.breakEndsAt = breakEndsAt
     }
+
+    /// Une pause en cours, après le bloc `completedBlocks`.
+    static func onBreak(kind: String,
+                        startedAt: Date,
+                        endsAt: Date,
+                        completedBlocks: Int) -> ActivityPomodoro {
+        ActivityPomodoro(blockNumber: max(1, completedBlocks),
+                         completedBlocks: max(0, completedBlocks),
+                         startedAt: nil,
+                         endsAt: nil,
+                         frozenProgress: 1,
+                         breakKind: kind,
+                         breakStartedAt: startedAt,
+                         breakEndsAt: endsAt)
+    }
+
+    /// Une pause est-elle en cours ?
+    var isOnBreak: Bool { breakEndsAt != nil }
+
+    /// L'intervalle de la pause, pour le compte à rebours et l'anneau qui se vide.
+    var breakInterval: ClosedRange<Date>? {
+        guard let breakStartedAt, let breakEndsAt, breakEndsAt > breakStartedAt else { return nil }
+        return breakStartedAt...breakEndsAt
+    }
+
+    /// « Pause », « Pause longue ».
+    var breakLabel: String { breakKind == "long" ? "Pause longue" : "Pause" }
 
     /// Projette l'avancement d'un bloc sur l'horloge murale.
     ///
@@ -179,6 +220,6 @@ struct ActivityPomodoro: Codable, Hashable {
     /// Le bloc est fini : c'est le moment de proposer la pause.
     var isBlockComplete: Bool { frozenProgress >= 1 }
 
-    /// « Bloc 3 ».
-    var label: String { "Bloc \(blockNumber)" }
+    /// « Bloc 3 », ou le nom de la pause en cours.
+    var label: String { isOnBreak ? breakLabel : "Bloc \(blockNumber)" }
 }

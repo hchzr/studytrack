@@ -45,30 +45,57 @@ final class NotificationScheduler {
     // MARK: Pomodoro
 
     static let pomodoroIdentifier = "pomodoro-focus"
+    static let pomodoroBreakIdentifier = "pomodoro-break"
 
-    /// Sonne à la fin du bloc de concentration, même app fermée.
+    /// Annonce la fin du bloc **et** la fin de la pause qui suit, même app fermée.
     ///
-    /// Le mode Pomodoro n'annonçait jamais sa fin : la barre se remplissait, puis
-    /// rien. Une notification locale planifiée à l'instant exact du terme est ce
-    /// qui rend le mode utile quand l'écran est verrouillé.
-    func schedulePomodoroEnd(at date: Date, breakMinutes: Int) {
-        cancel(identifier: Self.pomodoroIdentifier)
-        guard date > Date() else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Bloc terminé"
-        content.body = "Pause de \(breakMinutes) min, puis on reprend."
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow),
-                                                        repeats: false)
-        let request = UNNotificationRequest(identifier: Self.pomodoroIdentifier,
-                                            content: content,
-                                            trigger: trigger)
-        Task { try? await center.add(request) }
+    /// Les deux sont planifiées d'un coup, au démarrage du bloc : l'app peut être
+    /// suspendue pendant toute la pause, et c'est justement là qu'on a besoin
+    /// d'être rappelé à sa table.
+    ///
+    /// - Parameters:
+    ///   - blockEndsAt: fin du bloc de travail ; `nil` si l'on est déjà en pause.
+    ///   - breakKind: la pause qui suivra (ou qui est en cours).
+    ///   - breakEndsAt: fin de cette pause.
+    ///   - nextBlock: le numéro du bloc qui suivra la pause.
+    func schedulePomodoro(blockEndsAt: Date?,
+                          breakKind: PomodoroBreak,
+                          breakMinutes: Int,
+                          breakEndsAt: Date,
+                          nextBlock: Int) {
+        cancelPomodoro()
+        if let blockEndsAt, blockEndsAt > Date() {
+            let content = UNMutableNotificationContent()
+            content.title = "Bloc \(nextBlock - 1) terminé"
+            content.body = breakKind == .long
+                ? "Pause longue de \(breakMinutes) min. Lève-toi, bois de l'eau."
+                : "Pause de \(breakMinutes) min. Le chrono de travail s'est arrêté."
+            content.sound = .default
+            content.interruptionLevel = .timeSensitive
+            addRelative(identifier: Self.pomodoroIdentifier, content: content, date: blockEndsAt)
+        }
+        if breakEndsAt > Date() {
+            let content = UNMutableNotificationContent()
+            content.title = "Fin de la pause"
+            content.body = "Bloc \(nextBlock) : on s'y remet quand tu es prêt·e."
+            content.sound = .default
+            content.interruptionLevel = .timeSensitive
+            addRelative(identifier: Self.pomodoroBreakIdentifier, content: content, date: breakEndsAt)
+        }
     }
 
     func cancelPomodoro() {
-        cancel(identifier: Self.pomodoroIdentifier)
+        center.removePendingNotificationRequests(withIdentifiers: [Self.pomodoroIdentifier,
+                                                                   Self.pomodoroBreakIdentifier])
+    }
+
+    /// À la seconde près : un rappel de fin de bloc arrondi à la minute sonnerait
+    /// jusqu'à 59 s trop tôt.
+    private func addRelative(identifier: String, content: UNMutableNotificationContent, date: Date) {
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, date.timeIntervalSinceNow),
+                                                        repeats: false)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        Task { try? await center.add(request) }
     }
 
     // MARK: Rappel quotidien
@@ -123,7 +150,9 @@ final class NotificationScheduler {
     /// quotidien, hebdo) — pas le Pomodoro en cours, qui appartient au chrono.
     func cancelScheduled() async {
         let pending = await center.pendingNotificationRequests()
-        let ids = pending.map(\.identifier).filter { $0 != Self.pomodoroIdentifier }
+        let ids = pending.map(\.identifier).filter {
+            $0 != Self.pomodoroIdentifier && $0 != Self.pomodoroBreakIdentifier
+        }
         center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 

@@ -20,6 +20,13 @@ struct FocusTimerState: Codable, Equatable {
     var note: String
     var contextLabel: String
     var pomodoro: Bool
+    /// Pause Pomodoro en cours : son type et ses bornes.
+    ///
+    /// Optionnels : un état écrit par une version précédente se relit, et
+    /// « pas de pause » est exactement `nil`.
+    var breakKindRaw: String?
+    var breakStartedAt: Date?
+    var breakEndsAt: Date?
 
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,
@@ -55,11 +62,19 @@ struct FocusTimerState: Codable, Equatable {
     static let maxRestorableAge: TimeInterval = 18 * 3600
 
     /// Faut-il proposer cette session à la reprise ?
+    ///
+    /// Une pause en cours compte comme une session vivante, même au tout
+    /// premier bloc : le chrono est arrêté, mais la session ne l'est pas.
     func isRestorable(at now: Date = Date()) -> Bool {
-        elapsed(at: now) >= 1 && now.timeIntervalSince(sessionStartedAt) < Self.maxRestorableAge
+        (elapsed(at: now) >= 1 || breakEndsAt != nil)
+            && now.timeIntervalSince(sessionStartedAt) < Self.maxRestorableAge
     }
 
+    /// Reprendre le travail met fin à toute pause Pomodoro en cours.
     mutating func start(at now: Date = Date()) {
+        breakKindRaw = nil
+        breakStartedAt = nil
+        breakEndsAt = nil
         guard runningSince == nil else { return }
         runningSince = now
     }

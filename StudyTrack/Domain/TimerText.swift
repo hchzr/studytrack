@@ -13,6 +13,21 @@ enum TimerText {
     /// Borne haute : douze heures. Au-delà, ce n'est plus une session d'étude.
     static let maximumHours = 12
 
+    /// « 07:42 », « 1:02:09 » — l'affichage d'un chrono.
+    ///
+    /// Tronqué à la seconde : un compte à rebours passe `rounded(.up)` pour
+    /// afficher « 25:00 » au départ et « 00:01 » à la dernière seconde, pas
+    /// « 24:59 » puis « 00:00 » une seconde trop tôt.
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, secs)
+            : String(format: "%02d:%02d", minutes, secs)
+    }
+
     /// « 1:30 », « 90 », « 1h30 », « 45m », « 1,5h » → secondes.
     ///
     /// `nil` quand rien n'est lisible — l'appelant garde alors la valeur en place

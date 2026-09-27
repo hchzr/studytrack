@@ -8,6 +8,8 @@ enum FocusTimerCommand: String, Codable, Sendable {
     case finish
     /// Coche la prochaine sous-question de la cible.
     case nextQuestion
+    /// Termine la pause Pomodoro et relance le travail.
+    case skipBreak
 
     var label: String {
         switch self {
@@ -15,6 +17,7 @@ enum FocusTimerCommand: String, Codable, Sendable {
         case .resume: return "Reprendre"
         case .finish: return "Enregistrer la session"
         case .nextQuestion: return "Question suivante"
+        case .skipBreak: return "Reprendre le travail"
         }
     }
 }
@@ -113,6 +116,18 @@ struct NextQuestionIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         FocusTimerBridge.request(.nextQuestion)
+        return .result()
+    }
+}
+
+/// Termine la pause Pomodoro et relance le bloc suivant, depuis l'écran
+/// verrouillé ou l'îlot.
+struct SkipBreakIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Reprendre le travail"
+    static var isDiscoverable: Bool = false
+
+    func perform() async throws -> some IntentResult {
+        FocusTimerBridge.request(.skipBreak)
         return .result()
     }
 }
