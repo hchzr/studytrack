@@ -399,7 +399,9 @@ struct ActionCard: View {
                 Text(eyebrow.uppercased())
                     .font(.caption2.weight(.bold))
                     .tracking(1.2)
-                    .foregroundStyle(tint.accessibleInk)
+                    // Neutre : c'est l'icône qui porte le verdict. Un sur-titre
+                    // rouge criait « alerte » au-dessus d'un simple exercice.
+                    .foregroundStyle(.secondary)
             }
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
@@ -607,7 +609,9 @@ struct SectionHeader: View {
 
 /// Choix unique sous forme de grandes cartes (onboarding, réglages).
 struct ChoiceCard: View {
-    var icon: String
+    /// Facultative : une liste de 28 sections avec 28 fois la même toque
+    /// n'apprend rien, le titre suffit.
+    var icon: String?
     var title: String
     var subtitle: String
     var isSelected: Bool
@@ -620,10 +624,12 @@ struct ChoiceCard: View {
             action()
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? tint.badgeInk : tint.accessibleMark)
-                    .frame(width: 42, alignment: .leading)
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(isSelected ? tint.badgeInk : tint.accessibleMark)
+                        .frame(width: 42, alignment: .leading)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold))
                     if !subtitle.isEmpty {

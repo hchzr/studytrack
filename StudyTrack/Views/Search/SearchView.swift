@@ -44,6 +44,12 @@ struct SearchView: View {
                     ContentUnavailableView("Rien à chercher",
                                            systemImage: "magnifyingglass",
                                            description: Text("Ajoute des cours et des exercices : ils deviendront cherchables ici."))
+                } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // Avant de taper, il n'y a pas « aucun résultat » : il n'y a
+                    // pas encore de question.
+                    ContentUnavailableView("Chercher dans ton semestre",
+                                           systemImage: "magnifyingglass",
+                                           description: Text("Un code de cours, un numéro d'exercice (« 3.2 »), un mot d'un résumé ou d'une tâche."))
                 } else if hits.isEmpty {
                     ContentUnavailableView("Aucun résultat",
                                            systemImage: "magnifyingglass",

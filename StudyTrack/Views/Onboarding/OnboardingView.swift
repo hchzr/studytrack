@@ -219,7 +219,7 @@ struct OnboardingView: View {
                                   alignment: .leading,
                                   spacing: Layout.control) {
                             ForEach(group.sections) { section in
-                                ChoiceCard(icon: "graduationcap.fill",
+                                ChoiceCard(icon: nil,
                                            title: section.name,
                                            subtitle: section.code,
                                            isSelected: sectionCode == section.code) {
@@ -252,22 +252,29 @@ struct OnboardingView: View {
 
     private var coursesStep: some View {
         VStack(alignment: .leading, spacing: Layout.cardSpacing) {
-            HStack(spacing: 10) {
-                Button {
-                    showingImport = true
-                } label: {
-                    Label("Importer mon horaire", systemImage: "calendar.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button {
-                    showingCourseForm = true
-                } label: {
-                    Label("Ajouter", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
+            // Tant qu'il n'y a aucun cours, la carte vide porte les deux
+            // gestes ; ensuite, ils se rangent en une ligne discrète. Quatre
+            // boutons pleins à l'écran — dont deux « ajouter » — laissaient
+            // chercher lequel était le bon.
+            if !courses.isEmpty {
+                HStack(spacing: Layout.control) {
+                    Button {
+                        showingImport = true
+                    } label: {
+                        Label("Importer l'horaire", systemImage: "calendar.badge.plus")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                    }
+                    Button {
+                        showingCourseForm = true
+                    } label: {
+                        Label("Ajouter un cours", systemImage: "plus")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.bordered)
+                .font(.subheadline.weight(.medium))
             }
 
             if let resultMessage {
@@ -277,11 +284,20 @@ struct OnboardingView: View {
             }
 
             if courses.isEmpty {
-                EmptyCard(icon: "books.vertical",
-                          title: "Aucun cours pour l'instant",
-                          message: "Importe ton horaire EPFL (.ics) pour créer tes cours automatiquement, ou ajoute-les à la main.",
-                          actionTitle: "Ajouter un cours") {
-                    showingCourseForm = true
+                VStack(spacing: Layout.control) {
+                    EmptyCard(icon: "calendar.badge.plus",
+                              title: "Importe ton horaire EPFL",
+                              message: "Le fichier .ics de ton horaire crée tes cours d'un coup, avec leurs heures de cours et d'exercices.",
+                              actionTitle: "Importer mon horaire") {
+                        showingImport = true
+                    }
+                    Button {
+                        showingCourseForm = true
+                    } label: {
+                        Text("ou ajouter un cours à la main")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .buttonStyle(.borderless)
                 }
             } else {
                 Card(title: "Mes classes",
