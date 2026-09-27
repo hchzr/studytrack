@@ -687,7 +687,7 @@ struct FocusTimerPanel: View {
         case .exercise, .correction:
             return course.allExercises
                 .sorted { $0.displayNumber.localizedStandardCompare($1.displayNumber) == .orderedAscending }
-                .map { TargetOption(id: $0.id, label: "Exercice \($0.displayNumber)") }
+                .map { TargetOption(id: $0.id, label: $0.displayNumber) }
         case .video, .theory, .summary:
             return course.sortedTheoryItems
                 .map { TargetOption(id: $0.id, label: $0.displayNumber) }
@@ -699,7 +699,7 @@ struct FocusTimerPanel: View {
     private var targetLabel: String? {
         guard let course, let targetID else { return nil }
         if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
-            return "Ex. \(exercise.displayNumber)"
+            return "Ex. \(exercise.exerciseNumber)"
         }
         return course.theoryItems.first { $0.id == targetID }?.displayNumber
     }

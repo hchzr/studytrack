@@ -209,6 +209,9 @@ struct SeriesImportSheet: View {
                     } label: {
                         Label("Arrêter l'IA et garder la lecture rapide", systemImage: "stop.fill")
                     }
+                    // L'icône suit le texte : un carré indigo à côté d'un libellé
+                    // rouge se lisait comme deux boutons.
+                    .foregroundStyle(.red)
                 } footer: {
                     Text("Sans attendre, tu relis la lecture rapide ; si l'IA trouve autre chose ensuite, elle te le proposera sans rien écraser.")
                 }

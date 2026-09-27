@@ -388,11 +388,20 @@ struct ActionCard: View {
     var subtitle: String
     var actionTitle: String
     var tint: Color = Theme.accent
+    /// Un sur-titre (« Maintenant ») : il dit **pourquoi** cette carte est là.
+    var eyebrow: String? = nil
+    var actionIcon: String = "play.fill"
     var action: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
+            if let eyebrow {
+                Text(eyebrow.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(tint.accessibleInk)
+            }
+            HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     Circle().fill(tint.badgeFill).frame(width: 46, height: 46)
                     Image(systemName: icon).font(.title3).foregroundStyle(tint.badgeInk)
@@ -413,12 +422,13 @@ struct ActionCard: View {
                 Haptics.tap()
                 action()
             } label: {
-                Text(actionTitle)
+                Label(actionTitle, systemImage: actionIcon)
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: 12))
             // Le bouton est une **action** : toujours l'encre de l'app. La teinte
             // de l'icône porte le verdict (à refaire, à jour) ; un grand bouton
             // rouge criait « danger » là où il fallait lire « démarrer ».
