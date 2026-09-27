@@ -193,7 +193,7 @@ struct GroupMembersView: View {
                 context.delete(member)
                 try? context.save()
                 memberError = nil
-                Haptics.warning()
+                Haptics.removed()
             } catch {
                 memberError = "Retrait impossible — \(GroupSync.explain(error))"
             }

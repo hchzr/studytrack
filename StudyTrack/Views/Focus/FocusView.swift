@@ -531,7 +531,7 @@ struct FocusView: View {
                     HStack(spacing: Layout.control) {
                         Button(role: .destructive) {
                             applyAdjustment(-elapsed)
-                            Haptics.warning()
+                            Haptics.removed()
                         } label: {
                             Label("Zéro", systemImage: "arrow.counterclockwise")
                                 .font(.caption)
@@ -713,7 +713,7 @@ struct FocusView: View {
         FocusTimerStore.save(nil)
         StudyActivityController.end()
         app.presence.stop(context: context, social: app.social)
-        Haptics.warning()
+        Haptics.removed()
     }
 
     private func quickStartButton(course: Course, type: TaskType) -> some View {

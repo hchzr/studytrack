@@ -48,12 +48,14 @@ enum FocusTimerCommandHandler {
             state.pause()
             FocusTimerStore.save(state)
             StudyActivityController.publish(state, container: container)
+            refreshWidgets(container: container)
             notify()
 
         case .resume:
             state.start()
             FocusTimerStore.save(state)
             StudyActivityController.publish(state, container: container)
+            refreshWidgets(container: container)
             notify()
 
         case .finish:
@@ -122,6 +124,15 @@ enum FocusTimerCommandHandler {
         context.insert(session)
         try? context.save()
         WidgetSnapshotWriter.refresh(context: context, settings: container.settings)
+    }
+
+    /// Pause et reprise changent ce que montrent le widget « Prochaine tâche » et
+    /// le contrôle du Centre de contrôle : sans ce rafraîchissement, ils restaient
+    /// sur « En cours » après une pause depuis l'écran verrouillé.
+    @MainActor
+    private static func refreshWidgets(container: AppContainer) {
+        WidgetSnapshotWriter.refresh(context: ModelContext(container.modelContainer),
+                                     settings: container.settings)
     }
 
     @MainActor

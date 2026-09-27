@@ -150,7 +150,7 @@ struct ExamFormSheet: View {
         app.notifications.cancelExam(id: exam.id)
         context.delete(exam)
         try? context.save()
-        Haptics.warning()
+        Haptics.removed()
         dismiss()
     }
 }

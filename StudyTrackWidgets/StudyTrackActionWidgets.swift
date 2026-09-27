@@ -51,7 +51,8 @@ struct NextActionWidgetView: View {
         case .accessoryInline:
             Label {
                 if timer.isRunning {
-                    Text(timerInterval: timer.effectiveStart...Date.distantFuture, countsDown: false)
+                    Text(timerInterval: timer.effectiveStart...StudyActivityTimer.horizon(from: timer.effectiveStart),
+                     countsDown: false)
                 } else {
                     Text("En pause · \(WidgetFormat.hours(Int(timer.elapsedWhenPaused)))")
                 }
@@ -85,7 +86,8 @@ struct NextActionWidgetView: View {
     @ViewBuilder
     private func clock(_ timer: WidgetTimer) -> some View {
         if timer.isRunning {
-            Text(timerInterval: timer.effectiveStart...Date.distantFuture, countsDown: false)
+            Text(timerInterval: timer.effectiveStart...StudyActivityTimer.horizon(from: timer.effectiveStart),
+                     countsDown: false)
         } else {
             Text(Duration.seconds(timer.elapsedWhenPaused).formatted(.time(pattern: .hourMinuteSecond)))
         }
@@ -182,6 +184,8 @@ struct NextActionWidgetView: View {
                 Image(systemName: action.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
                     .foregroundStyle(action.isDone ? Color.green.widgetInk : Color.secondary)
+                    // Le cercle se change en coche : seul retour visible du geste.
+                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
             .disabled(action.isDone)
@@ -261,6 +265,7 @@ struct WeekCoursesWidgetView: View {
                 Text("\(totals.total == 0 ? 0 : totals.done * 100 / totals.total)")
             }
             .gaugeStyle(.accessoryCircularCapacity)
+            .widgetAccentable()
             .accessibilityLabel("Semaine faite à \(totals.total == 0 ? 0 : totals.done * 100 / totals.total) %")
         } else if courses.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
@@ -359,6 +364,8 @@ struct ExamCountdownWidgetView: View {
                         .foregroundStyle(Color.orange.widgetInk)
                     Text(countdown)
                         .font(.largeTitle.weight(.bold))
+                        .contentTransition(.numericText())
+                        .widgetAccentable()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     Spacer(minLength: 0)
@@ -399,5 +406,50 @@ struct FocusControl: ControlWidget {
         }
         .displayName("Chrono StudyTrack")
         .description("Ouvre le chrono de StudyTrack.")
+    }
+}
+
+/// Un interrupteur pause / reprise pour la session en cours.
+///
+/// Il complète `FocusControl` au lieu de le remplacer : démarrer une session
+/// demande de choisir un cours, donc l'app ; la mettre en pause, non. Sans
+/// session, l'interrupteur le dit et ne fait rien.
+@available(iOS 18.0, *)
+struct FocusPauseControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "StudyTrackFocusPauseControl",
+                                   provider: FocusTimerValueProvider()) { value in
+            ControlWidgetToggle(isOn: value.isRunning, action: ToggleFocusTimerIntent()) {
+                Text(value.label)
+            } valueLabel: { isOn in
+                Label(value.hasSession ? (isOn ? "En cours" : "En pause") : "Aucune session",
+                      systemImage: isOn ? "pause.fill" : "play.fill")
+            }
+            .tint(.indigo)
+        }
+        .displayName("Pause du chrono")
+        .description("Met en pause ou relance la session en cours.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct FocusTimerValue {
+    var hasSession: Bool
+    var isRunning: Bool
+    var label: String
+}
+
+/// Lit le chrono dans l'instantané partagé, le même que les widgets.
+@available(iOS 18.0, *)
+struct FocusTimerValueProvider: ControlValueProvider {
+    var previewValue: FocusTimerValue {
+        FocusTimerValue(hasSession: true, isRunning: true, label: "CS-250 · Exercices")
+    }
+
+    func currentValue() async throws -> FocusTimerValue {
+        guard let timer = WidgetBridge.read()?.timer else {
+            return FocusTimerValue(hasSession: false, isRunning: false, label: "Chrono")
+        }
+        return FocusTimerValue(hasSession: true, isRunning: timer.isRunning, label: timer.label)
     }
 }

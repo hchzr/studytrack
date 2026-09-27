@@ -635,7 +635,7 @@ struct GroupDetailView: View {
                 }
                 context.delete(group)
                 try? context.save()
-                Haptics.warning()
+                Haptics.removed()
                 dismiss()
             }
         }
@@ -650,7 +650,7 @@ struct GroupDetailView: View {
             await MainActor.run {
                 context.delete(group)
                 try? context.save()
-                Haptics.warning()
+                Haptics.removed()
                 dismiss()
             }
         }

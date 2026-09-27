@@ -284,7 +284,7 @@ struct SessionEditSheet: View {
                 Button("Supprimer", role: .destructive) {
                     context.delete(session)
                     try? context.save()
-                    Haptics.warning()
+                    Haptics.removed()
                     WidgetSnapshotWriter.refresh(context: context, settings: app.settings)
                     dismiss()
                 }

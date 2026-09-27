@@ -49,6 +49,8 @@ enum WidgetSnapshotWriter {
 
         WidgetBridge.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
+        // Le contrôle « Pause du chrono » lit le même instantané.
+        if #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
     }
 
     /// Rafraîchissement **groupé** : plusieurs enregistrements rapprochés (cocher

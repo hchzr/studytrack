@@ -113,7 +113,7 @@ struct CoursesView: View {
         if selectedCourseID == course.id { selectedCourseID = nil }
         context.delete(course)
         try? context.save()
-        Haptics.warning()
+        Haptics.removed()
     }
 
     // MARK: iPad — maître / détail

@@ -116,3 +116,25 @@ struct NextQuestionIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+/// L'interrupteur du Centre de contrôle, de l'écran verrouillé et du bouton
+/// Action : met le chrono en pause ou le relance, sans ouvrir l'app.
+///
+/// `LiveActivityIntent` pour la même raison que les boutons de l'îlot : l'intention
+/// s'exécute dans le **processus de l'app**, qui applique la commande tout de
+/// suite au lieu d'attendre sa prochaine activation.
+@available(iOS 18.0, *)
+struct ToggleFocusTimerIntent: SetValueIntent, LiveActivityIntent {
+    static var title: LocalizedStringResource = "Pause du chrono"
+    static var isDiscoverable: Bool = false
+
+    @Parameter(title: "Chrono en marche")
+    var value: Bool
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        FocusTimerBridge.request(value ? .resume : .pause)
+        return .result()
+    }
+}

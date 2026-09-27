@@ -243,8 +243,17 @@ enum StudyActivityController {
              state: StudyActivityAttributes.ContentState.make(elapsed: 90, running: true))
     }
 
+    /// Combien de temps une pause reste « fraîche » sur l'écran verrouillé.
+    ///
+    /// Un chrono qui tourne n'est jamais périmé : le système le fait avancer seul.
+    /// Une pause, si — une session oubliée la veille ne doit pas se présenter comme
+    /// une information du moment. `reconcile` ne passe qu'au lancement de l'app :
+    /// d'ici là, c'est le système qui la grise.
+    static let pausedFreshness: TimeInterval = 2 * 3600
+
     private static func content(_ state: StudyActivityAttributes.ContentState)
         -> ActivityContent<StudyActivityAttributes.ContentState> {
-        ActivityContent(state: state, staleDate: nil)
+        ActivityContent(state: state,
+                        staleDate: state.isRunning ? nil : Date().addingTimeInterval(pausedFreshness))
     }
 }

@@ -79,12 +79,26 @@ extension View {
 
 // MARK: - Retour haptique
 
+/// Les générateurs sont **réutilisés** et réarmés après chaque coup.
+///
+/// En créer un à chaque appel obligeait le moteur à se réveiller à froid : la
+/// vibration arrivait une cinquantaine de millisecondes après le toucher, ce qui
+/// se sent sur des coches en rafale. `prepare()` le garde chaud pour le suivant.
+@MainActor
 enum Haptics {
-    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func soft() { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
-    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-    static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
-    static func error() { UINotificationFeedbackGenerator().notificationOccurred(.error) }
+    private static let light = UIImpactFeedbackGenerator(style: .light)
+    private static let softImpact = UIImpactFeedbackGenerator(style: .soft)
+    private static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+    private static let notification = UINotificationFeedbackGenerator()
+
+    static func tap() { light.impactOccurred(); light.prepare() }
+    static func soft() { softImpact.impactOccurred(); softImpact.prepare() }
+    /// Une suppression **déjà confirmée** : un clac net, pas une alerte.
+    /// `warning()` reste réservé à ce qui n'a pas marché.
+    static func removed() { rigid.impactOccurred(); rigid.prepare() }
+    static func success() { notification.notificationOccurred(.success); notification.prepare() }
+    static func warning() { notification.notificationOccurred(.warning); notification.prepare() }
+    static func error() { notification.notificationOccurred(.error); notification.prepare() }
 }
 
 // MARK: - Progression

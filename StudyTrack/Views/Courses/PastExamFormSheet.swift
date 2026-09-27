@@ -144,7 +144,7 @@ struct PastExamFormSheet: View {
         guard let exam else { return }
         context.delete(exam)
         try? context.save()
-        Haptics.warning()
+        Haptics.removed()
         dismiss()
     }
 }

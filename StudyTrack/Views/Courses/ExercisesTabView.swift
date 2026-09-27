@@ -107,7 +107,7 @@ struct ExercisesTabView: View {
             Button("Supprimer la série et ses \(series.exercises.count) exercices", role: .destructive) {
                 context.delete(series)
                 try? context.save()
-                Haptics.warning()
+                Haptics.removed()
             }
         } message: { series in
             let done = series.exercises.filter(\.isDone).count
@@ -120,7 +120,7 @@ struct ExercisesTabView: View {
             Button("Supprimer", role: .destructive) {
                 context.delete(exercise)
                 try? context.save()
-                Haptics.warning()
+                Haptics.removed()
             }
         } message: { exercise in
             Text(exercise.isDone ? "Il est marqué fait : son avancement sera perdu." : "Ses questions seront supprimées avec lui.")
@@ -796,7 +796,7 @@ struct ExerciseDetailSheet: View {
                 Button("Supprimer", role: .destructive) {
                     context.delete(exercise)
                     try? context.save()
-                    Haptics.warning()
+                    Haptics.removed()
                     dismiss()
                 }
             } message: {

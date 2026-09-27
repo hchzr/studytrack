@@ -102,7 +102,7 @@ struct DiagnosticsView: View {
                     ExamActivityController.end()
                     liveCount = StudyActivityController.liveCount
                     examCount = ExamActivityController.liveCount
-                    Haptics.warning()
+                    Haptics.removed()
                 } label: {
                     Label("Fermer toute activité", systemImage: "stop.circle")
                 }

@@ -41,12 +41,21 @@ struct StudyTrackProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StudyTrackEntry>) -> Void) {
-        let entry = StudyTrackEntry(date: Date(), snapshot: WidgetBridge.read())
+        let now = Date()
+        let snapshot = WidgetBridge.read()
+        var entries = [StudyTrackEntry(date: now, snapshot: snapshot)]
+        // Une seconde entrée à minuit : « Demain » devient « Aujourd'hui », « J-3 »
+        // devient « J-2 » à l'heure juste, sans attendre un rechargement que le
+        // système peut repousser.
+        let calendar = Calendar.current
+        if let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
+            entries.append(StudyTrackEntry(date: midnight, snapshot: snapshot))
+        }
         // L'app recharge explicitement les timelines ; ce rafraîchissement périodique
         // n'est qu'un filet de sécurité.
-        let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date())
-            ?? Date().addingTimeInterval(1800)
-        completion(Timeline(entries: [entry], policy: .after(next)))
+        let next = calendar.date(byAdding: .minute, value: 30, to: now)
+            ?? now.addingTimeInterval(1800)
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 }
 
@@ -264,7 +273,9 @@ struct StudyActivityControls: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                         if let label = state.questionsLabel {
-                            Text(label).monospacedDigit()
+                            Text(label)
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
                         }
                     }
                 }
@@ -367,6 +378,7 @@ struct StudyActivityLockView: View {
                         Text(label)
                             .font(.caption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Sous-questions faites : \(label)")
@@ -531,7 +543,16 @@ struct ExamActivityCountdown: View {
         Group {
             switch state.phase {
             case .upcoming:
-                Text(timerInterval: Date()...attributes.examDate, countsDown: true)
+                // La phase n'est recalculée que quand l'app tourne : passé
+                // l'heure de l'épreuve, elle peut encore dire « à venir ».
+                // `Date()...examDate` serait alors un intervalle inversé, et le
+                // rendu planterait — l'activité s'afficherait vide.
+                let now = Date()
+                if now < attributes.examDate {
+                    Text(timerInterval: now...attributes.examDate, countsDown: true)
+                } else {
+                    Text("en cours")
+                }
             case .running:
                 Text("en cours")
             case .over:
@@ -600,6 +621,7 @@ struct StudyTrackWidgetsBundle: WidgetBundle {
         ExamActivityWidget()
         if #available(iOS 18.0, *) {
             FocusControl()
+            FocusPauseControl()
         }
     }
 }
@@ -652,6 +674,8 @@ struct StudyTrackWidgetView: View {
             Spacer(minLength: 0)
             Text(WidgetFormat.hours(snapshot.weekSeconds))
                 .font(.system(size: heroSmall, weight: .bold, design: .rounded))
+                .contentTransition(.numericText())
+                .widgetAccentable()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Text("cette semaine")
@@ -672,6 +696,8 @@ struct StudyTrackWidgetView: View {
                 Spacer(minLength: 0)
                 Text(WidgetFormat.hours(snapshot.weekSeconds))
                     .font(.system(size: heroMedium, weight: .bold, design: .rounded))
+                    .contentTransition(.numericText())
+                    .widgetAccentable()
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                 Text("cette semaine")
@@ -699,6 +725,8 @@ struct StudyTrackWidgetView: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(WidgetFormat.hours(snapshot.weekSeconds))
                         .font(.system(size: heroLarge, weight: .bold, design: .rounded))
+                        .contentTransition(.numericText())
+                        .widgetAccentable()
                     Text("cette semaine")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -745,6 +773,7 @@ struct StudyTrackWidgetView: View {
                     Text("\(snapshot.streak)").font(.caption2.weight(.bold))
                 }
                 .foregroundStyle(Color.orange.widgetInk)
+                .widgetAccentable()
             }
         }
     }
@@ -814,6 +843,8 @@ struct StudyTrackTimerWidgetView: View {
 
                 Text(WidgetFormat.hours(snapshot.weekSeconds))
                     .font(.system(size: heroSize, weight: .bold, design: .rounded))
+                    .contentTransition(.numericText())
+                    .widgetAccentable()
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
 
@@ -826,6 +857,7 @@ struct StudyTrackTimerWidgetView: View {
                             Text("\(snapshot.streak) j").font(.caption2.weight(.bold))
                         }
                         .foregroundStyle(Color.orange.widgetInk)
+                        .widgetAccentable()
                     }
                     HStack(spacing: 3) {
                         Image(systemName: "star.fill").font(.caption2)

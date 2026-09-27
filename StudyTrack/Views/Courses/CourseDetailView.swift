@@ -146,7 +146,7 @@ struct CourseDetailView: View {
         for exam in course.exams { app.notifications.cancelExam(id: exam.id) }
         context.delete(course)
         try? context.save()
-        Haptics.warning()
+        Haptics.removed()
         dismiss()
     }
 

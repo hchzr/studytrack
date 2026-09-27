@@ -510,7 +510,7 @@ struct SeriesEditorSheet: View {
         guard let series else { return }
         context.delete(series)
         try? context.save()
-        Haptics.warning()
+        Haptics.removed()
         dismiss()
     }
 }

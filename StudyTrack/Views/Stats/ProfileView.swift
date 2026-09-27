@@ -525,7 +525,7 @@ struct ProfileView: View {
         FocusTimerStore.save(nil)
         Task { await app.notifications.cancelScheduled() }
         WidgetSnapshotWriter.refresh(context: context, settings: app.settings)
-        Haptics.warning()
+        Haptics.removed()
         message = "Données effacées."
     }
 

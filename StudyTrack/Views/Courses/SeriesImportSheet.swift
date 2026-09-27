@@ -607,7 +607,7 @@ struct SeriesImportSheet: View {
         analysisTask = nil
         ai = .failed("Analyse arrêtée.")
         phase = .review
-        Haptics.warning()
+        Haptics.removed()
     }
 
     private func summary(local: [DetectedSeries], merged: [DetectedSeries], source: SeriesExtractionSource) -> String {
