@@ -240,10 +240,11 @@ struct CourseAgendaTabView: View {
                                 .frame(width: 24)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(exam.title).font(.subheadline.weight(.medium))
-                                HStack(spacing: 6) {
-                                    Text(DateUtils.fullDayLabel(exam.date))
-                                    if !exam.location.isEmpty { Text("· \(exam.location)") }
-                                }
+                                // Une seule chaîne : deux textes séparés par un
+                                // espacement donnaient « octobre  · SG1 ».
+                                Text([DateUtils.fullDayLabel(exam.date), exam.location]
+                                        .filter { !$0.isEmpty }
+                                        .joined(separator: " · "))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             }
@@ -272,10 +273,10 @@ struct CourseAgendaTabView: View {
             Button {
                 showingAddExam = true
             } label: {
-                Label("Ajouter une évaluation", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
+                Label("Ajouter une évaluation", systemImage: "plus.circle.fill")
+                    .font(.subheadline.weight(.semibold))
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.borderless)
             }
         }
     }
