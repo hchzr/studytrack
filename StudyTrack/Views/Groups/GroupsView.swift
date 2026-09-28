@@ -77,38 +77,30 @@ struct GroupsView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { ProfileButton() }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        joinCode = ""
-                        showingJoin = true
-                    } label: {
-                        Image(systemName: "person.badge.plus")
-                    }
-                    .accessibilityLabel("Rejoindre un groupe")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
-                        Button {
-                            Task { await syncNow() }
-                        } label: {
-                            if isSyncing {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                            }
-                        }
-                        .disabled(isSyncing)
-                        .accessibilityLabel("Synchroniser les groupes")
+                // Un « + » pour les deux façons d'entrer dans un groupe, puis
+                // l'avatar. La synchronisation se fait en tirant la liste vers
+                // le bas, comme partout sur iOS.
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
                         Button {
                             showingCreate = true
                         } label: {
-                            Image(systemName: "plus")
+                            Label("Créer un groupe", systemImage: "person.3")
                         }
-                        .accessibilityLabel("Créer un groupe")
+                        Button {
+                            joinCode = ""
+                            showingJoin = true
+                        } label: {
+                            Label("Rejoindre avec un code", systemImage: "person.badge.plus")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Créer ou rejoindre un groupe")
+                    ProfileButton()
                 }
             }
+            .refreshable { await syncNow() }
             .sheet(isPresented: $showingCreate) { CreateGroupView() }
             .sheet(isPresented: $showingJoin) { JoinGroupView(prefilledCode: joinCode) }
             .task {

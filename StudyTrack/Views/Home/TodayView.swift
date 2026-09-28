@@ -18,7 +18,6 @@ private struct TodayState {
     let streak: Int
     let weekSeconds: Int
     let upcomingExams: [Exam]
-    let upcomingSessions: [PlannedSession]
     let dueTasks: [LinkedTask]
     /// Le planning du jour : séances, sessions planifiées, évaluations.
     let todayItems: [TodayItem]
@@ -83,7 +82,6 @@ struct TodayView: View {
             },
             // Les trois `@Query` sont déjà triées : `prefix(3)` s'arrête au 3ᵉ match.
             upcomingExams: Array(exams.lazy.filter { $0.date >= today }.prefix(3)),
-            upcomingSessions: Array(plannedSessions.lazy.filter { !$0.isPast }.prefix(3)),
             dueTasks: Array(tasks.lazy
                 .filter { !$0.isDone && ($0.isOverdue || $0.isDueToday) }
                 .prefix(3)),
@@ -208,31 +206,33 @@ struct TodayView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Aujourd'hui")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { ProfileButton() }
+                // L'action de l'onglet, puis l'avatar — la même règle partout.
+                // La loupe vit dans « Cours », dont elle cherche le contenu.
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        sheet = .search
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
-                    .accessibilityLabel("Rechercher")
-                    // Toutes les créations derrière un seul « + » : quatre icônes
-                    // côte à côte ne se lisaient pas, et doublaient la barre d'onglets.
                     Menu {
-                        Button {
-                            app.router.startFocus(courseID: nil, courseCode: "", taskType: .theory, label: "Session libre")
-                        } label: {
-                            Label("Démarrer un chrono", systemImage: "timer")
+                        Section {
+                            Button {
+                                app.router.startFocus(courseID: nil, courseCode: "", taskType: .theory, label: "Session libre")
+                            } label: {
+                                Label("Démarrer un chrono", systemImage: "timer")
+                            }
+                            Button {
+                                app.router.openFocus(.manual)
+                            } label: {
+                                Label("Saisir une session passée", systemImage: "square.and.pencil")
+                            }
                         }
-                        Button {
-                            app.router.openFocus(.manual)
-                        } label: {
-                            Label("Saisir une session passée", systemImage: "square.and.pencil")
-                        }
-                        Button {
-                            sheet = .seriesImport(nil, nil)
-                        } label: {
-                            Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+                        Section {
+                            Button {
+                                app.router.openContentImport()
+                            } label: {
+                                Label("Importer du contenu de cours", systemImage: "square.and.arrow.down.on.square")
+                            }
+                            Button {
+                                sheet = .seriesImport(nil, nil)
+                            } label: {
+                                Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+                            }
                         }
                         Button {
                             app.router.showingTasks = true
@@ -240,9 +240,10 @@ struct TodayView: View {
                             Label("Tâches", systemImage: "checklist")
                         }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus")
                     }
-                    .accessibilityLabel("Ajouter")
+                    .accessibilityLabel("Ajouter ou démarrer")
+                    ProfileButton()
                 }
             }
             // **Une seule** feuille pour les six présentations.
@@ -294,13 +295,7 @@ struct TodayView: View {
                     || PreviewLaunch.isSet(PreviewLaunch.statsFlag) {
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
-                        if let path = PreviewLaunch.string(PreviewLaunch.importFileFlag) {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        sheet = .seriesImport(nil, PendingImport(kind: .pdf, fileName: path, text: nil, receivedAt: Date()))
-                    }
-                }
-                if PreviewLaunch.isSet(PreviewLaunch.profileFlag) { router.showingProfile = true }
+                        if PreviewLaunch.isSet(PreviewLaunch.profileFlag) { router.showingProfile = true }
                         if PreviewLaunch.isSet(PreviewLaunch.statsFlag) { router.showingStats = true }
                     }
                 }
@@ -454,76 +449,167 @@ struct TodayView: View {
 
     // MARK: En-tête
 
+    /// La date d'abord, en sur-titre, puis le salut : on ouvre l'app pour savoir
+    /// quel jour et quelle semaine on est, avant tout le reste.
     private func greeting(_ state: TodayState) -> some View {
         VStack(alignment: .leading, spacing: Layout.tight) {
-            // Un seul en-tête par écran : le grand titre de navigation porte le
-            // nom de l'écran, le salut reste un sous-titre.
+            Text(dateLine(state))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
             Text(greetingText)
                 .font(.title3.weight(.semibold))
-            // La date et la semaine en une phrase — pas deux pastilles à décoder.
-            Text(dateLine(state))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func dateLine(_ state: TodayState) -> String {
-        var parts = [DateUtils.fullDayLabel(Date())]
+        var parts = [DateUtils.fullDayLabel(Date()).capitalizedFirst]
         if let term = state.term {
-            parts.append(term.hasEnded ? "semestre terminé" : (term.hasNotStarted ? "semestre à venir" : "semaine \(term.currentWeek) / \(term.totalWeeks)"))
+            parts.append(term.hasEnded ? "semestre terminé" : (term.hasNotStarted ? "semestre à venir" : "semaine \(term.currentWeek) sur \(term.totalWeeks)"))
         }
-        if !app.settings.sectionCode.isEmpty { parts.append(app.settings.sectionCode) }
         return parts.joined(separator: " · ")
     }
 
     // MARK: Planning du jour
 
-    @ViewBuilder
+    /// « Ta journée » : ce qui a une heure aujourd'hui, et l'accès à l'agenda.
+    ///
+    /// Toujours affichée, même vide : c'est le point d'entrée de l'agenda depuis
+    /// l'accueil. Les créneaux finis se replient en une ligne pour que la
+    /// prochaine séance soit en haut ; la ligne rouge marque maintenant.
     private func todaySchedule(_ state: TodayState) -> some View {
-        if !state.todayItems.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Ta journée", trailing: "\(state.todayItems.count)")
-                Card {
-                    VStack(spacing: 0) {
-                        ForEach(Array(state.todayItems.enumerated()), id: \.element.id) { index, item in
-                            let isPast = (item.end ?? item.start) < Date()
-                            HStack(alignment: .center, spacing: Layout.block) {
-                                VStack(alignment: .trailing, spacing: Layout.micro) {
-                                    Text(DateUtils.time.string(from: item.start))
-                                        .font(.caption.weight(.semibold))
-                                        .monospacedDigit()
-                                    if let end = item.end {
-                                        Text(DateUtils.time.string(from: end))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .monospacedDigit()
-                                    }
-                                }
-                                .frame(width: 44, alignment: .trailing)
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(item.color.accessibleMark)
-                                    .frame(width: 4, height: 32)
-                                VStack(alignment: .leading, spacing: Layout.micro) {
-                                    Text(item.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                                    if !item.subtitle.isEmpty {
-                                        Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                }
-                                Spacer(minLength: Layout.inline)
-                                Image(systemName: item.icon)
+        let now = Date()
+        let finished = state.todayItems.filter { ($0.end ?? $0.start) < now }
+        let coming = state.todayItems.filter { ($0.end ?? $0.start) >= now }
+        return VStack(alignment: .leading, spacing: Layout.control) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Ta journée").font(.headline)
+                Spacer()
+                Button {
+                    app.router.openAgenda(day: now)
+                } label: {
+                    HStack(spacing: Layout.tight) {
+                        Text("Agenda")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                }
+                .accessibilityLabel("Ouvrir l'agenda d'aujourd'hui")
+            }
+            .padding(.horizontal, Layout.micro)
+
+            Button {
+                app.router.openAgenda(day: now)
+            } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    if state.todayItems.isEmpty {
+                        HStack(spacing: Layout.block) {
+                            Image(systemName: "sun.max")
+                                .font(.title3)
+                                .foregroundStyle(Color.orange.accessibleMark)
+                            VStack(alignment: .leading, spacing: Layout.micro) {
+                                Text("Rien d'autre à l'horaire aujourd'hui")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                Text("Toute la journée est à toi · touche pour voir la semaine")
                                     .font(.caption)
-                                    .foregroundStyle(item.color.accessibleMark)
+                                    .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, Layout.inline)
-                            .opacity(isPast ? 0.55 : 1)
-                            if index < state.todayItems.count - 1 {
-                                Divider().padding(.leading, 64)
+                            Spacer(minLength: 0)
+                        }
+                    } else {
+                        if !finished.isEmpty {
+                            Text(finished.count == 1 ? "1 créneau terminé" : "\(finished.count) créneaux terminés")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 60)
+                                .padding(.bottom, Layout.inline)
+                        }
+                        if !coming.isEmpty, !finished.isEmpty || coming.first.map({ $0.start > now }) == true {
+                            scheduleNowLine(now)
+                        }
+                        ForEach(Array(coming.prefix(4).enumerated()), id: \.element.id) { index, item in
+                            scheduleRow(item, isOngoing: item.start <= now)
+                            if index < min(coming.count, 4) - 1 {
+                                Divider().padding(.leading, 60)
                             }
+                        }
+                        if coming.isEmpty {
+                            Text("Journée terminée · rien d'autre à l'horaire")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 60)
+                                .padding(.top, Layout.inline)
+                        } else if coming.count > 4 {
+                            Text("+ \(coming.count - 4) autre\(coming.count - 4 > 1 ? "s" : "")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 60)
+                                .padding(.top, Layout.inline)
                         }
                     }
                 }
+                .padding(Layout.gutter)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+                .contentShape(Rectangle())
             }
+            .buttonStyle(PressableStyle())
         }
+    }
+
+    private func scheduleNowLine(_ now: Date) -> some View {
+        HStack(spacing: Layout.snug) {
+            Text(DateUtils.time.string(from: now))
+                .font(.caption2.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(Color.red.accessibleInk)
+                .frame(width: 44, alignment: .trailing)
+            Circle().fill(Color.red.accessibleMark).frame(width: 6, height: 6)
+            Rectangle().fill(Color.red.accessibleMark).frame(height: 1.5)
+        }
+        .padding(.bottom, Layout.tight)
+        .accessibilityHidden(true)
+    }
+
+    private func scheduleRow(_ item: TodayItem, isOngoing: Bool) -> some View {
+        HStack(alignment: .center, spacing: Layout.block) {
+            VStack(alignment: .trailing, spacing: Layout.micro) {
+                Text(DateUtils.time.string(from: item.start))
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                if let end = item.end {
+                    Text(DateUtils.time.string(from: end))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .frame(width: 44, alignment: .trailing)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(item.color.accessibleMark)
+                .frame(width: 4, height: 34)
+            VStack(alignment: .leading, spacing: Layout.micro) {
+                HStack(spacing: Layout.snug) {
+                    Text(item.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if isOngoing {
+                        Pill(text: "en cours", color: Theme.accent)
+                    }
+                }
+                if !item.subtitle.isEmpty {
+                    Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: Layout.inline)
+            Image(systemName: item.icon)
+                .font(.caption)
+                .foregroundStyle(item.color.accessibleMark)
+        }
+        .padding(.vertical, Layout.inline)
     }
 
     private var greetingText: String {
@@ -550,7 +636,7 @@ struct TodayView: View {
                        subtitle: "\(next.reasonLabel) · \(next.detail)",
                        actionTitle: "Démarrer le chrono",
                        tint: next.reason == .redo ? .red : Color(hex: next.colorHex),
-                       eyebrow: "Maintenant") {
+                       eyebrow: "À faire maintenant") {
                 app.router.startFocus(courseID: next.courseID,
                                       courseCode: next.courseCode,
                                       taskType: next.taskType,
@@ -594,7 +680,7 @@ struct TodayView: View {
         if !rest.isEmpty {
             let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Ensuite", trailing: "\(rest.count)")
+                SectionHeader(title: "À faire cette semaine", trailing: "\(rest.count)")
                 Card {
                     VStack(spacing: 0) {
                         ForEach(visible) { todo in
@@ -641,10 +727,10 @@ struct TodayView: View {
 
     @ViewBuilder
     private func deadlinesSection(_ state: TodayState) -> some View {
-        if !state.upcomingExams.isEmpty || !state.upcomingSessions.isEmpty || !state.dueTasks.isEmpty {
+        if !state.upcomingExams.isEmpty || !state.dueTasks.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Échéances").font(.headline)
+                    Text("À venir").font(.headline)
                     Spacer()
                     Button("Tâches") { app.router.showingTasks = true }
                         .font(.subheadline)
@@ -689,14 +775,6 @@ struct TodayView: View {
                                     title: exam.title,
                                     subtitle: "\(exam.course?.displayCode ?? "") · \(DateUtils.shortDay.string(from: exam.date))",
                                     trailing: DateUtils.countdownLabel(to: exam.date)))
-        }
-        for session in state.upcomingSessions {
-            rows.append(DeadlineRow(id: "planned-\(session.id)",
-                                    icon: "timer",
-                                    tint: .indigo,
-                                    title: session.title,
-                                    subtitle: "\(DateUtils.relativeLabel(session.startsAt)) · \(DateUtils.time.string(from: session.startsAt))",
-                                    trailing: session.isGroupSession ? "Groupe" : nil))
         }
         for task in state.dueTasks {
             rows.append(DeadlineRow(id: "task-\(task.id)",

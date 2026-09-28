@@ -92,6 +92,13 @@ struct ContentImportView: View {
             .sheet(isPresented: $showingSeriesPDF) {
                 SeriesImportSheet(course: course)
             }
+            #if DEBUG
+            .onAppear {
+                guard path.isEmpty, let raw = PreviewLaunch.string(PreviewLaunch.contentImportFlag),
+                      let source = ContentSource(rawValue: raw) else { return }
+                path.append(source == .botafogo ? .botafogo : .browser(source, nil))
+            }
+            #endif
             .sheet(isPresented: $showingFileImport) {
                 ImportSheet()
             }
@@ -105,8 +112,10 @@ struct ContentImportView: View {
                 .foregroundStyle(Theme.accentInk)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: Layout.micro) {
-                Text(title).font(.body).foregroundStyle(.primary)
-                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                // Couleurs explicites : dans une liste, un bouton teinte tout son
+                // libellé à l'encre de l'app, et six lignes indigo ne se lisaient plus.
+                Text(title).font(.body).foregroundStyle(Color.primary)
+                Text(detail).font(.footnote).foregroundStyle(Color.secondary)
             }
             Spacer(minLength: Layout.inline)
             Image(systemName: "chevron.right")
@@ -282,8 +291,8 @@ struct BotafogoPicker: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: Layout.micro) {
-                                Text(entry.title).foregroundStyle(.primary)
-                                Text(entry.url.path).font(.footnote).foregroundStyle(.secondary)
+                                Text(entry.title).foregroundStyle(Color.primary)
+                                Text(entry.url.path).font(.footnote).foregroundStyle(Color.secondary)
                             }
                             Spacer()
                             if loadingURL == entry.url { ProgressView() }
@@ -317,6 +326,12 @@ struct BotafogoPicker: View {
         do {
             catalog = try await BotafogoClient.catalog()
             if catalog.isEmpty { errorMessage = "Aucun polycopié trouvé sur la page d'accueil." }
+            #if DEBUG
+            if let index = PreviewLaunch.string(PreviewLaunch.botafogoCourseFlag).flatMap(Int.init),
+               catalog.indices.contains(index) {
+                await open(catalog[index].url)
+            }
+            #endif
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -399,10 +414,16 @@ struct ContentReviewView: View {
     }
 
     private var summaryLine: String {
-        var parts = ["\(draft.theoryCount) théorie"]
+        var parts: [String] = []
+        if draft.theoryCount > 0 { parts.append("\(draft.theoryCount) élément\(draft.theoryCount > 1 ? "s" : "") de théorie") }
         if draft.videoCount > 0 { parts.append("\(draft.videoCount) vidéo\(draft.videoCount > 1 ? "s" : "")") }
-        parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")")
+        if draft.seriesCount > 0 { parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")") }
         return parts.joined(separator: " · ")
+    }
+
+    private var importTitle: String {
+        let total = draft.theoryCount + draft.seriesCount
+        return "Importer \(total) élément\(total > 1 ? "s" : "")"
     }
 
     private var targetSection: some View {
@@ -518,7 +539,7 @@ struct ContentReviewView: View {
         Button {
             apply()
         } label: {
-            Text(draft.isEmpty ? "Rien à importer" : "Importer \(summaryLine)")
+            Text(draft.isEmpty ? "Rien à importer" : importTitle)
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Layout.control)

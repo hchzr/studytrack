@@ -135,13 +135,13 @@ struct OnboardingView: View {
     }
 
     private var titles: [String] {
-        ["Bienvenue sur StudyTrack", "Tes cours", "Ta première série"]
+        ["Bienvenue sur StudyTrack", "Tes cours", "Le contenu de tes cours"]
     }
 
     private var subtitles: [String] {
         ["Ta théorie, tes exercices et ton temps de travail, semaine par semaine. Commence par ta section.",
          "Importe ton horaire EPFL ou ajoute tes classes à la main.",
-         "Importe le PDF d'une série : exercices, questions et points sont repérés tout seuls."]
+         "Importe la théorie et les séries depuis Moodle, Courseware ou Botafogo : tout arrive rangé par semaine."]
     }
 
     // MARK: Étapes
@@ -368,24 +368,37 @@ struct OnboardingView: View {
         }
     }
 
-    /// Étape 3 : une vraie série, tout de suite — facultatif.
+    /// Étape 3 : le contenu des cours, depuis leurs sites — facultatif.
+    ///
+    /// C'était « ta première série » en PDF. Mais une série ne dit rien de la
+    /// théorie, ni des semaines : importer la page Moodle du cours remplit les
+    /// deux d'un coup, et la progression hebdomadaire a enfin de quoi s'afficher.
     private var firstSeriesStep: some View {
         VStack(alignment: .leading, spacing: Layout.cardSpacing) {
             Card {
                 VStack(alignment: .leading, spacing: Layout.block) {
-                    Label("Depuis Moodle ou Fichiers", systemImage: "doc.badge.plus")
+                    Label("Depuis le site du cours", systemImage: "square.and.arrow.down.on.square")
                         .font(.headline)
-                    Text("Choisis le PDF de la série de cette semaine. Tu vérifies la liste — exercices, questions (a)(b)(c), bonus — avant que quoi que ce soit ne soit créé.")
+                    Text("Connecte-toi à Moodle ou Courseware dans l'app, ouvre un cours : vidéos, supports et séries sont lus semaine par semaine, et tu relis avant d'importer. Le polycopié d'Analyse de Botafogo s'importe sans connexion.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button {
-                        showingSeriesImport = true
+                        app.router.openContentImport()
                     } label: {
-                        Label(series.isEmpty ? "Importer une série" : "Importer une autre série", systemImage: "square.and.arrow.down")
+                        Label(importedTheory + series.count == 0 ? "Importer un cours" : "Importer un autre cours",
+                              systemImage: "square.and.arrow.down")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(trackedCourses.isEmpty)
+                    Button {
+                        showingSeriesImport = true
+                    } label: {
+                        Label("Ou le PDF d'une série", systemImage: "doc.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                     .disabled(trackedCourses.isEmpty)
                     if trackedCourses.isEmpty {
                         Text("Ajoute d'abord un cours à l'étape précédente.")
@@ -394,22 +407,24 @@ struct OnboardingView: View {
                     }
                 }
             }
-            if !series.isEmpty {
+            if importedTheory + series.count > 0 {
                 Card(title: "Déjà importé", icon: "checkmark.circle.fill") {
                     VStack(alignment: .leading, spacing: Layout.snug) {
-                        ForEach(series.sorted { $0.seriesNumber < $1.seriesNumber }) { item in
-                            Text("\(item.course?.displayCode ?? "") · \(item.title) · \(item.exercises.count) exercices")
+                        ForEach(trackedCourses.filter { !$0.theoryItems.isEmpty || !$0.series.isEmpty }) { course in
+                            Text("\(course.displayCode) · \(course.theoryItems.count) théorie · \(course.series.count) série\(course.series.count > 1 ? "s" : "")")
                                 .font(.subheadline)
                         }
                     }
                 }
             }
-            Text("Tu peux passer cette étape : chaque cours a un bouton « Importer un PDF ». Section, semestre et cours restent modifiables depuis le profil.")
+            Text("Tu peux passer cette étape : chaque cours a un bouton « + › Importer ». Section, semestre et cours restent modifiables depuis le profil.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+
+    private var importedTheory: Int { trackedCourses.reduce(0) { $0 + $1.theoryItems.count } }
 
     // MARK: Pied
 

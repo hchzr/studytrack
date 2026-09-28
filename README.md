@@ -112,7 +112,9 @@ arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaq
 | `-seedSampleData` | installe le semestre d'exemple, saute l'accueil, et supprime le prompt de notifications qui recouvrirait la capture |
 | `-tab <0,1,3,4>` | ouvre directement un onglet (0 Aujourd'hui, 1 Cours, 3 Groupes, 4 Agenda). **`-tab 2` ouvre la feuille Focus** : 2 était l'onglet du chrono, et les valeurs brutes n'ont pas bougé pour que liens et captures restent valables |
 | `-course <code>` | présélectionne un cours dans le volet de droite (`-course CS-250`) |
-| `-courseTab <theory\|exercises\|progress\|agenda>` | avec `-course`, ouvre cet onglet de la fiche |
+| `-courseTab <theory\|exercises\|progress\|exams>` | avec `-course`, ouvre cet onglet de la fiche (ou la page Progression / Examens) |
+| `-contentImport <moodle\|courseware\|botafogo>` | ouvre « Importer du contenu » sur cette source (avec `-course`, pour ce cours) |
+| `-botafogoCourse <index>` | avec `-contentImport botafogo`, lit ce polycopié du catalogue et ouvre la relecture |
 | `-onboardingStep <0…3>` | ouvre une étape de l'accueil — à lancer sur une installation **fraîche**, le seeding marquant l'accueil comme terminé |
 | `-profile` | ouvre « Profil & réglages » : les onze écrans de configuration sont autrement inatteignables sans taper |
 | `-school` | avec `-profile`, ouvre « Section et semestre » (section, cours, dates) |
@@ -167,10 +169,10 @@ encart au-dessus avant cela.
 
 | Onglet | Rôle |
 |---|---|
-| **Aujourd'hui** | La prochaine chose à faire, la journée en timeline, l'avancement de la semaine par cours (`TodayWeekCard`), puis « Ensuite » |
-| **Cours** | Ton plan : une carte par cours, puis **Exercices** (en premier), Théorie, Agenda — la progression est une page à part |
+| **Aujourd'hui** | La date et la semaine, « À faire maintenant », **Ta journée** (ce qui a une heure, ligne « maintenant », lien vers l'Agenda du jour), **Cette semaine** (deux barres par cours : Théorie et Séries), « À faire cette semaine », « À venir » (évaluations, tâches dues) |
+| **Cours** | Une carte par cours avec la semaine en cours (Théorie, Série n). La fiche : en-tête (semaine en cours, lien Progression, chrono), ligne **Examens**, puis deux segments **Séries** et **Théorie**. La Progression est une page semaine par semaine |
 | **Groupes** | Une fiche qui **oriente** (direct, trois chiffres, matières) vers quatre sous-pages : **Avancement des séries** (série par série, membre par membre, numéros faits écrits), **Temps d'étude** (classement 7 j / total, ma place), **Membres** (rôles, gestion par glissement), **Sessions planifiées** (RSVP) |
-| **Agenda** | Une **bande de semaine** à balayer (pastilles colorées sous les jours chargés), la journée choisie en timeline (heure, barre de couleur du cours, présence à cocher), puis « Ensuite » (les 8 prochains éléments). Les créneaux libres sont **tapables** : planifier part de l'heure qu'on vient de toucher |
+| **Agenda** | Une **bande de semaine** (balayer pour changer de semaine), des **pastilles de filtre** visibles (Cours, Évaluations, Sessions, Tâches, et un cours précis), la journée choisie en timeline avec la ligne « maintenant », puis « Les jours suivants », groupés par jour. Tirer vers le bas relit le calendrier système. Les créneaux libres sont **tapables** |
 
 Le dock a deux états, et un seul à la fois :
 
@@ -179,8 +181,12 @@ Le dock a deux états, et un seul à la fois :
 - **pendant une session**, il devient un mini-lecteur : cours, temps, pause/arrêt.
 
 Focus, Profil et Statistiques sont des **feuilles**, ouvertes depuis n'importe
-quel onglet (`router.showingFocus / showingProfile / showingStats`). Le bouton de
-profil est sur chaque onglet.
+quel onglet (`router.showingFocus / showingProfile / showingStats`).
+
+**Une seule règle pour la barre du haut** : à gauche le grand titre, à droite
+l'action de l'onglet (« + », un menu quand il y a plusieurs choix) puis
+**l'avatar** (initiales, ouvre le profil). La loupe n'existe que dans « Cours ».
+Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 
 ---
 
@@ -198,9 +204,10 @@ profil est sur chaque onglet.
 | **Date de résumé** | `TheoryVideo.summarizedAt` + texte du résumé |
 | **Date** de l'exercice + **code couleur vert/orange/rouge** | `Exercise.doneAt` + `ConfidenceControl` — **contrôle à trois pastilles toujours visible**, plus caché dans un menu |
 | **Date de correction** + juste / moyennement juste / faux + **à refaire** | `Exercise.correctedAt`, `CorrectnessControl`, `redoRequired` (auto si « faux ») |
-| **Pourcentages** théorie / exercices / corrections **par semaine** | onglet **Progression**, graphique **à défilement horizontal** (14 semaines ne tiennent pas sur un écran) |
+| **Pourcentages** théorie / séries / corrections **par semaine** | page **Progression** : une ligne par semaine du semestre (S1…S14, vides comprises), deux barres Théorie et Séries, la semaine en cours pleine, une semaine passée incomplète cerclée d'orange ; toucher une semaine déplie ses éléments. `ProgressEngine.semesterWeeks` |
+| **Trois catégories** | Théorie (vidéos, lectures, sections, diapos : le support n'est qu'une icône), Séries, Correction — plus « Autre ». `TaskType.choices` ; les anciennes valeurs (« Vidéo », « Résumé »…) restent décodables et comptent via `TaskType.canonical` |
 | **Feuille récapitulative** + gamification | `StatsView` (anneaux par cours, XP, niveaux, badges) |
-| **Agenda** avec midterms / examens | `Exam`, saisis dans **Cours › Agenda › Ajouter une évaluation** (`ExamFormSheet` : type, date, lieu, pondération), avec rappels J-3 et J-1. Onglet Agenda du cours et onglet Agenda global |
+| **Agenda** avec midterms / examens | `Exam`, saisis dans **Cours › Examens** (ou « + › Ajouter une évaluation »), avec rappels J-3 et J-1. La page Examens (`CourseExamsView`) réunit évaluations, plan de révision et annales ; séances et sessions sont dans l'Agenda, filtrable par cours |
 
 ### Temps et charge EPFL
 
@@ -242,7 +249,9 @@ profil est sur chaque onglet.
 | **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage, **routé automatiquement et sans rien demander à l'étudiant·e** : (1) la **fonction Supabase** `extract-series` — un modèle **servi**, la clé du fournisseur reste côté serveur et l'app n'utilise que sa clé `anon` ; (2) **sur l'appareil** — Apple Intelligence / FoundationModels, iOS 26, **relais hors ligne** ; (3) un **service perso** (URL + clé, compatible OpenAI) si l'étudiant·e en a saisi un. **Le service passe avant le modèle embarqué** : sur une série réelle, l'écart de qualité n'est pas marginal — l'ordre est épinglé par des tests (`SeriesEngineOrder`). Un maillon qui échoue passe au suivant. La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Plusieurs PDF à la fois, ou un énoncé **collé** (Moodle, mail). Réglages : Profil › Import intelligent | Réglages : Profil › Import intelligent |
 | **Ce que l'IA garantit** | ✅ **nouveau** | Une consigne explicite et testée : **un titre pour chaque exercice**, jamais vide — le modèle en écrit un de 2 à 6 mots à partir du titre de section quand le PDF n'en donne pas ; **dans la langue du document** (un PDF français donnait des titres anglais) ; et **un numéro qualifié par la série**, même quand le PDF recommence à 1 dans chaque section. Un exercice **sans aucun numéro** reçoit le suivant libre au lieu d'être jeté. La lecture de la réponse est **tolérante** : un modèle qui écrit `"02a"` au lieu de `2`, ou `"oui"` au lieu de `true`, ne fait plus perdre la réponse entière |
 | **Sous-questions** | ✅ **nouveau** | Un polycopié numérote souvent ses exercices 1, 2, 3 **dans chaque section**, et regroupe plusieurs questions sous un seul numéro. Le modèle `SubQuestion` porte ces questions : chacune se coche, l'exercice devient fait quand elles le sont toutes, et la série, la progression et les statistiques continuent de compter des **exercices**. Un compteur « 2/3 » se lit dans la liste sans ouvrir. L'IA les détecte et les regroupe ; l'import les crée sans jamais dupliquer ce qui existe |
-| ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s : ce connecteur ne pouvait jamais s'authentifier. Remplacé par l'import `.ics`. |
+| **Import du contenu : Moodle, Courseware, Botafogo** | ✅ **nouveau** | « + › Importer du contenu ». Pas d'API : **Moodle** et **Courseware** (Open edX) s'ouvrent dans un navigateur intégré (`WebImportBrowser`, cookies persistants — on se connecte une fois), et un script lit la page du cours (`WebContentScraper`) ; Courseware passe par l'API du plan du cours, dans la session de l'étudiant·e. **Botafogo** (polycopié d'Analyse de S. Friedli) est public et lu directement, vidéos de chaque section comptées (`BotafogoClient`). La logique — théorie ou série, numéros, semaines lues dans « Semaine 3 » ou dans une plage de dates Moodle — est pure et testée (`ContentDraftBuilder`). Relecture obligatoire (sections à cocher, semaine par section, type par élément), écriture sans suppression (`ContentDraftWriter`). Une série importée sans exercices propose « Lire les exercices dans le PDF » : le PDF est téléchargé avec la session Moodle et passe dans l'import de série. **Vérifié en bout de chaîne sur Botafogo ; les scripts Moodle et Courseware n'ont pas encore été essayés sur une vraie session.** |
+| **Temps Anki** | ✅ **nouveau** | Relevé **automatique** à chaque ouverture (au plus toutes les 10 min) via AnkiConnect `cardReviews` : les révisions sont regroupées en sessions (`AnkiReviewImport`, testé), étiquetées « Anki » (`StudySession.sourceRaw`), rattachées au cours dont le paquet porte le code ou le nom |
+| ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s. Remplacé par la lecture de la page dans le navigateur intégré (ci-dessus). |
 
 ### Relire et corriger une série importée
 

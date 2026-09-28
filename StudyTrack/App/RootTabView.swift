@@ -62,6 +62,14 @@ struct RootTabView: View {
             // épreuve passée doit disparaître, et une épreuve qui arrive dans les
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
             ExamActivityController.reconcileFromStore(context: context)
+            #if DEBUG
+            if PreviewLaunch.isSet(PreviewLaunch.contentImportFlag) {
+                let code = PreviewLaunch.string(PreviewLaunch.courseFlag)
+                let course = (try? context.fetch(FetchDescriptor<Course>()))?.first { $0.code == code }
+                try? await Task.sleep(for: .milliseconds(400))
+                app.router.openContentImport(courseID: course?.id)
+            }
+            #endif
         }
         .onOpenURL { url in
             handle(url)
@@ -205,17 +213,44 @@ struct RootTabView: View {
     }
 }
 
-/// L'accès au profil, aux réglages et au bilan, en haut à gauche de **chaque**
-/// onglet — il n'existait que sur « Aujourd'hui ».
+/// Le profil — réglages, bilan, compte — **en haut à droite de chaque onglet**,
+/// toujours à la même place, toujours le dernier bouton de la barre.
+///
+/// Un avatar plutôt qu'une silhouette générique : ce sont tes initiales, on
+/// reconnaît « moi » sans lire. La barre de chaque onglet suit une seule règle :
+/// à gauche le grand titre, à droite l'action de l'onglet (« + ») puis l'avatar.
 struct ProfileButton: View {
     @Environment(AppContainer.self) private var app
+    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 30
 
     var body: some View {
         Button {
             app.router.showingProfile = true
         } label: {
-            Image(systemName: "person.crop.circle")
+            ZStack {
+                Circle().fill(Theme.accent.badgeFill)
+                if initials.isEmpty {
+                    Image(systemName: "person.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent.badgeInk)
+                } else {
+                    Text(initials)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.accent.badgeInk)
+                }
+            }
+            .frame(width: size, height: size)
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("Profil, réglages et bilan")
+    }
+
+    private var initials: String {
+        app.settings.displayName
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap(\.first)
+            .map { String($0).uppercased() }
+            .joined()
     }
 }

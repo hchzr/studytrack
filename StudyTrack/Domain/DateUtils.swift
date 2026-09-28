@@ -235,3 +235,12 @@ enum DateUtils {
         return f.string(from: date).uppercased()
     }
 }
+
+extension String {
+    /// « lundi 28 septembre » → « Lundi 28 septembre » : seule l'initiale. En
+    /// français, `capitalized` écrirait « Lundi 28 Septembre ».
+    var capitalizedFirst: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
+    }
+}

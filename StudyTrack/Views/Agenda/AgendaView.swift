@@ -11,6 +11,7 @@ struct AgendaEntry: Identifiable {
     let icon: String
     let color: Color
     let kind: AgendaItemKind
+    var courseID: UUID? = nil
     /// L'objet d'origine, pour les actions de ligne (supprimer, présence…).
     var plannedSession: PlannedSession? = nil
     var task: LinkedTask? = nil
@@ -29,21 +30,48 @@ struct AgendaEntry: Identifiable {
     }
 }
 
-/// Ce que l'agenda montre. Chaque famille se masque d'un tap.
+/// Ce que l'agenda montre : une famille d'entrées, ou un cours.
+///
+/// Les filtres étaient cachés dans un menu de la barre du haut, à côté de la
+/// synchronisation : personne ne les trouvait. Ce sont maintenant des pastilles
+/// sous la semaine, visibles, et on filtre aussi par cours — c'est là que
+/// vivent les séances d'un cours depuis que sa page n'a plus d'onglet Agenda.
 struct AgendaFilter: Equatable {
-    var lectures = true
-    var exams = true
-    var sessions = true
-    var tasks = true
+    enum Family: String, CaseIterable, Identifiable {
+        case lectures, exams, sessions, tasks
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .lectures: return "Cours"
+            case .exams: return "Évaluations"
+            case .sessions: return "Sessions"
+            case .tasks: return "Tâches"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .lectures: return "building.columns"
+            case .exams: return "graduationcap"
+            case .sessions: return "timer"
+            case .tasks: return "checklist"
+            }
+        }
+    }
 
-    var isEverything: Bool { lectures && exams && sessions && tasks }
+    /// `nil` = toutes les familles.
+    var family: Family?
+    var courseID: UUID?
+
+    var isEverything: Bool { family == nil && courseID == nil }
 
     func allows(_ entry: AgendaEntry) -> Bool {
+        if let courseID, entry.courseID != courseID { return false }
+        guard let family else { return true }
         switch entry.kind {
-        case .calendar: return lectures
-        case .exam: return exams
-        case .planned: return sessions
-        case .task: return tasks
+        case .calendar: return family == .lectures
+        case .exam: return family == .exams
+        case .planned: return family == .sessions
+        case .task: return family == .tasks
         }
     }
 }
@@ -97,6 +125,7 @@ struct AgendaView: View {
                 icon: exam.kind.icon,
                 color: exam.kind.color,
                 kind: .exam,
+                courseID: exam.course?.id,
                 exam: exam))
         }
 
@@ -113,6 +142,7 @@ struct AgendaView: View {
                 icon: "timer",
                 color: .indigo,
                 kind: .planned,
+                courseID: session.course?.id,
                 plannedSession: session))
         }
 
@@ -126,6 +156,7 @@ struct AgendaView: View {
                 icon: event.kind.icon,
                 color: event.course.map { Color(hex: $0.colorHex) } ?? event.kind.color,
                 kind: .calendar,
+                courseID: event.course?.id,
                 event: event))
         }
 
@@ -141,6 +172,7 @@ struct AgendaView: View {
                 icon: "checklist",
                 color: task.isOverdue ? .red : .teal,
                 kind: .task,
+                courseID: task.course?.id,
                 task: task))
         }
 
@@ -160,10 +192,15 @@ struct AgendaView: View {
         allEntries.filter { calendar.isDate($0.date, inSameDayAs: day) }
     }
 
-    /// Ce qui suit la journée choisie : les 8 prochaines entrées, hors ce jour.
-    private var upcoming: [AgendaEntry] {
-        let dayEnd = DateUtils.addDays(1, to: selectedDay)
-        return Array(allEntries.filter { $0.date >= dayEnd }.prefix(8))
+    /// Les sept jours qui suivent la journée choisie, groupés par jour — au plus
+    /// douze entrées. Une liste plate de « 8 prochains » mélangeait demain et
+    /// dans trois semaines sans que rien ne les sépare.
+    private var upcomingDays: [(day: Date, entries: [AgendaEntry])] {
+        let from = DateUtils.addDays(1, to: selectedDay)
+        let to = DateUtils.addDays(8, to: selectedDay)
+        let items = Array(allEntries.filter { $0.date >= from && $0.date < to }.prefix(12))
+        let grouped = Dictionary(grouping: items) { DateUtils.startOfDay($0.date) }
+        return grouped.keys.sorted().map { ($0, grouped[$0] ?? []) }
     }
 
     private func eventSubtitle(_ event: LinkedCalendarEvent) -> String {
@@ -180,14 +217,18 @@ struct AgendaView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Layout.sectionGap) {
-                    weekStrip
-                    if let syncMessage {
-                        Label(syncMessage, systemImage: "calendar.badge.checkmark")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: Layout.block) {
+                        weekStrip
+                        filterBar
                     }
                     daySection
                     upcomingSection
+                    if let syncMessage {
+                        Label(syncMessage, systemImage: "calendar.badge.checkmark")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
                 }
                 .padding(Layout.screenPadding)
                 .adaptiveColumn()
@@ -195,6 +236,11 @@ struct AgendaView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Agenda")
             .toolbar { toolbar }
+            // Tirer vers le bas relit le calendrier système — le geste de toute
+            // app d'agenda, au lieu d'un bouton caché dans un menu de filtres.
+            .refreshable { await syncCalendar() }
+            .onAppear { applyRoute(app.router.agendaRoute) }
+            .onChange(of: app.router.agendaRoute) { _, route in applyRoute(route) }
             .sheet(isPresented: $showingPlan, onDismiss: { planStart = nil }) {
                 PlanSessionView(group: nil, defaultStart: planStart ?? defaultPlanStart)
             }
@@ -220,6 +266,16 @@ struct AgendaView: View {
         }
     }
 
+    /// « Ta journée » sur l'accueil, ou « Séances et sessions » d'un cours,
+    /// ouvrent l'agenda sur un jour et, au besoin, un cours.
+    private func applyRoute(_ route: AppRouter.AgendaRoute?) {
+        guard let route else { return }
+        selectedDay = DateUtils.startOfDay(route.day)
+        weekStart = DateUtils.startOfWeek(route.day)
+        filter = AgendaFilter(family: nil, courseID: route.courseID)
+        app.router.agendaRoute = nil
+    }
+
     /// Planifier depuis un jour choisi : la feuille s'ouvre sur ce jour, à 18 h.
     private var defaultPlanStart: Date {
         if calendar.isDateInToday(selectedDay) { return Date().addingTimeInterval(3600) }
@@ -228,33 +284,14 @@ struct AgendaView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) { ProfileButton() }
-        ToolbarItem(placement: .topBarLeading) {
-            Menu {
-                Toggle(isOn: $filter.lectures) { Label("Séances et cours", systemImage: "building.columns.fill") }
-                Toggle(isOn: $filter.exams) { Label("Évaluations", systemImage: "graduationcap.fill") }
-                Toggle(isOn: $filter.sessions) { Label("Sessions d'étude", systemImage: "timer") }
-                Toggle(isOn: $filter.tasks) { Label("Tâches", systemImage: "checklist") }
-                Divider()
-                Button {
-                    syncCalendar()
-                } label: {
-                    Label(isSyncing ? "Synchronisation…" : "Synchroniser le calendrier",
-                          systemImage: "arrow.triangle.2.circlepath")
-                }
-                .disabled(isSyncing)
-            } label: {
-                Image(systemName: filter.isEverything ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-            }
-            .accessibilityLabel("Filtres et synchronisation")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
                 showingPlan = true
             } label: {
-                Image(systemName: "calendar.badge.plus")
+                Image(systemName: "plus")
             }
-            .accessibilityLabel("Planifier une session")
+            .accessibilityLabel("Planifier une session d'étude")
+            ProfileButton()
         }
     }
 
@@ -262,19 +299,8 @@ struct AgendaView: View {
 
     private var weekStrip: some View {
         VStack(spacing: Layout.block) {
-            HStack {
-                Button {
-                    shiftWeek(-1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Semaine précédente")
-
-                Spacer()
-                VStack(spacing: Layout.micro) {
+            HStack(spacing: Layout.inline) {
+                VStack(alignment: .leading, spacing: Layout.micro) {
                     Text(weekTitle)
                         .font(.headline)
                     Text(weekSubtitle)
@@ -282,15 +308,38 @@ struct AgendaView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-
+                if !calendar.isDate(selectedDay, inSameDayAs: Date()) {
+                    Button("Aujourd'hui") {
+                        withAnimation(Motion.snappy) {
+                            selectedDay = DateUtils.startOfDay(Date())
+                            weekStart = DateUtils.startOfWeek(Date())
+                        }
+                        Haptics.soft()
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                }
+                Button {
+                    shiftWeek(-1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 36, height: Layout.minTouch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accentInk)
+                .accessibilityLabel("Semaine précédente")
                 Button {
                     shiftWeek(1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
+                        .frame(width: 36, height: Layout.minTouch)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(Theme.accentInk)
                 .accessibilityLabel("Semaine suivante")
             }
 
@@ -299,36 +348,28 @@ struct AgendaView: View {
                     dayCell(day)
                 }
             }
-
-            if !calendar.isDate(selectedDay, inSameDayAs: Date()) {
-                Button("Revenir à aujourd'hui") {
-                    withAnimation(Motion.snappy) {
-                        selectedDay = DateUtils.startOfDay(Date())
-                        weekStart = DateUtils.startOfWeek(Date())
-                    }
-                    Haptics.soft()
-                }
-                .font(.caption)
-            }
         }
         .padding(Layout.gutter)
         .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+        .gesture(DragGesture(minimumDistance: 30).onEnded { value in
+            // Balayer la bande change de semaine, comme dans Calendrier.
+            if value.translation.width < -40 { shiftWeek(1) }
+            if value.translation.width > 40 { shiftWeek(-1) }
+        })
     }
 
     private var weekTitle: String {
         let tracked = courses.filter(\.isTracked)
         if let term = AcademicTerm.resolve(from: tracked.compactMap(\.term)),
-           weekStart >= term.startDate, weekStart < term.endDate {
-            return "Semaine \(DateUtils.clampedWeek(for: weekStart, term: term))"
+           weekStart >= DateUtils.startOfWeek(term.startDate), weekStart < term.endDate {
+            return "Semaine \(DateUtils.clampedWeek(for: weekStart.addingTimeInterval(3600 * 12), term: term))"
         }
         return "Semaine du \(DateUtils.shortDay.string(from: weekStart))"
     }
 
     private var weekSubtitle: String {
         guard let last = weekDays.last else { return "" }
-        let count = weekDays.reduce(0) { $0 + entries(on: $1).count }
-        let range = "\(DateUtils.shortDay.string(from: weekStart)) – \(DateUtils.shortDay.string(from: last))"
-        return count == 0 ? range : "\(range) · \(count) élément\(count > 1 ? "s" : "")"
+        return "\(DateUtils.shortDay.string(from: weekStart)) – \(DateUtils.shortDay.string(from: last))"
     }
 
     private func dayCell(_ day: Date) -> some View {
@@ -348,10 +389,7 @@ struct AgendaView: View {
             VStack(spacing: Layout.tight) {
                 Text(DateUtils.weekdayInitial(day))
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(isSelected || isToday ? Theme.accentInk : .secondary)
-                // Le jour choisi est un disque plein, son numéro évidé dedans.
-                // L'encre claire du badge posée sur le disque plein rendait le
-                // numéro invisible : indigo sur indigo.
+                    .foregroundStyle(isToday ? Theme.accentInk : .secondary)
                 Text("\(calendar.component(.day, from: day))")
                     .font(.subheadline.weight(isToday || isSelected ? .bold : .regular))
                     .monospacedDigit()
@@ -392,43 +430,127 @@ struct AgendaView: View {
         Haptics.soft()
     }
 
+    // MARK: Filtres
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Layout.inline) {
+                chip("Tout", icon: nil, color: nil, isOn: filter.isEverything) {
+                    filter = AgendaFilter()
+                }
+                ForEach(AgendaFilter.Family.allCases) { family in
+                    chip(family.label, icon: family.icon, color: nil, isOn: filter.family == family) {
+                        filter.family = filter.family == family ? nil : family
+                    }
+                }
+                Divider().frame(height: 20)
+                ForEach(courses.filter(\.isTracked)) { course in
+                    chip(course.displayCode, icon: nil, color: Color(hex: course.colorHex),
+                         isOn: filter.courseID == course.id) {
+                        filter.courseID = filter.courseID == course.id ? nil : course.id
+                    }
+                }
+            }
+            .padding(.horizontal, Layout.gutter)
+        }
+        // Les pastilles défilent jusqu'au bord de l'écran, pas jusqu'à la marge.
+        .padding(.horizontal, -Layout.gutter)
+    }
+
+    private func chip(_ title: String, icon: String?, color: Color?, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(Motion.snappy) { action() }
+            Haptics.soft()
+        } label: {
+            HStack(spacing: Layout.snug) {
+                if let color {
+                    Circle().fill(color.accessibleMark).frame(width: 8, height: 8)
+                } else if let icon {
+                    Image(systemName: icon).font(.caption)
+                }
+                Text(title).font(.subheadline.weight(isOn ? .semibold : .regular))
+            }
+            .padding(.horizontal, Layout.block)
+            .padding(.vertical, Layout.snug)
+            .foregroundStyle(isOn ? Theme.knockedOutInk : .primary)
+            .background(isOn ? AnyShapeStyle(Theme.accent.accessibleMark) : AnyShapeStyle(Theme.softBackground), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+    }
+
     // MARK: Journée
 
     private var daySection: some View {
         let items = entries(on: selectedDay)
-        let total = items.compactMap { entry -> Int? in
+        let allDay = items.filter(\.isAllDay)
+        let timed = items.filter { !$0.isAllDay }
+        let total = timed.compactMap { entry -> Int? in
             guard let end = entry.endDate else { return nil }
             return Int(end.timeIntervalSince(entry.date))
         }.reduce(0, +)
+        let isToday = calendar.isDateInToday(selectedDay)
         return VStack(alignment: .leading, spacing: Layout.control) {
             SectionHeader(title: dayTitle,
-                          trailing: total > 0 ? DateUtils.durationLabel(seconds: total) : nil)
+                          trailing: total > 0 ? "\(DateUtils.durationLabel(seconds: total)) prévues" : nil)
             if items.isEmpty {
                 EmptyCard(icon: "calendar",
-                          title: calendar.isDateInToday(selectedDay) ? "Rien aujourd'hui" : "Rien ce jour-là",
+                          title: isToday ? "Rien aujourd'hui" : "Rien ce jour-là",
                           message: filter.isEverything
-                              ? "Planifie une session d'étude, ou importe ton horaire pour voir tes séances ici."
-                              : "Rien avec les filtres actuels.",
+                              ? "Importe ton horaire (Cours › + › Horaire) pour voir tes séances, ou planifie une session d'étude."
+                              : "Rien avec ce filtre.",
                           actionTitle: "Planifier une session") {
                     showingPlan = true
                 }
             } else {
                 Card {
                     VStack(spacing: 0) {
-                        ForEach(Array(items.enumerated()), id: \.element.id) { index, entry in
+                        ForEach(allDay) { entry in
+                            timelineRow(entry)
+                            Divider().padding(.leading, 64)
+                        }
+                        ForEach(Array(timed.enumerated()), id: \.element.id) { index, entry in
+                            if isToday, isNowBefore(entry, previous: index > 0 ? timed[index - 1] : nil) {
+                                nowLine
+                            }
                             timelineRow(entry)
                             if let gap = freeGap(after: entry, in: items) {
                                 Divider().padding(.leading, 64)
                                 freeSlotRow(gap)
                             }
-                            if index < items.count - 1 {
+                            if index < timed.count - 1 {
                                 Divider().padding(.leading, 64)
                             }
+                        }
+                        if isToday, let last = timed.last, (last.endDate ?? last.date) < Date() {
+                            nowLine
                         }
                     }
                 }
             }
         }
+    }
+
+    /// La ligne « maintenant » tombe avant la première entrée pas encore finie.
+    private func isNowBefore(_ entry: AgendaEntry, previous: AgendaEntry?) -> Bool {
+        let now = Date()
+        guard (entry.endDate ?? entry.date) >= now else { return false }
+        guard let previous else { return entry.date > now }
+        return (previous.endDate ?? previous.date) < now && entry.date > now
+    }
+
+    private var nowLine: some View {
+        HStack(spacing: Layout.snug) {
+            Text(DateUtils.time.string(from: Date()))
+                .font(.caption2.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(Color.red.accessibleInk)
+                .frame(width: 44, alignment: .trailing)
+            Circle().fill(Color.red.accessibleMark).frame(width: 7, height: 7)
+            Rectangle().fill(Color.red.accessibleMark).frame(height: 1.5)
+        }
+        .padding(.vertical, Layout.tight)
+        .accessibilityLabel("Maintenant, \(DateUtils.time.string(from: Date()))")
     }
 
     /// Un créneau libre d'au moins une heure après cette entrée, entre 8 h et
@@ -483,14 +605,15 @@ struct AgendaView: View {
         if calendar.isDateInToday(selectedDay) { return "Aujourd'hui" }
         if calendar.isDateInTomorrow(selectedDay) { return "Demain" }
         if calendar.isDateInYesterday(selectedDay) { return "Hier" }
-        return DateUtils.fullDayLabel(selectedDay)
+        return DateUtils.fullDayLabel(selectedDay).capitalizedFirst
     }
 
     /// Une ligne de journée : l'heure à gauche, dans sa colonne, puis l'entrée.
     private func timelineRow(_ entry: AgendaEntry) -> some View {
-        HStack(alignment: .top, spacing: Layout.block) {
+        let isPast = calendar.isDateInToday(selectedDay) && !entry.isAllDay && (entry.endDate ?? entry.date) < Date()
+        return HStack(alignment: .top, spacing: Layout.block) {
             VStack(alignment: .trailing, spacing: Layout.micro) {
-                Text(entry.isAllDay ? "journée" : DateUtils.time.string(from: entry.date))
+                Text(entry.isAllDay ? "Jour" : DateUtils.time.string(from: entry.date))
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                 if let end = entry.endDate {
@@ -521,72 +644,88 @@ struct AgendaView: View {
                         }
                     }
                     Spacer(minLength: Layout.inline)
-                    Image(systemName: entry.icon)
-                        .font(.caption)
-                        .foregroundStyle(entry.color.accessibleMark)
                     if let event = entry.event, event.isLecture, event.course != nil {
                         CheckCircleButton(isOn: event.isAttended,
-                                          tint: .blue,
+                                          tint: TaskType.lecture.tint,
                                           label: "Marquer la présence à \(event.title)") {
                             event.isAttended.toggle()
                             try? context.save()
                         }
+                    } else {
+                        Image(systemName: entry.icon)
+                            .font(.caption)
+                            .foregroundStyle(entry.color.accessibleMark)
                     }
                 }
             }
         }
         .padding(.vertical, Layout.inline)
         .frame(minHeight: Layout.minTouch)
+        .opacity(isPast ? 0.55 : 1)
     }
 
     // MARK: À venir
 
     @ViewBuilder
     private var upcomingSection: some View {
-        let items = upcoming
-        if !items.isEmpty {
+        let days = upcomingDays
+        if !days.isEmpty {
             VStack(alignment: .leading, spacing: Layout.control) {
-                SectionHeader(title: "Ensuite", trailing: "\(items.count) prochains")
+                SectionHeader(title: "Les jours suivants", trailing: nil)
                 Card {
-                    VStack(spacing: 0) {
-                        ForEach(Array(items.enumerated()), id: \.element.id) { index, entry in
-                            actions(for: entry) {
-                                HStack(spacing: Layout.block) {
-                                    VStack(alignment: .leading, spacing: Layout.micro) {
-                                        Text(DateUtils.relativeLabel(entry.date))
-                                            .font(.caption.weight(.semibold))
-                                        Text(entry.isAllDay ? "—" : DateUtils.time.string(from: entry.date))
-                                            .font(.caption2)
+                    VStack(alignment: .leading, spacing: Layout.block) {
+                        ForEach(Array(days.enumerated()), id: \.element.day) { index, group in
+                            Button {
+                                withAnimation(Motion.snappy) {
+                                    selectedDay = group.day
+                                    weekStart = DateUtils.startOfWeek(group.day)
+                                }
+                                Haptics.soft()
+                            } label: {
+                                Text(upcomingDayLabel(group.day))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.accentInk)
+                                    .textCase(.uppercase)
+                            }
+                            .buttonStyle(.plain)
+                            ForEach(group.entries) { entry in
+                                actions(for: entry) {
+                                    HStack(spacing: Layout.block) {
+                                        Text(entry.isAllDay ? "Jour" : DateUtils.time.string(from: entry.date))
+                                            .font(.caption.weight(.medium))
                                             .foregroundStyle(.secondary)
                                             .monospacedDigit()
-                                    }
-                                    .frame(width: 84, alignment: .leading)
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(entry.color.accessibleMark)
-                                        .frame(width: 4, height: 30)
-                                    VStack(alignment: .leading, spacing: Layout.micro) {
-                                        Text(entry.title).font(.subheadline).lineLimit(1)
-                                        if !entry.subtitle.isEmpty {
-                                            Text(entry.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            .frame(width: 44, alignment: .leading)
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(entry.color.accessibleMark)
+                                            .frame(width: 4, height: 28)
+                                        VStack(alignment: .leading, spacing: Layout.micro) {
+                                            Text(entry.title).font(.subheadline).lineLimit(1)
+                                            if !entry.subtitle.isEmpty {
+                                                Text(entry.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            }
                                         }
-                                    }
-                                    Spacer(minLength: Layout.inline)
-                                    if entry.kind == .exam {
-                                        Text(DateUtils.countdownLabel(to: entry.date))
-                                            .font(.caption.weight(.bold))
-                                            .foregroundStyle(entry.color.accessibleInk)
+                                        Spacer(minLength: Layout.inline)
+                                        if entry.kind == .exam {
+                                            Text(DateUtils.countdownLabel(to: entry.date))
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(entry.color.accessibleInk)
+                                        }
                                     }
                                 }
                             }
-                            .padding(.vertical, Layout.inline)
-                            if index < items.count - 1 {
-                                Divider().padding(.leading, 96)
-                            }
+                            if index < days.count - 1 { Divider() }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func upcomingDayLabel(_ day: Date) -> String {
+        if calendar.isDateInToday(day) { return "Aujourd'hui" }
+        if calendar.isDateInTomorrow(day) { return "Demain" }
+        return DateUtils.fullDayLabel(day)
     }
 
     // MARK: Actions de ligne
@@ -641,27 +780,24 @@ struct AgendaView: View {
         }
     }
 
-    private func syncCalendar() {
+    @MainActor
+    private func syncCalendar() async {
         isSyncing = true
-        Task { @MainActor in
-            defer { isSyncing = false }
+        defer { isSyncing = false }
 
-            if !app.calendar.hasAccess {
-                let granted = await app.calendar.requestAccess()
-                guard granted else {
-                    syncMessage = "Accès au calendrier refusé. Autorise-le dans Réglages › StudyTrack."
-                    return
-                }
-            }
-
-            let result = CalendarSync.sync(context: context,
-                                           courses: courses,
-                                           service: app.calendar)
-            if result.total == 0 {
-                syncMessage = "Aucun événement trouvé sur la période."
-            } else {
-                syncMessage = "\(result.imported) événement(s) importé(s) · \(result.updated) mis à jour."
+        if !app.calendar.hasAccess {
+            let granted = await app.calendar.requestAccess()
+            guard granted else {
+                syncMessage = "Accès au calendrier refusé. Autorise-le dans Réglages › StudyTrack."
+                return
             }
         }
+
+        let result = CalendarSync.sync(context: context,
+                                       courses: courses,
+                                       service: app.calendar)
+        syncMessage = result.total == 0
+            ? "Calendrier relu · aucun nouvel événement."
+            : "Calendrier relu · \(result.imported) ajouté\(result.imported > 1 ? "s" : ""), \(result.updated) mis à jour."
     }
 }

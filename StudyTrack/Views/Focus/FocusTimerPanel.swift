@@ -216,7 +216,7 @@ struct FocusTimerPanel: View {
                     .accessibilityValue(course?.displayCode ?? "aucun")
 
                     Menu {
-                        Picker("Type de travail", selection: taskTypeBinding) {
+                        Picker("Catégorie", selection: taskTypeBinding) {
                             ForEach(TaskType.choices) { type in
                                 Label(type.label, systemImage: type.icon).tag(type)
                             }
@@ -224,7 +224,7 @@ struct FocusTimerPanel: View {
                     } label: {
                         chip(icon: taskType.icon, text: taskType.label, tint: taskType.tint)
                     }
-                    .accessibilityLabel("Type de travail")
+                    .accessibilityLabel("Catégorie")
                     .accessibilityValue(taskType.label)
 
                     if let course, !targetOptions(for: course).isEmpty {

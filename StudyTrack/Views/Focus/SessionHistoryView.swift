@@ -200,7 +200,7 @@ struct SessionEditSheet: View {
                             Text("\(course.displayCode) — \(course.name)").tag(UUID?.some(course.id))
                         }
                     }
-                    Picker("Type de travail", selection: $taskType) {
+                    Picker("Catégorie", selection: $taskType) {
                         // Une session Anki garde son étiquette ; on ne la choisit pas.
                         ForEach(taskType == .flashcards ? TaskType.choices + [.flashcards] : TaskType.choices) { type in
                             Label(type.label, systemImage: type.icon).tag(type)

@@ -152,16 +152,12 @@ struct ProgressTabView: View {
             } else {
                 Circle().fill(Color(.tertiarySystemFill))
             }
-            if week.isComplete && !isCurrent {
-                Image(systemName: "checkmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.green.badgeInk)
-            } else {
-                Text("S\(week.week)")
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(isCurrent ? Theme.knockedOutInk : (late ? Color.orange.accessibleInk : .primary))
-            }
+            Text("S\(week.week)")
+                .font(.caption.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(isCurrent ? Theme.knockedOutInk
+                                 : (week.isComplete ? Color.green.badgeInk
+                                    : (late ? Color.orange.accessibleInk : .primary)))
         }
         .frame(width: 40, height: 40)
         .opacity(week.hasItems || isCurrent ? 1 : 0.5)

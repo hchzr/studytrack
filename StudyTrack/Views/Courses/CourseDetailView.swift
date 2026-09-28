@@ -296,10 +296,11 @@ struct CourseDetailView: View {
     }
 
     private var metaLine: String {
-        var parts = ["\(fmt(course.credits)) ECTS"]
+        // Espaces insécables : « 2 h » ne se coupe pas en fin de ligne.
+        var parts = ["\(fmt(course.credits))\u{00A0}ECTS"]
         parts.append(course.hasLectures
-                     ? "\(fmt(course.weeklyLectureHours)) h cours · \(fmt(course.weeklyExerciseHours)) h exercices"
-                     : "\(fmt(course.weeklyExerciseHours)) h exercices, sans amphi")
+                     ? "\(fmt(course.weeklyLectureHours))\u{00A0}h de cours · \(fmt(course.weeklyExerciseHours))\u{00A0}h d'exercices"
+                     : "\(fmt(course.weeklyExerciseHours))\u{00A0}h d'exercices, sans amphi")
         return parts.joined(separator: " · ")
     }
 

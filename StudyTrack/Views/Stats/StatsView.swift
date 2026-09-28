@@ -288,7 +288,7 @@ struct StatsView: View {
     // MARK: Par type
 
     private var taskTypeCard: some View {
-        Card(title: "Par type de travail", icon: "square.stack.3d.up.fill") {
+        Card(title: "Par catégorie", icon: "square.stack.3d.up.fill") {
             if byTaskType.isEmpty {
                 Text("Aucune session sur cette période.")
                     .font(.subheadline)
@@ -405,7 +405,7 @@ struct StatsView: View {
         let xp = GamificationEngine.totalXP(courses: courses, sessions: sessions)
         let level = GamificationEngine.level(forXP: xp)
         let badges = GamificationEngine.earnedBadges(courses: courses, sessions: sessions)
-        return Card(title: "Gamification", icon: "trophy.fill") {
+        return Card(title: "Niveau et badges", icon: "trophy.fill") {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 16) {
                     workloadStat(title: "XP total", value: "\(xp)", tint: .yellow)

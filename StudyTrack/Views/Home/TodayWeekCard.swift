@@ -34,16 +34,26 @@ struct TodayWeekCard: View {
     }
 
     var body: some View {
-        Card(title: "Cette semaine", icon: "calendar") {
+        VStack(alignment: .leading, spacing: Layout.control) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Cette semaine").font(.headline)
+                Spacer()
+                HStack(spacing: Layout.block) {
+                    legend("Théorie", TaskType.theory.tint)
+                    legend("Séries", TaskType.exercise.tint)
+                }
+            }
+            .padding(.horizontal, Layout.micro)
+
             VStack(spacing: 0) {
                 ForEach(rows) { row in
                     Button { onOpenCourse(row.course) } label: { rowView(row) }
                         .buttonStyle(.plain)
-                    Divider().padding(.leading, 14)
+                    Divider().padding(.leading, 16)
                 }
                 Button(action: onOpenStats) {
                     HStack(spacing: Layout.inline) {
-                        Image(systemName: "chart.bar.xaxis")
+                        Image(systemName: "clock")
                             .foregroundStyle(Theme.accentInk)
                         Text(summary)
                             .foregroundStyle(.secondary)
@@ -61,57 +71,69 @@ struct TodayWeekCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(summary). Ouvrir le bilan")
             }
+            .padding(Layout.gutter)
+            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+        }
+    }
+
+    private func legend(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: Layout.tight) {
+            Capsule().fill(color.accessibleMark).frame(width: 10, height: 5)
+            Text(title).font(.caption).foregroundStyle(.secondary)
         }
     }
 
     private var summary: String {
         let hours = DateUtils.hoursLabel(seconds: weekSeconds)
-        return streak > 0 ? "\(hours) sur 7 j · \(streak) j d'affilée" : "\(hours) sur 7 j"
+        return streak > 0 ? "\(hours) de travail sur 7 j · \(streak) j d'affilée" : "\(hours) de travail sur 7 j"
     }
 
+    /// Un cours : son code, puis deux barres côte à côte — théorie et séries de
+    /// **sa** semaine en cours. Les chiffres disent quoi, les barres combien.
     private func rowView(_ row: Row) -> some View {
         let tint = Color(hex: row.course.colorHex)
+        let week = row.week
         return HStack(spacing: Layout.block) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(tint)
-                .frame(width: 4, height: 34)
-            VStack(alignment: .leading, spacing: Layout.tight) {
-                HStack(spacing: Layout.snug) {
-                    Text(row.course.displayCode)
-                        .font(.subheadline.weight(.semibold))
-                    Text(detail(row))
-                        .font(.caption)
-                        .foregroundStyle(row.remaining == 0 ? Color.green.accessibleInk : .secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    if row.total > 0 {
-                        Text("\(row.done)/\(row.total)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                ProgressView(value: Double(row.done), total: Double(max(row.total, 1)))
-                    .tint(tint)
-                    .opacity(row.total == 0 ? 0.3 : 1)
+                .frame(width: 4, height: 30)
+            VStack(alignment: .leading, spacing: Layout.micro) {
+                Text(row.course.displayCode)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(status(row))
+                    .font(.caption)
+                    .foregroundStyle(row.total > 0 && row.remaining == 0 ? Color.green.accessibleInk : .secondary)
+                    .lineLimit(1)
             }
+            .frame(width: 96, alignment: .leading)
+            axis(week.watchedCount, week.videoCount, TaskType.theory.tint)
+            axis(week.doneCount, week.exerciseCount, TaskType.exercise.tint)
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, Layout.control)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.course.displayCode), \(detail(row))")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(row.course.displayCode) : théorie \(week.watchedCount) sur \(week.videoCount), séries \(week.doneCount) sur \(week.exerciseCount)")
     }
 
-    private func detail(_ row: Row) -> String {
+    private func axis(_ done: Int, _ total: Int, _ tint: Color) -> some View {
+        VStack(alignment: .trailing, spacing: Layout.tight) {
+            Text(total == 0 ? "—" : "\(done)/\(total)")
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(total > 0 && done == total ? Color.green.accessibleInk : .primary)
+            ProgressBar(progress: CourseProgress.ratio(done, total), color: tint, height: 5)
+                .opacity(total == 0 ? 0.3 : 1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func status(_ row: Row) -> String {
         guard row.total > 0 else { return "rien de prévu" }
         guard row.remaining > 0 else { return "à jour" }
-        var parts: [String] = []
-        let theory = row.week.videoCount - row.week.watchedCount
-        let exercises = row.week.exerciseCount - row.week.doneCount
-        if theory > 0 { parts.append("\(theory) théorie") }
-        if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
-        return "reste " + parts.joined(separator: " · ")
+        return "reste \(row.remaining)"
     }
 }

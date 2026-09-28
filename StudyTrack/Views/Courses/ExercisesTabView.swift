@@ -13,6 +13,17 @@ struct ExercisesTabView: View {
     @State private var selectedExercise: Exercise?
     @State private var editingSeries: SeriesEditTarget?
     @State private var showingPDFImport = false
+    /// PDF d'une série importée de Moodle, téléchargé dans la session : il
+    /// ouvre l'import avec le fichier déjà choisi.
+    @State private var downloadedPDF: DownloadedPDF?
+    @State private var downloadingSeries: UUID?
+    @State private var downloadError: String?
+    @Environment(AppContainer.self) private var app
+
+    struct DownloadedPDF: Identifiable {
+        let id = UUID()
+        var url: URL
+    }
     @State private var deletingSeries: ExerciseSeries?
     @State private var deletingExercise: Exercise?
     /// Séries dont l'étudiant·e a inversé le pliage par défaut (une série
@@ -30,19 +41,28 @@ struct ExercisesTabView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
             if course.series.isEmpty {
-                EmptyCard(icon: "checklist",
+                EmptyCard(icon: TaskType.exercise.icon,
                           title: "Aucune série",
-                          message: "Importe le PDF d'une série : exercices, questions et points (a)(b)(c) sont repérés tout seuls, et tu vérifies avant d'enregistrer.",
-                          actionTitle: "Importer un PDF") {
-                    showingPDFImport = true
+                          message: "Importe les séries depuis Moodle (elles arrivent rangées par semaine), ou le PDF d'une série : exercices et questions (a)(b)(c) sont repérés tout seuls.",
+                          actionTitle: "Importer depuis Moodle") {
+                    app.router.openContentImport(courseID: course.id)
                 }
-                Button {
-                    editingSeries = SeriesEditTarget(series: nil)
-                } label: {
-                    Label("Créer une série à la main", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: Layout.control) {
+                    Button {
+                        showingPDFImport = true
+                    } label: {
+                        Label("Un PDF", systemImage: "doc.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    Button {
+                        editingSeries = SeriesEditTarget(series: nil)
+                    } label: {
+                        Label("À la main", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.bordered)
+                .font(.subheadline)
             } else {
                 // L'ajout **en haut**, mais discret : en semaine 12, importer la
                 // série 12 obligeait à faire défiler onze séries terminées. Deux
@@ -103,6 +123,15 @@ struct ExercisesTabView: View {
         }
         .sheet(isPresented: $showingPDFImport) {
             SeriesImportSheet(course: course)
+        }
+        .sheet(item: $downloadedPDF) { pdf in
+            SeriesImportSheet(course: course, initialFileURL: pdf.url)
+        }
+        .alert("PDF inaccessible", isPresented: Binding(get: { downloadError != nil }, set: { if !$0 { downloadError = nil } })) {
+            Button("Choisir le fichier") { showingPDFImport = true }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text(downloadError ?? "")
         }
         .confirmationDialog("Supprimer « \(deletingSeries?.title ?? "") » ?",
                             isPresented: Binding(get: { deletingSeries != nil }, set: { if !$0 { deletingSeries = nil } }),
@@ -267,10 +296,25 @@ struct ExercisesTabView: View {
                 Divider()
 
                 if series.exercises.isEmpty {
+                    // Une série venue de Moodle connaît son PDF : un tap le lit.
+                    if let url = URL(string: series.urlString), !series.urlString.isEmpty {
+                        Button {
+                            Task { await readPDF(of: series, at: url) }
+                        } label: {
+                            HStack(spacing: Layout.inline) {
+                                if downloadingSeries == series.id { ProgressView() }
+                                Label("Lire les exercices dans le PDF", systemImage: "doc.text.magnifyingglass")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(downloadingSeries != nil)
+                    }
                     Button {
                         editingSeries = SeriesEditTarget(series: series)
                     } label: {
-                        Label("Ajouter des exercices", systemImage: "plus.circle")
+                        Label("Saisir les exercices à la main", systemImage: "plus.circle")
                             .font(.subheadline)
                     }
                     .buttonStyle(.borderless)
@@ -308,8 +352,20 @@ struct ExercisesTabView: View {
         }
     }
 
+    @MainActor
+    private func readPDF(of series: ExerciseSeries, at url: URL) async {
+        downloadingSeries = series.id
+        defer { downloadingSeries = nil }
+        do {
+            downloadedPDF = DownloadedPDF(url: try await AuthenticatedDownloader.download(url))
+        } catch {
+            downloadError = "\(error.localizedDescription) Reconnecte-toi à Moodle depuis « Importer du contenu », ou choisis le fichier toi-même."
+        }
+    }
+
     private func seriesSubtitle(_ series: ExerciseSeries) -> String {
-        var parts = ["Semaine \(series.plannedWeek)"]
+        var parts = [series.plannedWeek > 0 ? "Semaine \(series.plannedWeek)" : "Sans semaine"]
+        if series.exercises.isEmpty { parts.append("exercices à importer") }
         if let due = series.dueDate { parts.append("à rendre le \(DateUtils.shortDay.string(from: due))") }
         if !series.bonusExercises.isEmpty { parts.append("\(series.bonusExercises.count) bonus") }
         if series.isComplete { parts.append("terminée") }

@@ -17,6 +17,9 @@ struct AnkiSettingsView: View {
     @State private var selectedCourseID: UUID?
     @State private var isSending = false
     @State private var sendMessage: String?
+    @State private var isSyncingReviews = false
+    @State private var reviewMessage: String?
+    @Environment(\.modelContext) private var context
 
     private enum Status: Equatable {
         case unknown
@@ -58,6 +61,32 @@ struct AnkiSettingsView: View {
                 Text("AnkiConnect")
             } footer: {
                 Text("Sur Anki Desktop : Outils › Modules complémentaires › **Obtenir des modules**, code **2055492159**, puis redémarre Anki. L'extension écoute sur le port 8765 de l'ordinateur — sur un iPhone, écris l'**adresse du Mac** sur le réseau local, pas `127.0.0.1`.")
+            }
+
+            Section {
+                HStack {
+                    Label("Temps de révision", systemImage: TaskType.flashcards.icon)
+                    Spacer()
+                    Text(settings.ankiLastSync.map { "relevé \(DateUtils.relativeLabel($0).lowercased()) à \(DateUtils.time.string(from: $0))" } ?? "jamais relevé")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    Task { await syncReviews() }
+                } label: {
+                    HStack {
+                        Label("Relever maintenant", systemImage: "arrow.triangle.2.circlepath")
+                        if isSyncingReviews { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(!settings.isAnkiConfigured || isSyncingReviews)
+                if let reviewMessage {
+                    Text(reviewMessage).font(.footnote).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Temps passé dans Anki")
+            } footer: {
+                Text("Automatique : à chaque ouverture de l'app (au plus toutes les dix minutes), les révisions faites depuis le dernier relevé deviennent des sessions étiquetées « Anki ». Un paquet qui porte le code ou le nom d'un cours y est rattaché ; les autres restent comptés sans cours.")
             }
 
             if !decks.isEmpty {
@@ -159,6 +188,21 @@ struct AnkiSettingsView: View {
                 : "Renseigne l'adresse du Mac où tourne Anki."
         case .failed(let message):
             return message
+        }
+    }
+
+    @MainActor
+    private func syncReviews() async {
+        isSyncingReviews = true
+        defer { isSyncingReviews = false }
+        do {
+            let outcome = try await AnkiReviewSync.sync(context: context, settings: app.settings)
+            reviewMessage = outcome.sessionsAdded == 0
+                ? "Rien de nouveau depuis le dernier relevé."
+                : "\(outcome.sessionsAdded) session\(outcome.sessionsAdded > 1 ? "s" : "") ajoutée\(outcome.sessionsAdded > 1 ? "s" : "") · \(DateUtils.durationLabel(seconds: outcome.seconds))."
+            Haptics.success()
+        } catch {
+            reviewMessage = error.localizedDescription
         }
     }
 

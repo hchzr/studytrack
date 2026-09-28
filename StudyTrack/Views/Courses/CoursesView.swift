@@ -243,32 +243,40 @@ struct CoursesView: View {
         }
     }
 
+    /// Loupe, « + », avatar — dans cet ordre, sur la droite. Le « + » réunit
+    /// les trois façons de remplir l'onglet : un cours à la main, son contenu
+    /// depuis Moodle / Courseware / Botafogo, ou l'horaire IS-Academia.
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) { ProfileButton() }
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
-                showingImport = true
+                showingSearch = true
             } label: {
-                Image(systemName: "square.and.arrow.down")
+                Image(systemName: "magnifyingglass")
             }
-            .accessibilityLabel("Importer")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: Layout.block) {
+            .accessibilityLabel("Rechercher")
+            Menu {
                 Button {
-                    showingSearch = true
+                    app.router.openContentImport()
                 } label: {
-                    Image(systemName: "magnifyingglass")
+                    Label("Importer du contenu (Moodle, Courseware, Botafogo)", systemImage: "square.and.arrow.down.on.square")
                 }
-                .accessibilityLabel("Rechercher")
+                Button {
+                    showingImport = true
+                } label: {
+                    Label("Importer mon horaire (.ics)", systemImage: "calendar.badge.plus")
+                }
+                Divider()
                 Button {
                     showingForm = true
                 } label: {
-                    Image(systemName: "plus")
+                    Label("Ajouter un cours à la main", systemImage: "plus")
                 }
-                .accessibilityLabel("Ajouter un cours")
+            } label: {
+                Image(systemName: "plus")
             }
+            .accessibilityLabel("Ajouter")
+            ProfileButton()
         }
     }
 
@@ -320,9 +328,14 @@ struct CoursesView: View {
                     // de la semaine. Archiver et supprimer ensuite.
                     Button {
                         app.router.startFocus(courseID: course.id, courseCode: course.code,
-                                              taskType: .exercise, label: "\(course.displayCode) · Exercices")
+                                              taskType: .exercise, label: "\(course.displayCode) · Séries")
                     } label: {
                         Label("Démarrer un chrono", systemImage: "play.fill")
+                    }
+                    Button {
+                        app.router.openContentImport(courseID: course.id)
+                    } label: {
+                        Label("Importer du contenu", systemImage: "square.and.arrow.down.on.square")
                     }
                     Button {
                         seriesImportCourse = course
@@ -419,8 +432,6 @@ struct CourseCardRow: View {
     var body: some View {
         let progress = ProgressEngine.progress(for: course)
         let week = course.currentWeek
-        let remainingTheory = ProgressEngine.remainingVideos(for: course, week: week)
-        let remainingExercises = ProgressEngine.remainingExercises(for: course, week: week)
         let redo = course.allExercises.filter(\.redoRequired).count
         return Card {
             VStack(alignment: .leading, spacing: Layout.block) {
@@ -459,47 +470,55 @@ struct CourseCardRow: View {
 
                 Divider()
 
-                // Une phrase, pas un tableau : « cette semaine, il reste… ».
-                HStack(spacing: Layout.snug) {
-                    Image(systemName: weekIcon(theory: remainingTheory.count, exercises: remainingExercises.count, redo: redo))
-                        .font(.caption)
-                        .foregroundStyle(weekTint(theory: remainingTheory.count, exercises: remainingExercises.count, redo: redo).accessibleMark)
-                    Text(weekSentence(theory: remainingTheory, exercises: remainingExercises.count, redo: redo))
+                // La semaine en cours sur les deux axes, côte à côte : c'est
+                // ce que la liste doit dire d'un coup d'œil, cours par cours.
+                if !course.isTermRunning {
+                    Text("Semestre en pause")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                } else if weekProgress.hasItems {
+                    HStack(alignment: .top, spacing: Layout.gutter) {
+                        compactAxis("Théorie", weekProgress.watchedCount, weekProgress.videoCount, TaskType.theory.tint)
+                        compactAxis(weekProgress.seriesNumbers.count == 1 ? "Série \(weekProgress.seriesNumbers[0])" : "Séries",
+                                    weekProgress.doneCount, weekProgress.exerciseCount, TaskType.exercise.tint)
+                    }
+                    if redo > 0 {
+                        Label("\(redo) exercice\(redo > 1 ? "s" : "") à refaire", systemImage: "arrow.counterclockwise")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.red.accessibleInk)
+                    }
+                } else {
+                    Text(course.theoryItems.isEmpty && course.series.isEmpty
+                         ? "Pas encore de contenu · importe-le depuis Moodle"
+                         : "Rien de planifié en semaine \(week)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func weekSentence(theory: [TheoryItem], exercises: Int, redo: Int) -> String {
-        guard course.isTermRunning else { return "Semestre en pause" }
-        var parts: [String] = []
-        if !theory.isEmpty {
-            let minutes = theory.reduce(0) { $0 + $1.durationMinutes }
-            parts.append("\(theory.count) théorie" + (minutes > 0 ? " (\(DateUtils.durationLabel(seconds: minutes * 60)))" : ""))
+    private var weekProgress: WeeklyProgress {
+        ProgressEngine.weekProgress(for: course, week: course.currentWeek)
+    }
+
+    private func compactAxis(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: Layout.tight) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: Layout.tight)
+                Text(total == 0 ? "—" : "\(done)/\(total)")
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(total > 0 && done == total ? Color.green.accessibleInk : .primary)
+            }
+            ProgressBar(progress: CourseProgress.ratio(done, total), color: tint, height: 5)
+                .opacity(total == 0 ? 0.3 : 1)
         }
-        if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
-        if redo > 0 { parts.append("\(redo) à refaire") }
-        if parts.isEmpty { return "À jour pour la semaine \(course.currentWeek)" }
-        return "Cette semaine : " + parts.joined(separator: " · ")
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
-    private func weekIcon(theory: Int, exercises: Int, redo: Int) -> String {
-        if redo > 0 { return "arrow.counterclockwise" }
-        if theory + exercises == 0 { return "checkmark.circle.fill" }
-        return "list.bullet"
-    }
 
-    private func weekTint(theory: Int, exercises: Int, redo: Int) -> Color {
-        if redo > 0 { return .red }
-        if theory + exercises == 0 { return .green }
-        return .secondary
-    }
+
 }

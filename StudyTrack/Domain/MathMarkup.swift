@@ -48,7 +48,7 @@ enum MathMarkup {
     // MARK: Symboles
 
     static let symbols: [String: String] = [
-        "le": "≤", "leq": "≤", "leqslant": "⩽", "ge": "≥", "geq": "≥", "geqslant": "⩾",
+        "lt": "<", "gt": ">", "le": "≤", "leq": "≤", "leqslant": "⩽", "ge": "≥", "geq": "≥", "geqslant": "⩾",
         "neq": "≠", "ne": "≠", "approx": "≈", "equiv": "≡", "sim": "∼",
         "infty": "∞", "to": "→", "rightarrow": "→", "longrightarrow": "⟶", "leftarrow": "←",
         "Rightarrow": "⇒", "implies": "⇒", "Leftarrow": "⇐", "Leftrightarrow": "⇔", "iff": "⇔",

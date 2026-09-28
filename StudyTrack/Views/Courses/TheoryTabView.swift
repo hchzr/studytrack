@@ -1,31 +1,53 @@
 import SwiftUI
 import SwiftData
 
-/// Théorie : décomposition par vidéos, durée à regarder par semaine.
+/// Théorie : la semaine en cours, puis chapitre par chapitre.
+///
+/// Tout support — vidéo, lecture, section de polycopié, diapos — est de la
+/// théorie ; son type n'est plus qu'une icône. Un chapitre porte son **titre**
+/// (« Suites réelles »), pas « Section 3 ».
 struct TheoryTabView: View {
     let course: Course
 
     @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var app
     @State private var selectedVideo: TheoryItem?
     @State private var showingAdd = false
+    @State private var showsDone = true
 
     private var week: Int { course.currentWeek }
-    private var weekVideos: [TheoryItem] {
+    private var weekItems: [TheoryItem] {
         course.sortedTheoryItems.filter { $0.plannedWeek == week }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            weekCard
-
             if course.theoryItems.isEmpty {
-                EmptyCard(icon: "play.rectangle",
+                EmptyCard(icon: TaskType.theory.icon,
                           title: "Aucune théorie",
-                          message: "Ajoute les vidéos de théorie (1.1, 1.2…) avec leur durée pour suivre ta progression.",
-                          actionTitle: "Ajouter un élément de théorie") {
-                    showingAdd = true
+                          message: "Importe le plan du cours depuis Moodle, Courseware ou Botafogo : chaque vidéo, lecture ou section arrive rangée dans sa semaine.",
+                          actionTitle: "Importer la théorie") {
+                    app.router.openContentImport(courseID: course.id)
                 }
+                Button {
+                    showingAdd = true
+                } label: {
+                    Label("Ajouter un élément à la main", systemImage: "plus")
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             } else {
+                weekCard
+                HStack {
+                    SectionHeader(title: "Tout le cours", trailing: nil)
+                    Button {
+                        withAnimation(Motion.snappy) { showsDone.toggle() }
+                    } label: {
+                        Text(showsDone ? "Masquer le fait" : "Tout afficher")
+                            .font(.caption.weight(.medium))
+                    }
+                }
                 ForEach(course.theorySections, id: \.self) { section in
                     sectionCard(section)
                 }
@@ -41,90 +63,82 @@ struct TheoryTabView: View {
 
     // MARK: Semaine
 
-    /// La semaine en une ligne : ce qu'il reste, et une barre.
-    ///
-    /// La carte affichait la même information trois fois — un anneau à 0 %, une
-    /// barre à 0 % et « 0/2 » — plus deux durées côte à côte. Il reste la seule
-    /// chose qu'on vient chercher ici : combien de temps de vidéo il reste à
-    /// regarder cette semaine, et où l'on en est.
+    /// La semaine en cours : ce qu'il reste, cochable sur place.
+    @ViewBuilder
     private var weekCard: some View {
-        let total = weekVideos.reduce(0) { $0 + $1.durationSeconds }
-        let remaining = weekVideos.filter { !$0.isWatched }.reduce(0) { $0 + $1.durationSeconds }
-        let watched = weekVideos.filter(\.isWatched).count
-        return VStack(alignment: .leading, spacing: Layout.block) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Cette semaine")
-                    .font(.headline)
-                Text(course.isTermRunning ? "S\(week)" : "hors semestre")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    showingAdd = true
-                } label: {
-                    Label("Ajouter", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .accessibilityLabel("Ajouter un élément de théorie")
-            }
-            .padding(.horizontal, Layout.micro)
-
-            if weekVideos.isEmpty {
+        let done = weekItems.filter(\.isWatched).count
+        let remainingSeconds = weekItems.filter { !$0.isWatched }.reduce(0) { $0 + $1.durationSeconds }
+        let videos = weekItems.reduce(0) { $0 + $1.videoCount }
+        Card(title: course.isTermRunning ? "Semaine \(week)" : "Hors semestre",
+             icon: "calendar",
+             trailing: weekItems.isEmpty ? nil : "\(done)/\(weekItems.count)") {
+            if weekItems.isEmpty {
                 Text(course.isTermRunning
-                     ? "Rien de planifié pour la semaine \(week)."
+                     ? "Aucune théorie planifiée cette semaine."
                      : "Le semestre n'est pas en cours : le plan hebdomadaire est en pause.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, Layout.micro)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Card {
-                    VStack(alignment: .leading, spacing: Layout.control) {
-                        HStack(alignment: .firstTextBaseline) {
-                            if remaining == 0 {
-                                Label("Tout est vu", systemImage: "checkmark.circle.fill")
-                                    .font(.title3.weight(.bold))
-                                    .foregroundStyle(Color.green.accessibleInk)
-                            } else {
-                                Text(DateUtils.durationLabel(seconds: remaining))
-                                    .font(.title3.weight(.bold).monospacedDigit())
-                                Text("à regarder sur \(DateUtils.durationLabel(seconds: total))")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Layout.control) {
+                    ProgressBar(progress: CourseProgress.ratio(done, weekItems.count), color: TaskType.theory.tint)
+                    if remainingSeconds > 0 || videos > 0 {
+                        Text([videos > 0 ? "\(videos) vidéo\(videos > 1 ? "s" : "")" : nil,
+                              remainingSeconds > 0 ? "\(DateUtils.durationLabel(seconds: remainingSeconds)) à regarder" : nil]
+                            .compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 0) {
+                        ForEach(weekItems) { item in
+                            VideoRow(video: item,
+                                     isCurrentWeek: false,
+                                     onToggleWatched: { toggleWatched(item) },
+                                     onOpen: { selectedVideo = item })
+                            if item.id != weekItems.last?.id {
+                                Divider().padding(.leading, 44)
                             }
-                            Spacer(minLength: Layout.inline)
-                            Text("\(watched)/\(weekVideos.count)")
-                                .font(.subheadline.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .contentTransition(.numericText())
                         }
-                        ProgressBar(progress: CourseProgress.ratio(watched, max(weekVideos.count, 1)),
-                                    color: TaskType.video.tint)
                     }
                 }
             }
         }
     }
 
-    // MARK: Section de théorie
+    // MARK: Chapitre
 
+    @ViewBuilder
     private func sectionCard(_ section: Int) -> some View {
-        let videos = course.sortedTheoryItems.filter { $0.sectionNumber == section }
-        let watched = videos.filter(\.isWatched).count
-        return Card(title: "Section \(section)",
-                    icon: "rectangle.stack.fill",
-                    trailing: "\(watched)/\(videos.count)") {
-            VStack(spacing: 0) {
-                ForEach(videos) { video in
-                    VideoRow(video: video,
-                             isCurrentWeek: video.plannedWeek == week,
-                             onToggleWatched: { toggleWatched(video) },
-                             onOpen: { selectedVideo = video })
-                    if video.id != videos.last?.id {
-                        Divider().padding(.leading, 56)
+        let all = course.sortedTheoryItems.filter { $0.sectionNumber == section }
+        let items = showsDone ? all : all.filter { !$0.isWatched }
+        let watched = all.filter(\.isWatched).count
+        let title = all.first(where: { !$0.sectionTitle.isEmpty })?.sectionTitle ?? "Chapitre \(section)"
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: Layout.inline) {
+                    MathText(title, font: .subheadline.weight(.semibold))
+                        .lineLimit(2)
+                    Spacer(minLength: Layout.inline)
+                    Text("\(watched)/\(all.count)")
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(watched == all.count ? Color.green.accessibleInk : .secondary)
+                }
+                .padding(.bottom, Layout.inline)
+                VStack(spacing: 0) {
+                    ForEach(items) { video in
+                        VideoRow(video: video,
+                                 isCurrentWeek: video.plannedWeek == week && course.isTermRunning,
+                                 onToggleWatched: { toggleWatched(video) },
+                                 onOpen: { selectedVideo = video })
+                        if video.id != items.last?.id {
+                            Divider().padding(.leading, 44)
+                        }
                     }
                 }
             }
+            .padding(Layout.gutter)
+            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
         }
     }
 
@@ -140,7 +154,7 @@ struct TheoryTabView: View {
     }
 }
 
-/// Ligne de vidéo : coche, numéro, titre, durée. Le reste est dans la feuille.
+/// Ligne de théorie : coche, numéro et titre, ce qu'elle contient.
 struct VideoRow: View {
     let video: TheoryItem
     let isCurrentWeek: Bool
@@ -150,64 +164,52 @@ struct VideoRow: View {
     var body: some View {
         HStack(spacing: 0) {
             CheckCircleButton(isOn: video.isWatched,
-                              tint: TaskType.video.tint,
-                              label: "Marquer \(video.displayNumber) vue",
+                              tint: TaskType.theory.tint,
+                              label: "Marquer \(video.displayNumber) comme faite",
                               action: onToggleWatched)
 
             Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: Layout.tight) {
-                    HStack(spacing: 6) {
-                        Text(video.displayNumber)
-                            .font(.subheadline.weight(.semibold))
-                        if isCurrentWeek {
-                            Pill(text: "cette semaine", color: TaskType.video.tint)
-                        }
-                    }
-                    if !video.title.isEmpty {
-                        Text(video.title)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Layout.micro) {
+                    HStack(spacing: Layout.snug) {
+                        MathText(video.numberAndTitle, font: .subheadline)
+                            .foregroundStyle(video.isWatched ? .secondary : .primary)
                             .lineLimit(2)
+                        if isCurrentWeek {
+                            Pill(text: "S\(video.plannedWeek)", color: TaskType.theory.tint)
+                        }
                     }
-                    HStack(spacing: 10) {
-                        if let watchedAt = video.watchedAt {
-                            IconLabel(icon: "eye.fill",
-                                      text: "Vu \(DateUtils.shortDay.string(from: watchedAt))",
-                                      tint: .green)
+                    if !meta.isEmpty {
+                        HStack(spacing: Layout.snug) {
+                            Image(systemName: video.kind.icon)
+                            Text(meta)
                         }
-                        if let summarizedAt = video.summarizedAt {
-                            IconLabel(icon: "doc.text.fill",
-                                      text: "Résumé \(DateUtils.shortDay.string(from: summarizedAt))",
-                                      tint: .teal)
-                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, Layout.snug)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                // Une lecture ou un chapitre n'a pas de durée : ne pas écrire « 0 min ».
-                if video.hasDuration {
-                    Text(video.durationLabel)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                if video.isSummarized {
-                    Image(systemName: "doc.text.fill")
-                        .font(.caption2)
-                        .foregroundStyle(Color.teal.accessibleMark)
-                }
-            }
-
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
-                .padding(.leading, 8)
+                .padding(.leading, Layout.inline)
         }
-        .padding(.vertical, 2)
+    }
+
+    /// « 3 vidéos · 45 min · résumé », ce qui compte, sans « 0 min ».
+    private var meta: String {
+        var parts: [String] = []
+        if video.videoCount > 1 { parts.append("\(video.videoCount) vidéos") }
+        else if video.videoCount == 1 || video.kind == .video { parts.append("Vidéo") }
+        else { parts.append(video.kind.label) }
+        if video.hasDuration { parts.append(video.durationLabel) }
+        if video.isSummarized { parts.append("résumé") }
+        if video.plannedWeek > 0 && !isCurrentWeek { parts.append("S\(video.plannedWeek)") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -226,11 +228,13 @@ struct VideoDetailSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(video.kind.label) {
+                Section("Théorie") {
                     DetailRow(icon: "number", label: "Numéro", value: video.number, tint: video.kind.tint)
                     if !video.title.isEmpty {
                         DetailRow(icon: "text.alignleft", label: "Titre", value: video.title)
                     }
+                    DetailRow(icon: video.kind.icon, label: "Support",
+                              value: video.videoCount > 1 ? "\(video.videoCount) vidéos" : video.kind.label)
                     if video.hasDuration {
                         DetailRow(icon: "clock", label: "Durée", value: video.durationLabel)
                     }
@@ -240,8 +244,8 @@ struct VideoDetailSheet: View {
                 }
 
                 Section("Suivi") {
-                    DetailRow(icon: "eye.fill",
-                              label: "Vu le",
+                    DetailRow(icon: "checkmark.circle.fill",
+                              label: "Faite le",
                               value: video.watchedAt.map { DateUtils.shortDay.string(from: $0) } ?? "—",
                               tint: .green)
                     DetailRow(icon: "doc.text.fill",
@@ -258,7 +262,7 @@ struct VideoDetailSheet: View {
                         Haptics.tap()
                         try? context.save()
                     } label: {
-                        Label(video.isWatched ? "Annuler le visionnage" : "Marquer comme vue",
+                        Label(video.isWatched ? "Marquer comme à faire" : "Marquer comme faite",
                               systemImage: video.isWatched ? "arrow.uturn.backward" : "checkmark.circle.fill")
                     }
                     .disabled(false)
@@ -290,7 +294,7 @@ struct VideoDetailSheet: View {
                 } header: {
                     Text("Planification")
                 } footer: {
-                    Text("La semaine détermine « à regarder cette semaine » et les pourcentages hebdomadaires.")
+                    Text("La semaine range l'élément dans la progression hebdomadaire.")
                 }
 
                 Section("Résumé") {
@@ -397,7 +401,7 @@ struct AddVideoSheet: View {
                     Text("La semaine sert au calcul « à regarder cette semaine ». Par défaut, la section est le préfixe du numéro (1.4 → section 1).")
                 }
             }
-            .navigationTitle("Nouvel élément de théorie")
+            .navigationTitle("Ajouter de la théorie")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -17,6 +17,12 @@ enum PreviewLaunch {
     /// Avec `-course`, ouvre un onglet de la fiche (`theory`, `exercises`,
     /// `progress`, `agenda`).
     static let courseTabFlag = "-courseTab"
+    /// Ouvre « Importer du contenu », puis la source qui suit (`moodle`,
+    /// `courseware`, `botafogo`) ; avec `-course`, pour ce cours.
+    static let contentImportFlag = "-contentImport"
+    /// Avec `-contentImport botafogo`, lit le polycopié à cet index du catalogue
+    /// et ouvre la relecture (`-botafogoCourse 0`).
+    static let botafogoCourseFlag = "-botafogoCourse"
     static let onboardingStepFlag = "-onboardingStep"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
