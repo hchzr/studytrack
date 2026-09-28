@@ -24,8 +24,10 @@ struct StatsView: View {
     }
 
     private var byTaskType: [(type: TaskType, seconds: Int)] {
-        TaskType.allCases.compactMap { type in
-            let seconds = periodSessions.filter { $0.taskType == type }
+        // Trois catégories et Anki : une ancienne session « Vidéo » compte
+        // dans la théorie, pas dans une ligne à part.
+        TaskType.reportCategories.compactMap { type in
+            let seconds = periodSessions.filter { $0.taskType.canonical == type }
                 .reduce(0) { $0 + $1.durationSeconds }
             return seconds > 0 ? (type, seconds) : nil
         }

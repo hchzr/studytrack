@@ -21,6 +21,16 @@ final class StudySession {
     var exercise: Exercise?
     var theoryItem: TheoryItem?
 
+    /// Provenance d'une session importée (« anki »), vide pour un chrono ou une
+    /// saisie. C'est l'**étiquette** qui distingue le temps Anki : l'étudiant·e
+    /// ne le saisit jamais, l'app le relève dans Anki.
+    var sourceRaw: String = ""
+    /// Clé stable de la session d'origine, pour qu'un second import ne la
+    /// double pas (« anki:Analyse I:2026-09-28:1727512345000 »).
+    var externalKey: String = ""
+
+    var isFromAnki: Bool { sourceRaw == "anki" }
+
     init(id: UUID = UUID(),
          course: Course? = nil,
          taskType: TaskType = .other,

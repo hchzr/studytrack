@@ -59,14 +59,16 @@ enum TaskTypeAppEnum: String, AppEnum {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Type de travail"
 
     static var caseDisplayRepresentations: [TaskTypeAppEnum: DisplayRepresentation] = [
-        .lecture: "Cours (amphi)",
-        .video: "Vidéo",
-        .exercise: "Exercices",
+        // Les anciennes valeurs restent (des raccourcis les ont enregistrées),
+        // nommées d'après la catégorie à laquelle elles comptent désormais.
+        .lecture: "Cours en amphi",
+        .video: "Théorie (vidéo)",
+        .exercise: "Séries",
         .theory: "Théorie",
-        .flashcards: "Flash cards",
-        .summary: "Résumé",
+        .flashcards: "Anki",
+        .summary: "Théorie (résumé)",
         .correction: "Correction",
-        .project: "Projet",
+        .project: "Autre (projet)",
         .other: "Autre"
     ]
 

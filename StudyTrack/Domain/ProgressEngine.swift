@@ -56,6 +56,18 @@ struct WeeklyProgress: Identifiable, Equatable {
         (theoryPercent + exercisePercent + correctionPercent) / 3
     }
     var hasItems: Bool { videoCount > 0 || exerciseCount > 0 }
+
+    /// Numéros des séries planifiées cette semaine (« Série 3 »).
+    var seriesNumbers: [Int] = []
+
+    /// Corrections rapportées aux **exercices de la semaine**, pas aux exercices
+    /// faits : « 2/8 corrigés » se lit comme les deux autres axes, et une semaine
+    /// où rien n'est fait n'affiche pas une correction « à 0 % de 0 ».
+    var correctionOfAllPercent: Double { CourseProgress.ratio(correctedCount, exerciseCount) }
+
+    /// Ce qui reste, tous axes confondus (théorie non vue + exercices non faits).
+    var remainingCount: Int { (videoCount - watchedCount) + (exerciseCount - doneCount) }
+    var isComplete: Bool { hasItems && remainingCount == 0 }
 }
 
 /// Moteur de calcul des pourcentages (fonctions pures, testables).
@@ -101,7 +113,25 @@ enum ProgressEngine {
         w.exerciseCount = exercises.count
         w.doneCount = exercises.filter(\.isDone).count
         w.correctedCount = exercises.filter(\.isCorrected).count
+        w.seriesNumbers = course.series.filter { $0.plannedWeek == week }.map(\.seriesNumber).sorted()
         return w
+    }
+
+    /// Les semaines du semestre **toutes**, de 1 à la dernière — vides comprises.
+    ///
+    /// La progression se lit comme un calendrier : une semaine sans rien de prévu
+    /// est une information (« rien à rattraper en S6 »), pas un trou à cacher. La
+    /// borne est la durée du semestre, étendue si un élément est planifié plus loin.
+    static func semesterWeeks(for course: Course) -> [WeeklyProgress] {
+        let planned = course.theoryItems.map(\.plannedWeek) + course.series.map(\.plannedWeek)
+        let last = max(course.term?.totalWeeks ?? 14, planned.max() ?? 0)
+        guard last > 0 else { return [] }
+        return (1...last).map { weekProgress(for: course, week: $0) }
+    }
+
+    /// Éléments de théorie sans semaine (importés sans calendrier).
+    static func unplannedTheory(for course: Course) -> [TheoryItem] {
+        course.sortedTheoryItems.filter { $0.plannedWeek <= 0 }
     }
 
     /// Toutes les semaines qui contiennent au moins une vidéo ou un exercice.

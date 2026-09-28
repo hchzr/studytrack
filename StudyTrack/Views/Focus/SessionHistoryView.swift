@@ -201,7 +201,8 @@ struct SessionEditSheet: View {
                         }
                     }
                     Picker("Type de travail", selection: $taskType) {
-                        ForEach(TaskType.allCases) { type in
+                        // Une session Anki garde son étiquette ; on ne la choisit pas.
+                        ForEach(taskType == .flashcards ? TaskType.choices + [.flashcards] : TaskType.choices) { type in
                             Label(type.label, systemImage: type.icon).tag(type)
                         }
                     }
@@ -315,7 +316,8 @@ struct SessionEditSheet: View {
 
     private func load() {
         courseID = session.course?.id
-        taskType = session.taskType
+        // Une ancienne session « Vidéo » s'édite comme de la théorie.
+        taskType = session.taskType.canonical
         startedAt = session.startedAt
         minutes = max(1, Int(session.durationSeconds / 60))
         hours = minutes / 60

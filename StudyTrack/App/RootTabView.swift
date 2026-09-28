@@ -45,6 +45,13 @@ struct RootTabView: View {
                 OnboardingView()
             }
         }
+        // L'import de contenu s'ouvre de partout (accueil, cours, onboarding
+        // terminé) : une présentation, portée par la racine.
+        .sheet(item: $router.contentImport) { route in
+            ContentImportView(course: route.courseID.flatMap { id in
+                try? context.fetch(FetchDescriptor<Course>(predicate: #Predicate { $0.id == id })).first
+            })
+        }
         .task {
             // Raccord au lancement : aucune activité d'îlot ne doit survivre à un
             // chrono éteint. Sans ça, une Live Activity laissée par une exécution
@@ -102,6 +109,8 @@ struct RootTabView: View {
                         app.router.selectedTab = .today
                         app.router.pendingImport = shared
                     }
+                    // Le temps passé dans Anki arrive tout seul, étiqueté.
+                    await AnkiReviewSync.syncIfDue(context: context, settings: app.settings)
                 }
             }
         }

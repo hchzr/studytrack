@@ -221,7 +221,7 @@ enum RevisionBuilder {
 
         for theory in course.sortedTheoryItems where !theory.isWatched || !theory.isSummarized {
             items.append(RevisionItem(id: "theory.\(theory.id)",
-                                      label: "\(theory.kind.label) \(theory.number) · \(theory.title)",
+                                      label: "\(theory.displayNumber) · \(theory.title)",
                                       kind: .theory,
                                       week: theory.plannedWeek))
         }

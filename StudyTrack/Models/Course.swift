@@ -44,6 +44,16 @@ final class Course {
     var moodleURLString: String
     var notes: String
 
+    /// Pages d'où le contenu du cours a été importé (Moodle, Courseware,
+    /// Botafogo), une par ligne — pour « Mettre à jour depuis… » sans rechercher
+    /// la page une seconde fois.
+    var contentSourcesRaw: String = ""
+
+    var contentSources: [String] {
+        get { contentSourcesRaw.split(separator: "\n").map(String.init) }
+        set { contentSourcesRaw = newValue.joined(separator: "\n") }
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \TheoryItem.course)
     var theoryItems: [TheoryItem] = []
 

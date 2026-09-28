@@ -154,7 +154,7 @@ struct SearchView: View {
         case .theory:
             if let id = identifier(of: hit) { path.append(SearchRoute.course(id, .theory)) }
         case .exam:
-            if let id = identifier(of: hit) { path.append(SearchRoute.course(id, .agenda)) }
+            if let id = identifier(of: hit) { path.append(SearchRoute.course(id, .exams)) }
         case .session:
             path.append(SearchRoute.history)
         case .task:

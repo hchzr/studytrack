@@ -37,6 +37,8 @@ final class SettingsStore {
         static let ankiEndpoint = "settings.ankiEndpoint"
         static let ankiDeck = "settings.ankiDeck"
         static let ankiModel = "settings.ankiModel"
+        static let ankiLastReviewID = "settings.ankiLastReviewID"
+        static let ankiLastSync = "settings.ankiLastSync"
         static let aiExtractionEnabled = "settings.aiExtractionEnabled"
         static let aiEndpoint = "settings.aiEndpoint"
         static let aiAPIKey = "settings.aiAPIKey"
@@ -134,6 +136,12 @@ final class SettingsStore {
 
     var isAnkiConfigured: Bool { AnkiConnect.normalizeEndpoint(ankiEndpoint) != nil }
 
+    /// Dernière révision Anki déjà relevée (ms depuis 1970) : l'import suivant
+    /// ne demande que les révisions plus récentes.
+    var ankiLastReviewID: Double { didSet { defaults.set(ankiLastReviewID, forKey: Key.ankiLastReviewID) } }
+    /// Dernier relevé réussi du temps Anki.
+    var ankiLastSync: Date? { didSet { defaults.set(ankiLastSync, forKey: Key.ankiLastSync) } }
+
     // MARK: Chrono
     /// Raccourcis du chrono, composés par l'étudiant·e.
     ///
@@ -183,6 +191,8 @@ final class SettingsStore {
         self.ankiEndpoint = defaults.string(forKey: Key.ankiEndpoint) ?? ""
         self.ankiDeck = defaults.string(forKey: Key.ankiDeck) ?? "StudyTrack"
         self.ankiModel = defaults.string(forKey: Key.ankiModel) ?? "Basic"
+        self.ankiLastReviewID = defaults.double(forKey: Key.ankiLastReviewID)
+        self.ankiLastSync = defaults.object(forKey: Key.ankiLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         // Une version intermédiaire proposait un service anonyme aujourd'hui
         // épuisé : on revient au pré-remplissage courant si rien n'a été saisi.

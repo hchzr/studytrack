@@ -217,7 +217,7 @@ struct FocusTimerPanel: View {
 
                     Menu {
                         Picker("Type de travail", selection: taskTypeBinding) {
-                            ForEach(TaskType.allCases) { type in
+                            ForEach(TaskType.choices) { type in
                                 Label(type.label, systemImage: type.icon).tag(type)
                             }
                         }

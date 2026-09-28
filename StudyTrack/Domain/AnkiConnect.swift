@@ -206,7 +206,7 @@ enum AnkiNoteFactory {
     static func theory(_ item: TheoryItem, deck: String, model: String = "Basic") -> AnkiNote {
         let course = item.course?.displayCode ?? ""
         var front = course.isEmpty ? "" : "\(course) — "
-        front += "\(item.kind.label) \(item.number)"
+        front += item.displayNumber
         if !item.title.isEmpty { front += " : \(item.title)" }
 
         var back = item.summaryText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

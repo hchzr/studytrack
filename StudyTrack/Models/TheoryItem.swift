@@ -31,6 +31,16 @@ final class TheoryItem {
     var summaryText: String?
     var urlString: String
 
+    /// Nombre de vidéos **dans** l'élément. Une section de polycopié en ligne
+    /// (Botafogo) ou une leçon de MOOC contient souvent plusieurs vidéos : ce ne
+    /// sont pas des éléments à part, c'est la même théorie à travailler.
+    var videoCount: Int = 0
+    /// Titre du chapitre auquel l'élément appartient (« Suites réelles ») : il
+    /// nomme la section dans la liste, là où « Section 3 » ne disait rien.
+    var sectionTitle: String = ""
+    /// D'où vient l'élément (`ContentSource.rawValue`), vide s'il a été saisi.
+    var sourceRaw: String = ""
+
     init(id: UUID = UUID(),
          course: Course? = nil,
          sectionNumber: Int,
@@ -68,6 +78,10 @@ final class TheoryItem {
     var durationLabel: String { DateUtils.durationLabel(seconds: durationSeconds) }
     var durationMinutes: Int { durationSeconds / 60 }
 
-    /// Libellé : « Vidéo 1.1 », « Chapitre 2.3 »… selon le support.
-    var displayNumber: String { "\(kind.label) \(number)" }
+    /// Libellé : « Théorie 1.1 ». Le support (vidéo, lecture…) est une icône,
+    /// pas une catégorie : tout élément de théorie se nomme de la même façon.
+    var displayNumber: String { "Théorie \(number)" }
+
+    /// « 1.1 · Introduction », ou le numéro seul.
+    var numberAndTitle: String { title.isEmpty ? number : "\(number) · \(title)" }
 }

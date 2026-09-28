@@ -113,7 +113,7 @@ enum SearchIndexBuilder {
         if item.isWatched { detail += " vu" }
         if item.isSummarized { detail += " resume" }
 
-        var parts = ["\(course.displayCode) · \(item.kind.label) \(item.number)"]
+        var parts = ["\(course.displayCode) · \(item.displayNumber)"]
         if item.durationSeconds > 0 {
             parts.append(DateUtils.durationLabel(seconds: item.durationSeconds))
         }
@@ -121,7 +121,7 @@ enum SearchIndexBuilder {
 
         return SearchDocument(id: "theory.\(item.id)",
                               kind: .theory,
-                              title: item.title.isEmpty ? "\(item.kind.label) \(item.number)" : item.title,
+                              title: item.title.isEmpty ? item.displayNumber : item.title,
                               subtitle: parts.joined(separator: " · "),
                               detail: detail,
                               courseCode: course.displayCode,

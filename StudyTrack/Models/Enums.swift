@@ -2,64 +2,80 @@ import SwiftUI
 
 // MARK: - Type de tâche (traçage du temps par sous-catégorie)
 
+/// Ce sur quoi une session a porté.
+///
+/// Le travail d'un cours se range en **trois** catégories — Théorie, Séries,
+/// Correction — et c'est tout ce que l'étudiant·e choisit. Neuf types côte à
+/// côte (« Vidéo », « Théorie », « Résumé », « Cours »…) posaient une question
+/// sans réponse : regarder la vidéo 1.2, est-ce « Vidéo » ou « Théorie » ?
+///
+/// Les anciennes valeurs brutes restent décodables — des sessions, des widgets
+/// et des raccourcis les ont enregistrées — mais `canonical` les replie sur la
+/// catégorie qui compte. `.flashcards` n'est jamais choisi à la main : c'est le
+/// temps passé dans **Anki**, importé tout seul et marqué comme tel.
 enum TaskType: String, Codable, CaseIterable, Identifiable {
     case lecture, video, exercise, theory, flashcards, summary, correction, project, other
 
     var id: String { rawValue }
 
-    var label: String {
+    /// Les seules catégories proposées dans un sélecteur.
+    static let choices: [TaskType] = [.theory, .exercise, .correction, .other]
+
+    /// Les catégories d'un bilan, dans l'ordre d'affichage.
+    static let reportCategories: [TaskType] = [.theory, .exercise, .correction, .flashcards, .lecture, .other]
+
+    /// La catégorie qui compte : une vidéo ou un résumé, c'est de la théorie.
+    var canonical: TaskType {
         switch self {
-        case .lecture: return "Cours"
-        case .video: return "Vidéo"
-        case .exercise: return "Exercices"
+        case .video, .summary, .theory: return .theory
+        case .project: return .other
+        default: return self
+        }
+    }
+
+    var label: String {
+        switch canonical {
+        case .lecture: return "Cours en amphi"
+        case .exercise: return "Séries"
         case .theory: return "Théorie"
-        case .flashcards: return "Flash cards"
-        case .summary: return "Résumé"
+        case .flashcards: return "Anki"
         case .correction: return "Correction"
-        case .project: return "Projet"
-        case .other: return "Autre"
+        default: return "Autre"
         }
     }
 
     var shortLabel: String {
-        switch self {
-        case .lecture: return "Cours"
-        case .video: return "Vidéo"
-        case .exercise: return "Exos"
+        switch canonical {
+        case .lecture: return "Amphi"
+        case .exercise: return "Séries"
         case .theory: return "Théorie"
-        case .flashcards: return "Flash"
-        case .summary: return "Résumé"
+        case .flashcards: return "Anki"
         case .correction: return "Corr."
-        case .project: return "Projet"
-        case .other: return "Autre"
+        default: return "Autre"
         }
     }
 
     var icon: String {
-        switch self {
+        switch canonical {
         case .lecture: return "building.columns.fill"
-        case .video: return "play.rectangle.fill"
-        case .exercise: return "checklist"
+        case .exercise: return "list.number"
         case .theory: return "book.fill"
         case .flashcards: return "rectangle.stack.fill"
-        case .summary: return "doc.text.fill"
         case .correction: return "checkmark.seal.fill"
-        case .project: return "hammer.fill"
-        case .other: return "ellipsis.circle.fill"
+        default: return "ellipsis.circle.fill"
         }
     }
 
+    /// Une teinte par catégorie, jamais vert / orange / rouge : ces trois-là
+    /// portent un verdict (sureté, correction), pas une catégorie.
     var tint: Color {
-        switch self {
-        case .lecture: return .blue
-        case .video: return .purple
-        case .exercise: return .green
-        case .theory: return .orange
+        switch canonical {
+        case .lecture: return .gray
+        case .exercise: return .blue
+        case .theory: return .purple
         case .flashcards: return .pink
-        case .summary: return .teal
-        case .correction: return .mint
-        case .project: return .brown
-        case .other: return .gray
+        case .correction: return .teal
+        default: return .gray
         }
     }
 }
@@ -249,14 +265,9 @@ enum TheoryKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var tint: Color {
-        switch self {
-        case .video: return .purple
-        case .reading: return .brown
-        case .chapter: return .teal
-        case .slides: return .orange
-        }
-    }
+    /// Tous les supports sont de la **théorie** : une seule teinte. Le glyphe
+    /// suffit à distinguer une vidéo d'une lecture.
+    var tint: Color { TaskType.theory.tint }
 
     /// Une durée a-t-elle un sens pour ce support ? Un chapitre sans durée ne
     /// doit pas s'afficher « 0 min ».

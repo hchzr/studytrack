@@ -70,7 +70,7 @@ struct FocusShortcutsEditor: View {
                         }
                     }
                     Picker("Travail", selection: $newType) {
-                        ForEach(TaskType.allCases) { type in
+                        ForEach(TaskType.choices) { type in
                             Label(type.label, systemImage: type.icon).tag(type)
                         }
                     }

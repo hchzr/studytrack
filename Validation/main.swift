@@ -144,8 +144,8 @@ if let projectCourse {
     check(projectCourse.theoryItems.allSatisfy { !$0.hasDuration },
           "ses chapitres n'ont pas de durée inventée")
     if let chapter = projectCourse.theoryItems.first {
-        check(chapter.displayNumber.hasPrefix("Chapitre"),
-              "le libellé suit le support : « \(chapter.displayNumber) »")
+        check(chapter.displayNumber.hasPrefix("Théorie"),
+              "le libellé est celui de la catégorie, pas du support : « \(chapter.displayNumber) »")
         check(chapter.kind.icon != TheoryKind.video.icon,
               "l'icône suit le support")
         check(ProgressEngine.remainingVideos(for: projectCourse, week: chapter.plannedWeek).count == 1,
@@ -841,8 +841,8 @@ let noteCourse = courses.first { $0.code == "CS-250" }!
 let theoryItem = TheoryItem(course: noteCourse, sectionNumber: 1, number: "1.2",
                             title: "Analyse asymptotique")
 let unsentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
-check(unsentTheory.fields["Front"]?.contains("Vidéo 1.2") == true,
-      "le recto porte le support et le numéro — \(unsentTheory.fields["Front"] ?? "-")")
+check(unsentTheory.fields["Front"]?.contains("Théorie 1.2") == true,
+      "le recto porte la catégorie et le numéro — \(unsentTheory.fields["Front"] ?? "-")")
 check(unsentTheory.fields["Back"] == "À résumer.", "sans résumé, le verso invite à résumer")
 check(unsentTheory.tags.contains("à-résumer"), "l'étiquette « à résumer » est posée")
 
@@ -3346,6 +3346,173 @@ do {
     // Le même document lu une seconde fois donne le même résultat : l'import
     // n'a plus rien d'aléatoire côté motifs.
     check(run(PDFFixtures.analyse, filename: "polycopie.pdf").series == analyse.series, "lecture déterministe")
+}
+
+
+print("== Import de contenu (Moodle, Courseware, Botafogo) ==")
+do {
+    let cal = Calendar(identifier: .gregorian)
+    let termStart = cal.date(from: DateComponents(year: 2026, month: 9, day: 7))!
+
+    // Semaines lues dans les titres de section.
+    check(ContentDraftBuilder.week(fromTitle: "Semaine 3", termStart: nil) == 3, "« Semaine 3 » → S3")
+    check(ContentDraftBuilder.week(fromTitle: "Week 12 - Revision", termStart: nil) == 12, "« Week 12 » → S12")
+    check(ContentDraftBuilder.week(fromTitle: "S4 : intégrales", termStart: nil) == 4, "« S4 : … » → S4")
+    check(ContentDraftBuilder.week(fromTitle: "21 septembre - 27 septembre", termStart: termStart, calendar: cal) == 3,
+          "section Moodle datée « 21 septembre - 27 septembre » → S3")
+    check(ContentDraftBuilder.week(fromTitle: "5 October - 11 October", termStart: termStart, calendar: cal) == 5,
+          "section datée en anglais → S5")
+    check(ContentDraftBuilder.week(fromTitle: "Généralités", termStart: termStart, calendar: cal) == nil,
+          "une section sans semaine n'en invente pas")
+    check(ContentDraftBuilder.week(fromTitle: "Séries numériques", termStart: nil) == nil,
+          "« Séries » n'est pas « S… » + numéro")
+
+    // Numéros.
+    check(ContentDraftBuilder.seriesNumber(in: "Série 3 - énoncé") == 3, "« Série 3 - énoncé » → 3")
+    check(ContentDraftBuilder.seriesNumber(in: "Serie_07.pdf") == 7, "« Serie_07 » → 7")
+    check(ContentDraftBuilder.seriesNumber(in: "Exercise set 4") == 4, "« Exercise set 4 » → 4")
+    check(ContentDraftBuilder.leadingNumber(in: "3.2 Limite: a_n\\to L")?.number == "3.2", "« 3.2 Limite » → 3.2")
+    check(ContentDraftBuilder.leadingNumber(in: "II.4 Trigonométrie")?.number == "II.4", "« II.4 » gardé tel quel")
+    check(ContentDraftBuilder.leadingNumber(in: "Chapitre 5 : Séries")?.number == "5", "« Chapitre 5 : … » → 5")
+    check(ContentDraftBuilder.leadingNumber(in: "2025 Examen blanc") == nil, "une année n'est pas un chapitre")
+    check(ContentDraftBuilder.cleanTitle("Nombres: \\(\\mathbb{R}\\)") == "Nombres: \\mathbb{R}",
+          "délimiteurs LaTeX retirés, la formule reste pour MathText")
+
+    // Classement.
+    func kind(_ title: String, _ type: String = "resource", _ source: ContentSource = .moodle) -> ContentItemKind {
+        ContentDraftBuilder.classify(ScrapedItem(title: title, type: type), title: title, source: source)
+    }
+    check(kind("Série 3") == .series, "« Série 3 » est une série")
+    check(kind("Corrigé série 3") == .ignore, "un corrigé n'est pas une série de plus")
+    check(kind("Annonces", "forum") == .ignore, "le forum d'annonces s'ignore")
+    check(kind("Slides chapitre 2") == .theory, "des diapos sont de la théorie")
+    check(kind("Vidéo 2.1 : dérivées", "kalvidres") == .theory, "une vidéo est de la théorie")
+    check(kind("Séries numériques", "resource") == .theory, "« Séries numériques » (matière) n'est pas une série d'exercices")
+    check(kind("Quiz 1", "quiz") == .ignore, "un quiz s'ignore par défaut")
+    check(kind("5.3 Séries et critères", "section", .botafogo) == .theory, "Botafogo n'a que de la théorie")
+
+    // Une page Moodle au format hebdomadaire.
+    let moodle = ScrapedCourse(source: "moodle", title: "Analyse I (MATH-101)", url: "https://moodle.epfl.ch/course/view.php?id=1", sections: [
+        ScrapedSection(title: "Généralités", items: [ScrapedItem(title: "Annonces", type: "forum")]),
+        ScrapedSection(title: "7 septembre - 13 septembre", items: [
+            ScrapedItem(title: "Vidéo 1.1 Introduction", url: "https://mediaspace.epfl.ch/1", type: "kalvidres"),
+            ScrapedItem(title: "Polycopié chapitre 1 Fichier", url: "https://moodle.epfl.ch/f/1", type: "resource"),
+            ScrapedItem(title: "Série 1", url: "https://moodle.epfl.ch/s/1", type: "resource"),
+            ScrapedItem(title: "Série 1 (version imprimable)", url: "https://moodle.epfl.ch/s/1b", type: "resource"),
+            ScrapedItem(title: "Corrigé 1", url: "https://moodle.epfl.ch/c/1", type: "resource")
+        ]),
+        ScrapedSection(title: "14 septembre - 20 septembre", items: [
+            ScrapedItem(title: "Série 2", url: "https://moodle.epfl.ch/s/2", type: "resource")
+        ])
+    ])
+    let draft = ContentDraftBuilder.draft(from: moodle, source: .moodle, termStart: termStart, calendar: cal)
+    check(draft.sections.count == 3, "trois sections lues (\(draft.sections.count))")
+    check(draft.sections.first?.isIncluded == false, "« Généralités » (que du forum) est décochée")
+    check(draft.sections[1].week == 1 && !draft.sections[1].weekIsInferred, "la 1ʳᵉ semaine datée tombe en S1, lue sur la page")
+    check(draft.sections[2].week == 2, "la 2ᵉ en S2")
+    check(draft.seriesCount == 2, "deux séries, la version imprimable fusionnée (\(draft.seriesCount))")
+    check(draft.sections[1].items.first?.theoryKind == .video && draft.sections[1].items.first?.videoCount == 1,
+          "la vidéo MediaSpace compte comme une vidéo de théorie")
+    check(draft.sections[1].items.first?.number == "1.1", "le numéro de la vidéo est lu dans son titre")
+    check(draft.sections[1].items.contains { $0.title == "Polycopié chapitre 1" }, "le suffixe « Fichier » de Moodle est retiré")
+
+    // Écriture : ajoute, met à jour, ne supprime rien.
+    let importCourse = Course(code: "MATH-101", name: "Analyse I")
+    context.insert(importCourse)
+    let first = ContentDraftWriter.apply(draft, to: importCourse, context: context)
+    check(first.theoryAdded == 2 && first.seriesAdded == 2, "import : 2 théorie + 2 séries — \(first.message)")
+    check(importCourse.series.first { $0.seriesNumber == 2 }?.plannedWeek == 2, "la série 2 est planifiée en S2")
+    importCourse.theoryItems.first { $0.number == "1.1" }?.watchedAt = Date()
+    var edited = draft
+    edited.sections[2].week = 3
+    let second = ContentDraftWriter.apply(edited, to: importCourse, context: context)
+    check(second.theoryAdded == 0 && second.seriesAdded == 0, "réimport : rien en double")
+    check(importCourse.theoryItems.first { $0.number == "1.1" }?.isWatched == true, "réimport : l'avancement est gardé")
+    check(importCourse.series.first { $0.seriesNumber == 2 }?.plannedWeek == 3, "réimport : la semaine corrigée est appliquée")
+    check(importCourse.contentSources == ["https://moodle.epfl.ch/course/view.php?id=1"], "la page source est retenue, une fois")
+
+    // Sans semaine sur la page : une section par semaine, proposée.
+    let flat = ScrapedCourse(source: "courseware", title: "MOOC", url: "", sections: [
+        ScrapedSection(title: "Introduction", items: [ScrapedItem(title: "Bienvenue", type: "sequential")]),
+        ScrapedSection(title: "Module A", items: [ScrapedItem(title: "Leçon", type: "sequential", videoCount: 3)])
+    ])
+    let flatDraft = ContentDraftBuilder.draft(from: flat, source: .courseware, termStart: nil)
+    check(flatDraft.sections.map(\.week) == [1, 2] && flatDraft.sections.allSatisfy(\.weekIsInferred),
+          "semaines proposées dans l'ordre et marquées comme supposées")
+    check(flatDraft.videoCount == 3, "les vidéos d'une leçon de MOOC sont comptées (\(flatDraft.videoCount))")
+
+    // Botafogo : table des matières et vidéos d'une section.
+    let toc = """
+    <title>Analyse 1 | S. Friedli (EPFL)</title>
+    <li class="had-nav-toplevel">
+    <a href="#this-is-preface" data-bs-toggle="collapse" aria-expanded="false" >I. Préface</a>
+     <ul class="had-nav-secondlevel collapse" id="this-is-preface">
+      <li class="had-nav-link-secondlevel" id="a"><a href="resources/sections/m_intro_objectifs.html">I.1 Un cours d'Analyse 1</a></li>
+     </ul>
+    <li class="had-nav-toplevel">
+    <a href="#chap-nombres-reels" data-bs-toggle="collapse" aria-expanded="false" >1. Nombres: \\(\\mathbb{R}\\)</a>
+     <ul class="had-nav-secondlevel collapse" id="chap-nombres-reels">
+    <li class="had-pdf-link"><a href="resources/pdfschapitres/chap-nombres-reels.pdf" target="_blank" >PDF du Chapitre</a>
+      <li class="had-nav-link-secondlevel" id="b"><a href="resources/sections/m_reels_intro.html">1.1 Introduction</a></li>
+      <li class="had-nav-link-secondlevel" id="c"><a href="resources/sections/m_reels_R_est_un_corps.html">1.2 Règles de calcul: \\(+,-,\\cdot,\\div\\)</a></li>
+     </ul>
+    """
+    let base = URL(string: "https://botafogo.epfl.ch/analyse-1/")!
+    let tocPage = BotafogoParser.parseTOC(html: toc, baseURL: base)
+    check(tocPage.title == "Analyse 1", "titre du polycopié — \(tocPage.title)")
+    check(tocPage.sections.count == 2 && tocPage.sections[1].items.count == 2,
+          "deux chapitres, le PDF du chapitre n'est pas un élément")
+    check(tocPage.sections[1].items.first?.url == "https://botafogo.epfl.ch/analyse-1/resources/sections/m_reels_intro.html",
+          "adresse de section résolue")
+    let botaDraft = ContentDraftBuilder.draft(from: tocPage, source: .botafogo, termStart: nil)
+    check(botaDraft.sections.first?.isIncluded == false, "la préface (I.) est décochée")
+    check(botaDraft.sections[1].week == 1, "le chapitre 1 est proposé en S1")
+    check(botaDraft.sections[1].items.map(\.number) == ["1.1", "1.2"], "numéros du polycopié gardés")
+    let sectionHTML = """
+    <div class="video">
+     <a class="video-button" data-bs-toggle="collapse" href="#IDVID-x" role="button">Suites qui tendent vers zéro</a>
+     <div class="collapse" id="IDVID-x"><video class="video-plyr" playsinline controls></video></div>
+    </div>
+    <div class="anim-video"><video class="anim-video-plyr" preload="none" playsinline></video></div>
+    """
+    check(BotafogoParser.videoTitles(inSection: sectionHTML) == ["Suites qui tendent vers zéro"],
+          "une vidéo de cours comptée, l'animation ignorée")
+    let home = """
+    <li><span class="link-description">Mon cours d'analyse:</span>
+    <a href="/analyse-1/" class="button-link">Version EN LIGNE</a></li>
+    """
+    let catalog = BotafogoParser.catalog(html: home, baseURL: URL(string: "https://botafogo.epfl.ch/")!)
+    check(catalog.first?.title == "Mon cours d'analyse" && catalog.first?.url.absoluteString == "https://botafogo.epfl.ch/analyse-1/",
+          "catalogue de Botafogo lu")
+
+    // Catégories : trois, plus Anki importé.
+    check(TaskType.choices == [.theory, .exercise, .correction, .other], "trois catégories choisissables, plus « Autre »")
+    check(TaskType.video.canonical == .theory && TaskType.summary.canonical == .theory,
+          "une vidéo et un résumé comptent comme de la théorie")
+    check(TaskType.flashcards.label == "Anki", "le temps Anki porte son étiquette")
+}
+
+
+print("== Temps Anki relevé automatiquement ==")
+do {
+    let raw = #"{"result": [[1727510000000, 1, -1, 3, 1, 0, 2500, 20000, 1], [1727510060000, 2, -1, 3, 1, 0, 2500, 45000, 1], [1727513000000, 3, -1, 3, 1, 0, 2500, 70000, 1]], "error": null}"#
+    let parsed = AnkiReviewImport.reviews(from: ankiOutcome(raw), deck: "EPFL::MATH-101 Analyse I")
+    check(parsed.count == 3 && parsed[1].durationMs == 45000, "révisions lues dans la réponse de cardReviews")
+    let drafts = AnkiReviewImport.sessions(from: parsed)
+    check(drafts.count == 2, "deux sessions : 49 min d'écart coupent la série (\(drafts.count))")
+    check(drafts.first?.seconds == 65 && drafts.first?.reviewCount == 2,
+          "le temps est la somme des réponses, pas l'écart entre cartes")
+    check(drafts.last?.seconds == 70, "une session d'une carte longue reste comptée")
+    let short = AnkiReviewImport.sessions(from: [AnkiReview(id: 1, durationMs: 8000, deck: "X")])
+    check(short.isEmpty, "une carte de 8 s n'est pas une session")
+    let dup = parsed + parsed.map { AnkiReview(id: $0.id, durationMs: $0.durationMs, deck: "EPFL") }
+    check(AnkiReviewImport.sessions(from: dup).allSatisfy { $0.deck == "EPFL::MATH-101 Analyse I" },
+          "une révision vue dans le paquet parent n'est comptée qu'une fois, au sous-paquet")
+    let keys = [(code: "MATH-101", shortName: "Ana I", name: "Analyse I"),
+                (code: "CS-250", shortName: "", name: "Algorithms I")]
+    check(AnkiReviewImport.courseIndex(forDeck: "EPFL::MATH-101 Analyse I", courses: keys) == 0, "paquet rattaché par code")
+    check(AnkiReviewImport.courseIndex(forDeck: "Algorithms I", courses: keys) == 1, "paquet rattaché par nom")
+    check(AnkiReviewImport.courseIndex(forDeck: "Japonais", courses: keys) == nil, "paquet sans cours : pas d'attribution au hasard")
 }
 
 if CommandLine.arguments.contains("--bench") {

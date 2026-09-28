@@ -45,7 +45,7 @@ struct FocusJournalPanel: View {
             } else {
                 Card(title: "Répartition", icon: "chart.bar.fill") {
                     VStack(alignment: .leading, spacing: Layout.block) {
-                        ForEach(TaskType.allCases) { type in
+                        ForEach(TaskType.choices) { type in
                             if let items = byType[type], !items.isEmpty {
                                 let seconds = items.reduce(0) { $0 + $1.durationSeconds }
                                 LabeledProgress(title: type.label,
@@ -189,7 +189,7 @@ struct ManualSessionSheet: View {
                         }
                     }
                     Picker("Type", selection: $taskType) {
-                        ForEach(TaskType.allCases) { type in
+                        ForEach(TaskType.choices) { type in
                             Label(type.label, systemImage: type.icon).tag(type)
                         }
                     }

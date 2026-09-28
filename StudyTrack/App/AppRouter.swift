@@ -67,6 +67,31 @@ final class AppRouter {
     }
     var courseRoute: CourseRoute?
 
+    /// L'agenda à ouvrir : un jour (« Ta journée » mène à aujourd'hui) et, au
+    /// besoin, un cours (les séances d'un cours s'y lisent, filtrées).
+    struct AgendaRoute: Equatable {
+        var day: Date
+        var courseID: UUID?
+    }
+    var agendaRoute: AgendaRoute?
+
+    func openAgenda(day: Date = Date(), courseID: UUID? = nil) {
+        agendaRoute = AgendaRoute(day: day, courseID: courseID)
+        selectedTab = .agenda
+    }
+
+    /// L'import de contenu (Moodle, Courseware, Botafogo), ouvert depuis
+    /// n'importe quel onglet ; `nil` dans la route = choisir le cours à la relecture.
+    struct ImportRoute: Identifiable, Equatable {
+        let id = UUID()
+        var courseID: UUID?
+    }
+    var contentImport: ImportRoute?
+
+    func openContentImport(courseID: UUID? = nil) {
+        contentImport = ImportRoute(courseID: courseID)
+    }
+
     func openCourse(_ id: UUID, section: CourseDetailView.Section = .exercises) {
         selectedTab = .courses
         courseRoute = CourseRoute(id: id, section: section)

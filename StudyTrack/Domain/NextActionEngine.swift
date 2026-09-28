@@ -110,7 +110,7 @@ enum NextActionEngine {
                            courseID: course.id, courseCode: course.displayCode, colorHex: course.colorHex,
                            title: "Réviser · \(exam.title.isEmpty ? exam.kind.label : exam.title)",
                            detail: "\(exam.kind.label) \(relativeDay(exam.date, now: now))",
-                           taskType: .summary, targetID: nil))
+                           taskType: .theory, targetID: nil))
         }
 
         // 4. Le reste, dans l'ordre du planificateur.
