@@ -268,7 +268,7 @@ enum SeriesAIExtractor {
     /// garde titres, retraits et l'indice de série. Le préparer une seconde fois
     /// le ramènerait à un texte aplati.
     static func extract(prepared: String, pageImages: [Data] = [], seriesHint: Int? = nil,
-                        settings: SettingsStore) async throws -> (series: [DetectedSeries], source: SeriesExtractionSource) {
+                        language: String? = nil, settings: SettingsStore) async throws -> (series: [DetectedSeries], source: SeriesExtractionSource) {
         let engines = chain(settings)
         guard !engines.isEmpty else { throw ExtractionError.unavailable }
         var lastError: Error = ExtractionError.emptyAnswer
@@ -286,7 +286,8 @@ enum SeriesAIExtractor {
                     // sous-questions. Le texte reste le repli, dans le même maillon.
                     if !pageImages.isEmpty {
                         do {
-                            let seen = try await extractSharedVision(pageImages, text: prepared, seriesHint: seriesHint)
+                            let seen = try await extractSharedVision(pageImages, text: prepared, seriesHint: seriesHint,
+                                                                   language: language)
                             if !seen.isEmpty { return (seen, .vision) }
                         } catch {
                             if Task.isCancelled { throw error }
@@ -320,9 +321,13 @@ enum SeriesAIExtractor {
     /// Le texte extrait part avec les images : ses numéros et son vocabulaire
     /// sont exacts, ses formules non — le modèle prend l'un et l'autre où ils sont
     /// fiables.
-    private static func extractSharedVision(_ pages: [Data], text: String, seriesHint: Int?) async throws -> [DetectedSeries] {
+    private static func extractSharedVision(_ pages: [Data], text: String, seriesHint: Int?,
+                                            language: String?) async throws -> [DetectedSeries] {
         var body: [String: Any] = ["images": pages.map { $0.base64EncodedString() }, "text": text]
         if let seriesHint { body["seriesHint"] = seriesHint }
+        // Le texte n'accompagne pas toujours les images (Groq le retire faute de
+        // quota) : la langue voyage donc à part.
+        if let language { body["language"] = language }
         return try await callShared(body, timeout: 150)
     }
 
@@ -449,7 +454,7 @@ struct GeneratedSeriesList {
                       seen.insert(number).inserted else { continue }
                 let title = exercise.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 exercises.append(DetectedExercise(number: number,
-                                                  title: SeriesPDFParser.looksLikeTitle(title) ? title : "",
+                                                  title: SeriesPDFParser.looksLikeGeneratedTitle(title) ? title : "",
                                                   isBonus: exercise.isBonus))
             }
             exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }

@@ -3278,6 +3278,71 @@ do {
     check(SeriesAIParsing.merge(heuristic: local, ai: model).first?.exercises.first?.subQuestions.count == 2,
           "questions lues dans le PDF préférées à celles du modèle")
 
+    // PHYS-101(en) : titres « 1. Rotating space station » dont PDFKit ne voit pas
+    // le gras (tout sort en corps 10), questions « 1. » décalées de 12 pt.
+    let phys: [[FixtureLine]] = [[
+        FixtureLine(text: "Problem Set 4", size: 20),
+        FixtureLine(text: "1. Rotating space station"),
+        FixtureLine(text: "In order to create an Earth-like environment for its inhabitants, a station is rotated."),
+        FixtureLine(text: "1. Find the angular speed required for the centripetal acceleration to equal g.", indent: 12),
+        FixtureLine(text: "2. Express the period of rotation T in terms of R and g.", indent: 12),
+        FixtureLine(text: "2. Circular motion of Earth"),
+        FixtureLine(text: "Earth is spinning about its axis with a period of 23 hours 56 min."),
+        FixtureLine(text: "1. Find the velocity of a person at EPFL.", indent: 12),
+        FixtureLine(text: "2. Find the person's centripetal acceleration.", indent: 12),
+        FixtureLine(text: "3. Find the error: Sliding block"),
+        FixtureLine(text: "This looks like the solution to the problem, but it contains one or more errors."),
+    ]]
+    let physics = run(phys, filename: "PS4.pdf")
+    let physSeries = physics.series.first
+    check(physSeries?.exercises.map(\.number) == ["4.1", "4.2", "4.3"],
+          "titres numérotés sur la marge, sans gras visible — \(physSeries?.exercises.map(\.number) ?? [])")
+    check(physSeries?.exercises.allSatisfy(\.isConfident) == true, "une suite 1, 2, 3 sur la marge est un repère sûr")
+    check(physSeries?.exercises.first?.subQuestions.map(\.label) == ["1", "2"],
+          "les « 1. » décalés sont des questions — \(physSeries?.exercises.first?.subQuestions.map(\.label) ?? [])")
+    check(physSeries?.exercises.first?.title == "Rotating space station", "intitulé anglais lu tel quel")
+    check(SeriesDocumentInference.languageName(of: physics.lines.map(\.text).joined(separator: "\n")) == "anglais",
+          "langue du document : anglais")
+    check(SeriesAIParsing.prepareLayout(physics.lines, seriesHint: 4, language: "anglais").contains("ne traduis rien"),
+          "la langue est dite au modèle")
+
+    // Un modèle qui traduit ou décale ses exercices est corrigé par le PDF.
+    let shifted = [DetectedSeries(number: 4, title: "", exercises: [
+        DetectedExercise(number: "4.1", title: "Station spatiale en rotation", isBonus: false),
+        DetectedExercise(number: "4.2", title: "Mouvement circulaire", isBonus: false),
+        DetectedExercise(number: "4.3", title: "Trouver l'erreur", isBonus: false),
+        DetectedExercise(number: "4.4", title: "Question promue", isBonus: false)])]
+    let fixed = SeriesAIParsing.merge(heuristic: physics.series, ai: shifted, preferredSeries: 4).first?.exercises ?? []
+    check(fixed.map(\.number) == ["4.1", "4.2", "4.3"],
+          "un exercice inventé hors d'une numérotation complète est écarté — \(fixed.map(\.number))")
+    check(fixed.first?.title == "Rotating space station", "l'intitulé imprimé l'emporte sur la traduction du modèle")
+
+    // Un modèle de vision qui saute une colonne ne fait pas perdre de questions.
+    let sixLocal = [DetectedSeries(number: 4, title: "", exercises: [DetectedExercise(
+        number: "4.8", title: "", isBonus: false,
+        subQuestions: (1...6).map { DetectedSubQuestion(label: String($0), text: "texte") })])]
+    let threeSeen = [DetectedSeries(number: 4, title: "", exercises: [DetectedExercise(
+        number: "4.8", title: "", isBonus: false,
+        subQuestions: (1...3).map { DetectedSubQuestion(label: String($0), text: "b_n = \\log n") })])]
+    let recovered = SeriesAIParsing.merge(heuristic: sixLocal, ai: threeSeen, aiReadsLayout: true)
+        .first?.exercises.first?.subQuestions ?? []
+    check(recovered.map(\.label) == ["1", "2", "3", "4", "5", "6"],
+          "questions oubliées par la vision rendues — \(recovered.map(\.label))")
+    check(recovered.first?.text == "b_n = \\log n", "le texte lu par le modèle est gardé")
+
+    // Numéros du modèle : les tirets séparent, ils ne collent pas.
+    check(SeriesAIParsing.normalizeNumber("4-3", series: 4) == "4.3", "« 4-3 » → 4.3 (et non 4.43)")
+    check(SeriesAIParsing.normalizeNumber("Ex-04-07", series: 4) == "4.7", "« Ex-04-07 » → 4.7")
+    check(SeriesAIParsing.normalizeNumber("7", series: 4) == "4.7", "« 7 » → 4.7")
+    check(SeriesAIParsing.normalizeNumber("4.10", series: 4) == "4.10", "« 4.10 » reste")
+
+    // Intitulés du modèle : un verbe est permis, un énoncé non.
+    check(SeriesPDFParser.looksLikeGeneratedTitle("Calculer les sommes"), "« Calculer les sommes » est un titre de modèle")
+    check(SeriesPDFParser.looksLikeGeneratedTitle("Find the error: Sliding block"), "titre imprimé commençant par un verbe gardé")
+    check(!SeriesPDFParser.looksLikeGeneratedTitle("Soit f une fonction continue"), "« Soit f… » reste un énoncé")
+    check(!SeriesPDFParser.looksLikeGeneratedTitle("Montrer que la suite est bornée."), "une phrase ponctuée reste un énoncé")
+    check(!SeriesPDFParser.looksLikeGeneratedTitle("Ex-04-03"), "le numéro seul n'est pas un titre")
+
     // Le même document lu une seconde fois donne le même résultat : l'import
     // n'a plus rien d'aléatoire côté motifs.
     check(run(PDFFixtures.analyse, filename: "polycopie.pdf").series == analyse.series, "lecture déterministe")

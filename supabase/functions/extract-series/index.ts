@@ -44,15 +44,16 @@ const INSTRUCTIONS = `Tu extrais la structure d'une série d'exercices depuis le
 Réponds UNIQUEMENT par un objet JSON :
 {"series":[{"number":2,"title":"Sommes","exercises":[{"number":"2.1","title":"Comparer des bornes","isBonus":false,"questions":["1","2"]}]}]}
 
-- Langue : les titres dans la langue du PDF.
+- Langue : les titres dans la langue du PDF (« [Langue du document : …] » la donne). Ne traduis JAMAIS : un PDF anglais donne des titres anglais, même si cette consigne est en français.
 - « exercises » = les EXERCICES, jamais les questions. Un exercice = un numéro du polycopié.
 - Format du texte : « # » en début de ligne marque un TITRE du PDF (plus gros ou en gras) ; les espaces de tête reproduisent le RETRAIT réel ; « --- page N --- » sépare les pages ; « [Indice : … série N] » donne le numéro de série lu dans l'en-tête ou le nom du fichier — utilise-le. Une ligne d'en-tête répétée à chaque page n'est pas un exercice.
+- Numéros : recopie le numéro IMPRIMÉ de chaque exercice (« Ex-04-07 » → « 4.7 », « 3. Banked turn » → « 4.3 » dans la série 4). Ne renumérote pas, ne saute aucun exercice, et ne promeus jamais une question (« 1. Find … », décalée) en exercice.
 - L'INDENTATION est le signal principal. Des numéros alignés au même niveau sont des EXERCICES, même sous un titre de section commun. Des numéros **décalés vers la droite** sous un numéro d'exercice sont ses QUESTIONS.
 - Exemple : un numéro qui se termine par « … telle que : » puis, plus à droite, « 1. … ; 2. … » → cet exercice, avec deux questions. Les numéros voisins, alignés à gauche, restent des exercices.
 - Autre cas : « Calculer : » puis « 1. la somme … ; 2. la somme … » au même niveau → UN exercice dont ces numéros sont les questions, parce qu'ils suivent une introduction terminée par deux points et se présentent comme des fragments.
 - « questions » ne contient que les étiquettes, en texte court : « 1 », « 2 », « a », « ii ». Jamais l'énoncé, jamais de formule. Omets « questions » s'il n'y en a qu'une.
 - « number » de série est un entier (« Série 02a » → 2). Numéro d'exercice : « série.exercice », même si le PDF recommence à 1 dans chaque section. Sans numéro, prends le suivant dans l'ordre. N'invente aucun exercice.
-- « title » toujours rempli, et **court** : 2 à 6 mots, jamais une phrase, jamais le nom du cours. Reprends l'intitulé du PDF s'il en donne un. Sinon nomme la tâche toi-même, à partir du titre de section ou de l'objet (« Comparer des bornes supérieures », « Somme des parties entières »). **Ne recopie jamais l'énoncé** : il commence par un verbe à l'infinitif ou à l'impératif et se termine par un point, ce n'est pas un titre.
+- « title » toujours rempli, et **court** : 2 à 6 mots, jamais une phrase, jamais le nom du cours. Si le PDF imprime un intitulé à côté du numéro (« 3. Banked turn »), recopie-le TEL QUEL, sans le traduire ni le reformuler. Sinon nomme la tâche toi-même, à partir du titre de section ou de l'objet (« Comparer des bornes supérieures », « Somme des parties entières »). **Ne recopie jamais l'énoncé** : il commence par un verbe à l'infinitif ou à l'impératif et se termine par un point, ce n'est pas un titre.
 - « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
 - Aucune série : {"series":[]}.`;
 
@@ -68,7 +69,8 @@ Réponds UNIQUEMENT par un objet JSON :
 {"series":[{"number":3,"title":"Suites","exercises":[{"number":"3.1","title":"Ensembles d'indices","statement":"Lire sur les graphes de (x_n) et (y_n) des ensembles d'indices et un rang N","isBonus":false,"page":1,"parts":[{"label":"1","kind":"question","text":"Suite (x_n) du graphe","children":[{"label":"a","kind":"question","text":"A = {n : x_n < 0}"}]}]},{"number":"3.2","title":"Monotonie d'une suite homographique","statement":"Montrer que x_n = \\\\frac{an+b}{cn+d} est croissante ⇔ ad − bc ≥ 0","isBonus":false,"page":2}]}]}
 
 Règles :
-- « exercises » = les EXERCICES (Ex-03-01, Exercice 2…). « number » = « série.exercice ».
+- LANGUE : écris « title », « statement » et « text » dans la langue des pages. Ne traduis JAMAIS — une page anglaise donne des champs anglais, même si cette consigne est en français.
+- « exercises » = les EXERCICES (Ex-03-01, Exercice 2, « 3. Banked turn » en gras…). « number » = « série.exercice », avec le numéro IMPRIMÉ : ne renumérote pas, ne saute rien, et une question numérotée « 1. » sous un exercice n'est jamais un exercice.
 - « parts » = le travail à cocher dans l'exercice, sur DEUX niveaux au plus : une question numérotée « 1) » avec ses points « (a) (b) » dans « children ».
 - Deux colonnes (« 1) … 3) » sur une ligne, « 2) … 4) » sur la suivante) : range par numéro, 1, 2, 3, 4.
 - Plusieurs questions sur une même ligne (« 1) … 2) … 3) ») : ce sont des questions séparées.
@@ -78,8 +80,8 @@ Règles :
 - Un exercice sans question numérotée : omets « parts ».
 - « text » : court (≤ 80 caractères), dans la langue du PDF. N'invente rien.
 - Formules (dans « text » et « statement ») : LaTeX léger SANS $ : indices « x_n », « a_{2k+1} », exposants « n^2 », fractions « \\frac{an+b}{cn+d} », racines « \\sqrt{n^2+2} », « \\lim_{n \\to \\infty} », et les symboles en Unicode (≤ ≥ ≠ ∈ ∞ ℕ ℝ ε ℓ ⇔). Dans le JSON, chaque barre oblique inverse est doublée (« \\\\frac »).
-- « title » : 2 à 6 mots qui nomment la tâche, jamais l'énoncé recopié.
-- « statement » : TOUJOURS rempli, ≤ 140 caractères : ce que l'exercice demande de faire, verbe à l'infinitif, avec les objets mathématiques essentiels (« Montrer que x_n = \\frac{an+b}{cn+d} est croissante ⇔ ad − bc ≥ 0 »). C'est la seule description d'un exercice sans questions : ne le laisse jamais vide.
+- « title » : l'intitulé imprimé à côté du numéro, recopié TEL QUEL s'il existe ; sinon 2 à 6 mots qui nomment la tâche, jamais l'énoncé recopié.
+- « statement » : TOUJOURS rempli, ≤ 140 caractères : ce que l'exercice demande de faire (en français : verbe à l'infinitif ; en anglais : à l'impératif), avec les objets mathématiques essentiels (« Montrer que x_n = \\frac{an+b}{cn+d} est croissante ⇔ ad − bc ≥ 0 »). C'est la seule description d'un exercice sans questions : ne le laisse jamais vide.
 - Si un « Texte extrait » est fourni, sers-t'en pour les numéros et le vocabulaire exacts ; ses formules sont souvent abîmées (symboles ≤ ≥ perdus, fractions éclatées) : pour les formules, fie-toi à l'image.
 - « page » : la page (1, 2, …) où l'exercice commence, dans l'ordre des images reçues.
 - « isBonus » : true si bonus, facultatif, optionnel ou étoilé.
@@ -132,6 +134,7 @@ Deno.serve(async (request) => {
   let text = "";
   let images: string[] = [];
   let seriesHint: number | null = null;
+  let language: string | null = null;
   let listOnly = false;
   try {
     const body = await request.json();
@@ -140,6 +143,9 @@ Deno.serve(async (request) => {
       ? body.images.filter((image: unknown) => typeof image === "string" && image.length > 0)
       : [];
     seriesHint = typeof body?.seriesHint === "number" ? body.seriesHint : null;
+    // Un nom de langue court (« anglais »), jamais un texte libre injecté tel quel.
+    language = typeof body?.language === "string" && /^[\p{L} ]{2,20}$/u.test(body.language.trim())
+      ? body.language.trim() : null;
     listOnly = body?.listModels === true;
   } catch {
     return json({ error: "corps JSON attendu : {\"text\": …} ou {\"images\": [...]}" }, 400);
@@ -214,7 +220,7 @@ Deno.serve(async (request) => {
             if (controllers[slot].signal.aborted) throw new Error("annulé");
           }
           const start = Date.now();
-          const outcome = await readWith(candidate, pages, first, count, seriesHint, text, controllers[slot].signal);
+          const outcome = await readWith(candidate, pages, first, count, seriesHint, language, text, controllers[slot].signal);
           const ms = Date.now() - start;
           if ("error" in outcome) {
             if (!controllers[slot].signal.aborted) {
@@ -261,13 +267,17 @@ Deno.serve(async (request) => {
   // nettement mieux une consigne placée juste avant de répondre qu'une consigne
   // noyée dans un long texte système. Sans lui, un PDF français ressortait avec
   // des titres anglais.
+  //
+  // La langue n'est **plus écrite en dur** : « (ici, en français) » faisait
+  // traduire les séries anglaises (PHYS-101(en)). L'app la détecte et l'envoie.
   const messages = [
     { role: "system", content: INSTRUCTIONS },
     {
       role: "user",
       content: `Texte du PDF :\n\n${text}\n\n`
         + "Rappel : tous les « title » doivent être écrits dans la langue du document ci-dessus "
-        + "(ici, en français), et chaque exercice doit en avoir un.",
+        + (language ? `(ici, en ${language}) ` : "")
+        + "— ne traduis rien —, et chaque exercice doit en avoir un.",
     },
   ];
 
@@ -488,7 +498,8 @@ function rankCandidates(candidates: Candidate[]): Candidate[] {
  * d'entrée par minute), deux pages par appel et sans le texte d'appoint.
  */
 async function readWith(candidate: Candidate, pages: string[], first: number, count: number,
-                        seriesHint: number | null, text: string, signal: AbortSignal): Promise<Outcome> {
+                        seriesHint: number | null, language: string | null, text: string,
+                        signal: AbortSignal): Promise<Outcome> {
   const onGroq = candidate.base === GROQ_URL;
   const step = onGroq ? 2 : count;
   const series: unknown[] = [];
@@ -498,7 +509,7 @@ async function readWith(candidate: Candidate, pages: string[], first: number, co
     let outcome: Outcome;
     try {
       outcome = await complete(candidate.base, candidate.key, candidate.model, onGroq,
-                               visionMessages(slice, start, seriesHint, onGroq ? "" : text), [], 8192, signal);
+                               visionMessages(slice, start, seriesHint, language, onGroq ? "" : text), [], 8192, signal);
     } catch (error) {
       return { error: signal.aborted ? "annulé" : String(error) };
     }
@@ -509,12 +520,14 @@ async function readWith(candidate: Candidate, pages: string[], first: number, co
 }
 
 /** Les messages d'un paquet de pages : consigne, repères, images. */
-function visionMessages(pages: string[], first: number, seriesHint: number | null, text: string) {
+function visionMessages(pages: string[], first: number, seriesHint: number | null,
+                        language: string | null, text: string) {
   const content: unknown[] = [{
     type: "text",
     text: `Pages ${first + 1} à ${first + pages.length} du document`
       + (seriesHint ? ` (série ${seriesHint} d'après l'en-tête ou le nom du fichier)` : "")
       + ". Numérote « page » à partir de " + (first + 1) + ". Réponds en JSON."
+      + (language ? ` Le document est en ${language} : écris tous les champs en ${language}, ne traduis rien.` : "")
       + (text ? `\n\nTexte extrait du PDF (numéros fiables, formules abîmées) :\n${text}` : ""),
   }];
   for (const image of pages) {

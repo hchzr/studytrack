@@ -36,6 +36,8 @@ struct SeriesImportSheet: View {
     @State private var localResult: [DetectedSeries] = []
     @State private var aiResult: [DetectedSeries]?
     @State private var preferredSeries: Int?
+    /// La langue lue dans le document, transmise au modèle pour qu'il ne traduise pas.
+    @State private var documentLanguage: String?
     @State private var aiInput = ""
     /// Les pages en JPEG : envoyées au modèle qui lit la mise en page, et
     /// affichées dans l'aperçu de chaque exercice.
@@ -546,9 +548,12 @@ struct SeriesImportSheet: View {
         }
 
         let hasLayout = lines.contains { $0.fontSize > 0 }
+        let language = SeriesDocumentInference.languageName(of: lines.map(\.text).joined(separator: "\n"))
+        documentLanguage = language
         aiInput = hasLayout
-            ? SeriesAIParsing.prepareLayout(lines, seriesHint: preferredSeries)
+            ? SeriesAIParsing.prepareLayout(lines, seriesHint: preferredSeries, language: language)
             : (preferredSeries.map { "[Indice : ce document semble être la série \($0)]\n" } ?? "")
+                + (SeriesDocumentInference.languageHint(language).map { $0 + "\n" } ?? "")
                 + SeriesAIParsing.prepare(lines.map(\.text).joined(separator: "\n"))
         if app.settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(app.settings) != nil {
             phase = .analyzing
@@ -569,11 +574,13 @@ struct SeriesImportSheet: View {
         let input = aiInput
         let base = localResult
         let preferred = preferredSeries
+        let language = documentLanguage
         let pages = pageImages.allSatisfy { !$0.isEmpty } ? pageImages : []
         analysisTask = Task {
             do {
                 let result = try await SeriesAIExtractor.extract(prepared: input, pageImages: pages,
-                                                                 seriesHint: preferred, settings: app.settings)
+                                                                 seriesHint: preferred, language: language,
+                                                                 settings: app.settings)
                 guard !Task.isCancelled else { return }
                 let merged = SeriesAIParsing.merge(heuristic: base, ai: result.series, preferredSeries: preferred,
                                                    aiReadsLayout: result.source.readsLayout)

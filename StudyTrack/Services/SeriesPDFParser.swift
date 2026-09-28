@@ -320,6 +320,32 @@ enum SeriesPDFParser {
         return true
     }
 
+    /// Un intitulé **proposé par le modèle**, jugé moins sévèrement.
+    ///
+    /// La consigne lui demande de nommer la tâche en 2 à 6 mots : « Calculer les
+    /// sommes » est alors un bon titre, et le PDF lui-même en donne qui
+    /// commencent par un verbe (« Find the error: Sliding block »). Le filtre
+    /// des lignes de PDF les effaçait. On ne rejette ici que l'énoncé recopié :
+    /// long, ponctué comme une phrase, ouvert par « Soit » / « Let », ou réduit
+    /// au numéro.
+    static func looksLikeGeneratedTitle(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 60 else { return false }
+        guard !value.hasSuffix("."), !value.hasSuffix(";"), !value.hasSuffix(":") else { return false }
+        let words = value.split(whereSeparator: { $0 == " " || $0 == "'" || $0 == "’" })
+        guard words.count <= 8 else { return false }
+        let firstWord = words.first.map { $0.lowercased() } ?? ""
+        if hypothesisOpeners.contains(firstWord) { return false }
+        if let marker = SeriesLayoutParser.exerciseMarker(value, fallbackSeries: 1),
+           cleanTitle(marker.remainder).isEmpty {
+            return false
+        }
+        return true
+    }
+
+    /// Les ouvertures d'une hypothèse : jamais un titre, même court.
+    private static let hypothesisOpeners: Set<String> = ["soit", "soient", "let", "sei", "seien", "on", "étant"]
+
     /// Les mots qui ouvrent un énoncé, jamais un intitulé.
     private static let statementOpeners: Set<String> = [
         "soit", "soient", "montrer", "démontrer", "calculer", "déterminer", "trouver", "résoudre",

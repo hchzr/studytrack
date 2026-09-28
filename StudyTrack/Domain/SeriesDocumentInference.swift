@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// Ce qu'un PDF de série dit de lui-même **en dehors** de ses exercices : son
 /// numéro de série et le cours auquel il appartient.
@@ -18,6 +19,34 @@ enum SeriesDocumentInference {
         case document
         /// Lu dans le nom du fichier.
         case filename
+    }
+
+    // MARK: Langue
+
+    /// La langue du document, **nommée en français** pour la consigne du modèle
+    /// (« anglais »), ou `nil` quand elle n'est pas sûre.
+    ///
+    /// La consigne est en français et donne des exemples français : sans langue
+    /// explicite, un modèle traduisait les séries de PHYS-101(en) — « Banked
+    /// turn » devenait « Virage relevé ». Lui dire la langue coupe court.
+    static func languageName(of text: String) -> String? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.languageConstraints = [.french, .english, .german, .italian]
+        recognizer.processString(String(text.prefix(4000)))
+        guard let (language, confidence) = recognizer.languageHypotheses(withMaximum: 1).max(by: { $0.value < $1.value }),
+              confidence >= 0.6 else { return nil }
+        switch language {
+        case .french: return "français"
+        case .english: return "anglais"
+        case .german: return "allemand"
+        case .italian: return "italien"
+        default: return nil
+        }
+    }
+
+    /// La ligne d'indice que le modèle lit en tête du texte.
+    static func languageHint(_ language: String?) -> String? {
+        language.map { "[Langue du document : \($0). Écris tout dans cette langue, ne traduis rien.]" }
     }
 
     // MARK: Numéro de série

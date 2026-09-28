@@ -126,6 +126,7 @@ enum SeriesLayoutParser {
             return marker.kind == .keyword || marker.kind == .dashed
         }
         let leftMargin = lines.filter { !$0.isEmpty && $0.indent > 0 }.map(\.indent).min() ?? 0
+        let plainHeadings = usesKeywords ? [] : plainNumberedHeadings(lines, leftMargin: leftMargin)
 
         var seriesTitles: [Int: String] = [:]
         var groups: [Int: [DetectedExercise]] = [:]
@@ -175,7 +176,8 @@ enum SeriesLayoutParser {
 
             // 2. Exercice.
             if let marker = exerciseMarker(text, fallbackSeries: currentSeries ?? fallback),
-               accepts(marker, markedUp: markedUp, nearMargin: nearMargin, usesKeywords: usesKeywords) {
+               plainHeadings.contains(index)
+                || accepts(marker, markedUp: markedUp, nearMargin: nearMargin, usesKeywords: usesKeywords) {
                 guard seen.insert(marker.number).inserted else {
                     // Un doublon (corrigé à la suite de l'énoncé, rappel en pied de
                     // page) clôt l'exercice précédent sans en créer un nouveau.
@@ -191,7 +193,7 @@ enum SeriesLayoutParser {
                                      title: title(for: marker, line: line, next: nextLine(lines, after: index),
                                                   body: body, boldBody: boldBody),
                                      isBonus: bonus(lines, from: index, body: body, boldBody: boldBody),
-                                     isConfident: marker.kind != .numeric,
+                                     isConfident: marker.kind != .numeric || plainHeadings.contains(index),
                                      pageIndex: line.pageIndex,
                                      verticalPosition: line.verticalPosition))
                 current = (resolvedSeries, groups[resolvedSeries]!.count - 1)
@@ -201,7 +203,8 @@ enum SeriesLayoutParser {
 
             // 3. Question d'un exercice : « a) », « (b) », « 1. » décalé — ou texte.
             guard current != nil else { continue }
-            events.append(QuestionEvent(marks: questionMark(text, allowNumbers: usesKeywords, indent: line.indent) ?? [],
+            events.append(QuestionEvent(marks: questionMark(text, allowNumbers: usesKeywords || !plainHeadings.isEmpty,
+                                                            indent: line.indent) ?? [],
                                         text: text, nearMargin: nearMargin))
         }
         closeExercise()
@@ -243,6 +246,38 @@ enum SeriesLayoutParser {
         case .numeric:
             return markedUp && nearMargin && !usesKeywords
         }
+    }
+
+    /// Les titres « 1. Rotating space station » que la police ne distingue pas.
+    ///
+    /// Certains PDF LaTeX (PHYS-101) embarquent des polices que PDFKit ne sait pas
+    /// nommer : tout sort en « Helvetica » corps 10, titres en gras compris. Un
+    /// numéro nu n'était alors jamais « mis en forme », et l'import ne trouvait
+    /// **aucun** exercice — l'IA restait seule, sans rien pour la contredire.
+    ///
+    /// La mise en page suffit pourtant : des lignes courtes, **exactement** sur la
+    /// marge, numérotées 1, 2, 3… dans l'ordre, sans ponctuation de phrase. Les
+    /// questions « 1. Find … », décalées de quelques points, n'en font pas partie.
+    static func plainNumberedHeadings(_ lines: [PDFLayoutLine], leftMargin: Double) -> Set<Int> {
+        guard leftMargin > 0 else { return [] }
+        var candidates: [(index: Int, value: Int)] = []
+        for (index, line) in lines.enumerated() where !line.isEmpty && abs(line.indent - leftMargin) <= 3 {
+            let text = line.trimmed
+            let ns = text as NSString
+            guard let match = singleNumberPattern.firstMatch(in: text, options: [],
+                                                             range: NSRange(location: 0, length: ns.length)),
+                  let value = Int(ns.substring(with: match.range(at: 1))) else { continue }
+            let remainder = ns.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespaces)
+            guard (2...60).contains(remainder.count),
+                  remainder.first?.isUppercase == true,
+                  !remainder.hasSuffix("."), !remainder.hasSuffix(";"), !remainder.hasSuffix(",") else { continue }
+            candidates.append((index, value))
+        }
+        // 1, 2, 3… sans trou ni retour en arrière : une liste de titres, pas des
+        // lignes numérotées éparses.
+        guard candidates.count >= 2,
+              candidates.enumerated().allSatisfy({ $0.element.value == $0.offset + 1 }) else { return [] }
+        return Set(candidates.map(\.index))
     }
 
     /// « Exercice 2 **de la série** précédente » : une citation, pas un titre.

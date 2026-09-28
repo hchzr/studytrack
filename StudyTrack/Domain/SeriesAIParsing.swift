@@ -50,7 +50,7 @@ enum SeriesAIParsing {
     /// chaque ligne garde son retrait (deux espaces par cran), et les pages sont
     /// séparées. Les lignes de corps sont raccourcies avant les lignes de
     /// structure, pour que **tout** le document tienne dans le budget.
-    static func prepareLayout(_ lines: [PDFLayoutLine], seriesHint: Int?) -> String {
+    static func prepareLayout(_ lines: [PDFLayoutLine], seriesHint: Int?, language: String? = nil) -> String {
         let body = SeriesLayoutParser.bodyFontSize(lines)
         let boldBody = SeriesLayoutParser.bodyIsBold(lines)
         let margin = lines.filter { !$0.isEmpty && $0.indent > 0 }.map(\.indent).min() ?? 0
@@ -86,6 +86,7 @@ enum SeriesAIParsing {
         func render(bodyLimit: Int?) -> String {
             var output: [String] = []
             if let seriesHint { output.append("[Indice : ce document semble être la série \(seriesHint)]") }
+            if let hint = SeriesDocumentInference.languageHint(language) { output.append(hint) }
             var page = -1
             var bodyRun = 0
             for entry in entries {
@@ -142,7 +143,7 @@ enum SeriesAIParsing {
     Réponds UNIQUEMENT avec un objet JSON de la forme :
     {"series":[{"number":3,"title":"Récurrences","exercises":[{"number":"3.1","title":"Tri fusion","isBonus":false,"questions":[{"label":"1","text":"Montrer la borne"},{"label":"2","text":"Cas d'égalité"}]}]}]}
     Format du texte : « # » en début de ligne marque un titre du PDF ; les espaces de tête reproduisent le retrait (une question est décalée sous son exercice) ; « --- page N --- » sépare les pages ; « [Indice : … série N] » donne le numéro de série à utiliser.
-    Langue : écris « title » et le texte des questions dans la même langue que le PDF.
+    Langue : écris « title » et le texte des questions dans la langue du PDF — « [Langue du document : …] » la donne quand elle est connue. Ne traduis JAMAIS : un PDF anglais donne des titres anglais.
     Exercices et questions : « exercises » contient les EXERCICES, pas les questions. Un exercice peut poser plusieurs questions — elles vont dans « questions ». Si le PDF introduit une liste par une phrase suivie de deux points (« Calculer : », « Déterminer : ») puis numérote 1., 2., ce sont les questions d'un même exercice. Si chaque numéro est une consigne autonome, ce sont des exercices distincts.
     Numérotation : « number » de la série est un entier (« Série 02a » donne 2) ; le numéro d'un exercice s'écrit toujours « série.exercice » (« 3.2 »), même si le PDF recommence à 1 dans chaque section ; sans numéro, prends le numéro suivant dans l'ordre. N'invente aucun exercice absent du texte.
     Titre : « title » est TOUJOURS rempli, jamais vide. Reprends l'intitulé court s'il existe ; sinon écris toi-même 2 à 6 mots qui nomment la tâche, en t'appuyant sur le titre de la section ou sur l'objet de l'exercice. Ne recopie jamais l'énoncé complet.
@@ -315,7 +316,7 @@ enum SeriesAIParsing {
                 nextIndex += 1
                 let title = (exercise.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 exercises.append(DetectedExercise(number: candidate,
-                                                  title: SeriesPDFParser.looksLikeTitle(title) ? title : "",
+                                                  title: SeriesPDFParser.looksLikeGeneratedTitle(title) ? title : "",
                                                   isBonus: exercise.isBonus ?? false,
                                                   statement: (exercise.statement ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                                                   subQuestions: subQuestions(exercise.questions),
@@ -367,13 +368,15 @@ enum SeriesAIParsing {
         return result.contains { $0.kind == .question } ? result : []
     }
 
-    /// « 2 » dans la série 3 → « 3.2 » ; « 3.2 » reste ; « Ex 3.2 » → « 3.2 ».
+    /// « 2 » dans la série 3 → « 3.2 » ; « 3.2 » reste ; « Ex 3.2 » → « 3.2 » ;
+    /// « Ex-04-03 » et « 4-3 » → « 4.3 ».
+    ///
+    /// Tout ce qui sépare deux groupes de chiffres est un séparateur. Ne garder
+    /// que les chiffres et les points collait « 4-3 » en « 43 », rangé en 4.43.
     static func normalizeNumber(_ raw: String?, series: Int) -> String? {
         guard let raw else { return nil }
-        let digits = raw.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-        guard !digits.isEmpty else { return nil }
-        let parts = digits.split(separator: ".").map(String.init)
+        let parts = raw.split(whereSeparator: { !$0.isASCII || !$0.isNumber }).map(String.init)
+        guard !parts.isEmpty else { return nil }
         switch parts.count {
         case 1:
             guard let value = Int(parts[0]), (1...99).contains(value) else { return nil }
@@ -433,9 +436,20 @@ enum SeriesAIParsing {
             if result[index].title.isEmpty, !series.title.isEmpty {
                 result[index].title = series.title
             }
+            // Une numérotation **complète** lue sur des repères sûrs (« Ex-04-01 »…
+            // « Ex-04-11 », ou 1…6 sur la marge) fait foi : un exercice que le
+            // modèle ajoute en dehors est une question promue ou un numéro inventé.
+            if isCompleteSkeleton(series.exercises) {
+                let known = Set(series.exercises.map(\.number))
+                result[index].exercises.removeAll { !known.contains($0.number) }
+            }
             for exercise in series.exercises {
                 if let existing = result[index].exercises.firstIndex(where: { $0.number == exercise.number }) {
                     var merged = result[index].exercises[existing]
+                    // L'intitulé **imprimé** dans le PDF l'emporte sur celui que le
+                    // modèle compose : un modèle qui décale ses exercices d'un cran
+                    // donnait à 4.3 le titre de 4.4, et rien ne le corrigeait.
+                    if !exercise.title.isEmpty, exercise.isConfident { merged.title = exercise.title }
                     if merged.title.isEmpty { merged.title = exercise.title }
                     if merged.statement.isEmpty { merged.statement = exercise.statement }
                     merged.isBonus = merged.isBonus || exercise.isBonus
@@ -448,8 +462,11 @@ enum SeriesAIParsing {
                     // colonnes, les points imbriqués et les formules : il l'emporte,
                     // et la lecture locale ne comble que son silence.
                     if aiReadsLayout {
-                        if merged.subQuestions.isEmpty {
-                            merged.subQuestions = exercise.subQuestions
+                        if merged.subQuestions.isEmpty || missesQuestions(merged.subQuestions, found: exercise.subQuestions) {
+                            // Le modèle voit les pages, mais un modèle de repli
+                            // (Qwen) saute parfois une colonne : 3 questions là où
+                            // la page en porte 6. La lecture locale les a toutes.
+                            merged.subQuestions = withTexts(exercise.subQuestions, from: merged.subQuestions)
                         } else if !merged.subQuestions.contains(where: { $0.kind == .part }) {
                             // Le modèle voit les questions, mais oublie parfois la
                             // consigne sans numéro (« Calculer lim aₙ. Ensuite… ») que
@@ -480,6 +497,41 @@ enum SeriesAIParsing {
             result[index].exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
         }
         return result.sorted { $0.number < $1.number }
+    }
+
+    /// Des exercices numérotés 1…n sans trou, tous sur des repères sûrs.
+    static func isCompleteSkeleton(_ exercises: [DetectedExercise]) -> Bool {
+        guard exercises.count >= 2, exercises.allSatisfy(\.isConfident) else { return false }
+        let minors = exercises.compactMap { $0.number.split(separator: ".").last.flatMap { Int($0) } }.sorted()
+        return minors == Array(1...exercises.count)
+    }
+
+    /// Le modèle a-t-il **perdu** des questions que la lecture locale a trouvées ?
+    ///
+    /// Seulement quand la liste locale est une suite propre (1…n, a…) et que
+    /// celle du modèle en est un sous-ensemble strict : ailleurs — étiquettes
+    /// différentes, points imbriqués — le modèle garde la main.
+    static func missesQuestions(_ seen: [DetectedSubQuestion], found local: [DetectedSubQuestion]) -> Bool {
+        let seenLabels = seen.filter { $0.kind == .question }.map(\.label)
+        let localLabels = local.filter { $0.kind == .question }.map(\.label)
+        guard SeriesLayoutParser.isQuestionSequence(localLabels),
+              localLabels.count > seenLabels.count,
+              Set(localLabels).count == localLabels.count else { return false }
+        return Set(seenLabels).isSubset(of: Set(localLabels))
+    }
+
+    /// La structure locale, avec les énoncés — et leurs formules — lus par le
+    /// modèle là où les étiquettes concordent.
+    static func withTexts(_ local: [DetectedSubQuestion], from seen: [DetectedSubQuestion]) -> [DetectedSubQuestion] {
+        let byLabel = Dictionary(seen.filter { $0.kind == .question }.map { ($0.label, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+        return local.map { question in
+            guard question.kind == .question, let match = byLabel[question.label] else { return question }
+            var copy = question
+            if !match.text.isEmpty { copy.text = match.text }
+            if !match.children.isEmpty { copy.children = match.children }
+            return copy
+        }
     }
 
     /// La même série sous un autre numéro : « 1.3 » devient « 4.3 ».
