@@ -29,12 +29,12 @@
 //   supabase secrets set LLM_VISION_MODEL=gemini-2.5-flash
 //
 // Repli **OpenRouter** quand c'est trop long : si aucun modèle n'a répondu après
-// OPENROUTER_AFTER_MS (15 s par défaut) — ou dès que tous ont échoué —,
+// OPENROUTER_AFTER_MS (10 s par défaut) — ou dès que tous ont échoué —,
 // DeepSeek v4.1 Flash rejoint la course, et le premier qui répond gagne.
 //
 //   supabase secrets set OPENROUTER_API_KEY=sk-or-…
 //   supabase secrets set OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash   # défaut
-//   supabase secrets set OPENROUTER_AFTER_MS=15000                       # défaut
+//   supabase secrets set OPENROUTER_AFTER_MS=10000                       # défaut
 //
 // Groq offre un palier gratuit largement suffisant pour des PDF de séries.
 // N'importe quelle API compatible OpenAI convient (OpenRouter : LLM_BASE_URL=
@@ -505,7 +505,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1";
 /** Rapide, lit les images, contexte d'un million de jetons. */
 const OPENROUTER_DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
 /** Au-delà, la chaîne principale « traîne » : le repli démarre. */
-const OPENROUTER_DEFAULT_AFTER_MS = 15_000;
+const OPENROUTER_DEFAULT_AFTER_MS = 10_000;
 
 /** Le repli OpenRouter, s'il est configuré. */
 function openRouterCandidate(): Candidate | null {
@@ -529,7 +529,7 @@ function backupDelay(): number {
  * Pourquoi une course plutôt qu'un simple « si échec, alors » : un modèle saturé
  * n'échoue pas vite, il **fait attendre** — Gemini en « high demand », ou un 429
  * de Groq suivi d'une pause d'une minute. L'étudiant·e attendait alors une
- * minute pour rien ; ici, au bout de 15 s, un second modèle travaille déjà.
+ * minute pour rien ; ici, au bout de 10 s, un second modèle travaille déjà.
  */
 async function raceWithBackup(
   primary: (signal: AbortSignal) => Promise<Outcome & { model?: string }>,
@@ -770,8 +770,10 @@ function callProvider(
   // OpenRouter : pas de longue réflexion (c'est un repli, il doit être rapide),
   // et le fournisseur le plus rapide du moment pour ce modèle.
   if (baseURL.includes("openrouter.ai")) {
-    payload.reasoning = { effort: "low", exclude: true };
-    payload.provider = { sort: "latency" };
+    // Réflexion **coupée** : avec « effort: low », DeepSeek v4.1 Flash mettait
+    // 72 s sur la série 3 (3 pages) — plus lent que la chaîne qu'il remplace.
+    payload.reasoning = { enabled: false };
+    payload.provider = { sort: "throughput" };
   }
   return fetch(`${baseURL}/chat/completions`, {
     signal,
