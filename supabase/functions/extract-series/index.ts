@@ -28,6 +28,14 @@
 //   supabase secrets set LLM_VISION_API_KEY=<clé Google AI Studio>
 //   supabase secrets set LLM_VISION_MODEL=gemini-2.5-flash
 //
+// Repli **OpenRouter** quand c'est trop long : si aucun modèle n'a répondu après
+// OPENROUTER_AFTER_MS (15 s par défaut) — ou dès que tous ont échoué —,
+// DeepSeek v4.1 Flash rejoint la course, et le premier qui répond gagne.
+//
+//   supabase secrets set OPENROUTER_API_KEY=sk-or-…
+//   supabase secrets set OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash   # défaut
+//   supabase secrets set OPENROUTER_AFTER_MS=15000                       # défaut
+//
 // Groq offre un palier gratuit largement suffisant pour des PDF de séries.
 // N'importe quelle API compatible OpenAI convient (OpenRouter : LLM_BASE_URL=
 // https://openrouter.ai/api/v1 et un modèle « :free »).
@@ -192,6 +200,7 @@ Deno.serve(async (request) => {
     if (usesGroq) add({ base: GROQ, key: apiKey, model: GROQ_VISION });
 
     const pages = images.slice(0, MAX_PAGES);
+    const backup = openRouterCandidate();
     const failures: string[] = [];
     const timings: string[] = [];
     const began = Date.now();
@@ -205,12 +214,15 @@ Deno.serve(async (request) => {
     // quota gratuit : la course ne coûte rien, et le temps devient celui du plus
     // rapide des modèles disponibles. Attendre qu'un modèle saturé réponde 503,
     // puis le suivant, puis le suivant, coûtait l'essentiel des 45 s.
-    const readChunk = async (first: number, count: number): Promise<Outcome & { model?: string }> => {
+    const readPrimary = async (first: number, count: number, outer: AbortSignal): Promise<Outcome & { model?: string }> => {
       let index = 0;
       while (index < ordered.length) {
+        if (outer.aborted) return { error: "annulé" };
         const pair = ordered.slice(index, index + RACE_WIDTH);
         index += pair.length;
         const controllers = pair.map(() => new AbortController());
+        const stop = () => controllers.forEach((controller) => controller.abort());
+        outer.addEventListener("abort", stop, { once: true });
         const attempts = pair.map((candidate, slot) => (async () => {
           // Les modèles « Lite » lisent moins bien (conditions prises pour des
           // questions, consigne d'ouverture oubliée) : ils partent après les
@@ -237,11 +249,23 @@ Deno.serve(async (request) => {
         try {
           return await Promise.any(attempts);
         } catch {
-          // Les deux ont échoué : paire suivante.
+          // Tous ont échoué : groupe suivant.
+        } finally {
+          outer.removeEventListener("abort", stop);
         }
       }
       return { error: "aucun modèle de vision n'a répondu" };
     };
+
+    // Le repli OpenRouter entre dans la course si la chaîne principale traîne.
+    const readChunk = (first: number, count: number) =>
+      raceWithBackup(
+        (signal) => readPrimary(first, count, signal),
+        backup ? (signal) => readWith(backup, pages, first, count, seriesHint, language, text, signal) : null,
+        backup?.model ?? "",
+        failures,
+        timings,
+      );
 
     // Les paquets partent **ensemble** (un PDF de dix pages = deux paquets).
     const starts: number[] = [];
@@ -255,7 +279,7 @@ Deno.serve(async (request) => {
     const collected = results.flatMap((result) => ("series" in result ? result.series : []));
     const usedModel = results.map((result) => result.model).find(Boolean) ?? ordered[0].model;
     return json({ series: mergeSeries(collected), model: usedModel, mode: "vision",
-                  ms: Date.now() - began, timings,
+                  ms: Date.now() - began, timings, backup: backup?.model,
                   fallbacks: failures.length > 0 ? failures : undefined });
   }
 
@@ -281,9 +305,29 @@ Deno.serve(async (request) => {
     },
   ];
 
-  const outcome = await complete(baseURL, apiKey, model, usesGroq, messages, preferredModels);
-  if ("error" in outcome) return json({ error: outcome.error }, 502);
-  return json({ series: outcome.series, model: outcome.model, structured: outcome.structured });
+  // Même course qu'en vision : le fournisseur principal part seul, OpenRouter le
+  // rejoint s'il traîne (un 429 de Groq fait attendre jusqu'à une minute).
+  const backup = openRouterCandidate();
+  const failures: string[] = [];
+  const timings: string[] = [];
+  const began = Date.now();
+  const outcome = await raceWithBackup(
+    async (signal) => {
+      const start = Date.now();
+      const result = await complete(baseURL, apiKey, model, usesGroq, messages, preferredModels, 4096, signal);
+      if (!("error" in result)) timings.push(`${result.model} : ${Date.now() - start} ms`);
+      return result;
+    },
+    backup ? (signal) => complete(backup.base, backup.key, backup.model, false, messages, [], 4096, signal) : null,
+    backup?.model ?? "",
+    failures,
+    timings,
+  );
+  if ("error" in outcome) {
+    return json({ error: failures.length > 0 ? `${outcome.error}. Essais : ${failures.join(" | ")}` : outcome.error }, 502);
+  }
+  return json({ series: outcome.series, model: outcome.model, structured: outcome.structured,
+                ms: Date.now() - began, timings, fallbacks: failures.length > 0 ? failures : undefined });
 });
 
 type Outcome =
@@ -346,6 +390,8 @@ async function complete(
     const wait = retryDelay(detail);
     if (wait > 0) {
       await new Promise((resolve) => setTimeout(resolve, wait));
+      // Le repli a peut-être déjà répondu pendant l'attente.
+      if (signal?.aborted) return { error: "annulé" };
       upstream = await attempt();
     }
   }
@@ -448,6 +494,89 @@ function mergeSeries(chunks: unknown[]): unknown[] {
 }
 
 type Candidate = { base: string; key: string; model: string };
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+/** Rapide, lit les images, contexte d'un million de jetons. */
+const OPENROUTER_DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
+/** Au-delà, la chaîne principale « traîne » : le repli démarre. */
+const OPENROUTER_DEFAULT_AFTER_MS = 15_000;
+
+/** Le repli OpenRouter, s'il est configuré. */
+function openRouterCandidate(): Candidate | null {
+  const key = Deno.env.get("OPENROUTER_API_KEY")?.trim();
+  if (!key) return null;
+  return { base: OPENROUTER_URL, key, model: Deno.env.get("OPENROUTER_MODEL")?.trim() || OPENROUTER_DEFAULT_MODEL };
+}
+
+function backupDelay(): number {
+  const value = Number(Deno.env.get("OPENROUTER_AFTER_MS"));
+  return Number.isFinite(value) && value >= 0 ? value : OPENROUTER_DEFAULT_AFTER_MS;
+}
+
+/**
+ * La chaîne principale, doublée d'un repli qui part **en retard**.
+ *
+ * Le repli démarre après `backupDelay()` si rien n'est encore revenu, ou tout
+ * de suite si la chaîne principale échoue. Le premier résultat gagne et annule
+ * l'autre. Sans repli configuré, c'est la chaîne principale seule, comme avant.
+ *
+ * Pourquoi une course plutôt qu'un simple « si échec, alors » : un modèle saturé
+ * n'échoue pas vite, il **fait attendre** — Gemini en « high demand », ou un 429
+ * de Groq suivi d'une pause d'une minute. L'étudiant·e attendait alors une
+ * minute pour rien ; ici, au bout de 15 s, un second modèle travaille déjà.
+ */
+async function raceWithBackup(
+  primary: (signal: AbortSignal) => Promise<Outcome & { model?: string }>,
+  backup: ((signal: AbortSignal) => Promise<Outcome>) | null,
+  backupModel: string,
+  failures: string[],
+  timings: string[],
+): Promise<Outcome & { model?: string }> {
+  const primaryControl = new AbortController();
+  if (!backup) return primary(primaryControl.signal);
+
+  const backupControl = new AbortController();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const timer = setTimeout(() => release(), backupDelay());
+
+  // Une requête annulée **lève** au lieu de rendre une erreur : on la ramène à
+  // une erreur ordinaire, sinon le repli n'apprendrait jamais l'échec.
+  const settle = (run: () => Promise<Outcome & { model?: string }>) =>
+    run().catch((error): Outcome => ({ error: String(error) }));
+
+  const first = settle(() => primary(primaryControl.signal)).then((outcome) => {
+    if ("error" in outcome) {
+      release();
+      throw new Error(outcome.error);
+    }
+    backupControl.abort();
+    return outcome;
+  });
+
+  const second = gate.then(async () => {
+    if (backupControl.signal.aborted) throw new Error("annulé");
+    const start = Date.now();
+    const outcome = await settle(() => backup(backupControl.signal));
+    const ms = Date.now() - start;
+    if ("error" in outcome) {
+      if (!backupControl.signal.aborted) failures.push(`${backupModel} (repli, ${ms} ms) : ${outcome.error.slice(0, 140)}`);
+      throw new Error(outcome.error);
+    }
+    timings.push(`${backupModel} (repli) : ${ms} ms`);
+    primaryControl.abort();
+    return { ...outcome, model: backupModel };
+  });
+
+  try {
+    return await Promise.any([first, second]);
+  } catch (error) {
+    const reasons = error instanceof AggregateError ? error.errors.map(String) : [String(error)];
+    return { error: `aucun modèle n'a répondu (${reasons.join(" ; ").slice(0, 300)})` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const GROQ_URL = "https://api.groq.com/openai/v1";
 
@@ -632,12 +761,19 @@ function callProvider(
   // réponse existe, mais dans `reasoning_content`. « low » suffit largement pour
   // lire une liste d'exercices, et rend le quota au texte utile.
   if (lowReasoning) payload.reasoning_effort = "low";
+  // OpenRouter : pas de longue réflexion (c'est un repli, il doit être rapide),
+  // et le fournisseur le plus rapide du moment pour ce modèle.
+  if (baseURL.includes("openrouter.ai")) {
+    payload.reasoning = { effort: "low", exclude: true };
+    payload.provider = { sort: "latency" };
+  }
   return fetch(`${baseURL}/chat/completions`, {
     signal,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      ...(baseURL.includes("openrouter.ai") ? { "X-Title": "StudyTrack" } : {}),
     },
     body: JSON.stringify(payload),
   });
