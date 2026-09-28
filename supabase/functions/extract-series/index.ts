@@ -144,6 +144,8 @@ Deno.serve(async (request) => {
   let seriesHint: number | null = null;
   let language: string | null = null;
   let listOnly = false;
+  /** Diagnostic : `"only": "backup"` n'interroge que le repli OpenRouter. */
+  let onlyBackup = false;
   try {
     const body = await request.json();
     text = typeof body?.text === "string" ? body.text : "";
@@ -155,6 +157,7 @@ Deno.serve(async (request) => {
     language = typeof body?.language === "string" && /^[\p{L} ]{2,20}$/u.test(body.language.trim())
       ? body.language.trim() : null;
     listOnly = body?.listModels === true;
+    onlyBackup = body?.only === "backup";
   } catch {
     return json({ error: "corps JSON attendu : {\"text\": …} ou {\"images\": [...]}" }, 400);
   }
@@ -260,7 +263,9 @@ Deno.serve(async (request) => {
     // Le repli OpenRouter entre dans la course si la chaîne principale traîne.
     const readChunk = (first: number, count: number) =>
       raceWithBackup(
-        (signal) => readPrimary(first, count, signal),
+        (signal) => onlyBackup && backup
+          ? Promise.resolve({ error: "chaîne principale sautée (diagnostic)" })
+          : readPrimary(first, count, signal),
         backup ? (signal) => readWith(backup, pages, first, count, seriesHint, language, text, signal) : null,
         backup?.model ?? "",
         failures,
@@ -313,6 +318,7 @@ Deno.serve(async (request) => {
   const began = Date.now();
   const outcome = await raceWithBackup(
     async (signal) => {
+      if (onlyBackup && backup) return { error: "chaîne principale sautée (diagnostic)" };
       const start = Date.now();
       const result = await complete(baseURL, apiKey, model, usesGroq, messages, preferredModels, 4096, signal);
       if (!("error" in result)) timings.push(`${result.model} : ${Date.now() - start} ms`);
