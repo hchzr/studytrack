@@ -651,7 +651,7 @@ struct ProfileView: View {
     /// `ASAuthorizationError` vaut `Code=1000 "(null)"` dans le cas le plus courant
     /// — l'app n'a pas la capacité « Sign in with Apple » — et n'en dit pas plus.
     /// Afficher `localizedDescription` revient à n'afficher rien.
-    private static func appleMessage(for error: Error) -> String {
+    static func appleMessage(for error: Error) -> String {
         guard let authError = error as? ASAuthorizationError else {
             return "Apple : \(error.localizedDescription)"
         }
@@ -691,7 +691,7 @@ struct ProfileView: View {
         return build.isEmpty ? short : "\(short) (\(build))"
     }
 
-    private static func sha256Hex(_ input: String) -> String {
+    static func sha256Hex(_ input: String) -> String {
         SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 

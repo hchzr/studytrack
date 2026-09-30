@@ -496,6 +496,14 @@ final class SocialService {
                                     query: [URLQueryItem(name: "id", value: "eq.\(id)")])
     }
 
+    /// Renomme un groupe ou change sa description (réservé au créateur, RLS).
+    func updateGroup(id: String, name: String, description: String) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        _ = try await client.update("study_groups",
+                                    query: [URLQueryItem(name: "id", value: "eq.\(id)")],
+                                    values: ["name": name, "description": description])
+    }
+
     /// Retire un membre d'un groupe.
     ///
     /// Autorisé par les politiques RLS soit à l'intéressé·e lui-même, soit à un

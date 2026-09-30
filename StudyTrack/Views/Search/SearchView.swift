@@ -201,7 +201,7 @@ struct SearchView: View {
             EPFLLifeView()
         case .group(let id):
             if let group = groups.first(where: { $0.id == id }) {
-                GroupDetailView(group: group)
+                GroupSettingsView(group: group)
             }
         }
     }

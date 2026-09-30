@@ -38,6 +38,10 @@ struct GroupsView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
+            if !app.social.isSignedIn {
+                // Un compte d'abord : sans lui, un groupe ne se partage pas.
+                GroupsSignInView()
+            } else {
             CarnetScroll {
                 if let syncMessage {
                     Text(syncMessage)
@@ -64,7 +68,7 @@ struct GroupsView: View {
                 if let selected { GroupInviteView(group: selected) }
             }
             .navigationDestination(for: StudyGroup.self) { group in
-                GroupDetailView(group: group)
+                GroupSettingsView(group: group)
             }
             .navigationDestination(for: GroupSubjectRoute.self) { route in
                 if let group = groups.first(where: { $0.id == route.groupID }) {
@@ -168,6 +172,10 @@ struct GroupsView: View {
                     showingJoin = true
                 }
             }
+            }
+        }
+        .onChange(of: app.social.isSignedIn) { _, signedIn in
+            if signedIn { Task { await syncNow() } }
         }
     }
 
