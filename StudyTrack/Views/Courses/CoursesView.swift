@@ -183,59 +183,48 @@ struct CoursesView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Mes cours")
+        .carnetBackground()
+        .navigationTitle("Cours")
         .toolbar { toolbarItems }
     }
 
     /// Le volet de droite au repos : le récapitulatif du semestre, qui n'a plus sa
     /// place en pleine largeur une fois la liste détachée.
     private var semesterOverview: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                summary
-                Text("Choisis un cours dans la liste pour voir sa théorie, ses exercices, sa progression et son agenda.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(Layout.screenPadding)
-            .adaptiveColumn()
+        CarnetScroll {
+            newsBanner
+            courseGrid
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Mes cours")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Cours")
+        .carnetSubtitle(subtitle)
     }
 
-    // MARK: iPhone — une colonne
+    // MARK: iPhone — une grille
 
     private var column: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                    if courses.isEmpty {
-                        EmptyCard(icon: "books.vertical",
-                                  title: "Aucun cours",
-                                  message: "Importe ton horaire EPFL (.ics) pour créer tes cours automatiquement, ou ajoute-les un par un.",
-                                  actionTitle: "Importer mon horaire") {
-                            showingImport = true
-                        }
-                        Button {
-                            showingForm = true
-                        } label: {
-                            Label("Ajouter un cours à la main", systemImage: "plus")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                    } else {
-                        summary
-                        trackedSection
-                        if !archived.isEmpty { archivedSection }
+            CarnetScroll {
+                if courses.isEmpty {
+                    CarnetEmpty(icon: "books.vertical",
+                                title: "Aucun cours",
+                                message: "Importe tes cours depuis Moodle (séries, vidéos, échéances) ou ton horaire IS-Academia.",
+                                actionTitle: "Importer depuis Moodle") {
+                        app.router.openContentImport()
                     }
+                    HStack(spacing: 10) {
+                        Button("Mon horaire (.ics)") { showingImport = true }
+                            .buttonStyle(.carnetSecondaryWide)
+                        Button("À la main") { showingForm = true }
+                            .buttonStyle(.carnetSecondaryWide)
+                    }
+                } else {
+                    newsBanner
+                    courseGrid
+                    if !archived.isEmpty { archivedSection }
                 }
-                .padding(Layout.screenPadding)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Mes cours")
+            .navigationTitle("Cours")
+            .carnetSubtitle(subtitle)
             .toolbar { toolbarItems }
             .navigationDestination(item: $pushedCourse) { course in
                 CourseDetailView(course: course, initialSection: pushedSection)
@@ -243,9 +232,102 @@ struct CoursesView: View {
         }
     }
 
-    /// Loupe, « + », avatar — dans cet ordre, sur la droite. Le « + » réunit
-    /// les trois façons de remplir l'onglet : un cours à la main, son contenu
-    /// depuis Moodle / Courseware / Botafogo, ou l'horaire IS-Academia.
+    private var subtitle: String {
+        let credits = tracked.reduce(0) { $0 + Int($1.credits) }
+        var parts = [term?.displayName ?? "Semestre", "\(tracked.count) cours", "\(credits) ECTS"]
+        if let term, !term.hasEnded, !term.hasNotStarted { parts.insert("semaine \(term.currentWeek)", at: 1) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// « Série 5 publiée sur Moodle · CS-107 » — ce que la mise à jour
+    /// automatique vient d'apporter.
+    @ViewBuilder
+    private var newsBanner: some View {
+        let news = app.settings.contentRefreshNews
+        if !news.isEmpty {
+            HStack(spacing: 10) {
+                Circle().fill(Carnet.ink).frame(width: 7, height: 7)
+                Text(news).font(.subheadline).foregroundStyle(Carnet.ink).lineLimit(2)
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(Motion.snappy) { app.settings.contentRefreshNews = "" }
+                } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(Carnet.inkSecondary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Masquer")
+            }
+            .padding(.leading, 14)
+            .padding(.vertical, 6)
+            .carnetGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private var courseGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
+            ForEach(tracked) { course in
+                NavigationLink {
+                    CourseDetailView(course: course)
+                } label: {
+                    CarnetCourseCard(course: course)
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+                .contextMenu { courseMenu(course) }
+            }
+            Button {
+                app.router.openContentImport()
+            } label: {
+                VStack(spacing: 8) {
+                    Image(systemName: "plus").font(.title3)
+                    Text("Importer un cours").font(.subheadline)
+                }
+                .foregroundStyle(Carnet.inkSecondary)
+                .frame(maxWidth: .infinity, minHeight: 170)
+                .overlay(RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous)
+                    .strokeBorder(Carnet.rule, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func courseMenu(_ course: Course) -> some View {
+        // Les gestes fréquents d'abord : s'y mettre, ajouter la série de la
+        // semaine. Archiver et supprimer ensuite.
+        Button {
+            app.router.startFocus(courseID: course.id, courseCode: course.code,
+                                  taskType: .exercise, label: "\(course.displayCode) · Séries")
+        } label: {
+            Label("Démarrer un chrono", systemImage: "play.fill")
+        }
+        Button {
+            app.router.openContentImport(courseID: course.id)
+        } label: {
+            Label("Importer du contenu", systemImage: "square.and.arrow.down.on.square")
+        }
+        Button {
+            seriesImportCourse = course
+        } label: {
+            Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+        }
+        Divider()
+        Button {
+            course.isTracked = false
+            try? context.save()
+        } label: {
+            Label("Archiver", systemImage: "archivebox")
+        }
+        Button(role: .destructive) {
+            courseToDelete = course
+        } label: {
+            Label("Supprimer", systemImage: "trash")
+        }
+    }
+
+    /// Loupe, puis « + » : un cours à la main, son contenu depuis Moodle /
+    /// Courseware / Botafogo, ou l'horaire IS-Academia.
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
@@ -276,7 +358,6 @@ struct CoursesView: View {
                 Image(systemName: "plus")
             }
             .accessibilityLabel("Ajouter")
-            ProfileButton()
         }
     }
 
@@ -285,105 +366,82 @@ struct CoursesView: View {
         AcademicTerm.resolve(from: courses.compactMap(\.term))
     }
 
-    private var summary: some View {
-        // Le coin de la carte disait « Non renseignée » — la **section**, alors
-        // que le titre annonce le semestre. On y met ce que le titre promet.
-        Card(title: term?.displayName ?? "Semestre", icon: "graduationcap.fill",
-             trailing: term?.statusLabel) {
-            VStack(alignment: .leading, spacing: Layout.block) {
-                if let term {
-                    LabeledProgress(title: "Écoulé",
-                                    progress: term.timeProgress,
-                                    color: Theme.accent,
-                                    countLabel: term.hasEnded ? "terminé" : "\(term.weeksRemaining) sem. restantes")
-                }
-                // Trois chiffres en une ligne : trois tuiles occupaient la moitié
-                // de l'écran avant le premier cours.
-                Text(summaryLine)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-        }
-    }
-
-    private var summaryLine: String {
-        let credits = tracked.reduce(0) { $0 + Int($1.credits) }
-        let framed = DateUtils.hoursLabel(hours: tracked.reduce(0) { $0 + WorkloadEngine.framedWeeklyHours(for: $1) })
-        return "\(tracked.count) cours · \(credits) ECTS · \(framed) encadrées / sem."
-    }
-
-    private var trackedSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Cours suivis", trailing: "\(tracked.count)")
-            ForEach(tracked) { course in
-                NavigationLink {
-                    CourseDetailView(course: course)
-                } label: {
-                    CourseCardRow(course: course)
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    // Les gestes fréquents d'abord : s'y mettre, ajouter la série
-                    // de la semaine. Archiver et supprimer ensuite.
-                    Button {
-                        app.router.startFocus(courseID: course.id, courseCode: course.code,
-                                              taskType: .exercise, label: "\(course.displayCode) · Séries")
-                    } label: {
-                        Label("Démarrer un chrono", systemImage: "play.fill")
-                    }
-                    Button {
-                        app.router.openContentImport(courseID: course.id)
-                    } label: {
-                        Label("Importer du contenu", systemImage: "square.and.arrow.down.on.square")
-                    }
-                    Button {
-                        seriesImportCourse = course
-                    } label: {
-                        Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
-                    }
-                    Divider()
-                    Button {
-                        course.isTracked = false
-                        try? context.save()
-                    } label: {
-                        Label("Archiver", systemImage: "archivebox")
-                    }
-                    Button(role: .destructive) {
-                        courseToDelete = course
-                    } label: {
-                        Label("Supprimer", systemImage: "trash")
-                    }
-                }
-            }
-        }
-    }
-
     private var archivedSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Archivés", trailing: "\(archived.count)")
-            ForEach(archived) { course in
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(hex: course.colorHex).opacity(0.5))
-                        .frame(width: 4, height: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(course.displayCode).font(.subheadline.weight(.medium))
-                        Text(course.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            CarnetSectionTitle("Archivés") { Text("\(archived.count)") }
+            CarnetSheet {
+                ForEach(Array(archived.enumerated()), id: \.element.id) { index, course in
+                    CarnetRow(title: course.name, subtitle: course.displayCode) {
+                        Button("Réactiver") {
+                            course.isTracked = true
+                            try? context.save()
+                            Haptics.tap()
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Carnet.ink)
                     }
-                    Spacer(minLength: 8)
-                    Button("Réactiver") {
-                        course.isTracked = true
-                        try? context.save()
-                        Haptics.tap()
-                    }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
+                    if index < archived.count - 1 { CarnetRule(inset: Carnet.rowInset) }
                 }
-                .padding(12)
-                .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
+    }
+}
+
+/// La carte d'un cours sur la grille : sa couleur en tête, son code, son nom
+/// en serif, où il en est (un grand pourcentage), son rythme et sa source.
+struct CarnetCourseCard: View {
+    let course: Course
+
+    var body: some View {
+        let tint = Carnet.tint(course.colorHex)
+        let progress = ProgressEngine.progress(for: course)
+        let late = ProgressEngine.lateCount(for: course)
+        let ahead = ProgressEngine.aheadCount(for: course)
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(tint).frame(height: 5)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(course.displayCode)
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(tint)
+                Text(course.name)
+                    .font(Carnet.serif(.headline))
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(minHeight: 44, alignment: .topLeading)
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text("\(Int((progress.completion * 100).rounded()))")
+                        .font(Carnet.serif(.title))
+                    Text("%").font(Carnet.serif(.subheadline))
+                }
+                .foregroundStyle(Carnet.ink)
+                Text(ProgressEngine.standingLabel(late: late, ahead: ahead))
+                    .font(.footnote.weight(late > 0 ? .semibold : .regular))
+                    .foregroundStyle(late > 0 ? Carnet.wrong : Carnet.inkSecondary)
+                if let source = CarnetCourseCard.sourceLabel(course) {
+                    Text(source)
+                        .font(.caption)
+                        .foregroundStyle(Carnet.inkTertiary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Carnet.sheet)
+        .clipShape(RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// « Moodle · Botafogo » : d'où vient le contenu du cours.
+    static func sourceLabel(_ course: Course) -> String? {
+        let hosts = course.contentSources.compactMap { URL(string: $0)?.host?.lowercased() }
+        var names: [String] = []
+        if hosts.contains(where: { $0.contains("moodle") }) { names.append("Moodle") }
+        if hosts.contains(where: { $0.contains("courseware") }) { names.append("Courseware") }
+        if hosts.contains(where: { $0.contains("botafogo") }) { names.append("Botafogo") }
+        return names.isEmpty ? nil : names.joined(separator: " · ")
     }
 }
 

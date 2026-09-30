@@ -463,6 +463,10 @@ do {
     check(CourseProgress().completion == 0, "un cours vide est à 0 %, pas NaN")
 }
 
+check(ProgressEngine.standingLabel(late: 3, ahead: 2) == "3 en retard", "le retard passe avant l'avance")
+check(ProgressEngine.standingLabel(late: 0, ahead: 2) == "2 d'avance", "de l'avance")
+check(ProgressEngine.standingLabel(late: 0, ahead: 0) == "À jour", "à jour")
+
 print("== Ordre des moteurs d'analyse ==")
 // Cet ordre a déjà été inversé une fois sans que rien ne le signale : le modèle
 // embarqué passait avant le modèle servi, et lisait nettement moins bien.
@@ -1416,6 +1420,19 @@ do {
     let outcome = ContentDraftWriter.apply(dalg, to: written, context: context)
     check(outcome.deadlinesAdded == 2 && written.exams.count == 2, "les échéances deviennent des évaluations du cours")
     check(written.documents.contains { $0.title.hasPrefix("Apprendre") }, "les documents sont gardés comme liens")
+
+    // Rythme d'un cours : ce qui manque des semaines passées, ce qui est fait
+    // d'avance ; la semaine en cours ne compte ni pour l'un ni pour l'autre.
+    let paced = Course(code: "TEST-777", name: "Rythme")
+    context.insert(paced)
+    for (week, watched) in [(1, false), (2, true), (3, false), (5, true)] {
+        let item = TheoryItem(course: paced, sectionNumber: 1, number: "1.\(week)", title: "t\(week)", kind: .video,
+                              plannedWeek: week, sortOrder: week, urlString: "")
+        if watched { item.watchedAt = Date() }
+        context.insert(item)
+    }
+    check(ProgressEngine.lateCount(for: paced, currentWeek: 3) == 1, "une vidéo de la semaine 1 non vue : 1 en retard")
+    check(ProgressEngine.aheadCount(for: paced, currentWeek: 3) == 1, "une vidéo de la semaine 5 déjà vue : 1 d'avance")
     ContentDraftWriter.apply(dalg, to: written, context: context, updateWeeks: false)
     check(written.exams.count == 2 && written.documents.count == outcome.documentsAdded, "une mise à jour ne double rien")
     let wphys = Course(code: "TEST-602", name: "Liens")

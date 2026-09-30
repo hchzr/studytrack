@@ -240,7 +240,14 @@ enum SeedData {
         // polycopiés qui numérotent « 1., 2. » à l'intérieur d'un même exercice.
         // Sans exemple, l'écran de détail ne montrerait jamais cette partie.
         if let s3 = cs.sortedSeries.first(where: { $0.seriesNumber == 3 }) {
-            let labels = [["1", "2"], ["1", "2", "3"], [], ["1", "2"]]
+            let labels = [["a", "b"], ["1", "2", "3"], [], ["1", "2"]]
+            // Un énoncé lu, pour que l'écran d'exercice montre ce qu'il fait
+            // d'un vrai texte : formules, sous-questions, celle en cours.
+            let texts: [[String]] = [["Écrire la relation de récurrence vérifiée par son coût $T(n)$.",
+                                      "En déduire que $T(n) = O(n \\log n)$."], [], [], []]
+            if let first = s3.sortedExercises.first {
+                first.statement = "On considère le tri fusion d'un tableau de $n$ éléments, avec $n = 2^k$."
+            }
             for (index, exercise) in s3.sortedExercises.enumerated() where index < labels.count {
                 let questions = labels[index]
                 guard !questions.isEmpty else { continue }
@@ -248,6 +255,7 @@ enum SeedData {
                     let question = SubQuestion(exercise: exercise,
                                                label: label,
                                                sortOrder: order)
+                    if texts[index].indices.contains(order) { question.text = texts[index][order] }
                     context.insert(question)
                 }
             }

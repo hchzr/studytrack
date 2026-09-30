@@ -1,13 +1,15 @@
 import SwiftUI
 import SwiftData
 
-/// Détail d'un cours : la semaine en cours, les examens, puis Séries | Théorie.
+/// Un cours, **semaine par semaine**.
 ///
-/// Deux segments, pas quatre. L'ancien onglet « Agenda » mêlait évaluations,
-/// annales, sessions, séances et tâches : les examens ont leur page (le bloc
-/// « Examens » de l'en-tête), les séances et sessions sont dans l'Agenda,
-/// filtrables par cours. La progression se lit dans l'en-tête — la semaine en
-/// cours, Théorie et Séries — et s'ouvre en détail d'un tap.
+/// On ouvre un cours pour savoir quoi faire cette semaine : la théorie à voir
+/// (vidéo, transparents, section du polycopié, leçon du MOOC — chacune liée),
+/// la série et ses exercices jusqu'aux sous-questions, ce qui tombe cette
+/// semaine. Les puces S1…S14 changent de semaine ; « Tout le cours » garde les
+/// listes complètes (Séries | Théorie) et leurs outils d'édition. L'en-tête,
+/// à la couleur du cours, porte un panneau de verre : fait, rythme, prochaine
+/// échéance — et mène aux examens, à la progression, aux documents.
 struct CourseDetailView: View {
     let course: Course
     /// Section ouverte à l'arrivée. La recherche y mène directement.
@@ -53,47 +55,57 @@ struct CourseDetailView: View {
         #endif
     }
 
+    /// La semaine affichée ; `nil` = « Tout le cours ».
+    @State private var shownWeek: Int?
+    @State private var hasChosenWeek = false
+    @State private var openedExercise: Exercise?
+    @State private var openedVideo: TheoryItem?
+    @State private var browsing: BrowsedLink?
+
+    private var totalWeeks: Int {
+        let planned = course.theoryItems.map(\.plannedWeek) + course.series.map(\.plannedWeek)
+        return max(course.term?.totalWeeks ?? 14, planned.max() ?? 0)
+    }
+
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+            VStack(alignment: .leading, spacing: 0) {
                 if !debugHidesHeader {
-                    header
-                    examsRow
-                    if !course.documents.isEmpty { documentsRow }
+                    hero
                 }
-
-                Picker("Section", selection: $tab) {
-                    ForEach(Section.segments) { section in
-                        Text(section.title).tag(section)
+                VStack(alignment: .leading, spacing: 22) {
+                    weekPicker
+                    if let week = shownWeek {
+                        weekContent(week)
+                    } else {
+                        allContent
                     }
                 }
-                .pickerStyle(.segmented)
-
-                switch tab {
-                case .theory:
-                    TheoryTabView(course: course)
-                default:
-                    ExercisesTabView(course: course)
-                }
+                .padding(.horizontal, Carnet.screenPadding)
+                .padding(.top, debugHidesHeader ? 8 : 18)
+                .padding(.bottom, 32)
+                .frame(maxWidth: Layout.readableWidth)
+                .frame(maxWidth: .infinity)
             }
-            .padding(Layout.screenPadding)
-            .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(course.name.isEmpty ? course.displayCode : course.name)
+        .background(Carnet.ground.ignoresSafeArea())
+        .navigationTitle(course.displayCode)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .sheet(isPresented: $showingEditor) { CourseFormView(course: course) }
         .sheet(isPresented: $showingSeriesImport) { SeriesImportSheet(course: course) }
         .sheet(isPresented: $showingAddTheory) { AddVideoSheet(course: course) }
         .sheet(isPresented: $showingAddExam) { ExamFormSheet(course: course) }
+        .sheet(item: $openedExercise) { exercise in ExerciseSheet(exercise: exercise) }
+        .sheet(item: $openedVideo) { video in VideoDetailSheet(video: video) }
+        .sheet(item: $browsing) { InAppBrowser(link: $0) }
         .navigationDestination(isPresented: $showingProgress) {
             ScrollView {
                 ProgressTabView(course: course)
                     .padding(Layout.screenPadding)
                     .adaptiveColumn()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
             .navigationTitle("Progression · \(course.displayCode)")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -104,21 +116,29 @@ struct CourseDetailView: View {
             CourseDocumentsView(course: course)
         }
         .onAppear {
+            if !hasChosenWeek {
+                hasChosenWeek = true
+                let empty = course.theoryItems.isEmpty && course.series.isEmpty
+                shownWeek = (course.isTermRunning && !empty) ? min(max(course.currentWeek, 1), totalWeeks) : nil
+            }
             if !hasAppliedInitialSection {
                 hasAppliedInitialSection = true
                 switch initialSection {
                 case .progress: showingProgress = true
                 case .exams: showingExams = true
-                default: tab = initialSection
+                case .theory: shownWeek = nil; tab = .theory
+                default: break
                 }
             }
             #if DEBUG
-            if let raw = PreviewLaunch.string(PreviewLaunch.courseTabFlag),
-               let section = Section(rawValue: raw) {
-                switch section {
-                case .progress: showingProgress = true
-                case .exams: showingExams = true
-                default: tab = section
+            if let raw = PreviewLaunch.string(PreviewLaunch.courseTabFlag) {
+                if raw == "all" { shownWeek = nil }
+                if let section = Section(rawValue: raw) {
+                    switch section {
+                    case .progress: showingProgress = true
+                    case .exams: showingExams = true
+                    default: shownWeek = nil; tab = section
+                    }
                 }
             }
             #endif
@@ -131,6 +151,294 @@ struct CourseDetailView: View {
         } message: {
             Text("Théorie, séries, évaluations et \(DateUtils.hoursLabel(seconds: WorkloadEngine.studySeconds(for: course))) de sessions seront effacées. « Archiver » garde tout, hors de la vue.")
         }
+    }
+
+    // MARK: En-tête
+
+    /// La couleur du cours en bandeau, son nom en serif, et le panneau de verre
+    /// qui le chevauche : fait, rythme, prochaine échéance.
+    private var hero: some View {
+        let tint = Carnet.tint(course.colorHex)
+        let progress = ProgressEngine.progress(for: course)
+        let late = ProgressEngine.lateCount(for: course)
+        let ahead = ProgressEngine.aheadCount(for: course)
+        let next = course.nextExam
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text([course.displayCode, CarnetCourseCard.sourceLabel(course)]
+                        .compactMap { $0 }.joined(separator: " · ").uppercased())
+                    .font(.caption.weight(.semibold))
+                    .tracking(1)
+                    .opacity(0.85)
+                Text(course.name.isEmpty ? course.displayCode : course.name)
+                    .font(Carnet.serif(.title))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(metaLine)
+                    .font(.footnote)
+                    .opacity(0.85)
+            }
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 58)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.ignoresSafeArea(edges: .top))
+
+            HStack(spacing: 0) {
+                heroStat(label: "Fait", value: "\(Int((progress.completion * 100).rounded())) %") { showingProgress = true }
+                Rectangle().fill(Carnet.rule).frame(width: 1, height: 36)
+                heroStat(label: "Rythme", value: late > 0 ? "−\(late)" : (ahead > 0 ? "+\(ahead)" : "à jour"),
+                         color: late > 0 ? Carnet.wrong : Carnet.ink) { showingProgress = true }
+                Rectangle().fill(Carnet.rule).frame(width: 1, height: 36)
+                heroStat(label: next.map { $0.kind.label } ?? "Examens",
+                         value: next.map { DateUtils.shortDay.string(from: $0.date) } ?? "—") { showingExams = true }
+            }
+            .padding(.vertical, 12)
+            .carnetGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous), interactive: true)
+            .padding(.horizontal, Carnet.screenPadding)
+            .padding(.top, -42)
+
+            if course.theoryItems.isEmpty && course.series.isEmpty {
+                Button {
+                    app.router.openContentImport(courseID: course.id)
+                } label: {
+                    Label("Importer le contenu du cours", systemImage: "square.and.arrow.down.on.square")
+                }
+                .buttonStyle(.carnetPrimaryWide)
+                .padding(.horizontal, Carnet.screenPadding)
+                .padding(.top, 16)
+            }
+        }
+    }
+
+    private func heroStat(label: String, value: String, color: Color = Carnet.ink,
+                          action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(label).font(.caption).foregroundStyle(Carnet.inkSecondary).lineLimit(1)
+                Text(value)
+                    .font(Carnet.serif(.title3))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Semaines
+
+    private var weekPicker: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Button { withAnimation(Motion.snappy) { shownWeek = nil } } label: {
+                        CarnetChip(text: "Tout le cours", isSelected: shownWeek == nil)
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(1...max(totalWeeks, 1), id: \.self) { week in
+                        let progress = ProgressEngine.weekProgress(for: course, week: week)
+                        Button { withAnimation(Motion.snappy) { shownWeek = week } } label: {
+                            weekChip(week, progress: progress)
+                        }
+                        .buttonStyle(.plain)
+                        .id(week)
+                        .accessibilityLabel("Semaine \(week)")
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            .onAppear {
+                if let shownWeek { proxy.scrollTo(shownWeek, anchor: .center) }
+            }
+        }
+    }
+
+    private func weekChip(_ week: Int, progress: WeeklyProgress) -> some View {
+        let selected = shownWeek == week
+        let isCurrent = course.isTermRunning && week == course.currentWeek
+        return VStack(spacing: 3) {
+            Text("S\(week)")
+                .font(.subheadline.weight(selected || isCurrent ? .semibold : .regular))
+                .foregroundStyle(selected ? Carnet.ground : (progress.hasItems ? Carnet.ink : Carnet.inkTertiary))
+            Circle()
+                .fill(progress.isComplete ? Carnet.correct : (progress.hasItems ? (selected ? Carnet.ground : Carnet.inkTertiary) : .clear))
+                .frame(width: 4, height: 4)
+        }
+        .frame(minWidth: 42, minHeight: 40)
+        .background(selected ? Carnet.ink : (isCurrent ? Carnet.sheetRaised : Carnet.sheet), in: Capsule())
+    }
+
+    // MARK: Une semaine
+
+    @ViewBuilder
+    private func weekContent(_ week: Int) -> some View {
+        let theory = course.sortedTheoryItems.filter { $0.plannedWeek == week }
+        let series = course.sortedSeries.filter { $0.plannedWeek == week }
+        let deadlines = course.sortedExams.filter { exam in
+            course.term.map { DateUtils.weekNumber(for: exam.date, term: $0) == week } ?? false
+        }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Semaine \(week)")
+                .font(Carnet.serif(.title2))
+                .foregroundStyle(Carnet.ink)
+            if let topic = weekTopic(theory: theory, series: series) {
+                Text(topic).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
+            }
+        }
+        .padding(.horizontal, 6)
+
+        if theory.isEmpty && series.isEmpty && deadlines.isEmpty {
+            CarnetEmpty(icon: "calendar", title: "Rien de prévu",
+                        message: "Aucune théorie ni série n'est rangée en semaine \(week).")
+        }
+
+        if !theory.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Théorie") {
+                    Text("\(theory.filter(\.isWatched).count)/\(theory.count)")
+                }
+                CarnetSheet {
+                    ForEach(Array(theory.enumerated()), id: \.element.id) { index, item in
+                        CarnetTheoryLine(item: item,
+                                         onOpen: { openedVideo = item },
+                                         onBrowse: { browsing = $0 })
+                        if index < theory.count - 1 { CarnetRule(inset: 54) }
+                    }
+                }
+            }
+        }
+
+        ForEach(series) { item in
+            seriesBlock(item)
+        }
+
+        if !deadlines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Cette semaine")
+                CarnetSheet {
+                    ForEach(Array(deadlines.enumerated()), id: \.element.id) { index, exam in
+                        CarnetRow(icon: exam.kind.icon, tint: Carnet.tint(course.colorHex),
+                                  title: exam.title.isEmpty ? exam.kind.label : exam.title,
+                                  subtitle: DateUtils.fullDayLabel(exam.date) + " · " + DateUtils.time.string(from: exam.date)) {
+                            Text(DateUtils.countdownLabel(to: exam.date))
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Carnet.inkSecondary)
+                        }
+                        if index < deadlines.count - 1 { CarnetRule() }
+                    }
+                }
+            }
+        }
+
+        besideLinks
+    }
+
+    private func weekTopic(theory: [TheoryItem], series: [ExerciseSeries]) -> String? {
+        if let section = theory.first?.sectionTitle, !section.isEmpty {
+            let cleaned = section.replacingOccurrences(of: #"^(semaine|week)\s*\d+\s*[:·–-]?\s*"#, with: "",
+                                                       options: [.regularExpression, .caseInsensitive])
+            if !cleaned.isEmpty, cleaned.count < 80 { return cleaned }
+        }
+        if let topic = series.first?.topic, !topic.isEmpty { return topic }
+        return nil
+    }
+
+    /// Une série : ses documents (énoncé, corrigé), puis chaque exercice, ses
+    /// sous-questions et sa correction.
+    private func seriesBlock(_ series: ExerciseSeries) -> some View {
+        let links = ExerciseLinks.seriesLinks(series)
+        let required = series.requiredExercises
+        return VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Série \(series.seriesNumber)" + (series.topic.isEmpty ? "" : " · \(series.topic)")) {
+                Text("\(series.doneCount)/\(required.count)")
+            }
+            if !links.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(links, id: \.url) { link in
+                            Button { browsing = link } label: {
+                                Label(link.title, systemImage: link.icon)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Carnet.ink)
+                                    .padding(.horizontal, 12)
+                                    .frame(minHeight: 34)
+                                    .background(Carnet.sheet, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            CarnetSheet {
+                if series.exercises.isEmpty {
+                    CarnetRow(icon: SeriesAutoReader.shared.reading.contains(series.id) ? "hourglass" : "doc.text.magnifyingglass",
+                              tint: Carnet.inkSecondary,
+                              title: SeriesAutoReader.shared.reading.contains(series.id) ? "Lecture de l'énoncé…" : "Exercices pas encore lus",
+                              subtitle: "Ouvre l'onglet Séries pour les lire dans le PDF")
+                }
+                ForEach(Array(series.sortedExercises.enumerated()), id: \.element.id) { index, exercise in
+                    Button { openedExercise = exercise } label: {
+                        CarnetExerciseLine(exercise: exercise)
+                    }
+                    .buttonStyle(.plain)
+                    if index < series.exercises.count - 1 { CarnetRule(inset: 54) }
+                }
+            }
+        }
+    }
+
+    /// Ce qui accompagne le cours sans se suivre : examens, documents, progression.
+    private var besideLinks: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("À côté")
+            CarnetSheet {
+                Button { showingExams = true } label: {
+                    CarnetRow(icon: "graduationcap", tint: Carnet.inkSecondary, title: "Examens et annales",
+                              subtitle: examsDetail(course.nextExam)) { chevron }
+                }
+                .buttonStyle(.plain)
+                if !course.documents.isEmpty {
+                    CarnetRule()
+                    Button { showingDocuments = true } label: {
+                        CarnetRow(icon: "folder", tint: Carnet.inkSecondary, title: "Documents du cours",
+                                  subtitle: course.documents.prefix(3).map(\.title).joined(separator: " · ")) { chevron }
+                    }
+                    .buttonStyle(.plain)
+                }
+                CarnetRule()
+                Button { showingProgress = true } label: {
+                    CarnetRow(icon: "chart.bar", tint: Carnet.inkSecondary, title: "Progression semaine par semaine") { chevron }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
+    }
+
+    // MARK: Tout le cours
+
+    @ViewBuilder
+    private var allContent: some View {
+        Picker("Section", selection: $tab) {
+            ForEach(Section.segments) { section in
+                Text(section.title).tag(section)
+            }
+        }
+        .pickerStyle(.segmented)
+
+        switch tab {
+        case .theory:
+            TheoryTabView(course: course)
+        default:
+            ExercisesTabView(course: course)
+        }
+        besideLinks
     }
 
     // MARK: Barre du haut
@@ -208,102 +516,6 @@ struct CourseDetailView: View {
         dismiss()
     }
 
-    // MARK: En-tête
-
-    private var header: some View {
-        let tint = Color(hex: course.colorHex)
-        let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
-        return VStack(alignment: .leading, spacing: Layout.cardGap) {
-            HStack(alignment: .top, spacing: Layout.block) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(tint)
-                    .frame(width: 6, height: 44)
-                VStack(alignment: .leading, spacing: Layout.tight) {
-                    HStack(spacing: Layout.snug) {
-                        Text(course.displayCode).font(.headline)
-                        if course.displayCode != course.code {
-                            Text(course.code).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Text(metaLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer(minLength: Layout.inline)
-                Button {
-                    app.router.startFocus(courseID: course.id, courseCode: course.code,
-                                          taskType: tab == .theory ? .theory : .exercise,
-                                          label: "\(course.displayCode) · \(tab == .theory ? "Théorie" : "Séries")")
-                } label: {
-                    Label("Chrono", systemImage: "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .accessibilityLabel("Démarrer un chrono sur \(course.displayCode)")
-            }
-
-            Divider()
-
-            // La semaine en cours, sur les deux axes qui comptent. Toucher ouvre
-            // la progression semaine par semaine.
-            Button {
-                showingProgress = true
-            } label: {
-                VStack(alignment: .leading, spacing: Layout.block) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(course.isTermRunning ? "Semaine \(course.currentWeek)" : "Hors semestre")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        if week.isComplete {
-                            Label("à jour", systemImage: "checkmark.circle.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.green.accessibleInk)
-                        }
-                        Spacer()
-                        Text("Progression")
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.accentInk)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    if week.hasItems {
-                        WeekAxisRow(title: "Théorie", done: week.watchedCount, total: week.videoCount,
-                                    tint: TaskType.theory.tint)
-                        WeekAxisRow(title: seriesTitle(week), done: week.doneCount, total: week.exerciseCount,
-                                    tint: TaskType.exercise.tint,
-                                    trailing: week.doneCount > 0 ? "\(week.correctedCount) corrigé\(week.correctedCount > 1 ? "s" : "")" : nil)
-                    } else {
-                        Text(course.theoryItems.isEmpty && course.series.isEmpty
-                             ? "Aucun contenu : importe la théorie et les séries depuis Moodle, Courseware ou Botafogo."
-                             : "Rien de planifié cette semaine.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if course.theoryItems.isEmpty && course.series.isEmpty {
-                Button {
-                    app.router.openContentImport(courseID: course.id)
-                } label: {
-                    Label("Importer le contenu du cours", systemImage: "square.and.arrow.down.on.square")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(Layout.gutter)
-        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-    }
-
     private func seriesTitle(_ week: WeeklyProgress) -> String {
         switch week.seriesNumbers.count {
         case 0: return "Séries"
@@ -319,83 +531,6 @@ struct CourseDetailView: View {
                      ? "\(fmt(course.weeklyLectureHours))\u{00A0}h de cours · \(fmt(course.weeklyExerciseHours))\u{00A0}h d'exercices"
                      : "\(fmt(course.weeklyExerciseHours))\u{00A0}h d'exercices, sans amphi")
         return parts.joined(separator: " · ")
-    }
-
-    // MARK: Examens
-
-    /// Une ligne : la prochaine évaluation et son compte à rebours, ou une
-    /// invitation à les saisir. Ouvre la page Examens (évaluations, annales, plan).
-    private var examsRow: some View {
-        let next = course.nextExam
-        return Button {
-            showingExams = true
-        } label: {
-            HStack(spacing: Layout.block) {
-                Image(systemName: next?.kind.icon ?? "graduationcap")
-                    .font(.subheadline)
-                    .foregroundStyle((next?.kind.color ?? Theme.accent).accessibleMark)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: Layout.micro) {
-                    Text(next.map { $0.title.isEmpty ? $0.kind.label : $0.title } ?? "Examens")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Text(examsDetail(next))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: Layout.inline)
-                if let next {
-                    Text(DateUtils.countdownLabel(to: next.date))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(next.kind.color.accessibleInk)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, Layout.block)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableStyle())
-    }
-
-    /// Les documents du cours qui ne se suivent pas : formulaire, plan,
-    /// organisation, forum. Un lien, pas une tâche.
-    private var documentsRow: some View {
-        Button {
-            showingDocuments = true
-        } label: {
-            HStack(spacing: Layout.block) {
-                Image(systemName: "folder")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.accent.accessibleMark)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: Layout.micro) {
-                    Text("Documents du cours")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Text(course.documents.prefix(3).map(\.title).joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: Layout.inline)
-                Text("\(course.documents.count)")
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, Layout.block)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableStyle())
     }
 
     private func examsDetail(_ next: Exam?) -> String {

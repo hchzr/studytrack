@@ -16,22 +16,22 @@ struct ExerciseStageMark: View {
         ZStack {
             switch stage {
             case .toDo:
-                Circle().strokeBorder(Color.secondary.opacity(0.6), lineWidth: 2)
+                Circle().strokeBorder(Carnet.inkTertiary, lineWidth: 1.8)
             case .inProgress(let done, let total):
-                ProgressRing(progress: Double(done) / Double(max(total, 1)),
-                             color: TaskType.exercise.tint,
-                             size: size,
-                             lineWidth: 3,
-                             showsLabel: false)
+                Circle().stroke(Carnet.rule, lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: Double(done) / Double(max(total, 1)))
+                    .stroke(Carnet.ink, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             case .toCorrect:
-                filled(TaskType.exercise.tint, glyph: "checkmark")
+                filled(Carnet.ink, glyph: "checkmark")
             case .corrected(let result):
-                filled(result.color, glyph: result.glyph)
+                filled(Carnet.color(for: result), glyph: result.glyph)
             case .redo:
-                Circle().strokeBorder(Color.red.accessibleMark, lineWidth: 2)
+                Circle().strokeBorder(Carnet.wrong, lineWidth: 2)
                 Image(systemName: "arrow.counterclockwise")
                     .font(.system(size: size * 0.45, weight: .bold))
-                    .foregroundStyle(Color.red.accessibleMark)
+                    .foregroundStyle(Carnet.wrong)
             }
         }
         .frame(width: size, height: size)
@@ -40,10 +40,10 @@ struct ExerciseStageMark: View {
 
     private func filled(_ tint: Color, glyph: String) -> some View {
         ZStack {
-            Circle().fill(tint.verdictFill)
+            Circle().fill(tint)
             Image(systemName: glyph)
                 .font(.system(size: size * 0.45, weight: .bold))
-                .foregroundStyle(Theme.knockedOutInk)
+                .foregroundStyle(Carnet.sheet)
         }
     }
 }
@@ -93,10 +93,10 @@ struct CorrectionDots: View {
                     onChange(isOn ? nil : option)
                 } label: {
                     ZStack {
-                        Circle().fill(isOn ? option.color.verdictFill : option.color.badgeFill)
+                        Circle().fill(isOn ? Carnet.color(for: option) : Carnet.color(for: option).opacity(0.14))
                         Image(systemName: option.glyph)
                             .font(.system(size: dot * 0.45, weight: .bold))
-                            .foregroundStyle(isOn ? Theme.knockedOutInk : option.color.accessibleMark)
+                            .foregroundStyle(isOn ? Carnet.sheet : Carnet.color(for: option))
                     }
                     .frame(width: dot, height: dot)
                     .opacity(value == nil || isOn ? 1 : 0.45)
@@ -127,12 +127,12 @@ struct CorrectionPicker: View {
                 } label: {
                     HStack(spacing: Layout.snug) {
                         Image(systemName: option.glyph).font(.caption.weight(.bold))
-                        Text(option.shortLabel).font(.subheadline.weight(.semibold))
+                        Text(option.lineLabel.capitalizedFirst).font(.subheadline.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(isOn ? option.color.verdictFill : option.color.badgeFill,
+                    .background(isOn ? Carnet.color(for: option) : Carnet.sheet,
                                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .foregroundStyle(isOn ? Theme.knockedOutInk : option.color.badgeInk)
+                    .foregroundStyle(isOn ? Carnet.sheet : Carnet.color(for: option))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableStyle(scale: 0.96))
@@ -368,8 +368,8 @@ struct ExerciseWorkspace: View {
                     ContentUnavailableView("Aucun exercice", systemImage: TaskType.exercise.icon)
                 }
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle(current?.displayNumber ?? series.title)
+            .background(Carnet.sheet.ignoresSafeArea())
+            .navigationTitle(current.map { "\($0.exerciseNumber) · \(index + 1)/\(exercises.count)" } ?? series.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -448,8 +448,21 @@ struct ExerciseWorkspace: View {
     }
 }
 
-/// Le contenu de la fiche : énoncé, questions, correction, aide, documents,
-/// théorie de la semaine, chrono.
+/// Le contenu de la fiche : **l'énoncé en grand**, puis tout ce qui aide à le
+/// faire ; les commandes flottent en bas, dans une barre de verre.
+///
+/// On ouvre un exercice pour le lire et le faire, pas pour remplir un
+/// formulaire : l'ancienne fiche était une liste de réglages (questions,
+/// correction, aide, liens, chrono) où l'énoncé n'était qu'une ligne de
+/// l'en-tête. Désormais :
+///   • l'énoncé occupe l'écran — le texte lu dans la série, formules comprises,
+///     la sous-question en cours surlignée ; sans texte, le document d'origine
+///     lui-même (la page Botafogo de l'exercice, le PDF de la série) ;
+///   • la barre de verre porte le geste suivant : cocher la sous-question en
+///     cours, marquer l'exercice fait, puis le corriger (juste · à revoir ·
+///     faux) — et le chrono, et le corrigé ;
+///   • l'indication, la solution, les notes de correction, la théorie de la
+///     semaine et le temps passé suivent l'énoncé, plus bas.
 private struct ExerciseDetailContent: View {
     @Bindable var exercise: Exercise
     let sessions: [StudySession]
@@ -463,63 +476,75 @@ private struct ExerciseDetailContent: View {
     @State private var maxScoreText = ""
     @State private var showingHint = false
     @State private var showingSolution = false
+    @State private var showingDetails = false
+    @StateObject private var document = BrowserModel()
 
     private var stage: ExerciseStage { ExerciseStage(exercise) }
     private var course: Course? { exercise.series?.course }
+    private var hasText: Bool {
+        !exercise.statement.isEmpty || exercise.sortedSubQuestions.contains { !$0.text.isEmpty }
+    }
+
+    /// Le document d'origine : l'énoncé de l'exercice, sinon celui de la série.
+    private var documentURL: URL? {
+        ExerciseLinks.web(exercise.statementURLString) ?? exercise.series.flatMap { ExerciseLinks.web($0.urlString) }
+    }
+
+    private var currentQuestion: SubQuestion? {
+        exercise.leafSubQuestions.first { !$0.isDone }
+    }
 
     var body: some View {
-        List {
-            Section {
-                header
-            }
-
-            if exercise.hasSubQuestions {
-                Section {
-                    ForEach(exercise.sortedSubQuestions) { question in
-                        SubQuestionRow(question: question, fullText: true) { toggle(question) }
-                        ForEach(question.sortedChildren) { child in
-                            SubQuestionRow(question: child, fullText: true) { toggle(child) }
+        Group {
+            if hasText || documentURL == nil {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        statementPage
+                        extras
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: Layout.readableWidth)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .background(Carnet.sheet.ignoresSafeArea())
+            } else if let documentURL {
+                // Pas de texte lu : le document lui-même, en pleine page.
+                WebView(model: document, initialURL: documentURL)
+                    .overlay(alignment: .top) {
+                        if document.isLoading {
+                            ProgressView(value: document.progress).progressViewStyle(.linear).tint(Carnet.ink)
                         }
                     }
-                } header: {
-                    HStack {
-                        Text("Questions")
-                        Spacer()
-                        Text(exercise.subQuestionLabel ?? "").monospacedDigit()
-                    }
-                }
+                    .background(Carnet.sheet.ignoresSafeArea())
             }
-
-            Section {
-                CorrectionPicker(value: exercise.correctness) { result in
-                    setCorrection(result)
-                }
-                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                Toggle("À refaire", isOn: Binding(get: { exercise.redoRequired },
-                                                  set: { exercise.redoRequired = $0; try? context.save() }))
-                TextField("Ce qu'il faut retenir", text: $note, axis: .vertical)
-                    .lineLimit(1...5)
-                HStack {
-                    TextField("Points", text: $scoreText).keyboardType(.decimalPad)
-                    Text("/").foregroundStyle(.secondary)
-                    TextField("sur", text: $maxScoreText).keyboardType(.decimalPad)
-                }
-            } header: {
-                Text("Correction")
-            } footer: {
-                Text("Vert : juste. Orange : à moitié. Rouge : faux — l'exercice passe « à refaire ».")
-            }
-
-            if !exercise.hint.isEmpty || !exercise.solution.isEmpty {
-                helpSection
-            }
-
-            linksSection
-            weekContextSection
-            timerSection
         }
-        .listStyle(.insetGrouped)
-        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ExerciseControlBar(exercise: exercise,
+                               sessions: sessions,
+                               onToggle: toggle,
+                               onCorrect: setCorrection,
+                               onSolution: openSolution,
+                               onDetails: hasText || documentURL == nil ? nil : { showingDetails = true })
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $showingDetails) {
+            NavigationStack {
+                ScrollView {
+                    extras.padding(20)
+                }
+                .background(Carnet.ground.ignoresSafeArea())
+                .navigationTitle(exercise.displayNumber)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("OK") { showingDetails = false } }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .onAppear {
             note = exercise.correctionNote ?? ""
             scoreText = exercise.score.map { String(format: "%g", $0) } ?? ""
@@ -530,168 +555,184 @@ private struct ExerciseDetailContent: View {
         .onChange(of: maxScoreText) { _, _ in persist() }
     }
 
-    // MARK: En-tête
+    // MARK: L'énoncé
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Layout.inline) {
-            HStack(alignment: .center, spacing: Layout.control) {
-                Button {
-                    exercise.setDone(!exercise.isDone)
-                    if exercise.isDone { Haptics.success() } else { Haptics.soft() }
-                    try? context.save()
-                } label: {
-                    ExerciseStageMark(stage: stage, size: 30)
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
-                }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel(exercise.isDone ? "Marquer à faire" : "Marquer fait")
-                VStack(alignment: .leading, spacing: 0) {
-                    Text([course?.displayCode, exercise.series?.title, exercise.isBonus ? "bonus" : nil]
-                        .compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(stage.label)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(stage.tint.accessibleInk)
-                }
-                Spacer(minLength: 0)
-            }
-            if !exercise.title.isEmpty {
-                MathText(exercise.title, font: .headline)
-            }
+    private var statementPage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            CarnetKicker([course?.displayCode, exercise.series.map { "Série \($0.seriesNumber)" },
+                          exercise.isBonus ? "bonus" : nil, stage.label]
+                            .compactMap { $0 }.joined(separator: " · "),
+                         color: course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary)
+            Text(exercise.title.isEmpty ? exercise.displayNumber : MathMarkup.plain(exercise.title))
+                .font(Carnet.serif(.title))
+                .foregroundStyle(Carnet.ink)
+                .fixedSize(horizontal: false, vertical: true)
             if !exercise.statement.isEmpty {
-                MathText(exercise.statement, font: .body)
+                MathText(exercise.statement, font: .system(.title3, design: .serif))
+                    .foregroundStyle(Carnet.ink)
+                    .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        .padding(.vertical, Layout.tight)
-    }
-
-    // MARK: Aide
-
-    @ViewBuilder
-    private var helpSection: some View {
-        Section {
-            if !exercise.hint.isEmpty {
-                DisclosureGroup(isExpanded: $showingHint) {
-                    MathText(exercise.hint, font: .subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
+            ForEach(exercise.sortedSubQuestions) { question in
+                questionBlock(question, depth: 0)
+                ForEach(question.sortedChildren) { child in
+                    questionBlock(child, depth: 1)
+                }
+            }
+            if let documentURL {
+                Button {
+                    onOpenLink(BrowsedLink(title: "Énoncé d'origine", url: documentURL, icon: "doc.richtext"))
                 } label: {
-                    Label("Indication", systemImage: "lightbulb")
+                    Label("Voir l'énoncé d'origine", systemImage: "doc.richtext")
+                        .font(.subheadline)
                 }
+                .buttonStyle(.carnetSecondary)
+                .padding(.top, 4)
             }
-            if !exercise.solution.isEmpty {
-                if let date = exercise.series?.solutionsAt, date > Date() {
-                    Label("Solution publiée le \(DateUtils.shortDay.string(from: date))", systemImage: "lock")
-                        .foregroundStyle(.secondary)
-                } else {
-                    DisclosureGroup(isExpanded: $showingSolution) {
-                        MathText(exercise.solution, font: .subheadline)
+        }
+    }
+
+    /// Une sous-question dans le texte : cochée, en cours (surlignée), ou à venir.
+    private func questionBlock(_ question: SubQuestion, depth: Int) -> some View {
+        let isCurrent = question.id == currentQuestion?.id
+        return Button { toggle(question) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: question.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundStyle(question.isDone ? Carnet.correct : Carnet.inkTertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    if question.text.isEmpty {
+                        Text(question.displayLabel)
+                            .font(.system(.title3, design: .serif))
+                    } else {
+                        MathText("(\(question.label)) " + question.text, font: .system(.title3, design: .serif))
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .foregroundStyle(question.isDone ? Carnet.inkSecondary : Carnet.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(isCurrent ? Carnet.marker : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, -8)
+            .padding(.leading, CGFloat(depth) * 22)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sous-question \(question.displayLabel)")
+        .accessibilityValue(question.isDone ? "faite" : "à faire")
+    }
+
+    // MARK: Plus bas
+
+    @ViewBuilder
+    private var extras: some View {
+        if !exercise.hint.isEmpty || !exercise.solution.isEmpty { helpBlock }
+        correctionBlock
+        weekTheoryBlock
+        timeBlock
+    }
+
+    private var helpBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Aide")
+            VStack(alignment: .leading, spacing: 12) {
+                if !exercise.hint.isEmpty {
+                    DisclosureGroup(isExpanded: $showingHint) {
+                        MathText(exercise.hint, font: .body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 6)
                     } label: {
-                        Label("Solution", systemImage: "checkmark.seal")
+                        Label("Indication", systemImage: "lightbulb").foregroundStyle(Carnet.ink)
+                    }
+                }
+                if !exercise.solution.isEmpty {
+                    if let date = exercise.series?.solutionsAt, date > Date() {
+                        Label("Solution publiée le \(DateUtils.shortDay.string(from: date))", systemImage: "lock")
+                            .foregroundStyle(Carnet.inkSecondary)
+                    } else {
+                        DisclosureGroup(isExpanded: $showingSolution) {
+                            MathText(exercise.solution, font: .body)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 6)
+                        } label: {
+                            Label("Solution", systemImage: "checkmark.seal").foregroundStyle(Carnet.ink)
+                        }
                     }
                 }
             }
-        } header: {
-            Text("Aide")
+            .tint(Carnet.ink)
+            .padding(14)
+            .background(Carnet.ground, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
         }
     }
 
-    // MARK: Documents
-
-    @ViewBuilder
-    private var linksSection: some View {
-        let links = ExerciseLinks.links(for: exercise)
-        if !links.isEmpty {
-            Section("Documents") {
-                ForEach(links) { link in
-                    Button { onOpenLink(link) } label: {
-                        Label(link.title, systemImage: link.icon)
-                    }
+    private var correctionBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Correction")
+            VStack(alignment: .leading, spacing: 12) {
+                CorrectionPicker(value: exercise.correctness) { setCorrection($0) }
+                Toggle("À refaire", isOn: Binding(get: { exercise.redoRequired },
+                                                  set: { exercise.redoRequired = $0; try? context.save() }))
+                    .tint(Carnet.ink)
+                TextField("Ce qu'il faut retenir", text: $note, axis: .vertical)
+                    .lineLimit(1...5)
+                HStack {
+                    TextField("Points", text: $scoreText).keyboardType(.decimalPad)
+                    Text("/").foregroundStyle(Carnet.inkSecondary)
+                    TextField("sur", text: $maxScoreText).keyboardType(.decimalPad)
                 }
             }
+            .padding(14)
+            .background(Carnet.ground, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+            Text("Juste : c'est acquis. À revoir : à moitié. Faux : l'exercice passe « à refaire ».")
+                .font(.footnote)
+                .foregroundStyle(Carnet.inkSecondary)
+                .padding(.horizontal, 6)
         }
     }
 
-    // MARK: Contexte de la semaine
-
     @ViewBuilder
-    private var weekContextSection: some View {
+    private var weekTheoryBlock: some View {
         if let series = exercise.series, let course, series.plannedWeek > 0 {
             let theory = course.sortedTheoryItems.filter { $0.plannedWeek == series.plannedWeek }
-            if !theory.isEmpty {
-                Section {
-                    ForEach(theory.prefix(14)) { item in
-                        TheoryLinkRow(item: item, onOpen: onOpenLink)
-                    }
-                } header: {
-                    Text("Théorie de la semaine \(series.plannedWeek)")
-                } footer: {
-                    Text("Ce que le cours couvre la semaine de cette série.")
-                }
-            }
-        }
-    }
-
-    // MARK: Chrono
-
-    private var timerSection: some View {
-        Section {
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                let focus = app.focus
-                let state = focus.state
-                let onThis = focus.hasSession && state?.targetID == exercise.id
-                let live = onThis ? (state?.allocation(at: timeline.date).first { $0.targetID == exercise.id }?.seconds ?? 0) : 0
-                let spent = ExerciseFlow.seconds(on: exercise.id, sessions: sessions, live: live)
-                VStack(alignment: .leading, spacing: Layout.inline) {
-                    if onThis, let state {
-                        HStack {
-                            Circle().fill(state.isRunning ? Color.green.accessibleMark : Color.orange.accessibleMark)
-                                .frame(width: 9, height: 9)
-                            Text(state.isRunning ? "Chrono sur cet exercice" : "Chrono en pause")
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text(TimerText.clock(TimeInterval(live)))
-                                .font(.title3.weight(.bold).monospacedDigit())
-                            Button {
-                                if state.isRunning { focus.pause() } else { focus.resume() }
-                                Haptics.tap()
-                            } label: {
-                                Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
-                                    .frame(width: Layout.minTouch, height: Layout.minTouch)
+            let links = ExerciseLinks.links(for: exercise)
+            if !theory.isEmpty || !links.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    CarnetSectionTitle("Pour s'aider") { Text("semaine \(series.plannedWeek)") }
+                    VStack(spacing: 0) {
+                        ForEach(links) { link in
+                            Button { onOpenLink(link) } label: {
+                                CarnetRow(icon: link.icon, tint: Carnet.inkSecondary, title: link.title)
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.plain)
+                            CarnetRule()
                         }
-                        Text("Passe à l'exercice voisin (⌃ ⌄) : le chrono le suit.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else if focus.hasSession {
-                        Button("Passer le chrono sur \(exercise.exerciseNumber)") {
-                            focus.updateContext(courseID: .some(course?.id), taskType: workType,
-                                                targetID: .some(exercise.id), label: "")
-                            Haptics.tap()
-                        }
-                    } else {
-                        Button {
-                            focus.start(courseID: course?.id, taskType: workType, targetID: exercise.id)
-                            Haptics.tap()
-                        } label: {
-                            Label(workType == .correction ? "Corriger au chrono" : "Démarrer le chrono",
-                                  systemImage: "play.fill")
+                        ForEach(theory.prefix(12)) { item in
+                            TheoryLinkRow(item: item, onOpen: onOpenLink)
+                                .padding(.horizontal, Carnet.rowInset)
+                                .padding(.vertical, 8)
+                            if item.id != theory.prefix(12).last?.id { CarnetRule() }
                         }
                     }
-                    if spent >= 60 {
-                        Text("\(DateUtils.durationLabel(seconds: spent)) passées sur cet exercice")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    .background(Carnet.ground, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
                 }
             }
-        } header: {
-            Text("Chrono")
         }
     }
 
-    private var workType: TaskType { stage == .toCorrect ? .correction : .exercise }
+    private var timeBlock: some View {
+        let spent = ExerciseFlow.seconds(on: exercise.id, sessions: sessions, live: 0)
+        return Group {
+            if spent >= 60 {
+                Text("\(DateUtils.durationLabel(seconds: spent)) passées sur cet exercice")
+                    .font(.footnote)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .padding(.horizontal, 6)
+            }
+        }
+    }
 
     // MARK: Actions
 
@@ -706,11 +747,176 @@ private struct ExerciseDetailContent: View {
         try? context.save()
     }
 
+    /// Le corrigé : la solution lue quand elle est là, sinon le document du corrigé.
+    private func openSolution() {
+        if !exercise.solution.isEmpty, !(exercise.series?.solutionsAt.map { $0 > Date() } ?? false) {
+            showingSolution = true
+            if !hasText, documentURL != nil { showingDetails = true }
+            return
+        }
+        if let series = exercise.series, let url = ExerciseLinks.web(series.solutionURLString) {
+            onOpenLink(BrowsedLink(title: "Corrigé · Série \(series.seriesNumber)", url: url, icon: "checkmark.seal"))
+        }
+    }
+
     private func persist() {
         exercise.correctionNote = note.isEmpty ? nil : note
         exercise.score = Double(scoreText.replacingOccurrences(of: ",", with: "."))
         exercise.maxScore = Double(maxScoreText.replacingOccurrences(of: ",", with: "."))
         try? context.save()
+    }
+}
+
+/// La barre de verre d'un exercice : les sous-questions en pastilles, le chrono,
+/// le corrigé, et **le** geste suivant.
+///
+/// Le bouton principal change avec l'avancement : « (b) terminée » tant qu'il
+/// reste des sous-questions, « Exercice fait » ensuite, puis les trois verdicts
+/// de correction (juste · à revoir · faux). Un seul bouton à chercher.
+private struct ExerciseControlBar: View {
+    @Bindable var exercise: Exercise
+    let sessions: [StudySession]
+    var onToggle: (SubQuestion) -> Void
+    var onCorrect: (Correctness?) -> Void
+    var onSolution: () -> Void
+    var onDetails: (() -> Void)?
+
+    @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var app
+
+    private var stage: ExerciseStage { ExerciseStage(exercise) }
+    private var course: Course? { exercise.series?.course }
+    private var leaves: [SubQuestion] { exercise.leafSubQuestions }
+    private var current: SubQuestion? { leaves.first { !$0.isDone } }
+    private var workType: TaskType { stage == .toCorrect ? .correction : .exercise }
+    private var hasSolution: Bool {
+        !exercise.solution.isEmpty || !(exercise.series?.solutionURLString.isEmpty ?? true)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 6) {
+                if !leaves.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(leaves) { question in
+                                chip(question)
+                            }
+                        }
+                    }
+                } else {
+                    Spacer(minLength: 0)
+                }
+                timerPill
+            }
+            HStack(spacing: 8) {
+                if let onDetails {
+                    Button(action: onDetails) {
+                        Image(systemName: "list.bullet").frame(width: 22)
+                    }
+                    .buttonStyle(.carnetSecondary)
+                    .accessibilityLabel("Aide, correction et théorie")
+                }
+                if hasSolution {
+                    Button("Corrigé", action: onSolution)
+                        .buttonStyle(.carnetSecondary)
+                }
+                primary
+            }
+        }
+        .padding(12)
+        .carnetGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private func chip(_ question: SubQuestion) -> some View {
+        let isCurrent = question.id == current?.id
+        return Button { onToggle(question) } label: {
+            Text(question.displayLabel)
+                .font(.subheadline.weight(isCurrent ? .semibold : .medium))
+                .foregroundStyle(question.isDone ? Carnet.ground : Carnet.ink)
+                .padding(.horizontal, 10)
+                .frame(minWidth: 40, minHeight: 38)
+                .background(question.isDone ? Carnet.correct : Carnet.sheet,
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isCurrent ? Carnet.ink : .clear, lineWidth: 1.5))
+        }
+        .buttonStyle(PressableStyle(scale: 0.95))
+        .accessibilityLabel("Sous-question \(question.displayLabel)")
+        .accessibilityValue(question.isDone ? "faite" : "à faire")
+    }
+
+    /// Le chrono de l'exercice : démarrer, mettre en pause, ou le faire venir ici.
+    private var timerPill: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let focus = app.focus
+            let state = focus.state
+            let onThis = focus.hasSession && state?.targetID == exercise.id
+            let live = onThis ? (state?.allocation(at: timeline.date).first { $0.targetID == exercise.id }?.seconds ?? 0) : 0
+            let spent = ExerciseFlow.seconds(on: exercise.id, sessions: sessions, live: live)
+            Button {
+                if onThis, let state {
+                    if state.isRunning { focus.pause() } else { focus.resume() }
+                } else if focus.hasSession {
+                    focus.updateContext(courseID: .some(course?.id), taskType: workType,
+                                        targetID: .some(exercise.id), label: "")
+                } else {
+                    focus.start(courseID: course?.id, taskType: workType, targetID: exercise.id)
+                }
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 6) {
+                    if onThis, state?.isRunning == true {
+                        Circle().fill(Carnet.wrong).frame(width: 7, height: 7)
+                    } else {
+                        Image(systemName: onThis ? "pause.fill" : "play.fill").font(.caption.weight(.bold))
+                    }
+                    Text(spent > 0 ? TimerText.clock(TimeInterval(spent)) : "Chrono")
+                        .font(Carnet.mono(.subheadline, weight: .medium))
+                }
+                .foregroundStyle(Carnet.ink)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 38)
+                .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(PressableStyle(scale: 0.96))
+            .accessibilityLabel(onThis ? (state?.isRunning == true ? "Mettre le chrono en pause" : "Reprendre le chrono")
+                                       : (focus.hasSession ? "Passer le chrono sur cet exercice" : "Démarrer le chrono"))
+        }
+    }
+
+    @ViewBuilder
+    private var primary: some View {
+        if let current {
+            Button("\(current.displayLabel) terminée") { onToggle(current) }
+                .buttonStyle(.carnetPrimaryWide)
+        } else if !exercise.isDone {
+            Button("Exercice fait") {
+                exercise.setDone(true)
+                Haptics.success()
+                try? context.save()
+            }
+            .buttonStyle(.carnetPrimaryWide)
+        } else {
+            HStack(spacing: 6) {
+                ForEach(Correctness.allCases) { option in
+                    let isOn = exercise.correctness == option
+                    Button {
+                        Haptics.soft()
+                        onCorrect(isOn ? nil : option)
+                    } label: {
+                        Text(option.lineLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(isOn ? Carnet.ground : Carnet.color(for: option))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(isOn ? Carnet.color(for: option) : Carnet.sheet, in: Capsule())
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.96))
+                    .accessibilityLabel("Correction : \(option.label)")
+                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
+                }
+            }
+        }
     }
 }
 

@@ -103,6 +103,43 @@ enum ProgressEngine {
         return p
     }
 
+    // MARK: Rythme
+
+    /// Ce qui aurait dû être fait **avant** cette semaine et ne l'est pas :
+    /// théorie non vue, exercices (hors bonus) non faits des semaines passées.
+    /// C'est le « 1 en retard » d'une carte de cours — la semaine en cours n'y
+    /// compte pas, elle n'est pas finie.
+    static func lateCount(for course: Course, currentWeek: Int? = nil) -> Int {
+        let week = currentWeek ?? course.currentWeek
+        guard week > 1 else { return 0 }
+        let theory = course.theoryItems.filter { $0.plannedWeek > 0 && $0.plannedWeek < week && !$0.isWatched }.count
+        let exercises = course.series
+            .filter { $0.plannedWeek > 0 && $0.plannedWeek < week }
+            .flatMap(\.exercises)
+            .filter { !$0.isBonus && !$0.isDone }
+            .count
+        return theory + exercises
+    }
+
+    /// Ce qui est fait **en avance** : éléments des semaines à venir déjà faits.
+    static func aheadCount(for course: Course, currentWeek: Int? = nil) -> Int {
+        let week = currentWeek ?? course.currentWeek
+        let theory = course.theoryItems.filter { $0.plannedWeek > week && $0.isWatched }.count
+        let exercises = course.series
+            .filter { $0.plannedWeek > week }
+            .flatMap(\.exercises)
+            .filter { !$0.isBonus && $0.isDone }
+            .count
+        return theory + exercises
+    }
+
+    /// « À jour », « 3 en retard », « 2 d'avance » : l'état d'un cours en mots.
+    static func standingLabel(late: Int, ahead: Int) -> String {
+        if late > 0 { return "\(late) en retard" }
+        if ahead > 0 { return "\(ahead) d'avance" }
+        return "À jour"
+    }
+
     // MARK: Par semaine
 
     static func weekProgress(for course: Course, week: Int) -> WeeklyProgress {
