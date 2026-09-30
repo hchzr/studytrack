@@ -1,168 +1,295 @@
 import SwiftUI
 
-/// Les fournisseurs de tâches, un bloc par fournisseur, avec l'état et la notice.
+/// Les fournisseurs de tâches : un toucher pour se connecter.
 ///
-/// Sorti du profil : huit blocs de champs et d'aide en ligne noyaient les réglages
-/// qui servent tous les jours (section, semestre, notifications).
+/// Chaque fournisseur est une ligne : son état (« connecté », « non relié »), et
+/// **un** bouton — « Se connecter avec Todoist », « Autoriser Rappels ». Plus de
+/// jeton à aller chercher et coller : la connexion passe par la page du
+/// fournisseur (OAuth) et revient dans l'app. La saisie manuelle reste
+/// possible, repliée sous « Configuration manuelle », pour une build sans
+/// identifiants OAuth.
 struct TaskIntegrationsView: View {
     @Environment(AppContainer.self) private var app
 
-    /// Fournisseur dont la notice de configuration est ouverte.
+    @State private var working: TaskProvider?
+    @State private var message: String?
+    @State private var notionDatabases: [NotionDatabase] = []
     @State private var guideProvider: TaskProvider?
-    @State private var testMessage: String?
-    @State private var testing: TaskProvider?
+    @State private var manualProvider: TaskProvider?
+
+    var body: some View {
+        Form {
+            Group {
+                Section {
+                    ForEach(TaskProvider.allCases) { provider in
+                        row(provider)
+                    }
+                } header: {
+                    CarnetFormHeader("Tes tâches")
+                } footer: {
+                    Text("Les tâches datées apparaissent dans l'agenda ; celles rattachées à un cours, dans le cours. Les jetons restent sur ton téléphone.")
+                }
+
+                if !notionDatabases.isEmpty {
+                    Section {
+                        ForEach(notionDatabases) { database in
+                            Button {
+                                app.settings.notionDatabaseID = database.id
+                                notionDatabases = []
+                                message = "Notion : base « \(database.title) » choisie."
+                                Haptics.success()
+                            } label: {
+                                Label(database.title, systemImage: "tablecells")
+                            }
+                        }
+                    } header: {
+                        CarnetFormHeader("Quelle base Notion ?")
+                    }
+                }
+
+                if let message {
+                    Section {
+                        Text(message).font(.footnote).foregroundStyle(Carnet.inkSecondary)
+                    }
+                }
+            }
+            .listRowBackground(Carnet.sheet)
+        }
+        .carnetForm()
+        .navigationTitle("Tâches")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $guideProvider) { ProviderGuideView(provider: $0) }
+        .sheet(item: $manualProvider) { provider in
+            NavigationStack { ManualProviderForm(provider: provider) }
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    // MARK: Une ligne
+
+    @ViewBuilder
+    private func row(_ provider: TaskProvider) -> some View {
+        let connected = TaskServiceFactory.shared.service(for: provider, settings: app.settings) != nil
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: provider.icon)
+                    .font(.body)
+                    .foregroundStyle(connected ? Carnet.ink : Carnet.inkTertiary)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(provider.label).font(.body).foregroundStyle(Carnet.ink)
+                    Text(status(provider, connected: connected))
+                        .font(.caption)
+                        .foregroundStyle(connected ? Carnet.correct : Carnet.inkSecondary)
+                }
+                Spacer()
+                if working == provider {
+                    ProgressView()
+                } else {
+                    action(provider, connected: connected)
+                }
+            }
+            if !connected, oauth(for: provider) == nil, needsManual(provider) {
+                HStack(spacing: 16) {
+                    Button("Configurer") { manualProvider = provider }
+                    Button("Aide") { guideProvider = provider }
+                }
+                .font(.footnote)
+                .buttonStyle(.borderless)
+                .padding(.leading, 38)
+            }
+        }
+        .padding(.vertical, 4)
+        .contextMenu {
+            if needsManual(provider) {
+                Button { manualProvider = provider } label: {
+                    Label("Configuration manuelle", systemImage: "key")
+                }
+            }
+            Button { guideProvider = provider } label: {
+                Label("Aide", systemImage: "questionmark.circle")
+            }
+        }
+    }
+
+    private func status(_ provider: TaskProvider, connected: Bool) -> String {
+        if !connected { return provider.supportsReading ? "non relié" : "non relié · écriture seule" }
+        if provider == .notion, app.settings.notionDatabaseID.isEmpty { return "choisis une base" }
+        return provider.supportsReading ? "connecté" : "connecté · écriture seule"
+    }
+
+    @ViewBuilder
+    private func action(_ provider: TaskProvider, connected: Bool) -> some View {
+        if connected {
+            Button("Déconnecter", role: .destructive) { disconnect(provider) }
+                .font(.subheadline)
+                .buttonStyle(.borderless)
+        } else {
+            switch provider {
+            case .reminders:
+                Button("Autoriser") { Task { await authorizeReminders() } }
+                    .buttonStyle(.carnetPrimary)
+            case .things:
+                Button("Activer") { app.settings.thingsEnabled = true; Haptics.success() }
+                    .buttonStyle(.carnetPrimary)
+            default:
+                if let oauth = oauth(for: provider) {
+                    Button("Se connecter") { Task { await connect(provider, via: oauth) } }
+                        .buttonStyle(.carnetPrimary)
+                } else if provider == .webhook {
+                    Button("Configurer") { manualProvider = provider }
+                        .buttonStyle(.carnetSecondary)
+                }
+            }
+        }
+    }
+
+    private func oauth(for provider: TaskProvider) -> OAuthProvider? {
+        let mapped: OAuthProvider? = {
+            switch provider {
+            case .todoist: return .todoist
+            case .googleTasks: return .google
+            case .microsoftToDo: return .microsoft
+            case .tickTick: return .tickTick
+            case .notion: return .notion
+            default: return nil
+            }
+        }()
+        return mapped.flatMap { OAuthConfig.isAvailable($0) ? $0 : nil }
+    }
+
+    private func needsManual(_ provider: TaskProvider) -> Bool {
+        ![.reminders, .things].contains(provider)
+    }
+
+    // MARK: Actions
+
+    private func connect(_ provider: TaskProvider, via oauth: OAuthProvider) async {
+        working = provider
+        defer { working = nil }
+        do {
+            let tokens = try await OAuthSignIn.shared.signIn(oauth)
+            let settings = app.settings
+            switch provider {
+            case .todoist: settings.todoistToken = tokens.accessToken
+            case .tickTick: settings.tickTickToken = tokens.accessToken
+            case .googleTasks:
+                settings.googleClientID = OAuthConfig.googleClientID
+                settings.googleClientSecret = ""
+                settings.googleRefreshToken = tokens.refreshToken ?? ""
+            case .microsoftToDo:
+                settings.microsoftToken = tokens.accessToken
+                settings.microsoftRefreshToken = tokens.refreshToken ?? ""
+            case .notion:
+                settings.notionToken = tokens.accessToken
+                notionDatabases = await NotionDatabase.list(token: tokens.accessToken)
+                if notionDatabases.count == 1, let only = notionDatabases.first {
+                    settings.notionDatabaseID = only.id
+                    notionDatabases = []
+                }
+            default: break
+            }
+            Haptics.success()
+            message = "\(provider.label) connecté."
+        } catch OAuthError.cancelled {
+            message = nil
+        } catch {
+            message = "\(provider.label) : \(error.localizedDescription)"
+        }
+    }
+
+    private func authorizeReminders() async {
+        working = .reminders
+        defer { working = nil }
+        let service = TaskServiceFactory.shared.service(for: .reminders, settings: app.settings)
+        let granted = await service?.requestAccess() ?? false
+        message = granted ? "Rappels autorisé." : "Accès refusé : autorise StudyTrack dans Réglages › Rappels."
+    }
+
+    private func disconnect(_ provider: TaskProvider) {
+        let settings = app.settings
+        switch provider {
+        case .reminders:
+            message = "Pour retirer l'accès aux Rappels : Réglages › Confidentialité › Rappels."
+            return
+        case .todoist: settings.todoistToken = ""
+        case .things: settings.thingsEnabled = false
+        case .notion: settings.notionToken = ""; settings.notionDatabaseID = ""
+        case .webhook: settings.webhookURL = ""
+        case .microsoftToDo: settings.microsoftToken = ""; settings.microsoftRefreshToken = ""
+        case .googleTasks: settings.googleRefreshToken = ""; settings.googleClientSecret = ""
+        case .tickTick: settings.tickTickToken = ""
+        }
+        Haptics.removed()
+    }
+}
+
+/// Une base Notion où créer les tâches.
+struct NotionDatabase: Identifiable {
+    let id: String
+    let title: String
+
+    /// Les bases partagées avec l'intégration lors de la connexion.
+    static func list(token: String) async -> [NotionDatabase] {
+        var request = URLRequest(url: URL(string: "https://api.notion.com/v1/search")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("2022-06-28", forHTTPHeaderField: "Notion-Version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["filter": ["property": "object", "value": "database"]])
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [[String: Any]] else { return [] }
+        return results.compactMap { item in
+            guard let id = item["id"] as? String else { return nil }
+            let title = ((item["title"] as? [[String: Any]])?.compactMap { $0["plain_text"] as? String }.joined())
+            return NotionDatabase(id: id, title: (title?.isEmpty ?? true) ? "Sans titre" : title!)
+        }
+    }
+}
+
+/// La saisie manuelle d'un fournisseur (jeton, adresse), pour une build sans
+/// OAuth ou un usage avancé.
+private struct ManualProviderForm: View {
+    let provider: TaskProvider
+    @Environment(AppContainer.self) private var app
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         @Bindable var settings = app.settings
         Form {
             Section {
-                ForEach(TaskProvider.allCases) { provider in
-                    providerBlock(provider, settings: settings)
+                switch provider {
+                case .todoist:
+                    SecureField("Jeton API (Todoist › Réglages › Intégrations)", text: $settings.todoistToken)
+                case .notion:
+                    SecureField("Jeton d'intégration", text: $settings.notionToken)
+                    TextField("ID de la base de données", text: $settings.notionDatabaseID)
+                case .webhook:
+                    TextField("https://…", text: $settings.webhookURL).keyboardType(.URL)
+                case .microsoftToDo:
+                    SecureField("Jeton d'accès Microsoft Graph", text: $settings.microsoftToken)
+                case .googleTasks:
+                    TextField("Identifiant client OAuth", text: $settings.googleClientID)
+                    SecureField("Secret client (client Web uniquement)", text: $settings.googleClientSecret)
+                    SecureField("Refresh token", text: $settings.googleRefreshToken)
+                case .tickTick:
+                    SecureField("Jeton d'accès TickTick", text: $settings.tickTickToken)
+                case .reminders, .things:
+                    EmptyView()
                 }
-            } header: {
-                Text("Fournisseurs")
             } footer: {
-                Text("Les fournisseurs en écriture seule ne peuvent pas être relus : la tâche est créée, mais son état reste local. Les jetons restent sur l'appareil et ne sont envoyés qu'au service concerné.")
+                Text(provider.helpText)
             }
-
-            if let testMessage {
-                Section {
-                    Text(testMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            .listRowBackground(Carnet.sheet)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
         }
         .carnetForm()
-        .navigationTitle("Fournisseurs de tâches")
+        .navigationTitle(provider.label)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $guideProvider) { provider in
-            ProviderGuideView(provider: provider)
-        }
-    }
-
-    @ViewBuilder
-    private func providerBlock(_ provider: TaskProvider, settings: SettingsStore) -> some View {
-        @Bindable var settings = settings
-        let service = TaskServiceFactory.shared.service(for: provider, settings: settings)
-        let configured = service != nil
-
-        VStack(alignment: .leading, spacing: Layout.control) {
-            HStack(spacing: Layout.control) {
-                Image(systemName: provider.icon)
-                    .foregroundStyle(configured ? Theme.accentInk : .secondary)
-                    .frame(width: 22)
-                Text(provider.label).font(.subheadline.weight(.semibold))
-                Spacer()
-                if provider.supportsReading {
-                    Pill(text: configured ? "actif" : "inactif",
-                         color: configured ? .green : .secondary)
-                } else {
-                    Pill(text: "écriture seule", color: .orange)
-                }
-            }
-
-            switch provider {
-            case .reminders:
-                EmptyView()
-
-            case .todoist:
-                SecureField("Jeton API", text: $settings.todoistToken)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-            case .things:
-                Toggle("Activer Things 3", isOn: $settings.thingsEnabled)
-
-            case .notion:
-                SecureField("Jeton d'intégration", text: $settings.notionToken)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                TextField("ID de la base de données", text: $settings.notionDatabaseID)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-            case .webhook:
-                TextField("https://…", text: $settings.webhookURL)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-
-            case .microsoftToDo:
-                SecureField("Jeton d'accès Microsoft Graph", text: $settings.microsoftToken)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-            case .googleTasks:
-                SecureField("Identifiant client OAuth", text: $settings.googleClientID)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                SecureField("Secret client OAuth", text: $settings.googleClientSecret)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                SecureField("Refresh token", text: $settings.googleRefreshToken)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-            case .tickTick:
-                SecureField("Jeton d'accès TickTick", text: $settings.tickTickToken)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            }
-
-            Text(provider.helpText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: Layout.gutter) {
-                Button {
-                    guideProvider = provider
-                } label: {
-                    Label("Comment configurer ?", systemImage: "questionmark.circle")
-                        .font(.footnote)
-                }
-                .buttonStyle(.borderless)
-
-                // Un jeton collé ne dit pas s'il marche : « Tester » pose la
-                // question au service, et affiche la réponse ici.
-                if configured, provider.supportsReading, let service {
-                    Button {
-                        test(service)
-                    } label: {
-                        if testing == provider {
-                            HStack(spacing: Layout.snug) {
-                                ProgressView()
-                                Text("Test…")
-                            }
-                            .font(.footnote)
-                        } else {
-                            Label("Tester", systemImage: "antenna.radiowaves.left.and.right")
-                                .font(.footnote)
-                        }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(testing != nil)
-                }
-            }
-        }
-        .padding(.vertical, Layout.tight)
-    }
-
-    private func test(_ service: TaskService) {
-        testing = service.provider
-        testMessage = nil
-        Task {
-            let granted = await service.requestAccess()
-            guard granted else {
-                testing = nil
-                testMessage = "\(service.provider.label) : accès refusé ou jeton invalide."
-                return
-            }
-            let tasks = await service.fetchTasks()
-            testing = nil
-            testMessage = "\(service.provider.label) : \(tasks.count) tâche\(tasks.count > 1 ? "s" : "") lisible\(tasks.count > 1 ? "s" : "")."
-            Haptics.success()
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } }
         }
     }
 }

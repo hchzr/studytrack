@@ -341,3 +341,29 @@ Les tables ajoutées depuis la première version :
 - L'instantané d'export pour un assistant (`Profil ▸ Données ▸ Exporter pour un
   assistant`) ne contient **ni identifiant, ni jeton, ni adhésion de groupe**.
 - La clé `service_role` ne doit jamais quitter le tableau de bord.
+
+## Connexion aux fournisseurs de tâches (OAuth)
+
+Chaque fournisseur a besoin d'une « application » enregistrée chez lui. Les
+**identifiants client** (publics) vont dans `Support/Supabase.xcconfig` ; les
+**secrets** ne vont que dans Supabase. Un identifiant laissé vide cache le bouton
+« Se connecter » de ce fournisseur (la saisie manuelle reste possible).
+
+L'adresse de retour des fournisseurs à secret est la fonction `oauth` :
+`https://<SUPABASE_HOST>/functions/v1/oauth`. Déploie-la une fois :
+
+    supabase functions deploy oauth --no-verify-jwt
+
+| Fournisseur | Où créer l'app | Adresse de retour à déclarer | xcconfig | Secrets Supabase |
+|---|---|---|---|---|
+| Todoist | developer.todoist.com › App Management | `https://<SUPABASE_HOST>/functions/v1/oauth` | `TODOIST_CLIENT_ID` | `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET` |
+| TickTick | developer.ticktick.com › Manage Apps | idem | `TICKTICK_CLIENT_ID` | `TICKTICK_CLIENT_ID`, `TICKTICK_CLIENT_SECRET` |
+| Notion | notion.so/my-integrations › Public integration | idem | `NOTION_CLIENT_ID` | `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` |
+| Google Tasks | console.cloud.google.com › Identifiants › ID client **iOS** (bundle `com.hczr.studytrack.app`), API Tasks activée, écran de consentement | (automatique : schéma inversé du client) | `GOOGLE_CLIENT_ID` | — (client public, PKCE) |
+| Microsoft To Do | entra.microsoft.com › Inscriptions d'applications › « Comptes personnels et professionnels », plateforme **iOS/macOS** (bundle ci-dessus), permission déléguée `Tasks.ReadWrite` | `msauth.com.hczr.studytrack.app://auth` | `MICROSOFT_CLIENT_ID` | — (client public, PKCE) |
+
+    supabase secrets set TODOIST_CLIENT_ID=… TODOIST_CLIENT_SECRET=… \
+        TICKTICK_CLIENT_ID=… TICKTICK_CLIENT_SECRET=… \
+        NOTION_CLIENT_ID=… NOTION_CLIENT_SECRET=…
+
+Rappels et Things n'ont pas besoin d'OAuth (autorisation système, schéma d'URL).

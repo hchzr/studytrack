@@ -24,6 +24,7 @@ final class SettingsStore {
         static let googleClientID = "settings.googleClientID"
         static let googleClientSecret = "settings.googleClientSecret"
         static let googleRefreshToken = "settings.googleRefreshToken"
+        static let microsoftRefreshToken = "settings.microsoftRefreshToken"
         static let tickTickToken = "settings.tickTickToken"
         static let notionToken = "settings.notionToken"
         static let notionDatabaseID = "settings.notionDatabaseID"
@@ -103,6 +104,8 @@ final class SettingsStore {
     var googleClientID: String { didSet { defaults.set(googleClientID, forKey: Key.googleClientID) } }
     var googleClientSecret: String { didSet { defaults.set(googleClientSecret, forKey: Key.googleClientSecret) } }
     var googleRefreshToken: String { didSet { defaults.set(googleRefreshToken, forKey: Key.googleRefreshToken) } }
+    /// Renouvellement Microsoft, obtenu par « Se connecter avec Microsoft ».
+    var microsoftRefreshToken: String { didSet { defaults.set(microsoftRefreshToken, forKey: Key.microsoftRefreshToken) } }
     var tickTickToken: String { didSet { defaults.set(tickTickToken, forKey: Key.tickTickToken) } }
     var notionToken: String { didSet { defaults.set(notionToken, forKey: Key.notionToken) } }
     var notionDatabaseID: String { didSet { defaults.set(notionDatabaseID, forKey: Key.notionDatabaseID) } }
@@ -189,6 +192,7 @@ final class SettingsStore {
         self.googleClientID = defaults.string(forKey: Key.googleClientID) ?? ""
         self.googleClientSecret = defaults.string(forKey: Key.googleClientSecret) ?? ""
         self.googleRefreshToken = defaults.string(forKey: Key.googleRefreshToken) ?? ""
+        self.microsoftRefreshToken = defaults.string(forKey: Key.microsoftRefreshToken) ?? ""
         self.tickTickToken = defaults.string(forKey: Key.tickTickToken) ?? ""
         self.notionToken = defaults.string(forKey: Key.notionToken) ?? ""
         self.notionDatabaseID = defaults.string(forKey: Key.notionDatabaseID) ?? ""

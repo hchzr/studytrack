@@ -452,20 +452,43 @@ final class WebhookTaskService: TaskService {
 final class MicrosoftToDoTaskService: TaskService {
     let provider: TaskProvider = .microsoftToDo
 
-    private let token: String
+    private var token: String
+    /// Connecté par OAuth : le jeton d'accès (une heure) se renouvelle seul.
+    private var refreshToken: String
+    private var tokenExpiry: Date
     private let session: URLSession
     private let baseURL = URL(string: "https://graph.microsoft.com/v1.0/me/todo")!
     private var listID: String?
+    /// Le nouveau jeton de renouvellement, à garder (Microsoft en émet un à chaque fois).
+    var onRefresh: ((String) -> Void)?
 
-    init(token: String, session: URLSession = .shared) {
+    init(token: String, refreshToken: String = "", session: URLSession = .shared) {
         self.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.refreshToken = refreshToken
+        self.tokenExpiry = refreshToken.isEmpty ? .distantFuture : .distantPast
         self.session = session
     }
 
-    var isConfigured: Bool { !token.isEmpty }
-    func requestAccess() async -> Bool { isConfigured }
+    var isConfigured: Bool { !token.isEmpty || !refreshToken.isEmpty }
+    func requestAccess() async -> Bool { await currentToken() != nil }
+
+    @MainActor
+    private func currentToken() async -> String? {
+        if !token.isEmpty, Date() < tokenExpiry { return token }
+        guard !refreshToken.isEmpty, let fresh = await OAuthSignIn.refreshMicrosoft(refreshToken: refreshToken) else {
+            return token.isEmpty ? nil : token
+        }
+        token = fresh.accessToken
+        tokenExpiry = Date().addingTimeInterval(50 * 60)
+        if let next = fresh.refreshToken, next != refreshToken {
+            refreshToken = next
+            onRefresh?(next)
+        }
+        return token
+    }
 
     private func send(_ path: String, method: String = "GET", body: [String: Any]? = nil) async -> Data? {
+        guard let token = await currentToken() else { return nil }
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
         request.timeoutInterval = 30
@@ -592,8 +615,10 @@ final class GoogleTasksTaskService: TaskService {
         self.session = session
     }
 
+    /// Un client « iOS » n'a pas de secret : l'identifiant et le jeton de
+    /// renouvellement suffisent.
     var isConfigured: Bool {
-        !clientID.isEmpty && !clientSecret.isEmpty && !refreshToken.isEmpty
+        !clientID.isEmpty && !refreshToken.isEmpty
     }
 
     func requestAccess() async -> Bool { await token() != nil }
@@ -604,10 +629,10 @@ final class GoogleTasksTaskService: TaskService {
         request.httpMethod = "POST"
         request.timeoutInterval = 30
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        let fields = ["client_id": clientID,
-                      "client_secret": clientSecret,
+        var fields = ["client_id": clientID,
                       "refresh_token": refreshToken,
                       "grant_type": "refresh_token"]
+        if !clientSecret.isEmpty { fields["client_secret"] = clientSecret }
         let encoded = fields.map { key, value in
             "\(key)=\(value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
         }.joined(separator: "&")
@@ -857,17 +882,22 @@ final class TaskServiceFactory {
             return webhook
 
         case .microsoftToDo:
-            guard !settings.microsoftToken.isEmpty else { return nil }
-            if microsoft == nil || microsoftToken != settings.microsoftToken {
-                microsoft = MicrosoftToDoTaskService(token: settings.microsoftToken)
-                microsoftToken = settings.microsoftToken
+            let key = "\(settings.microsoftToken)|\(settings.microsoftRefreshToken.prefix(12))"
+            guard !settings.microsoftToken.isEmpty || !settings.microsoftRefreshToken.isEmpty else { return nil }
+            if microsoft == nil || microsoftToken != key {
+                let service = MicrosoftToDoTaskService(token: settings.microsoftToken,
+                                                       refreshToken: settings.microsoftRefreshToken)
+                service.onRefresh = { next in
+                    Task { @MainActor in settings.microsoftRefreshToken = next }
+                }
+                microsoft = service
+                microsoftToken = "\(settings.microsoftToken)|\(settings.microsoftRefreshToken.prefix(12))"
             }
             return microsoft
 
         case .googleTasks:
             let key = "\(settings.googleClientID)|\(settings.googleRefreshToken)"
             guard !settings.googleClientID.isEmpty,
-                  !settings.googleClientSecret.isEmpty,
                   !settings.googleRefreshToken.isEmpty else { return nil }
             if google == nil || googleKey != key {
                 google = GoogleTasksTaskService(clientID: settings.googleClientID,

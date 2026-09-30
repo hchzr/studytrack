@@ -17,3 +17,9 @@ verify_jwt = true
 # Le serveur MCP s'authentifie par le jeton de son adresse, pas par un JWT.
 [functions.mcp]
 verify_jwt = false
+
+# Le retour OAuth des fournisseurs de tâches (Todoist, TickTick, Notion) : le
+# navigateur y arrive sans JWT. La fonction ne fait qu'échanger un code à usage
+# unique contre un jeton, avec le secret du fournisseur, et rouvre l'app.
+[functions.oauth]
+verify_jwt = false
