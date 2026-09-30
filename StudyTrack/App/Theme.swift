@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Palette et constantes visuelles de l'app.
 ///
-/// Deux familles littérales seulement : **Encre indigo** (interactif) et la
+/// Deux familles littérales seulement : **l'encre** (interactif) et la
 /// **palette d'identité de cours**. Tout le reste est une couleur sémantique
 /// d'iOS. Voir `DESIGN.md`.
 enum Theme {
@@ -14,10 +14,13 @@ enum Theme {
     // libellé blanc d'un bouton plein au-dessus de 4.5:1. Une seule valeur pour
     // les deux apparences échouait (2.76:1 en mode sombre).
 
-    static let accentHex = "#5247E6"
-    static let accentDarkHex = "#5C52E8"
-    static let accentInkHex = "#5247E6"
-    static let accentInkDarkHex = "#7E76EC"
+    // « Carnet de verre » : l'encre du carnet en clair (noir chaud), une encre
+    // de stylo bleue la nuit — le noir disparaîtrait sur le papier sombre, et
+    // un libellé blanc doit rester lisible sur le bouton plein (≥ 4.5:1).
+    static let accentHex = "#1D1B16"
+    static let accentDarkHex = "#5470A0"
+    static let accentInkHex = "#1D1B16"
+    static let accentInkDarkHex = "#B9C6DE"
 
     /// Teinte interactive : remplissages, `.tint`, grandes marques.
     static var accent: Color {

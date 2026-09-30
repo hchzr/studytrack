@@ -19,34 +19,39 @@ struct FocusRequest: Equatable {
 /// Navigation applicative partagée (onglet actif, demandes de chrono, feuilles).
 @Observable
 final class AppRouter {
-    /// Quatre onglets. Focus n'en est plus un : c'est une **action**, disponible
-    /// partout par le bouton flottant au-dessus de la barre — et, pendant une
-    /// session, le mini-lecteur qui la montre.
+    /// Quatre onglets, et le chrono à part.
+    ///
+    /// « Carnet de verre » : Aujourd'hui (travailler), Cours (tout le contenu),
+    /// Groupes (ensemble), Moi (bilan, liens, réglages). L'agenda n'est plus un
+    /// onglet : il s'ouvre depuis l'horaire du jour. Le chrono est le rond de
+    /// verre à droite de la barre (le rôle « recherche » d'iOS 26 le détache) :
+    /// le toucher ouvre Focus par-dessus l'onglet courant, sans le quitter.
     enum Tab: Int, Hashable, CaseIterable {
-        // L'ordre de déclaration est l'ordre de la barre d'onglets : l'agenda
-        // (quotidien) avant les groupes (troisième raison d'être de l'app). Les
-        // valeurs brutes, elles, ne bougent pas — liens et captures en dépendent
-        // (2 était Focus).
+        // Les valeurs brutes ne bougent pas — liens et captures en dépendent
+        // (2 était Focus, 4 l'agenda).
         case today = 0
         case courses = 1
-        case agenda = 4
         case groups = 3
+        case me = 5
+        case focus = 2
 
         var title: String {
             switch self {
             case .today: return "Aujourd'hui"
             case .courses: return "Cours"
             case .groups: return "Groupes"
-            case .agenda: return "Agenda"
+            case .me: return "Moi"
+            case .focus: return "Chrono"
             }
         }
 
         var icon: String {
             switch self {
-            case .today: return "sun.max.fill"
-            case .courses: return "books.vertical.fill"
-            case .groups: return "person.3.fill"
-            case .agenda: return "calendar"
+            case .today: return "sun.max"
+            case .courses: return "books.vertical"
+            case .groups: return "person.2"
+            case .me: return "person.crop.circle"
+            case .focus: return "timer"
             }
         }
     }
@@ -62,7 +67,16 @@ final class AppRouter {
 
     /// L'écran Focus (chrono, saisie, journal), en feuille au-dessus de l'onglet.
     var showingFocus = false
-    var showingProfile = false
+    /// L'agenda complet, en feuille (depuis l'horaire du jour, une évaluation…).
+    var showingAgenda = false
+    /// « Profil » est devenu l'onglet Moi : ce drapeau y mène.
+    var showingProfile = false {
+        didSet {
+            guard showingProfile else { return }
+            selectedTab = .me
+            showingProfile = false
+        }
+    }
     var showingTasks = false
     /// Statistiques et récapitulatif, ouverts depuis « Aujourd'hui ».
     var showingStats = false
@@ -84,7 +98,7 @@ final class AppRouter {
 
     func openAgenda(day: Date = Date(), courseID: UUID? = nil) {
         agendaRoute = AgendaRoute(day: day, courseID: courseID)
-        selectedTab = .agenda
+        showingAgenda = true
     }
 
     /// L'import de contenu (Moodle, Courseware, Botafogo), ouvert depuis

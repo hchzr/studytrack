@@ -30,6 +30,14 @@ struct CourseProgress: Equatable {
         (theoryPercent + exercisePercent + correctionPercent) / 3
     }
 
+    /// Le chiffre d'un cours, en un nombre : la part faite de ce qui est à
+    /// faire — théorie vue et exercices faits, pondérés par leur nombre. Les
+    /// corrections n'y entrent pas : elles disent si c'est juste, pas si
+    /// c'est fait.
+    var completion: Double {
+        Self.ratio(watchedCount + doneCount, videoCount + exerciseCount)
+    }
+
     var hasTheory: Bool { videoCount > 0 }
     var hasExercises: Bool { exerciseCount > 0 }
     var hasCorrections: Bool { doneCount > 0 }

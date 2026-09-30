@@ -456,6 +456,13 @@ check(SeriesAIParsing.normalizeNumber("02a", series: 2) == "2.2",
 check(SeriesAIParsing.normalizeNumber("", series: 2) == nil, "un numéro vide ne donne rien")
 check(SeriesAIParsing.normalizeNumber(nil, series: 2) == nil, "un numéro absent non plus")
 
+do {
+    var p = CourseProgress()
+    p.videoCount = 4; p.watchedCount = 2; p.exerciseCount = 6; p.doneCount = 3; p.correctedCount = 0
+    check(abs(p.completion - 0.5) < 0.001, "l'avancement d'un cours : (2 vues + 3 faits) / (4 + 6) = 50 %")
+    check(CourseProgress().completion == 0, "un cours vide est à 0 %, pas NaN")
+}
+
 print("== Ordre des moteurs d'analyse ==")
 // Cet ordre a déjà été inversé une fois sans que rien ne le signale : le modèle
 // embarqué passait avant le modèle servi, et lisait nettement moins bien.

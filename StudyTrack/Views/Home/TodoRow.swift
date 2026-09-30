@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Ligne « à faire »
 
-/// Une ligne = une chose. Coche à gauche, action au centre, chrono à droite.
+/// Une ligne = une chose. Coche à gauche, ce qu'il y a à faire au centre, le
+/// chrono à droite — sur le papier, sans cadre.
 struct TodoRow: View {
     let todo: StudyTodo
     var isDone: Bool = false
@@ -11,25 +12,29 @@ struct TodoRow: View {
     var onStart: () -> Void
 
     var body: some View {
+        let tint = Carnet.tint(todo.colorHex)
         HStack(spacing: 0) {
             CheckCircleButton(isOn: isDone,
-                              tint: todo.tint,
+                              tint: tint,
                               label: "Marquer \(todo.title) terminé",
                               action: onComplete)
+                .padding(.leading, 4)
 
             Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: Layout.tight) {
-                    HStack(spacing: 6) {
-                        Text(todo.courseCode)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color(hex: todo.colorHex).accessibleInk)
-                        Text(todo.title)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    Text(todo.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MathMarkup.plain(todo.title))
+                        .font(.body)
+                        .foregroundStyle(Carnet.ink)
                         .lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(todo.courseCode)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(tint)
+                        Text(todo.detail)
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -38,22 +43,24 @@ struct TodoRow: View {
 
             if let duration = todo.durationLabel {
                 Text(duration)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                    .font(Carnet.mono(.caption))
+                    .foregroundStyle(Carnet.inkSecondary)
             }
 
             Button(action: onStart) {
-                Image(systemName: "play.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(todo.tint.accessibleMark)
+                Image(systemName: "play.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Carnet.ink)
+                    .frame(width: 30, height: 30)
+                    .background(Carnet.sheetRaised, in: Circle())
                     .frame(width: Layout.minTouch, height: Layout.minTouch)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .accessibilityLabel("Démarrer le chrono sur \(todo.title)")
+            .padding(.trailing, 4)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 5)
     }
 }
 

@@ -116,7 +116,6 @@ final class SettingsStore {
     // MARK: Import intelligent (analyse des PDF)
     /// Proposer l'analyse par modèle de langage à l'import d'un PDF.
     var aiExtractionEnabled: Bool { didSet { defaults.set(aiExtractionEnabled, forKey: Key.aiExtractionEnabled) } }
-    /// Base d'une API compatible OpenAI (`…/v1`), utilisée si le modèle local manque.
 
     // MARK: Anki
     /// Adresse d'AnkiConnect. Vide = fonctionnalité éteinte.

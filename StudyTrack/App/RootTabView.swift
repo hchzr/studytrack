@@ -14,23 +14,16 @@ struct RootTabView: View {
 
         Group {
             if app.settings.hasCompletedOnboarding {
-                TabView(selection: $router.selectedTab) {
-                    ForEach(AppRouter.Tab.allCases, id: \.self) { tab in
-                        tabContent(tab)
-                            .modifier(LegacyFocusDockInset())
-                            .tabItem { Label(tab.title, systemImage: tab.icon) }
-                            .tag(tab)
-                    }
-                }
+                tabs
                 .modifier(FocusDockPlacement())
-                // Focus, profil et bilan s'ouvrent depuis **n'importe quel** onglet :
-                // une seule présentation, pilotée par le routeur.
+                // Focus, bilan et agenda s'ouvrent depuis **n'importe quel**
+                // onglet : une seule présentation, pilotée par le routeur.
                 .sheet(item: rootSheet) { sheet in
                     switch sheet {
                     case .focus:
                         FocusView(onClose: { app.router.showingFocus = false })
-                    case .profile:
-                        ProfileView()
+                    case .agenda:
+                        AgendaView()
                     case .stats:
                         NavigationStack {
                             StatsView()
@@ -141,25 +134,67 @@ struct RootTabView: View {
     }
 
     enum RootSheet: String, Identifiable {
-        case focus, profile, stats
+        case focus, agenda, stats
         var id: String { rawValue }
     }
 
-    /// Les trois drapeaux du routeur, vus comme une seule feuille. Fermer la
-    /// feuille remet le drapeau à faux — sinon le bouton ne rouvrirait plus rien.
+    /// Les drapeaux du routeur, vus comme une seule feuille. Fermer la feuille
+    /// remet le drapeau à faux — sinon le bouton ne rouvrirait plus rien.
     private var rootSheet: Binding<RootSheet?> {
         Binding(get: {
             if app.router.showingFocus { return .focus }
-            if app.router.showingProfile { return .profile }
+            if app.router.showingAgenda { return .agenda }
             if app.router.showingStats { return .stats }
             return nil
         }, set: { value in
             if value == nil {
                 app.router.showingFocus = false
-                app.router.showingProfile = false
+                app.router.showingAgenda = false
                 app.router.showingStats = false
             }
         })
+    }
+
+    /// Le rond « Chrono » n'est pas une page : le choisir ouvre Focus et laisse
+    /// l'onglet où l'on était.
+    private var tabSelection: Binding<AppRouter.Tab> {
+        Binding(get: { app.router.selectedTab }, set: { tab in
+            if tab == .focus {
+                app.router.openFocus()
+                Haptics.tap()
+            } else {
+                app.router.selectedTab = tab
+            }
+        })
+    }
+
+    @ViewBuilder
+    private var tabs: some View {
+        if #available(iOS 18.0, *) {
+            TabView(selection: tabSelection) {
+                ForEach([AppRouter.Tab.today, .courses, .groups, .me], id: \.self) { tab in
+                    Tab(tab.title, systemImage: tab.icon, value: tab) {
+                        tabContent(tab).modifier(LegacyFocusDockInset())
+                    }
+                }
+                // Le rôle « recherche » marque l'action à part (iOS 26 la
+                // détache parfois en rond à droite de la barre) : ce n'est pas
+                // une page, la choisir ouvre Focus.
+                Tab(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon,
+                    value: AppRouter.Tab.focus, role: .search) {
+                    Color.clear
+                }
+            }
+        } else {
+            TabView(selection: tabSelection) {
+                ForEach([AppRouter.Tab.today, .courses, .groups, .me], id: \.self) { tab in
+                    tabContent(tab)
+                        .modifier(LegacyFocusDockInset())
+                        .tabItem { Label(tab.title, systemImage: tab.icon) }
+                        .tag(tab)
+                }
+            }
+        }
     }
 
     /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.
@@ -195,12 +230,12 @@ struct RootTabView: View {
             app.router.selectedTab = .today
             app.router.showingTasks = true
         case "stats":
-            app.router.selectedTab = .today
+            app.router.selectedTab = .me
             app.router.showingStats = true
         case "today":
             app.router.selectedTab = .today
         case "agenda":
-            app.router.selectedTab = .agenda
+            app.router.openAgenda()
         case "courses":
             app.router.selectedTab = .courses
         case "groups":
@@ -224,7 +259,8 @@ struct RootTabView: View {
         case .today: TodayView()
         case .courses: CoursesView()
         case .groups: GroupsView()
-        case .agenda: AgendaView()
+        case .me: MeView()
+        case .focus: EmptyView()
         }
     }
 }

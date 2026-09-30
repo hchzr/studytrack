@@ -28,8 +28,26 @@ struct ProfileView: View {
     @State private var showingDeleteAccount = false
     @State private var csvURL: URL?
 
+    /// Poussé depuis l'onglet Moi (sans pile ni « Fermer »), ou présenté seul.
+    var isEmbedded = false
+
     var body: some View {
-        NavigationStack {
+        if isEmbedded {
+            settingsForm
+        } else {
+            NavigationStack {
+                settingsForm
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Fermer") { dismiss() }
+                        }
+                    }
+            }
+        }
+    }
+
+    private var settingsForm: some View {
+        Group {
             // Une page par sujet. Les quinze sections empilées faisaient un
             // formulaire de plusieurs écrans où rien ne se retrouvait ; la racine
             // ne garde que qui tu es, ton bilan, et un sommaire.
@@ -80,13 +98,9 @@ struct ProfileView: View {
                     }
                 }
             }
-            .navigationTitle("Profil & réglages")
+            .carnetBackground()
+            .navigationTitle("Réglages")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Fermer") { dismiss() }
-                }
-            }
             .sheet(isPresented: $showingImport) {
                 ImportSheet(defaultSectionCode: app.settings.sectionCode)
             }
@@ -172,6 +186,7 @@ struct ProfileView: View {
                                      @ViewBuilder content: @escaping () -> Content) -> some View {
         NavigationLink {
             Form { content() }
+                .carnetBackground()
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
         } label: {

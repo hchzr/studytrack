@@ -98,14 +98,14 @@ enum PreviewLaunch {
 
     /// Ouvre l'onglet demandé, et installe le semestre d'exemple si `-seedSampleData`.
     static func apply(to container: AppContainer) {
-        if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw) {
+        if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw), tab != .focus {
             container.router.selectedTab = tab
-        } else if int(tabFlag) == 2 {
-            // 2 était l'onglet Focus : il s'ouvre maintenant en feuille, après
-            // l'apparition de l'interface (une feuille demandée avant n'apparaît pas).
+        } else if let raw = int(tabFlag), raw == 2 || raw == 4 {
+            // 2 (Focus) et 4 (l'agenda) s'ouvrent en feuille, après l'apparition
+            // de l'interface (une feuille demandée avant n'apparaît pas).
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(600))
-                container.router.showingFocus = true
+                if raw == 2 { container.router.showingFocus = true } else { container.router.showingAgenda = true }
             }
         }
         // Les feuilles de prévisualisation sont ouvertes par `TodayView.onAppear`,
@@ -164,6 +164,8 @@ struct StudyTrackApp: App {
     @State private var container: AppContainer
 
     init() {
+        // Les grands titres en serif, avant la première barre de navigation.
+        Carnet.installAppearance()
         let container = AppContainer()
         _container = State(initialValue: container)
         // Expose le conteneur aux App Intents (Siri, Raccourcis).

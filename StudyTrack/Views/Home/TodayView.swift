@@ -54,6 +54,8 @@ struct TodayView: View {
     @State private var openedVideo: TheoryItem?
     /// Chrono laissé en route dans Focus, relu à chaque passage au premier plan.
     @State private var showAllTodos = false
+    /// Un cours ouvert depuis « La semaine ».
+    @State private var openedCourseDetail: Course?
     /// Les lignes cochées à l'instant : leur coche se remplit avant qu'elles
     /// ne quittent la liste, sinon la ligne disparaît sous le doigt.
     @State private var justDone: Set<String> = []
@@ -165,41 +167,14 @@ struct TodayView: View {
         @Bindable var router = app.router
         let state = derived()
         return NavigationStack {
-            ScrollView {
-                if isWide {
-                    // Deux colonnes : le plan de la semaine à gauche, le travail
-                    // concret à droite. Une seule colonne de 1030 pt obligeait à
-                    // faire défiler pour relier « ce qui reste » à « quoi faire ».
-                    HStack(alignment: .top, spacing: Layout.sectionSpacing) {
-                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            greeting(state)
-                            if state.tracked.isEmpty {
-                                emptyState
-                            } else {
-                                importNews
-                                todaySchedule(state)
-                                weekCard(state)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            if !state.tracked.isEmpty {
-                                weeklyList(state)
-                                deadlinesSection(state)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(Layout.screenPadding)
-                    .adaptiveColumn(maxWidth: Layout.wideWidth)
-                } else {
-                    content(state)
-                    .padding(Layout.screenPadding)
-                }
+            CarnetScroll {
+                content(state)
             }
-            .background(Color(.systemGroupedBackground))
             .navigationTitle("Aujourd'hui")
+            .carnetSubtitle(dateLine(state))
+            .navigationDestination(item: $openedCourseDetail) { course in
+                CourseDetailView(course: course)
+            }
             .toolbar {
                 // L'action de l'onglet, puis l'avatar — la même règle partout.
                 // La loupe vit dans « Cours », dont elle cherche le contenu.
@@ -238,7 +213,6 @@ struct TodayView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("Ajouter ou démarrer")
-                    ProfileButton()
                 }
             }
             // **Une seule** feuille pour les six présentations.
@@ -313,27 +287,135 @@ struct TodayView: View {
     /// vérificateur de types (« unable to type-check this expression in reasonable
     /// time »). Les nommer une par une dans une méthode donne au compilateur des
     /// expressions courtes, et au lecteur un plan lisible de l'écran.
+    /// L'accueil, dans l'ordre où l'on s'en sert : reprendre ce qu'on faisait,
+    /// voir ce qui a une heure aujourd'hui, choisir la suite, ne pas rater une
+    /// échéance, et voir la semaine d'un coup d'œil.
     @ViewBuilder
     private func content(_ state: TodayState) -> some View {
-        LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            greeting(state)
+        if state.tracked.isEmpty {
+            CarnetEmpty(icon: "books.vertical",
+                        title: "Aucun cours suivi",
+                        message: "Importe tes cours depuis Moodle : séries, vidéos et échéances arrivent d'un coup.",
+                        actionTitle: "Importer mes cours") {
+                app.router.openContentImport()
+            }
+        } else {
+            resumeCard(state)
+            importNews
+            todaySchedule(state)
+            weeklyList(state)
+            deadlinesSection(state)
+            weekCourses(state)
+        }
+    }
 
-            if state.tracked.isEmpty {
-                emptyState
-            } else {
-                // Par ordre d'urgence : la prochaine chose à faire, ce qui a une
-                // heure aujourd'hui, où j'en suis par cours, la suite, les
-                // échéances. Le chrono en cours n'a plus de bandeau : le dock le
-                // montre sur tous les onglets.
-                // La prochaine action n'a plus de carte ici : la bulle Focus,
-                // au-dessus de la barre d'onglets, la montre déjà — sur tous
-                // les onglets. Deux fois la même chose l'une sous l'autre,
-                // c'était du poids pour rien.
-                importNews
-                todaySchedule(state)
-                weekCard(state)
-                weeklyList(state)
-                deadlinesSection(state)
+    // MARK: Reprendre
+
+    /// La carte en verre du haut : la chose à reprendre, où on en est dedans
+    /// (l'anneau compte les sous-questions), et le bouton qui y retourne.
+    @ViewBuilder
+    private func resumeCard(_ state: TodayState) -> some View {
+        if let next = NextActionEngine.actions(for: state.tracked, limit: 1).first {
+            let exercise = next.targetID.flatMap { id in exercises.first { $0.id == id } }
+            let video = next.targetID.flatMap { id in videos.first { $0.id == id } }
+            let tint = Carnet.tint(next.colorHex)
+            let leaves = exercise?.leafSubQuestions ?? []
+            let done = leaves.filter(\.isDone).count
+            VStack(alignment: .leading, spacing: 12) {
+                CarnetKicker("\(next.reasonLabel) · \(next.courseCode)", color: tint)
+                HStack(spacing: 14) {
+                    if leaves.isEmpty {
+                        CarnetIconTile(systemName: next.icon, tint: tint, size: 52)
+                    } else {
+                        CarnetRing(value: Double(done) / Double(max(leaves.count, 1)), tint: tint,
+                                   label: "\(done)/\(leaves.count)")
+                    }
+                    Button {
+                        if let exercise { openedExercise = exercise } else if let video { openedVideo = video }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(MathMarkup.plain(next.title))
+                                .font(Carnet.serif(.title3))
+                                .foregroundStyle(Carnet.ink)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Text(resumeDetail(next, exercise: exercise))
+                                .font(.footnote)
+                                .foregroundStyle(Carnet.inkSecondary)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        app.router.startFocus(courseID: next.courseID, courseCode: next.courseCode,
+                                              taskType: next.taskType, targetID: next.targetID,
+                                              label: next.focusLabel)
+                        Haptics.tap()
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(Carnet.ground)
+                            .offset(x: 1)
+                            .frame(width: 50, height: 50)
+                            .background(Carnet.ink, in: Circle())
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("Démarrer le chrono : \(next.focusLabel)")
+                }
+            }
+            .padding(16)
+            .carnetGlass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+    }
+
+    private func resumeDetail(_ next: NextAction, exercise: Exercise?) -> String {
+        if let exercise, let current = exercise.leafSubQuestions.first(where: { !$0.isDone }) {
+            return "Sous-question \(current.displayLabel) · \(next.detail)"
+        }
+        return next.detail
+    }
+
+    // MARK: La semaine
+
+    /// Chaque cours en une colonne : la part faite de sa semaine.
+    @ViewBuilder
+    private func weekCourses(_ state: TodayState) -> some View {
+        let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("La semaine") {
+                Button(DateUtils.hoursLabel(seconds: state.weekSeconds) + " travaillées") {
+                    app.router.showingStats = true
+                }
+            }
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(state.tracked) { course in
+                    let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
+                    let done = week.watchedCount + week.doneCount
+                    let total = week.videoCount + week.exerciseCount
+                    Button {
+                        openedCourseDetail = course
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(course.displayCode)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Carnet.tint(course.colorHex))
+                            Text(total == 0 ? "—" : "\(done)/\(total)")
+                                .font(Carnet.serif(.title2))
+                                .foregroundStyle(Carnet.ink)
+                            CarnetBar(value: CourseProgress.ratio(done, total), tint: Carnet.tint(course.colorHex))
+                            Text(total == 0 ? "rien de prévu" : (done == total ? "semaine faite" : "reste \(total - done)"))
+                                .font(.caption)
+                                .foregroundStyle(Carnet.inkSecondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.98))
+                    .accessibilityLabel("\(course.name) : \(done) sur \(total) cette semaine")
+                }
             }
         }
     }
@@ -344,12 +426,11 @@ struct TodayView: View {
     private var importNews: some View {
         let news = app.settings.contentRefreshNews
         if !news.isEmpty {
-            HStack(alignment: .top, spacing: Layout.control) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(Theme.accent.accessibleMark)
-                VStack(alignment: .leading, spacing: Layout.micro) {
-                    Text("Nouveau dans tes cours").font(.subheadline.weight(.semibold))
-                    Text(news).font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                CarnetIconTile(systemName: "sparkles", tint: Carnet.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Nouveau dans tes cours").font(.subheadline.weight(.semibold)).foregroundStyle(Carnet.ink)
+                    Text(news).font(.footnote).foregroundStyle(Carnet.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -358,15 +439,15 @@ struct TodayView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Carnet.inkSecondary)
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Masquer")
             }
-            .padding(Layout.gutter)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+            .padding(14)
+            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
             .transition(.opacity)
         }
     }
@@ -502,146 +583,96 @@ struct TodayView: View {
         return parts.joined(separator: " · ")
     }
 
-    // MARK: Planning du jour
+    // MARK: Horaire
 
-    /// « Ta journée » : ce qui a une heure aujourd'hui, et l'accès à l'agenda.
-    ///
-    /// Toujours affichée, même vide : c'est le point d'entrée de l'agenda depuis
-    /// l'accueil. Les créneaux finis se replient en une ligne pour que la
-    /// prochaine séance soit en haut ; la ligne rouge marque maintenant.
+    /// Ce qui a une heure aujourd'hui : cours EPFL, sessions planifiées,
+    /// évaluations. Les créneaux passés restent, barrés ; toucher la feuille
+    /// ouvre l'agenda.
     private func todaySchedule(_ state: TodayState) -> some View {
         let now = Date()
-        let finished = state.todayItems.filter { ($0.end ?? $0.start) < now }
-        let coming = state.todayItems.filter { ($0.end ?? $0.start) >= now }
-        return VStack(alignment: .leading, spacing: Layout.control) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Ta journée").font(.headline)
-                Spacer()
+        let items = state.todayItems
+        return VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Horaire") {
                 Button {
                     app.router.openAgenda(day: now)
                 } label: {
-                    HStack(spacing: Layout.tight) {
+                    HStack(spacing: 3) {
                         Text("Agenda")
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                     }
-                    .font(.subheadline)
                 }
-                .accessibilityLabel("Ouvrir l'agenda d'aujourd'hui")
+                .accessibilityLabel("Ouvrir l'agenda")
             }
-            .padding(.horizontal, Layout.micro)
-
             Button {
                 app.router.openAgenda(day: now)
             } label: {
-                VStack(alignment: .leading, spacing: 0) {
-                    if state.todayItems.isEmpty {
-                        HStack(spacing: Layout.block) {
-                            Image(systemName: "sun.max")
-                                .font(.title3)
-                                .foregroundStyle(Color.orange.accessibleMark)
-                            VStack(alignment: .leading, spacing: Layout.micro) {
-                                Text("Rien d'autre à l'horaire aujourd'hui")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                Text("Toute la journée est à toi · touche pour voir la semaine")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 0)
-                        }
+                CarnetSheet {
+                    if items.isEmpty {
+                        CarnetRow(icon: "sun.max", tint: Carnet.review,
+                                  title: "Rien à l'horaire aujourd'hui",
+                                  subtitle: "La journée est à toi")
                     } else {
-                        if !finished.isEmpty {
-                            Text(finished.count == 1 ? "1 créneau terminé" : "\(finished.count) créneaux terminés")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 60)
-                                .padding(.bottom, Layout.inline)
+                        ForEach(Array(items.prefix(6).enumerated()), id: \.element.id) { index, item in
+                            scheduleRow(item, now: now)
+                            if index < min(items.count, 6) - 1 { CarnetRule(inset: 74) }
                         }
-                        if !coming.isEmpty, !finished.isEmpty || coming.first.map({ $0.start > now }) == true {
-                            scheduleNowLine(now)
-                        }
-                        ForEach(Array(coming.prefix(4).enumerated()), id: \.element.id) { index, item in
-                            scheduleRow(item, isOngoing: item.start <= now)
-                            if index < min(coming.count, 4) - 1 {
-                                Divider().padding(.leading, 60)
-                            }
-                        }
-                        if coming.isEmpty {
-                            Text("Journée terminée · rien d'autre à l'horaire")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 60)
-                                .padding(.top, Layout.inline)
-                        } else if coming.count > 4 {
-                            Text("+ \(coming.count - 4) autre\(coming.count - 4 > 1 ? "s" : "")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 60)
-                                .padding(.top, Layout.inline)
+                        if items.count > 6 {
+                            Text("+ \(items.count - 6) autres")
+                                .font(.footnote)
+                                .foregroundStyle(Carnet.inkSecondary)
+                                .padding(.leading, 74)
+                                .padding(.bottom, 10)
                         }
                     }
                 }
-                .padding(Layout.gutter)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-                .contentShape(Rectangle())
             }
-            .buttonStyle(PressableStyle())
+            .buttonStyle(PressableStyle(scale: 0.99))
         }
     }
 
-    private func scheduleNowLine(_ now: Date) -> some View {
-        HStack(spacing: Layout.snug) {
-            Text(DateUtils.time.string(from: now))
-                .font(.caption2.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(Color.red.accessibleInk)
-                .frame(width: 44, alignment: .trailing)
-            Circle().fill(Color.red.accessibleMark).frame(width: 6, height: 6)
-            Rectangle().fill(Color.red.accessibleMark).frame(height: 1.5)
-        }
-        .padding(.bottom, Layout.tight)
-        .accessibilityHidden(true)
-    }
-
-    private func scheduleRow(_ item: TodayItem, isOngoing: Bool) -> some View {
-        HStack(alignment: .center, spacing: Layout.block) {
-            VStack(alignment: .trailing, spacing: Layout.micro) {
+    private func scheduleRow(_ item: TodayItem, now: Date) -> some View {
+        let isPast = (item.end ?? item.start) < now
+        let isOngoing = item.start <= now && !isPast
+        return HStack(spacing: 12) {
+            VStack(alignment: .trailing, spacing: 1) {
                 Text(DateUtils.time.string(from: item.start))
-                    .font(.caption.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
+                    .font(Carnet.mono(.footnote, weight: isOngoing ? .semibold : .regular))
                 if let end = item.end {
                     Text(DateUtils.time.string(from: end))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                        .font(Carnet.mono(.caption2))
+                        .foregroundStyle(Carnet.inkTertiary)
                 }
             }
-            .frame(width: 44, alignment: .trailing)
+            .foregroundStyle(isPast ? Carnet.inkTertiary : Carnet.ink)
+            .frame(width: 46, alignment: .trailing)
             RoundedRectangle(cornerRadius: 2)
-                .fill(item.color.accessibleMark)
-                .frame(width: 4, height: 34)
-            VStack(alignment: .leading, spacing: Layout.micro) {
-                HStack(spacing: Layout.snug) {
+                .fill(item.color)
+                .opacity(isPast ? 0.35 : 1)
+                .frame(width: 3, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
                     Text(item.title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .font(.body.weight(isOngoing ? .semibold : .regular))
+                        .strikethrough(isPast, color: Carnet.inkTertiary)
+                        .foregroundStyle(isPast ? Carnet.inkTertiary : Carnet.ink)
                         .lineLimit(1)
                     if isOngoing {
-                        Pill(text: "en cours", color: Theme.accent)
+                        Text("en cours")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Carnet.ground)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Carnet.ink, in: Capsule())
                     }
                 }
                 if !item.subtitle.isEmpty {
-                    Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(item.subtitle).font(.footnote).foregroundStyle(Carnet.inkSecondary).lineLimit(1)
                 }
             }
-            Spacer(minLength: Layout.inline)
-            Image(systemName: item.icon)
-                .font(.caption)
-                .foregroundStyle(item.color.accessibleMark)
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, Layout.inline)
+        .padding(.horizontal, Carnet.rowInset)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
     }
 
     private var greetingText: String {
@@ -656,16 +687,7 @@ struct TodayView: View {
         return name.isEmpty ? base : "\(base) \(name)"
     }
 
-    // MARK: Cette semaine
-
-    private func weekCard(_ state: TodayState) -> some View {
-        TodayWeekCard(courses: state.tracked,
-                      weekSeconds: state.weekSeconds,
-                      onOpenCourse: { course in app.router.openCourse(course.id) },
-                      onOpenStats: { app.router.showingStats = true })
-    }
-
-    // MARK: Liste de la semaine
+    // MARK: À faire
 
     /// Au-delà de cinq lignes, la liste se replie : en semaine 12 elle en compte
     /// des dizaines, et l'accueil devenait un mur à faire défiler.
@@ -677,11 +699,10 @@ struct TodayView: View {
         if !rest.isEmpty {
             let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "À faire cette semaine", trailing: "\(rest.count)")
-                Card {
-                    VStack(spacing: 0) {
-                        ForEach(visible) { todo in
-                          VStack(spacing: 0) {
+                CarnetSectionTitle("À faire") { Text("\(rest.count) cette semaine") }
+                CarnetSheet {
+                    ForEach(visible) { todo in
+                        VStack(spacing: 0) {
                             TodoRow(todo: todo,
                                     isDone: justDone.contains(todo.id),
                                     onComplete: { checkOff(todo) },
@@ -693,28 +714,22 @@ struct TodayView: View {
                                                               targetID: todo.targetID,
                                                               label: "\(todo.courseCode) · \(todo.title)")
                                     })
-                            if todo.id != visible.last?.id {
-                                Divider().padding(.leading, 56)
-                            }
-                          }
-                          .transition(reduceMotion
-                                      ? .opacity
-                                      : .opacity.combined(with: .move(edge: .leading)))
+                            if todo.id != visible.last?.id { CarnetRule(inset: 54) }
                         }
-                        if rest.count > Self.collapsedTodoCount {
-                            Divider()
-                            Button {
-                                withAnimation(Motion.snappy) { showAllTodos.toggle() }
-                            } label: {
-                                Text(showAllTodos ? "Afficher moins" : "Tout afficher (\(rest.count))")
-                                    .font(.subheadline.weight(.medium))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.top, Layout.control)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Theme.accentInk)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .leading)))
+                    }
+                    if rest.count > Self.collapsedTodoCount {
+                        CarnetRule(inset: 0)
+                        Button {
+                            withAnimation(Motion.snappy) { showAllTodos.toggle() }
+                        } label: {
+                            Text(showAllTodos ? "Afficher moins" : "Tout afficher (\(rest.count))")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Carnet.ink)
+                                .frame(maxWidth: .infinity, minHeight: 46)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -725,28 +740,22 @@ struct TodayView: View {
 
     @ViewBuilder
     private func deadlinesSection(_ state: TodayState) -> some View {
-        if !state.upcomingExams.isEmpty || !state.dueTasks.isEmpty {
+        let rows = deadlineRows(state)
+        if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("À venir").font(.headline)
-                    Spacer()
+                CarnetSectionTitle("Échéances") {
                     Button("Tâches") { app.router.showingTasks = true }
-                        .font(.subheadline)
                 }
-                .padding(.horizontal, 2)
-                Card {
-                    let rows = deadlineRows(state)
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                            deadlineRow(icon: row.icon,
-                                        tint: row.tint,
-                                        title: row.title,
-                                        subtitle: row.subtitle,
-                                        trailing: row.trailing)
-                            if index < rows.count - 1 {
-                                Divider().padding(.leading, 36)
+                CarnetSheet {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        CarnetRow(icon: row.icon, tint: row.tint, title: row.title, subtitle: row.subtitle) {
+                            if let trailing = row.trailing {
+                                Text(trailing)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(row.urgent ? Carnet.wrong : Carnet.inkSecondary)
                             }
                         }
+                        if index < rows.count - 1 { CarnetRule() }
                     }
                 }
             }
@@ -760,6 +769,7 @@ struct TodayView: View {
         let title: String
         let subtitle: String
         let trailing: String?
+        var urgent = false
     }
 
     /// Les échéances aplaties en une liste, pour que les séparateurs tombent entre
@@ -767,42 +777,25 @@ struct TodayView: View {
     private func deadlineRows(_ state: TodayState) -> [DeadlineRow] {
         var rows: [DeadlineRow] = []
         for exam in state.upcomingExams {
+            let soon = exam.date.timeIntervalSinceNow < 3 * 86_400
             rows.append(DeadlineRow(id: "exam-\(exam.id)",
                                     icon: exam.kind.icon,
-                                    tint: exam.kind.color,
+                                    tint: exam.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary,
                                     title: exam.title,
                                     subtitle: "\(exam.course?.displayCode ?? "") · \(DateUtils.shortDay.string(from: exam.date))",
-                                    trailing: DateUtils.countdownLabel(to: exam.date)))
+                                    trailing: DateUtils.countdownLabel(to: exam.date),
+                                    urgent: soon))
         }
         for task in state.dueTasks {
             rows.append(DeadlineRow(id: "task-\(task.id)",
                                     icon: "checklist",
-                                    tint: task.isOverdue ? .red : .teal,
+                                    tint: task.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary,
                                     title: task.title,
                                     subtitle: task.course?.displayCode ?? task.provider.label,
-                                    trailing: task.isOverdue ? "En retard" : "Aujourd'hui"))
+                                    trailing: task.isOverdue ? "En retard" : "Aujourd'hui",
+                                    urgent: task.isOverdue))
         }
         return rows
-    }
-
-    private func deadlineRow(icon: String, tint: Color, title: String, subtitle: String, trailing: String?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(tint.accessibleMark)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.medium)).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if let trailing {
-                Text(trailing)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint.accessibleInk)
-            }
-        }
-        .padding(.vertical, 8)
     }
 
     // MARK: Actions

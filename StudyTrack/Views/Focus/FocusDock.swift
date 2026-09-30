@@ -37,7 +37,7 @@ struct FocusDock: View {
     /// compter.
     private var starter: some View {
         let next = NextActionEngine.actions(for: courses, limit: 1).first
-        let tint = next.map { Color(hex: $0.colorHex) } ?? Theme.accent
+        let tint = next.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
         return HStack(spacing: Layout.inline) {
             Button {
                 if let next {
@@ -51,9 +51,9 @@ struct FocusDock: View {
                 HStack(spacing: Layout.control) {
                     Image(systemName: next?.icon ?? "timer")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tint.accessibleMark)
+                        .foregroundStyle(tint)
                         .frame(width: 34, height: 34)
-                        .background(tint.badgeFill, in: Circle())
+                        .background(tint.opacity(0.16), in: Circle())
                     VStack(alignment: .leading, spacing: 0) {
                         Text(next.map { "\($0.courseCode) · \(MathMarkup.plain($0.title))" } ?? "Focus")
                             .font(.subheadline.weight(.semibold))
@@ -80,10 +80,10 @@ struct FocusDock: View {
                 } label: {
                     Image(systemName: "play.fill")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Theme.knockedOutInk)
+                        .foregroundStyle(Carnet.ground)
                         .offset(x: 1)
                         .frame(width: 34, height: 34)
-                        .background(tint.accessibleMark, in: Circle())
+                        .background(Carnet.ink, in: Circle())
                         .frame(width: Layout.minTouch, height: Layout.minTouch)
                         .contentShape(Rectangle())
                 }
@@ -99,7 +99,7 @@ struct FocusDock: View {
 
     private func player(_ state: FocusTimerState) -> some View {
         let course = courses.first { $0.id == state.courseID }
-        let tint = course.map { Color(hex: $0.colorHex) } ?? Theme.accent
+        let tint = course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
         return TimelineView(.periodic(from: .now, by: 1)) { context in
             let phase = focus.phase(at: context.date)
             HStack(spacing: Layout.inline) {
@@ -218,8 +218,18 @@ struct FocusDock: View {
 /// Place le dock : accessoire de la barre d'onglets sur iOS 26 (il se replie
 /// avec elle au défilement), bandeau au-dessus de la barre avant.
 struct FocusDockPlacement: ViewModifier {
+    @Environment(AppContainer.self) private var app
+
+    /// Sur l'accueil, la carte « Reprendre » propose déjà la suite : le dock
+    /// n'y paraît que pendant une session. Ailleurs, il est toujours là.
+    private var isShown: Bool {
+        app.focus.hasSession || app.router.selectedTab != .today
+    }
+
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: isShown) { FocusDock() }
+        } else if #available(iOS 26.0, *) {
             content.tabViewBottomAccessory { FocusDock() }
         } else {
             content
