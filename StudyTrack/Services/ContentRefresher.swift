@@ -1,0 +1,80 @@
+import Foundation
+import SwiftData
+
+/// Relit Moodle et Botafogo **tout seul**, pour les cours déjà importés.
+///
+/// Sans elle, la série 4 publiée mardi n'existait dans l'app que si l'on
+/// pensait à réimporter. Au passage au premier plan, au plus toutes les douze
+/// heures : chaque cours relié à Moodle (son adresse est dans ses sources) ou à
+/// Botafogo est relu, et ce qui est **nouveau** est ajouté.
+///
+/// Prudente par construction :
+///   • rien n'est supprimé (`ContentDraftWriter` n'efface jamais) ;
+///   • une semaine corrigée à la main n'est pas réécrite (`updateWeeks: false`) ;
+///   • sans connexion Moodle valide, on n'insiste pas : pas de fenêtre de
+///     connexion surgie de nulle part, l'écran d'import le dira.
+@MainActor
+enum ContentRefresher {
+    static let interval: TimeInterval = 12 * 3600
+    private static var running = false
+
+    static func refreshIfDue(context: ModelContext, settings: SettingsStore, now: Date = Date()) async {
+        guard settings.contentAutoRefresh, !running else { return }
+        if let last = settings.contentLastRefresh, now.timeIntervalSince(last) < interval { return }
+        running = true
+        defer { running = false }
+
+        let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
+        let moodleCourses = courses.filter { MoodleCourseMatcher.linkedID(in: $0.contentSources) != nil }
+        let botafogoCourses = courses.compactMap { course -> (Course, URL)? in
+            guard let link = course.contentSources.compactMap(URL.init(string:))
+                    .first(where: { ContentSource.detect(host: $0.host) == .botafogo }) else { return nil }
+            return (course, link)
+        }
+        guard !moodleCourses.isEmpty || !botafogoCourses.isEmpty else {
+            settings.contentLastRefresh = now
+            return
+        }
+
+        var news: [String] = []
+
+        if !moodleCourses.isEmpty {
+            let client = MoodleClient()
+            if await client.isSignedIn() {
+                let enrolled = (try? await client.enrolled()) ?? []
+                for course in moodleCourses {
+                    guard case .unique(let ref)? = try? await client.resolve(course, enrolled: enrolled),
+                          let page = try? await client.content(of: ref) else { continue }
+                    if let line = apply(page, source: .moodle, to: course, context: context) { news.append(line) }
+                }
+            } else {
+                AppLog.record(.info, "import", "Mise à jour Moodle sautée : session expirée")
+            }
+        }
+
+        for (course, link) in botafogoCourses {
+            guard let page = try? await BotafogoClient.course(at: link) else { continue }
+            if let line = apply(page, source: .botafogo, to: course, context: context) { news.append(line) }
+        }
+
+        try? context.save()
+        settings.contentLastRefresh = now
+        if !news.isEmpty {
+            settings.contentRefreshNews = news.joined(separator: " · ")
+            AppLog.record(.info, "import", "Mise à jour automatique", detail: settings.contentRefreshNews)
+        }
+    }
+
+    /// Écrit ce qui est nouveau ; rend « MATH-101 : 1 série » s'il y en a.
+    private static func apply(_ page: ScrapedCourse, source: ContentSource, to course: Course, context: ModelContext) -> String? {
+        let draft = ContentDraftBuilder.draft(from: page, source: source,
+                                              termStart: course.term?.startDate,
+                                              totalWeeks: course.term?.totalWeeks ?? 14)
+        guard !draft.isEmpty else { return nil }
+        let result = ContentDraftWriter.apply(draft, to: course, context: context, updateWeeks: false)
+        var parts: [String] = []
+        if result.seriesAdded > 0 { parts.append("\(result.seriesAdded) série\(result.seriesAdded > 1 ? "s" : "")") }
+        if result.theoryAdded > 0 { parts.append("\(result.theoryAdded) théorie") }
+        return parts.isEmpty ? nil : "\(course.displayCode) : " + parts.joined(separator: ", ")
+    }
+}

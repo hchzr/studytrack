@@ -43,6 +43,11 @@ final class SettingsStore {
         static let aiEndpoint = "settings.aiEndpoint"
         static let aiAPIKey = "settings.aiAPIKey"
         static let aiModel = "settings.aiModel"
+        static let contentAutoRefresh = "settings.contentAutoRefresh"
+        static let contentLastRefresh = "settings.contentLastRefresh"
+        static let contentRefreshNews = "settings.contentRefreshNews"
+        static let assistantToken = "settings.assistantToken"
+        static let assistantLastSync = "settings.assistantLastSync"
     }
 
     /// Pré-remplissage du service **perso** (facultatif) : une API compatible
@@ -142,6 +147,20 @@ final class SettingsStore {
     /// Dernier relevé réussi du temps Anki.
     var ankiLastSync: Date? { didSet { defaults.set(ankiLastSync, forKey: Key.ankiLastSync) } }
 
+    // MARK: Contenu des cours
+    /// Relire Moodle et Botafogo tout seul (au plus deux fois par jour) pour
+    /// ajouter la série de la semaine dès qu'elle est publiée.
+    var contentAutoRefresh: Bool { didSet { defaults.set(contentAutoRefresh, forKey: Key.contentAutoRefresh) } }
+    var contentLastRefresh: Date? { didSet { defaults.set(contentLastRefresh, forKey: Key.contentLastRefresh) } }
+    /// « Moodle : Série 4 ajoutée en MATH-101 » — affiché sur l'accueil
+    /// jusqu'à ce qu'on le ferme ; vide quand il n'y a rien de neuf.
+    var contentRefreshNews: String { didSet { defaults.set(contentRefreshNews, forKey: Key.contentRefreshNews) } }
+
+    // MARK: Assistant IA (MCP)
+    /// Jeton secret qui relie l'app à son serveur MCP. Vide = pas relié.
+    var assistantToken: String { didSet { defaults.set(assistantToken, forKey: Key.assistantToken) } }
+    var assistantLastSync: Date? { didSet { defaults.set(assistantLastSync, forKey: Key.assistantLastSync) } }
+
     // MARK: Chrono
     /// Raccourcis du chrono, composés par l'étudiant·e.
     ///
@@ -193,6 +212,11 @@ final class SettingsStore {
         self.ankiModel = defaults.string(forKey: Key.ankiModel) ?? "Basic"
         self.ankiLastReviewID = defaults.double(forKey: Key.ankiLastReviewID)
         self.ankiLastSync = defaults.object(forKey: Key.ankiLastSync) as? Date
+        self.contentAutoRefresh = defaults.object(forKey: Key.contentAutoRefresh) as? Bool ?? true
+        self.contentLastRefresh = defaults.object(forKey: Key.contentLastRefresh) as? Date
+        self.contentRefreshNews = defaults.string(forKey: Key.contentRefreshNews) ?? ""
+        self.assistantToken = defaults.string(forKey: Key.assistantToken) ?? ""
+        self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         // Une version intermédiaire proposait un service anonyme aujourd'hui
         // épuisé : on revient au pré-remplissage courant si rien n'a été saisi.

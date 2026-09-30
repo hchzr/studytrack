@@ -114,6 +114,14 @@ struct ContentDraftItem: Identifiable, Equatable {
     var videoCount: Int
     var seriesNumber: Int?
     var theoryKind: TheoryKind
+    /// La semaine **de l'élément**, quand elle diffère de celle de sa section :
+    /// un chapitre de quatorze sections s'étale sur plusieurs semaines, et un
+    /// enregistrement de cours tombe la semaine de sa date. `nil` = celle de la
+    /// section.
+    var week: Int? = nil
+
+    /// La semaine à écrire.
+    func plannedWeek(in section: ContentDraftSection) -> Int { week ?? section.week }
 }
 
 struct ContentDraftSection: Identifiable, Equatable {
@@ -128,6 +136,24 @@ struct ContentDraftSection: Identifiable, Equatable {
     var items: [ContentDraftItem]
 
     var theoryCount: Int { items.filter { $0.kind == .theory }.count }
+
+    /// « Semaine 3 », ou « Semaines 3–5 » quand les éléments s'étalent.
+    var weekRange: ClosedRange<Int>? {
+        let weeks = items.filter { $0.kind != .ignore }.map { $0.plannedWeek(in: self) }.filter { $0 > 0 }
+        guard let low = weeks.min(), let high = weeks.max() else { return nil }
+        return low...high
+    }
+
+    /// Décale la section **et** ses éléments : corriger la semaine d'un chapitre
+    /// étalé ne doit pas écraser son étalement.
+    mutating func shiftWeeks(by delta: Int, totalWeeks: Int) {
+        guard delta != 0 else { return }
+        for index in items.indices {
+            if let own = items[index].week {
+                items[index].week = min(max(1, own + delta), max(totalWeeks, 1))
+            }
+        }
+    }
     var seriesCount: Int { items.filter { $0.kind == .series }.count }
     var videoCount: Int { items.filter { $0.kind == .theory }.reduce(0) { $0 + $1.videoCount } }
 }
@@ -202,6 +228,21 @@ enum ContentDraftBuilder {
                                                   theoryKind: .reading))
                 case .theory, .ignore:
                     theoryIndex += 1
+                    if raw.type == "recording" {
+                        // L'enregistrement d'un cours : sa semaine est celle de
+                        // sa date (« Cours 03 AN - GM - 16 sept 2026 »).
+                        let index = firstMatch(fold(title), #"^cours\s*0*(\d{1,3})\b"#).flatMap(Int.init) ?? theoryIndex
+                        items.append(ContentDraftItem(kind: .theory,
+                                                      number: "C\(index)",
+                                                      title: title,
+                                                      url: raw.url,
+                                                      videoCount: 1,
+                                                      seriesNumber: nil,
+                                                      theoryKind: .video,
+                                                      week: week(fromTitle: title, termStart: termStart, calendar: calendar)
+                                                        .map { min($0, max(totalWeeks, 1)) }))
+                        continue
+                    }
                     let lead = leadingNumber(in: title)
                     let number = lead?.number ?? "\(chapterLabel).\(theoryIndex)"
                     let videos = raw.videoCount ?? (isVideo(raw) ? 1 : 0)
@@ -217,17 +258,25 @@ enum ContentDraftBuilder {
 
             guard !items.isEmpty else { continue }
             let useful = items.contains { $0.kind != .ignore }
+            let dated = !items.isEmpty && items.allSatisfy { $0.week != nil }
             sections.append(ContentDraftSection(title: sectionTitle,
-                                                week: explicitWeek ?? 0,
-                                                weekIsInferred: explicitWeek == nil,
+                                                week: explicitWeek ?? (dated ? (items.compactMap(\.week).min() ?? 0) : 0),
+                                                weekIsInferred: explicitWeek == nil && !dated,
                                                 isIncluded: useful && !isFrontMatter(sectionTitle),
                                                 items: items))
         }
 
-        // Aucune semaine lue sur la page : on propose une section par semaine,
-        // dans l'ordre. C'est une **proposition** — la relecture la montre comme
-        // telle et chaque semaine se corrige d'un geste.
-        if !sections.contains(where: { !$0.weekIsInferred }) {
+        if source == .botafogo {
+            // Un polycopié n'a pas de semaines : ses chapitres vont de deux à
+            // quatorze sections. « Un chapitre par semaine » mettait le chapitre
+            // 3 (quatorze sections) en une semaine et le 14 (trois) dans une
+            // autre. On étale plutôt la matière **à proportion de son volume**
+            // sur le semestre.
+            spreadByVolume(&sections, totalWeeks: totalWeeks)
+        } else if !sections.contains(where: { !$0.weekIsInferred }) {
+            // Aucune semaine lue sur la page : on propose une section par
+            // semaine, dans l'ordre. C'est une **proposition** — la relecture la
+            // montre comme telle et chaque semaine se corrige d'un geste.
             var week = 0
             for index in sections.indices where sections[index].isIncluded {
                 week += 1
@@ -239,6 +288,30 @@ enum ContentDraftBuilder {
                             courseTitle: cleanTitle(page.title),
                             url: page.url,
                             sections: sections)
+    }
+
+    /// Répartit les éléments de théorie des sections incluses sur `totalWeeks`
+    /// semaines, chacun pesant `1 + vidéos`. Les éléments déjà datés (les
+    /// enregistrements) gardent leur semaine.
+    static func spreadByVolume(_ sections: inout [ContentDraftSection], totalWeeks: Int) {
+        let weeks = max(totalWeeks, 1)
+        var slots: [(section: Int, item: Int, weight: Double)] = []
+        for (s, section) in sections.enumerated() where section.isIncluded && section.weekIsInferred {
+            for (i, item) in section.items.enumerated() where item.kind == .theory && item.week == nil {
+                slots.append((s, i, 1 + Double(item.videoCount)))
+            }
+        }
+        let total = slots.reduce(0) { $0 + $1.weight }
+        guard total > 0 else { return }
+        var cumulative = 0.0
+        for slot in slots {
+            let week = min(weeks, Int(cumulative / total * Double(weeks)) + 1)
+            sections[slot.section].items[slot.item].week = week
+            cumulative += slot.weight
+        }
+        for index in sections.indices where sections[index].isIncluded && sections[index].weekIsInferred {
+            sections[index].week = sections[index].weekRange?.lowerBound ?? 0
+        }
     }
 
     // MARK: Règles
@@ -287,8 +360,9 @@ enum ContentDraftBuilder {
 
     /// Préface, avant-propos, outils : pas de la matière à planifier.
     static func isFrontMatter(_ title: String) -> Bool {
+        // Par les mots, pas par la numérotation romaine : « II. Notions
+        // élémentaires » est de la matière (sommes, fonctions, récurrence).
         let lower = fold(title)
-        if matches(lower, #"^(i|ii|iii|iv)\."#) { return true }
         return matches(lower, #"\b(preface|avant-propos|foreword|generalites du cours|informations generales|general|outils graphiques)\b"#)
     }
 
@@ -381,8 +455,13 @@ enum ContentDraftBuilder {
     /// Espaces normalisés, délimiteurs LaTeX retirés (`\(\mathbb{R}\)` → `\mathbb{R}`,
     /// que `MathText` sait afficher), suffixes techniques de Moodle ôtés.
     static func cleanTitle(_ raw: String) -> String {
-        var text = raw
-        for token in [#"\("#, #"\)"#, #"\["#, #"\]"#] { text = text.replacingOccurrences(of: token, with: "") }
+        // Un saut de ligne LaTeX (`\\`) dans un titre sépare deux parties.
+        var text = raw.replacingOccurrences(of: #"\\"#, with: " · ")
+        for token in [#"\("#, #"\)"#, #"\["#, #"\]"#, "$"] { text = text.replacingOccurrences(of: token, with: "") }
+        // Le code dans les titres du polycopié d'ICS :
+        // `\htmlTag{code}{\htmlAttr{language}{"text"}plt.plot}` → `plt.plot`.
+        text = text.replacingOccurrences(of: #"\\htmlTag\{[^}]*\}\{\\htmlAttr\{[^}]*\}\{[^}]*\}([^}]*)\}"#,
+                                         with: "$1", options: .regularExpression)
         for suffix in [" Fichier", " File", " URL", " Page", " Dossier", " Folder", " Devoir", " Assignment"] where text.hasSuffix(suffix) {
             text = String(text.dropLast(suffix.count))
         }
@@ -460,6 +539,104 @@ enum BotafogoParser {
                              title: title,
                              url: baseURL.absoluteString,
                              sections: sections)
+    }
+
+    static let home = URL(string: "https://botafogo.epfl.ch/")!
+
+    /// `…/analyse-1/resources/sections/x.html` → `…/analyse-1/`.
+    static func courseRoot(of url: URL) -> URL {
+        let parts = url.path.split(separator: "/")
+        guard let first = parts.first else { return home }
+        return URL(string: "/\(first)/", relativeTo: home)?.absoluteURL ?? home
+    }
+
+    // MARK: Polycopiés Nuxt
+
+    /// La page redirige-t-elle ailleurs (`<meta http-equiv="refresh" …>`) ?
+    ///
+    /// `/ics/`, `/analyse-b/` et `/algebre-lineaire-geometrie/` ne sont que
+    /// cela : une redirection vers leur première section. `URLSession` ne suit
+    /// pas ces redirections-là, et l'import tombait sur une page vide.
+    static func metaRefresh(html: String, baseURL: URL) -> URL? {
+        guard html.count < 4000,
+              let target = firstCapture(html, #"http-equiv="refresh"[^>]*url=([^"'>]+)"#) else { return nil }
+        return URL(string: target.trimmingCharacters(in: .whitespaces), relativeTo: baseURL)?.absoluteURL
+    }
+
+    /// La table des matières d'un polycopié Nuxt (analyse-b, ICS, algèbre
+    /// linéaire, Analyse I GM et classe inversée).
+    ///
+    /// Deux façons d'adresser une section : un chemin (`/analyse-b/matiere/…`)
+    /// ou, pour les sites de cours qui encadrent le polycopié, un paramètre
+    /// (`/analyse-1-GM/?cours=&polycopie=/handout/matiere/…`).
+    static func parseNuxt(html: String, pageURL: URL) -> ScrapedCourse? {
+        guard let payload = NuxtPayload(html: html) else { return nil }
+        let navigation = payload.navigation()
+        let chapters = navigation.chapters
+        guard !chapters.isEmpty else { return nil }
+        let root = siteRoot(html: html, pageURL: pageURL)
+        let queryRouted = html.contains("?cours=")
+        func link(_ path: String) -> String {
+            if queryRouted {
+                let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
+                return root.absoluteString + "?cours=&polycopie=" + encoded
+            }
+            let trimmedRoot = root.absoluteString.hasSuffix("/") ? String(root.absoluteString.dropLast()) : root.absoluteString
+            return trimmedRoot + (path.hasPrefix("/") ? path : "/" + path)
+        }
+        let sections = chapters.map { chapter in
+            ScrapedSection(title: decode(chapter.title),
+                           items: chapter.children.map { child in
+                               ScrapedItem(title: decode(child.title), url: link(child.path), type: "section")
+                           })
+        }
+        // Le titre de la page est celui de la **section** affichée
+        // (« 1.1 Introduction ») : le nom du polycopié vient du nœud racine du
+        // sommaire, sinon du titre de la page.
+        let pageTitle = firstCapture(html, #"<title>\s*([^<|]+)"#).map { ContentDraftBuilder.cleanTitle(decode($0)) }
+        let title = navigation.title.map { ContentDraftBuilder.cleanTitle(decode($0)) }
+            ?? pageTitle.flatMap { ContentDraftBuilder.leadingNumber(in: $0) == nil ? $0 : nil }
+            ?? "Botafogo"
+        return ScrapedCourse(source: ContentSource.botafogo.rawValue, title: title,
+                             url: root.absoluteString, sections: sections)
+    }
+
+    /// La racine du site : `baseURL` de la configuration Nuxt, sinon le
+    /// premier segment du chemin.
+    static func siteRoot(html: String, pageURL: URL) -> URL {
+        if let base = firstCapture(html, #"baseURL:"([^"]+)""#) {
+            let path = base.hasSuffix("/") ? base : base + "/"
+            if let url = URL(string: path, relativeTo: pageURL)?.absoluteURL { return url }
+        }
+        return courseRoot(of: pageURL)
+    }
+
+    /// La page « vidéos » d'un site de cours (`?cours=sections/videos_an_gm_2026`),
+    /// quand il en a une.
+    static func videosPage(html: String, root: URL) -> URL? {
+        guard let section = firstCapture(html, #"\?cours=(sections/[A-Za-z0-9_-]*vid[A-Za-z0-9_-]*)"#) else { return nil }
+        return URL(string: root.absoluteString + "?cours=" + section + "&polycopie=")
+    }
+
+    /// Les enregistrements des cours, avec leur date : `0_8coayv4h` suivi de
+    /// « Cours 01 AN - GM - 09 sept 2026 (SG1) ». Les directs (« Streaming »)
+    /// n'ont pas de date : ce ne sont pas des éléments à travailler.
+    static func recordings(html: String) -> [ScrapedItem] {
+        guard let payload = NuxtPayload(html: html) else { return [] }
+        let strings = payload.strings
+        var items: [ScrapedItem] = []
+        var seen: Set<String> = []
+        for (index, value) in strings.enumerated() where index + 1 < strings.count {
+            guard value.range(of: #"^[01]_[a-z0-9]{8}$"#, options: .regularExpression) != nil else { continue }
+            let title = decode(strings[index + 1]).trimmingCharacters(in: .whitespaces)
+            let folded = ContentDraftBuilder.fold(title)
+            guard !folded.contains("streaming"),
+                  folded.range(of: #"\b\d{1,2}\.?\s+[a-z]+\.?\s+\d{4}\b"#, options: .regularExpression) != nil,
+                  seen.insert(value).inserted else { continue }
+            items.append(ScrapedItem(title: title, url: "https://mediaspace.epfl.ch/media/\(value)",
+                                     type: "recording", videoCount: 1))
+        }
+        return items
     }
 
     /// Les vidéos de cours d'une page de section (pas les petites animations,

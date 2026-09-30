@@ -49,6 +49,16 @@ final class Course {
     /// la page une seconde fois.
     var contentSourcesRaw: String = ""
 
+    /// Les adresses d'éléments **écartés** à la relecture d'un import (un
+    /// support qu'on ne veut pas suivre, une section décochée). La mise à jour
+    /// automatique ne les réajoute pas. Une adresse par ligne.
+    var contentIgnoredRaw: String = ""
+
+    var contentIgnored: Set<String> {
+        get { Set(contentIgnoredRaw.split(separator: "\n").map(String.init)) }
+        set { contentIgnoredRaw = newValue.sorted().joined(separator: "\n") }
+    }
+
     var contentSources: [String] {
         get { contentSourcesRaw.split(separator: "\n").map(String.init) }
         set { contentSourcesRaw = newValue.joined(separator: "\n") }

@@ -50,10 +50,16 @@ enum WebContentScraper {
         if source == .botafogo, let url = webView.url {
             return try await BotafogoClient.course(at: BotafogoClient.courseRoot(of: url))
         }
-        let script = source == .moodle ? moodleScript : coursewareScript
         let raw: Any?
         do {
-            raw = try await webView.callAsyncJavaScript(script, contentWorld: .defaultClient)
+            if source == .courseware {
+                guard let key = coursewareKey(in: webView.url) else { throw ScrapeError.notACoursePage(source) }
+                raw = try await webView.callAsyncJavaScript(coursewareOutlineScript, arguments: ["key": key], contentWorld: .page)
+            } else {
+                raw = try await webView.callAsyncJavaScript(moodleScript, contentWorld: .defaultClient)
+            }
+        } catch let error as ScrapeError {
+            throw error
         } catch {
             throw ScrapeError.unreadable(error.localizedDescription)
         }
@@ -116,10 +122,16 @@ enum WebContentScraper {
     /// Open edX expose le plan du cours à l'étudiant·e connecté·e :
     /// `/api/course_home/outline/<clé>` (chapitres → leçons). Le nombre de vidéos
     /// par leçon vient de l'API des blocs, quand elle répond ; sinon on s'en passe.
-    static let coursewareScript = #"""
-    const match = decodeURIComponent(location.href).match(/(course-v1:[^/?#]+)/);
-    if (!match) return JSON.stringify({ error: "ouvre la page d'un cours" });
-    const key = match[1];
+    /// La clé Open edX d'une adresse : `course-v1:EPFL+analyse+2021`.
+    static func coursewareKey(in url: URL?) -> String? {
+        guard let text = url?.absoluteString.removingPercentEncoding,
+              let range = text.range(of: #"course-v1:[^/?#]+"#, options: .regularExpression) else { return nil }
+        return String(text[range])
+    }
+
+    /// Reçoit la clé du cours en argument (`key`) : le navigateur intégré la lit
+    /// dans l'adresse affichée, l'import direct dans la liste des inscriptions.
+    static let coursewareOutlineScript = #"""
     const lms = 'https://courseware.epfl.ch';
     const get = async (path) => {
       try {
@@ -165,9 +177,15 @@ enum WebContentScraper {
 // MARK: - Botafogo
 
 /// Botafogo est public : ni navigateur ni connexion, on lit les pages.
+///
+/// Deux générations de sites cohabitent : Analyse I, en HTML statique (une page
+/// de sommaire, une page par section avec ses vidéos), et les cinq autres —
+/// Analyse I GM et classe inversée, Analyse B, ICS, Algèbre linéaire — des
+/// applications Nuxt dont le sommaire est dans `__NUXT_DATA__`. Seule la
+/// première était lue : les cinq autres donnaient « rien de reconnaissable ».
 enum BotafogoClient {
 
-    static let home = URL(string: "https://botafogo.epfl.ch/")!
+    static var home: URL { BotafogoParser.home }
 
     /// Les polycopiés proposés sur la page d'accueil.
     static func catalog(session: URLSession = .shared) async throws -> [(title: String, url: URL)] {
@@ -175,20 +193,39 @@ enum BotafogoClient {
         return BotafogoParser.catalog(html: html, baseURL: home)
     }
 
-    /// `…/analyse-1/resources/sections/x.html` → `…/analyse-1/`.
-    static func courseRoot(of url: URL) -> URL {
-        let parts = url.path.split(separator: "/")
-        guard let first = parts.first else { return home }
-        return URL(string: "/\(first)/", relativeTo: home)?.absoluteURL ?? home
-    }
+    static func courseRoot(of url: URL) -> URL { BotafogoParser.courseRoot(of: url) }
 
-    /// La table des matières, puis chaque section pour y compter les vidéos.
-    ///
-    /// Huit pages à la fois : une centaine de sections se lisent en quelques
-    /// secondes sans charger le serveur d'un enseignant.
+    /// Le polycopié à cette adresse, quelle que soit sa génération.
     static func course(at url: URL, session: URLSession = .shared) async throws -> ScrapedCourse {
-        let html = try await text(at: url, session: session)
-        var page = BotafogoParser.parseTOC(html: html, baseURL: url)
+        var address = url
+        var html = try await text(at: address, session: session)
+        // `/ics/` n'est qu'une redirection `<meta refresh>` vers une section.
+        for _ in 0..<2 {
+            guard let next = BotafogoParser.metaRefresh(html: html, baseURL: address) else { break }
+            address = next
+            html = try await text(at: address, session: session)
+        }
+
+        if var page = BotafogoParser.parseNuxt(html: html, pageURL: address) {
+            // Les sites de cours (GM, classe inversée) publient les
+            // enregistrements, datés : ils deviennent de la théorie à la bonne
+            // semaine.
+            let root = BotafogoParser.siteRoot(html: html, pageURL: address)
+            if let videos = BotafogoParser.videosPage(html: html, root: root),
+               let body = try? await text(at: videos, session: session) {
+                let recordings = BotafogoParser.recordings(html: body)
+                if !recordings.isEmpty {
+                    page.sections.insert(ScrapedSection(title: "Enregistrements des cours", items: recordings), at: 0)
+                }
+            }
+            guard page.sections.contains(where: { !$0.items.isEmpty }) else { throw WebContentScraper.ScrapeError.empty }
+            return page
+        }
+
+        // Génération HTML : le sommaire, puis chaque section pour y compter
+        // les vidéos — huit pages à la fois, pour ne pas charger le serveur
+        // d'un enseignant.
+        var page = BotafogoParser.parseTOC(html: html, baseURL: BotafogoParser.courseRoot(of: address))
         guard !page.sections.isEmpty else { throw WebContentScraper.ScrapeError.empty }
 
         var targets: [(section: Int, item: Int, url: URL)] = []

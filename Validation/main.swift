@@ -943,6 +943,138 @@ if let data = #"{"countingSince":null,"frozenTotal":30}"#.data(using: .utf8),
     check(false, "un état sans libellés doit se décoder")
 }
 
+print("== Botafogo : polycopiés Nuxt ==")
+do {
+    let nuxtHTML = "<html><head><title>1.1 Introduction</title><script>window.__NUXT__={};baseURL:\"/analyse-b\"</script></head><body><script type=\"application/json\" data-nuxt-data=\"nuxt-app\" data-ssr=\"true\" id=\"__NUXT_DATA__\">[{\"nav\": 29}, \"Analyse B (MAN)\", \"1.1 Introduction\", \"/matiere/m_intro\", [], {\"title\": 2, \"path\": 3, \"children\": 4}, \"1.2 Limite: $a_{n}\\\\to L$\", \"/matiere/m_lim\", [], {\"title\": 6, \"path\": 7, \"children\": 8}, \"2.1 Parité\", \"/matiere/m_par\", [], {\"title\": 10, \"path\": 11, \"children\": 12}, \"1 Suites réelles\", \"#_1\", [5, 9], {\"title\": 14, \"path\": 15, \"children\": 16}, \"2 Fonctions\", \"#_2\", [13], {\"title\": 18, \"path\": 19, \"children\": 20}, \"3 Pas encore publié\", \"#_3\", [], {\"title\": 22, \"path\": 23, \"children\": 24}, [17, 21, 25], [\"ShallowReactive\", 26], \"/analyse-b\", {\"title\": 1, \"path\": 28, \"children\": 27}, \"videokaltura\", \"0_tt1r5whs\", \"Streaming Analyse 1 - GM - MERCREDI\", \"0_8coayv4h\", \"Cours 01 AN - GM - 09 sept 2026 (SG1)\", \"0_la3lc4m0\", \"Cours 03 AN - GM - 16 sept 2026 (SG1)\"]</script></body></html>"
+    let pageURL = URL(string: "https://botafogo.epfl.ch/analyse-b/matiere/m_intro")!
+    let payload = NuxtPayload(html: nuxtHTML)
+    check(payload != nil, "le bloc __NUXT_DATA__ se lit")
+    let nav = payload?.navigation()
+    check(nav?.chapters.count == 3, "trois chapitres, dont un encore vide (\(nav?.chapters.count ?? 0))")
+    check(nav?.chapters.first?.children.count == 2, "les sections suivent les indices, enveloppe ShallowReactive comprise")
+    check(nav?.title == "Analyse B (MAN)", "le nom du polycopié vient du nœud racine")
+    if let page = BotafogoParser.parseNuxt(html: nuxtHTML, pageURL: pageURL) {
+        check(page.title == "Analyse B (MAN)", "pas le titre de la section affichée (« 1.1 Introduction »)")
+        check(page.url == "https://botafogo.epfl.ch/analyse-b/", "racine du site lue dans baseURL")
+        check(page.sections.first?.items.first?.url == "https://botafogo.epfl.ch/analyse-b/matiere/m_intro", "adresse d'une section")
+        let draft = ContentDraftBuilder.draft(from: page, source: .botafogo, termStart: nil, totalWeeks: 14)
+        check(draft.sections.first?.items.last?.title == "Limite: a_{n}\\to L", "les $ du LaTeX sont retirés des titres")
+        let weeks = draft.sections.flatMap { s in s.items.map { $0.plannedWeek(in: s) } }
+        check(weeks == weeks.sorted() && weeks.first == 1 && (weeks.last ?? 0) <= 14,
+              "la matière s'étale dans l'ordre sur le semestre (\(weeks))")
+    } else {
+        check(false, "un polycopié Nuxt doit se lire")
+    }
+    let recordings = BotafogoParser.recordings(html: nuxtHTML)
+    check(recordings.count == 2, "deux enregistrements datés, le direct est écarté (\(recordings.count))")
+    check(recordings.first?.url == "https://mediaspace.epfl.ch/media/0_8coayv4h", "lien MediaSpace de l'enregistrement")
+    let termStart = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 9, day: 7))!
+    let recDraft = ContentDraftBuilder.draft(from: ScrapedCourse(source: "botafogo", title: "GM", url: "",
+                                                                 sections: [ScrapedSection(title: "Enregistrements des cours", items: recordings)]),
+                                             source: .botafogo, termStart: termStart, totalWeeks: 14)
+    check(recDraft.sections.first?.items.map(\.number) == ["C1", "C3"], "numérotés par cours")
+    check(recDraft.sections.first?.items.map { $0.week ?? 0 } == [1, 2], "semaine d'un enregistrement = semaine de sa date")
+
+    let refresh = #"<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/ics/matiere/m_avantpropos_avantpropos"></head></html>"#
+    check(BotafogoParser.metaRefresh(html: refresh, baseURL: URL(string: "https://botafogo.epfl.ch/ics/")!)?.absoluteString
+          == "https://botafogo.epfl.ch/ics/matiere/m_avantpropos_avantpropos", "une redirection <meta refresh> est suivie")
+    check(ContentDraftBuilder.cleanTitle(#"2.2 Les fonctions \htmlTag{code}{\htmlAttr{language}{"text"}plt.plot}"#)
+          == "2.2 Les fonctions plt.plot", "le code dans les titres d'ICS est lisible")
+    check(ContentDraftBuilder.cleanTitle(#"Informatique (ICS) \\ CMS"#) == "Informatique (ICS) · CMS", "un saut de ligne LaTeX devient un séparateur")
+    check(!ContentDraftBuilder.isFrontMatter("II. Notions élémentaires"), "« Notions élémentaires » est de la matière")
+    check(ContentDraftBuilder.isFrontMatter("I. Préface"), "la préface ne l'est pas")
+
+    // Corriger la semaine d'un chapitre étalé décale ses éléments.
+    var spread = ContentDraftSection(title: "3", week: 3, weekIsInferred: true, isIncluded: true,
+                                     items: [ContentDraftItem(kind: .theory, number: "3.1", title: "", url: "", videoCount: 0, seriesNumber: nil, theoryKind: .reading, week: 3),
+                                             ContentDraftItem(kind: .theory, number: "3.2", title: "", url: "", videoCount: 0, seriesNumber: nil, theoryKind: .reading, week: 5)])
+    spread.shiftWeeks(by: 2, totalWeeks: 14)
+    check(spread.items.map { $0.week ?? 0 } == [5, 7], "décaler un chapitre garde son étalement")
+    check(spread.weekRange == 5...7, "« Semaines 5–7 »")
+}
+
+print("== Moodle : plan du cours et sections ==")
+do {
+    // La forme exacte que renvoie moodle.epfl.ch (Moodle 4.5), relevée sur un
+    // cours public : identifiants en chaînes, `module` technique, sous-sections
+    // déléguées.
+    let state = #"""
+    {"course":{"id":"14840","numsections":3},
+     "section":[
+      {"id":"100","section":0,"number":0,"title":"Généralités","cmlist":["1","2"],"visible":true,"component":null,"itemid":null},
+      {"id":"101","section":1,"number":1,"title":"8 septembre - 14 septembre","cmlist":["3","4","5","9"],"visible":true,"component":null,"itemid":null},
+      {"id":"102","section":2,"number":2,"title":"Semaine 2","cmlist":["6","7"],"visible":true,"component":null,"itemid":null},
+      {"id":"103","section":3,"number":3,"title":"Sous-section","cmlist":["8"],"visible":true,"component":"mod_subsection","itemid":"9"}],
+     "cm":[
+      {"id":"1","name":"Annonces","module":"forum","url":"https://moodle.epfl.ch/mod/forum/view.php?id=1","uservisible":true},
+      {"id":"2","name":"Plan du cours","module":"resource","url":"https://moodle.epfl.ch/mod/resource/view.php?id=2","uservisible":true},
+      {"id":"3","name":"Vidéo 1.1 Introduction","module":"kalvidres","url":"https://moodle.epfl.ch/mod/kalvidres/view.php?id=3","uservisible":true},
+      {"id":"4","name":"Série 1","module":"resource","url":"https://moodle.epfl.ch/mod/resource/view.php?id=4","uservisible":true},
+      {"id":"5","name":"Corrigé série 1","module":"resource","url":"https://moodle.epfl.ch/mod/resource/view.php?id=5","uservisible":true},
+      {"id":"6","name":"Série 2","module":"assign","url":"https://moodle.epfl.ch/mod/assign/view.php?id=6","uservisible":true},
+      {"id":"7","name":"Caché","module":"resource","url":"","uservisible":false},
+      {"id":"8","name":"Chapitre 1.2 Suites","module":"page","url":"https://moodle.epfl.ch/mod/page/view.php?id=8","uservisible":true},
+      {"id":"9","name":"Sous-section","module":"subsection","url":"","uservisible":true}]}
+    """#
+    if let page = MoodleStateParser.course(fromStateJSON: state, title: "Analyse I", url: "https://moodle.epfl.ch/course/view.php?id=14840") {
+        check(page.sections.count == 3, "la sous-section déléguée n'est pas une section de plus (\(page.sections.count))")
+        check(page.sections[1].items.map(\.title) == ["Vidéo 1.1 Introduction", "Série 1", "Corrigé série 1", "Chapitre 1.2 Suites"],
+              "ses activités sont rangées là où on les voit")
+        check(!page.sections[2].items.contains { $0.title == "Caché" }, "une activité invisible n'est pas importée")
+        let term = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 9, day: 7))!
+        let draft = ContentDraftBuilder.draft(from: page, source: .moodle, termStart: term, totalWeeks: 14)
+        check(draft.seriesCount == 2, "deux séries, le corrigé n'en est pas une (\(draft.seriesCount))")
+        check(draft.sections.first { $0.title.hasPrefix("8 septembre") }?.week == 1, "une section datée tombe à sa semaine")
+        check(draft.sections.first { $0.title == "Semaine 2" }?.week == 2, "« Semaine 2 »")
+        check(draft.sections.first { $0.title == "Généralités" }?.items.first { $0.title == "Annonces" }?.kind == .ignore,
+              "un forum s'ignore")
+    } else {
+        check(false, "le plan Moodle doit se lire")
+    }
+    check(MoodleStateParser.course(fromStateJSON: "{\"error\":true}", title: "", url: "") == nil, "une erreur ne donne pas de plan")
+
+    let search = #"{"total":3,"courses":[{"id":14839,"fullname":"Analyse I","shortname":"MATH-101(a)"},{"id":14840,"fullname":"Analyse I","shortname":"MATH-101(e)"},{"id":7621,"fullname":"Biochimie","shortname":"CH-210"}],"warnings":[]}"#
+    let found = MoodleStateParser.courses(fromJSON: search)
+    check(found.count == 3 && found[1].baseCode == "MATH-101" && found[1].variant == "e", "résultats de recherche lus")
+    check(MoodleCourseMatcher.match(code: "CH-210", candidates: found) == .unique(found[2]), "un seul cours : relié d'office")
+    if case .ambiguous(let options) = MoodleCourseMatcher.match(code: "MATH-101", candidates: found) {
+        check(options.count == 2, "plusieurs sections : on demande laquelle")
+    } else { check(false, "MATH-101 a deux sections") }
+    check(MoodleCourseMatcher.match(code: "MATH-101", candidates: found, enrolled: [found[1]]) == .unique(found[1]),
+          "l'inscription départage les sections")
+    check(MoodleCourseMatcher.match(code: "math-101(a)", candidates: found) == .unique(found[0]), "un code écrit avec sa section la désigne")
+    check(MoodleCourseMatcher.match(code: "PHYS-101", candidates: found) == .none, "rien trouvé")
+    check(MoodleCourseMatcher.linkedID(in: ["https://botafogo.epfl.ch/analyse-1/", "https://moodle.epfl.ch/course/view.php?id=14840"]) == 14840,
+          "le lien Moodle retenu se relit")
+}
+
+print("== Import : ce qui est écarté le reste ==")
+do {
+    let keepCourse = Course(code: "TEST-301", name: "Écarts")
+    context.insert(keepCourse)
+    func item(_ n: String, _ url: String) -> ContentDraftItem {
+        ContentDraftItem(kind: .theory, number: n, title: "T\(n)", url: url, videoCount: 0, seriesNumber: nil, theoryKind: .reading)
+    }
+    var reviewed = ContentDraft(source: .moodle, courseTitle: "", url: "https://moodle.epfl.ch/course/view.php?id=1",
+                                sections: [ContentDraftSection(title: "S1", week: 1, weekIsInferred: false, isIncluded: true,
+                                                               items: [item("1.1", "u1"), item("1.2", "u2")])])
+    reviewed.sections[0].items[1].kind = .ignore
+    ContentDraftWriter.apply(reviewed, to: keepCourse, context: context)
+    check(keepCourse.theoryItems.count == 1, "la relecture n'importe que ce qui est gardé")
+    keepCourse.theoryItems.first?.plannedWeek = 4
+    var refreshed = reviewed
+    refreshed.sections[0].items[1].kind = .theory
+    refreshed.sections[0].week = 2
+    ContentDraftWriter.apply(refreshed, to: keepCourse, context: context, updateWeeks: false)
+    check(keepCourse.theoryItems.count == 1, "la mise à jour automatique ne réajoute pas un élément écarté")
+    check(keepCourse.theoryItems.first?.plannedWeek == 4, "…ni ne défait une semaine corrigée à la main")
+    ContentDraftWriter.apply(refreshed, to: keepCourse, context: context)
+    check(keepCourse.theoryItems.count == 2, "une nouvelle relecture peut le reprendre")
+    check(MoodleCourseMatcher.linkedID(in: keepCourse.contentSources) == 1, "l'adresse du cours Moodle est retenue")
+    context.delete(keepCourse)
+    try? context.save()
+}
+
 print("== Exercice par exercice ==")
 do {
     let flowSeries = ExerciseSeries(seriesNumber: 9)

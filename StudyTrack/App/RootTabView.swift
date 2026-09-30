@@ -119,6 +119,9 @@ struct RootTabView: View {
                     }
                     // Le temps passé dans Anki arrive tout seul, étiqueté.
                     await AnkiReviewSync.syncIfDue(context: context, settings: app.settings)
+                    // La série de la semaine, publiée sur Moodle depuis la
+                    // dernière fois, arrive toute seule elle aussi.
+                    await ContentRefresher.refreshIfDue(context: context, settings: app.settings)
                 }
             }
         }

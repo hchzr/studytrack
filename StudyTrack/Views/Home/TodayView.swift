@@ -179,6 +179,7 @@ struct TodayView: View {
                             if state.tracked.isEmpty {
                                 emptyState
                             } else {
+                                importNews
                                 primaryActionCard(state)
                                 todaySchedule(state)
                                 weekCard(state)
@@ -328,12 +329,46 @@ struct TodayView: View {
                 // heure aujourd'hui, où j'en suis par cours, la suite, les
                 // échéances. Le chrono en cours n'a plus de bandeau : le dock le
                 // montre sur tous les onglets.
+                importNews
                 primaryActionCard(state)
                 todaySchedule(state)
                 weekCard(state)
                 weeklyList(state)
                 deadlinesSection(state)
             }
+        }
+    }
+
+    /// « Nouveau sur Moodle : MATH-101 : 1 série » — ce que la mise à jour
+    /// automatique vient d'ajouter, jusqu'à ce qu'on le ferme.
+    @ViewBuilder
+    private var importNews: some View {
+        let news = app.settings.contentRefreshNews
+        if !news.isEmpty {
+            HStack(alignment: .top, spacing: Layout.control) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Theme.accent.accessibleMark)
+                VStack(alignment: .leading, spacing: Layout.micro) {
+                    Text("Nouveau dans tes cours").font(.subheadline.weight(.semibold))
+                    Text(news).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(Motion.snappy) { app.settings.contentRefreshNews = "" }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Masquer")
+            }
+            .padding(Layout.gutter)
+            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+            .transition(.opacity)
         }
     }
 

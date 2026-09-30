@@ -2,76 +2,80 @@ import SwiftUI
 import SwiftData
 import WebKit
 
-/// « Importer du contenu » : d'où vient la théorie et les séries d'un cours.
+/// « Importer du contenu » : la théorie et les séries d'un cours, depuis le site
+/// où elles vivent.
 ///
-/// Un seul point d'entrée pour tout ce qui remplit un cours. On choisit la
-/// source, on se connecte si elle l'exige, on ouvre la page du cours, et l'app
-/// propose un plan semaine par semaine à relire. Rien n'est écrit avant « Importer ».
+/// L'ancien parcours demandait, pour **chaque** cours : choisir la source, se
+/// connecter, trouver le cours dans Moodle, l'ouvrir, puis toucher « Importer
+/// cette page ». Cinq cours, cinq fois tout le chemin. Désormais :
+///   • **un toucher** importe tous les cours suivis — l'app trouve chaque cours
+///     Moodle par son code (la recherche de Moodle répond sans connexion), ne
+///     demande de se connecter que si Moodle l'exige (la fenêtre se ferme
+///     seule), et ne pose une question que lorsqu'un code a plusieurs sections
+///     auxquelles on n'est pas inscrit·e ;
+///   • une **seule** relecture, cours par cours, dépliable ;
+///   • ensuite, la mise à jour est **automatique** (`ContentRefresher`) : la
+///     série de la semaine arrive seule.
+/// Le navigateur intégré reste là pour les cas où l'automatique échoue.
 struct ContentImportView: View {
-    /// Le cours à remplir. `nil` depuis l'onglet Cours : la relecture propose
-    /// le cours qui correspond à la page, ou d'en créer un.
+    /// Le cours à remplir ; `nil` = tous les cours suivis.
     var course: Course?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppContainer.self) private var app
+    @Query(sort: \Course.code) private var courses: [Course]
+
     @State private var path: [Route] = []
+    @State private var model = MoodleImportModel()
     @State private var showingSeriesPDF = false
     @State private var showingFileImport = false
 
     enum Route: Hashable {
         case browser(ContentSource, URL?)
         case botafogo
+        case courseware
+        case review
+    }
+
+    private var targets: [Course] {
+        if let course { return [course] }
+        return courses.filter(\.isTracked)
     }
 
     var body: some View {
+        @Bindable var model = model
         NavigationStack(path: $path) {
             List {
-                if let course, !course.contentSources.isEmpty {
-                    Section {
-                        ForEach(course.contentSources, id: \.self) { link in
-                            if let url = URL(string: link), let source = ContentSource.detect(host: url.host) {
-                                Button {
-                                    path.append(source == .botafogo ? .botafogo : .browser(source, url))
-                                } label: {
-                                    sourceRow(icon: "arrow.triangle.2.circlepath",
-                                              title: "Mettre à jour depuis \(source.label)",
-                                              detail: "Ajoute ce qui est nouveau, garde ton avancement")
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Déjà importé")
-                    }
-                }
-
+                moodleSection
                 Section {
-                    ForEach(ContentSource.allCases) { source in
-                        Button {
-                            path.append(source == .botafogo ? .botafogo : .browser(source, nil))
-                        } label: {
-                            sourceRow(icon: source.icon, title: source.label, detail: source.detail)
-                        }
+                    Button { path.append(.botafogo) } label: {
+                        sourceRow(icon: ContentSource.botafogo.icon, title: "Botafogo",
+                                  detail: botafogoDetail)
+                    }
+                    Button { path.append(.courseware) } label: {
+                        sourceRow(icon: ContentSource.courseware.icon, title: "Courseware",
+                                  detail: "Tes cours Open edX : chapitres, leçons et vidéos")
                     }
                 } header: {
-                    Text("Depuis le site du cours")
-                } footer: {
-                    Text("Moodle et Courseware s'ouvrent ici : connecte-toi avec ton compte EPFL (une seule fois), ouvre le cours, puis touche « Importer cette page ». L'EPFL n'offre pas d'accès API : l'app lit la page, rien ne quitte ton téléphone.")
+                    Text("Autres sites")
                 }
-
                 Section {
-                    Button {
-                        showingSeriesPDF = true
-                    } label: {
+                    Button { showingSeriesPDF = true } label: {
                         sourceRow(icon: "doc.text.magnifyingglass", title: "Une série en PDF",
                                   detail: "Exercices et sous-questions lus dans l'énoncé")
                     }
-                    Button {
-                        showingFileImport = true
-                    } label: {
+                    Button { showingFileImport = true } label: {
                         sourceRow(icon: "square.and.arrow.down", title: "Horaire ou fichier",
                                   detail: "Horaire .ics d'IS-Academia, sauvegarde JSON, CSV")
                     }
                 } header: {
-                    Text("Autres imports")
+                    Text("Fichiers")
+                }
+                Section {
+                    Toggle("Mettre à jour tout seul", isOn: Binding(get: { app.settings.contentAutoRefresh },
+                                                                   set: { app.settings.contentAutoRefresh = $0 }))
+                } footer: {
+                    Text(refreshFooter)
                 }
             }
             .navigationTitle(course.map { "Importer · \($0.displayCode)" } ?? "Importer du contenu")
@@ -87,22 +91,143 @@ struct ContentImportView: View {
                     WebImportBrowser(source: source, startURL: start, course: course, onDone: { dismiss() })
                 case .botafogo:
                     BotafogoPicker(course: course, onDone: { dismiss() })
+                case .courseware:
+                    CoursewareImportView(course: course, onDone: { dismiss() })
+                case .review:
+                    BatchReviewView(model: model, onDone: { dismiss() })
                 }
+            }
+            .sheet(isPresented: $model.needsLogin) {
+                SiteLoginSheet(source: .moodle) {
+                    model.needsLogin = false
+                    Task { await model.run(courses: targets, term: termInfo) }
+                }
+            }
+            .sheet(item: $model.question) { question in
+                SectionChoiceSheet(question: question) { choice in
+                    model.answer(question, with: choice)
+                }
+            }
+            .onChange(of: model.phase) { _, phase in
+                if phase == .ready, path.last != .review { path.append(.review) }
             }
             .sheet(isPresented: $showingSeriesPDF) {
                 SeriesImportSheet(course: course)
             }
-            #if DEBUG
-            .onAppear {
-                guard path.isEmpty, let raw = PreviewLaunch.string(PreviewLaunch.contentImportFlag),
-                      let source = ContentSource(rawValue: raw) else { return }
-                path.append(source == .botafogo ? .botafogo : .browser(source, nil))
-            }
-            #endif
             .sheet(isPresented: $showingFileImport) {
                 ImportSheet()
             }
+            #if DEBUG
+            .onAppear {
+                guard path.isEmpty, let raw = PreviewLaunch.string(PreviewLaunch.contentImportFlag) else { return }
+                // `-contentImport auto` : lance l'import Moodle automatique,
+                // que `simctl` ne peut pas toucher.
+                if raw == "auto" { Task { await model.run(courses: targets, term: termInfo) } }
+                switch ContentSource(rawValue: raw) {
+                case .botafogo: path.append(.botafogo)
+                case .courseware: path.append(.courseware)
+                case .moodle: path.append(.browser(.moodle, nil))
+                case nil: break
+                }
+            }
+            #endif
         }
+    }
+
+    // MARK: Moodle
+
+    @ViewBuilder
+    private var moodleSection: some View {
+        Section {
+            Button {
+                Task { await model.run(courses: targets, term: termInfo) }
+            } label: {
+                HStack(spacing: Layout.block) {
+                    ZStack {
+                        Circle().fill(Theme.accent.badgeFill).frame(width: 40, height: 40)
+                        if model.phase == .working {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "wand.and.stars")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Theme.accent.badgeInk)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: Layout.micro) {
+                        Text(course == nil ? "Importer tous mes cours depuis Moodle" : "Importer \(course!.displayCode) depuis Moodle")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                        Text(model.phase == .working ? model.progress : "Semaines, vidéos, supports et séries — trouvés par le code du cours")
+                            .font(.footnote)
+                            .foregroundStyle(Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, Layout.tight)
+                .contentShape(Rectangle())
+            }
+            .disabled(model.phase == .working || targets.isEmpty)
+
+            if let error = model.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(Color.orange.accessibleInk)
+            }
+
+            ForEach(targets) { course in
+                courseStatusRow(course)
+            }
+
+            Button {
+                path.append(.browser(.moodle, MoodleCourseMatcher.linkedID(in: course?.contentSources ?? [])
+                    .map { URL(string: "https://moodle.epfl.ch/course/view.php?id=\($0)")! }))
+            } label: {
+                Label("Ouvrir Moodle et choisir la page moi-même", systemImage: "safari")
+                    .font(.subheadline)
+            }
+        } header: {
+            Text("Moodle")
+        } footer: {
+            Text("Ton compte EPFL ne sert qu'à Moodle, dans l'app : on te le demande seulement si Moodle l'exige. L'EPFL n'offre pas d'accès API aux étudiant·e·s — l'app fait les mêmes demandes que la page du cours, et rien ne quitte ton téléphone.")
+        }
+    }
+
+    private func courseStatusRow(_ course: Course) -> some View {
+        HStack(spacing: Layout.control) {
+            Circle().fill(Color(hex: course.colorHex).accessibleMark).frame(width: 8, height: 8)
+            Text(course.displayCode).font(.subheadline.weight(.semibold))
+            Text(course.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: Layout.inline)
+            Text(model.status[course.id] ?? linkLabel(course))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func linkLabel(_ course: Course) -> String {
+        let sources = course.contentSources.compactMap { URL(string: $0).flatMap { ContentSource.detect(host: $0.host) }?.label }
+        return sources.isEmpty ? "pas encore importé" : "relié : " + Array(Set(sources)).sorted().joined(separator: ", ")
+    }
+
+    private var termInfo: MoodleImportModel.TermInfo {
+        let term = targets.compactMap(\.term).first
+        return .init(start: term?.startDate, weeks: term?.totalWeeks ?? 14)
+    }
+
+    private var botafogoDetail: String {
+        if let course, let suggestion = BotafogoSuggestion.hint(for: course) { return "Suggéré pour \(course.displayCode) : \(suggestion)" }
+        return "Polycopiés en ligne (Analyse, Algèbre linéaire, ICS), avec leurs vidéos"
+    }
+
+    private var refreshFooter: String {
+        var text = "Une fois un cours importé, l'app relit Moodle et Botafogo au plus deux fois par jour, et ajoute ce qui est nouveau — la série de la semaine, par exemple. Rien n'est supprimé, et une semaine corrigée à la main n'est pas touchée."
+        if let last = app.settings.contentLastRefresh {
+            text += " Dernière vérification : \(DateUtils.relativeLabel(last)) \(DateUtils.time.string(from: last))."
+        }
+        return text
     }
 
     private func sourceRow(icon: String, title: String, detail: String) -> some View {
@@ -126,12 +251,437 @@ struct ContentImportView: View {
     }
 }
 
-// MARK: - Navigateur intégré
+// MARK: - Le modèle de l'import Moodle
 
-/// Moodle ou Courseware, dans la session de l'étudiant·e.
+/// Un cours prêt à importer : le cours de l'app, sa source, et le brouillon.
+struct ContentImportPlan: Identifiable {
+    let id = UUID()
+    var course: Course
+    var sourceLabel: String
+    var draft: ContentDraft
+    var isIncluded = true
+}
+
+/// Une question à poser : quelle section Moodle pour ce cours ?
+struct SectionQuestion: Identifiable {
+    let id = UUID()
+    var course: Course
+    var options: [MoodleCourseRef]
+}
+
+/// L'import Moodle, du premier toucher à la relecture.
+@MainActor
+@Observable
+final class MoodleImportModel {
+    struct TermInfo { var start: Date?; var weeks: Int }
+
+    enum Phase: Equatable { case idle, working, ready }
+
+    var phase: Phase = .idle
+    var progress = ""
+    var error: String?
+    var needsLogin = false
+    var question: SectionQuestion?
+    /// « trouvé », « introuvable sur Moodle »… par cours.
+    var status: [UUID: String] = [:]
+    var plans: [ContentImportPlan] = []
+
+    @ObservationIgnored private let client = MoodleClient()
+    @ObservationIgnored private var pendingQuestions: [SectionQuestion] = []
+    @ObservationIgnored private var term = TermInfo(start: nil, weeks: 14)
+    @ObservationIgnored private var enrolled: [MoodleCourseRef] = []
+
+    /// Tout le parcours : connexion si besoin, puis chaque cours.
+    func run(courses: [Course], term: TermInfo) async {
+        guard phase != .working else { return }
+        self.term = term
+        phase = .working
+        error = nil
+        plans = []
+        pendingQuestions = []
+        progress = "Connexion à Moodle…"
+        guard await client.isSignedIn() else {
+            phase = .idle
+            needsLogin = true
+            return
+        }
+        enrolled = (try? await client.enrolled()) ?? []
+        for (index, course) in courses.enumerated() {
+            progress = "\(course.displayCode) · \(index + 1) sur \(courses.count)"
+            status[course.id] = "recherche…"
+            do {
+                switch try await client.resolve(course, enrolled: enrolled) {
+                case .unique(let ref):
+                    await load(ref, for: course)
+                case .ambiguous(let options):
+                    status[course.id] = "section à choisir"
+                    pendingQuestions.append(SectionQuestion(course: course, options: options))
+                case .none:
+                    status[course.id] = "introuvable sur Moodle"
+                }
+            } catch HiddenSiteSession.SiteError.notSignedIn {
+                phase = .idle
+                needsLogin = true
+                return
+            } catch {
+                status[course.id] = "erreur : \(error.localizedDescription)"
+            }
+        }
+        askNextOrFinish()
+    }
+
+    /// La réponse à « quelle section ? » — retenue pour la prochaine fois
+    /// (l'adresse du cours s'écrit dans ses sources à l'import).
+    func answer(_ question: SectionQuestion, with choice: MoodleCourseRef?) {
+        self.question = nil
+        Task {
+            if let choice {
+                await load(choice, for: question.course)
+            } else {
+                status[question.course.id] = "ignoré"
+            }
+            askNextOrFinish()
+        }
+    }
+
+    private func askNextOrFinish() {
+        if !pendingQuestions.isEmpty {
+            question = pendingQuestions.removeFirst()
+            return
+        }
+        if plans.isEmpty {
+            phase = .idle
+            if error == nil { error = "Aucun cours n'a pu être lu sur Moodle. Essaie « Ouvrir Moodle et choisir la page moi-même »." }
+        } else {
+            phase = .ready
+        }
+    }
+
+    private func load(_ ref: MoodleCourseRef, for course: Course) async {
+        status[course.id] = "lecture de \(ref.shortname)…"
+        do {
+            let page = try await client.content(of: ref)
+            let draft = ContentDraftBuilder.draft(from: page, source: .moodle,
+                                                  termStart: course.term?.startDate ?? term.start,
+                                                  totalWeeks: course.term?.totalWeeks ?? term.weeks)
+            guard !draft.isEmpty else {
+                status[course.id] = "rien de reconnaissable"
+                return
+            }
+            plans.append(ContentImportPlan(course: course, sourceLabel: "Moodle · \(ref.shortname)", draft: draft))
+            status[course.id] = "\(draft.theoryCount) théorie · \(draft.seriesCount) séries"
+        } catch {
+            status[course.id] = "erreur : \(error.localizedDescription)"
+        }
+    }
+
+    func reset() {
+        phase = .idle
+        plans = []
+    }
+}
+
+// MARK: - Connexion
+
+/// La page de connexion du site, qui se **ferme seule** une fois connecté·e.
+struct SiteLoginSheet: View {
+    let source: ContentSource
+    var onSignedIn: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var browser = BrowserModel()
+    @State private var checking = false
+
+    private var start: URL { source == .moodle ? MoodleClient.login : CoursewareClient.login }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                WebView(model: browser, initialURL: start)
+                    .overlay(alignment: .top) {
+                        if browser.isLoading {
+                            ProgressView(value: browser.progress).progressViewStyle(.linear).tint(Theme.accent)
+                        }
+                    }
+                Label("Connecte-toi avec ton compte EPFL. Cette fenêtre se ferme toute seule.", systemImage: "lock.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(Layout.gutter)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.bar)
+            }
+            .navigationTitle("Connexion à \(source.label)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { dismiss() }
+                }
+            }
+            .onChange(of: browser.isLoading) { _, loading in
+                if !loading { Task { await check() } }
+            }
+        }
+        .interactiveDismissDisabled(checking)
+    }
+
+    /// Revenu·e sur le site, hors des pages de connexion : c'est gagné.
+    private func check() async {
+        guard let url = browser.url, let host = url.host,
+              host.hasSuffix(source == .moodle ? "moodle.epfl.ch" : "courseware.epfl.ch"),
+              !url.path.hasPrefix("/login"), !url.path.hasPrefix("/auth") else { return }
+        checking = true
+        defer { checking = false }
+        let script = source == .moodle
+            ? "return String(!!document.querySelector('#user-menu-toggle, .usermenu .userbutton'))"
+            : "const r = await fetch('/api/user/v1/me', { credentials: 'include' }); return String(r.status === 200)"
+        let result = try? await browser.webView?.callAsyncJavaScript(script, contentWorld: .page) as? String
+        if result == "true" {
+            Haptics.success()
+            onSignedIn()
+        }
+    }
+}
+
+/// « Quelle section de MATH-101 suis-tu ? »
+struct SectionChoiceSheet: View {
+    let question: SectionQuestion
+    var onChoose: (MoodleCourseRef?) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(question.options) { option in
+                        Button {
+                            onChoose(option)
+                        } label: {
+                            VStack(alignment: .leading, spacing: Layout.micro) {
+                                Text(option.shortname).font(.body.weight(.semibold)).foregroundStyle(Color.primary)
+                                Text(option.fullname).font(.footnote).foregroundStyle(Color.secondary)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Moodle a un cours par section d'étudiant·e·s. Ton choix est retenu : on ne te le redemandera pas.")
+                }
+            }
+            .navigationTitle("\(question.course.displayCode) : quelle section ?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Passer") { onChoose(nil) }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled()
+    }
+}
+
+// MARK: - Relecture groupée
+
+/// Tous les cours lus, une ligne chacun ; chaque ligne se déplie en relecture
+/// détaillée. Un seul bouton importe le tout.
+struct BatchReviewView: View {
+    @Bindable var model: MoodleImportModel
+    var onDone: () -> Void
+
+    @Environment(\.modelContext) private var context
+    @State private var result: String?
+
+    var body: some View {
+        List {
+            Section {
+                ForEach($model.plans) { $plan in
+                    HStack(spacing: Layout.control) {
+                        Toggle(isOn: $plan.isIncluded) { EmptyView() }
+                            .toggleStyle(CheckToggleStyle())
+                            .frame(width: 32)
+                        NavigationLink {
+                            ContentDraftEditor(draft: $plan.draft,
+                                               totalWeeks: plan.course.term?.totalWeeks ?? 14,
+                                               title: plan.course.displayCode)
+                        } label: {
+                            VStack(alignment: .leading, spacing: Layout.micro) {
+                                Text("\(plan.course.displayCode) · \(plan.course.name)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(ContentDraftSummary.line(plan.draft))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(plan.sourceLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("Touche un cours pour vérifier ses semaines ou exclure un élément. Rien n'est supprimé à l'import, et ton avancement est gardé.")
+            }
+        }
+        .navigationTitle("Relecture")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            let count = model.plans.filter(\.isIncluded).count
+            Button {
+                apply()
+            } label: {
+                Text(count == 0 ? "Rien à importer" : "Importer \(count) cours")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Layout.control)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(count == 0)
+            .padding(Layout.gutter)
+            .background(.bar)
+        }
+        .alert("Import terminé", isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil; onDone() } })) {
+            Button("OK") { result = nil; onDone() }
+        } message: {
+            Text(result ?? "")
+        }
+    }
+
+    private func apply() {
+        var lines: [String] = []
+        for plan in model.plans where plan.isIncluded {
+            let outcome = ContentDraftWriter.apply(plan.draft, to: plan.course, context: context)
+            lines.append("\(plan.course.displayCode) — \(outcome.message)")
+        }
+        try? context.save()
+        Haptics.success()
+        model.reset()
+        result = lines.joined(separator: "\n")
+    }
+}
+
+/// « 24 éléments de théorie · 12 vidéos · 13 séries ».
+enum ContentDraftSummary {
+    static func line(_ draft: ContentDraft) -> String {
+        var parts: [String] = []
+        if draft.theoryCount > 0 { parts.append("\(draft.theoryCount) élément\(draft.theoryCount > 1 ? "s" : "") de théorie") }
+        if draft.videoCount > 0 { parts.append("\(draft.videoCount) vidéo\(draft.videoCount > 1 ? "s" : "")") }
+        if draft.seriesCount > 0 { parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")") }
+        return parts.isEmpty ? "rien de reconnaissable" : parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - Courseware
+
+/// Courseware : la liste de **tes** cours, puis l'import en un toucher.
+struct CoursewareImportView: View {
+    var course: Course?
+    var onDone: () -> Void
+
+    @Query private var terms: [AcademicTerm]
+    @State private var enrollments: [CoursewareClient.Enrollment] = []
+    @State private var client = CoursewareClient()
+    @State private var loading = true
+    @State private var needsLogin = false
+    @State private var reading: String?
+    @State private var errorMessage: String?
+    @State private var draft: ContentDraft?
+
+    var body: some View {
+        List {
+            if loading {
+                HStack { ProgressView(); Text("Lecture de tes cours…").foregroundStyle(.secondary) }
+            }
+            if !enrollments.isEmpty {
+                Section {
+                    ForEach(enrollments) { enrollment in
+                        Button {
+                            Task { await read(enrollment) }
+                        } label: {
+                            HStack {
+                                Text(enrollment.name).foregroundStyle(Color.primary)
+                                Spacer()
+                                if reading == enrollment.key { ProgressView() }
+                            }
+                        }
+                        .disabled(reading != nil)
+                    }
+                } header: {
+                    Text("Tes cours Courseware")
+                }
+            } else if !loading, !needsLogin {
+                Text("Aucun cours Courseware actif sur ton compte.")
+                    .foregroundStyle(.secondary)
+            }
+            if needsLogin {
+                Section {
+                    Button("Se connecter à Courseware") { needsLogin = true }
+                } footer: {
+                    Text("Une seule fois : la connexion est gardée pour les imports suivants.")
+                }
+            }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.orange.accessibleInk)
+            }
+            Section {
+                NavigationLink {
+                    WebImportBrowser(source: .courseware, startURL: nil, course: course, onDone: onDone)
+                } label: {
+                    Label("Ouvrir Courseware et choisir la page moi-même", systemImage: "safari")
+                }
+            }
+        }
+        .navigationTitle("Courseware")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .sheet(isPresented: $needsLogin) {
+            SiteLoginSheet(source: .courseware) {
+                needsLogin = false
+                Task { await load() }
+            }
+        }
+        .navigationDestination(item: $draft) { draft in
+            ContentReviewView(draft: draft, course: course, onDone: onDone)
+        }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        guard await client.isSignedIn() else {
+            needsLogin = true
+            return
+        }
+        do {
+            enrollments = try await client.enrollments()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func read(_ enrollment: CoursewareClient.Enrollment) async {
+        reading = enrollment.key
+        errorMessage = nil
+        defer { reading = nil }
+        do {
+            let page = try await client.content(of: enrollment.key)
+            let term = course?.term ?? AcademicTerm.resolve(from: terms)
+            draft = ContentDraftBuilder.draft(from: page, source: .courseware,
+                                              termStart: term?.startDate,
+                                              totalWeeks: term?.totalWeeks ?? 14)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Navigateur intégré (repli)
+
+/// Moodle ou Courseware, affiché : pour une page que l'import automatique n'a
+/// pas su trouver.
 ///
 /// Les cookies vivent dans le magasin **persistant** de WebKit : on se connecte
-/// une fois, les imports suivants ouvrent directement la page.
+/// une fois, les imports suivants — et la mise à jour automatique — en profitent.
+/// La page d'un cours est lue **dès qu'elle s'affiche** : plus besoin de
+/// chercher le bouton « Importer cette page ».
 struct WebImportBrowser: View {
     let source: ContentSource
     var startURL: URL?
@@ -139,9 +689,12 @@ struct WebImportBrowser: View {
     var onDone: () -> Void
 
     @StateObject private var model = BrowserModel()
+    @Query private var terms: [AcademicTerm]
     @State private var isReading = false
     @State private var errorMessage: String?
     @State private var draft: ContentDraft?
+    /// La page déjà lue : revenir en arrière ne relance pas la lecture.
+    @State private var lastRead: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -166,6 +719,11 @@ struct WebImportBrowser: View {
                     .accessibilityLabel("Recharger")
             }
         }
+        .onChange(of: model.isLoading) { _, loading in
+            // Lecture automatique d'une page de cours, une fois chargée.
+            guard !loading, isCoursePage, model.url != lastRead, draft == nil else { return }
+            Task { await read() }
+        }
         .navigationDestination(item: $draft) { draft in
             ContentReviewView(draft: draft, course: course, onDone: onDone)
         }
@@ -182,8 +740,8 @@ struct WebImportBrowser: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(isCoursePage
-                     ? "Page de cours détectée."
-                     : (source.requiresLogin ? "Connecte-toi si besoin, puis ouvre la page du cours." : "Ouvre le cours à importer."))
+                     ? "Page de cours : lecture automatique."
+                     : (source.requiresLogin ? "Connecte-toi si besoin, puis ouvre la page du cours : elle sera lue toute seule." : "Ouvre le cours à importer."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -207,16 +765,18 @@ struct WebImportBrowser: View {
 
     @MainActor
     private func read() async {
-        guard let webView = model.webView else { return }
+        guard let webView = model.webView, !isReading else { return }
         isReading = true
         errorMessage = nil
+        lastRead = model.url
         defer { isReading = false }
         do {
             let page = try await WebContentScraper.scrape(webView, source: source)
+            let term = course?.term ?? AcademicTerm.resolve(from: terms)
             let built = ContentDraftBuilder.draft(from: page,
                                                   source: source,
-                                                  termStart: course?.term?.startDate,
-                                                  totalWeeks: course?.term?.totalWeeks ?? 14)
+                                                  termStart: term?.startDate,
+                                                  totalWeeks: term?.totalWeeks ?? 14)
             guard !built.isEmpty else { throw WebContentScraper.ScrapeError.empty }
             Haptics.success()
             draft = built
@@ -249,7 +809,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate {
     }
 }
 
-private struct WebView: UIViewRepresentable {
+struct WebView: UIViewRepresentable {
     let model: BrowserModel
     let initialURL: URL
 
@@ -268,16 +828,64 @@ private struct WebView: UIViewRepresentable {
 
 // MARK: - Botafogo
 
+/// Quel polycopié proposer d'abord pour un cours.
+enum BotafogoSuggestion {
+    /// Mots qui relient un cours à un polycopié : le nom de l'app et celui du site.
+    static func score(course: Course, title: String, sectionCode: String) -> Int {
+        let courseWords = words(course.name + " " + course.code)
+        let titleWords = words(title)
+        var score = courseWords.intersection(titleWords).count * 2
+        // « Analyse I » et « Analyse B » : le chiffre ou la lettre départagent.
+        if courseWords.contains("b"), titleWords.contains("b") { score += 2 }
+        if courseWords.contains("i") || courseWords.contains("1"), titleWords.contains("1") || titleWords.contains("i") { score += 1 }
+        // Les versions « GM » et « classe inversée » sont celles de leur section.
+        let section = sectionCode.lowercased()
+        if titleWords.contains("gm") { score += section == "gm" ? 3 : -2 }
+        if titleWords.contains("inversee") { score -= 1 }
+        return score
+    }
+
+    static func hint(for course: Course) -> String? {
+        let name = ContentDraftBuilder.fold(course.name)
+        if name.contains("analyse b") { return "Analyse B" }
+        if name.contains("analyse") || course.code.uppercased().hasPrefix("MATH-101") { return "Analyse I" }
+        if name.contains("algebre") { return "Algèbre linéaire" }
+        if name.contains("calcul scientifique") || name.contains("ics") { return "ICS" }
+        return nil
+    }
+
+    private static func words(_ text: String) -> Set<String> {
+        Set(ContentDraftBuilder.fold(text)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty && !["de", "d", "l", "le", "la", "et", "mon", "cours", "pour", "polycopie", "en", "ligne"].contains($0) })
+    }
+}
+
 /// Les polycopiés de Botafogo, lus directement : pas de connexion.
 struct BotafogoPicker: View {
     var course: Course?
     var onDone: () -> Void
 
+    @Environment(AppContainer.self) private var app
+    @Query private var terms: [AcademicTerm]
     @State private var catalog: [(title: String, url: URL)] = []
     @State private var loadingURL: URL?
     @State private var isLoadingCatalog = true
     @State private var errorMessage: String?
     @State private var draft: ContentDraft?
+
+    /// Le catalogue, le polycopié le plus probable pour ce cours en tête.
+    private var ranked: [(title: String, url: URL, suggested: Bool)] {
+        guard let course else { return catalog.map { ($0.title, $0.url, false) } }
+        let scored = catalog.map { entry in
+            (entry, BotafogoSuggestion.score(course: course, title: entry.title + " " + entry.url.path,
+                                             sectionCode: app.settings.sectionCode))
+        }
+        let best = scored.map(\.1).max() ?? 0
+        return scored
+            .sorted { $0.1 > $1.1 }
+            .map { ($0.0.title, $0.0.url, best > 0 && $0.1 == best) }
+    }
 
     var body: some View {
         List {
@@ -285,13 +893,16 @@ struct BotafogoPicker: View {
                 if isLoadingCatalog {
                     HStack { ProgressView(); Text("Lecture de botafogo.epfl.ch…").foregroundStyle(.secondary) }
                 }
-                ForEach(catalog, id: \.url) { entry in
+                ForEach(ranked, id: \.url) { entry in
                     Button {
-                        Task { await open(entry.url) }
+                        Task { await open(entry.url, title: entry.title) }
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: Layout.micro) {
-                                Text(entry.title).foregroundStyle(Color.primary)
+                                HStack(spacing: Layout.snug) {
+                                    Text(entry.title).foregroundStyle(Color.primary)
+                                    if entry.suggested { Pill(text: "suggéré", color: Theme.accent) }
+                                }
                                 Text(entry.url.path).font(.footnote).foregroundStyle(Color.secondary)
                             }
                             Spacer()
@@ -303,7 +914,7 @@ struct BotafogoPicker: View {
             } header: {
                 Text("Polycopiés en ligne")
             } footer: {
-                Text("Chaque section du polycopié devient un élément de théorie, avec ses vidéos. Les chapitres sont proposés une semaine chacun : ajuste-les avant d'importer.")
+                Text("Chaque section du polycopié devient un élément de théorie, et les enregistrements des cours s'ajoutent à leur semaine quand le site les publie. La matière est répartie sur le semestre selon son volume : ajuste avant d'importer.")
             }
             if let errorMessage {
                 Section {
@@ -329,7 +940,7 @@ struct BotafogoPicker: View {
             #if DEBUG
             if let index = PreviewLaunch.string(PreviewLaunch.botafogoCourseFlag).flatMap(Int.init),
                catalog.indices.contains(index) {
-                await open(catalog[index].url)
+                await open(catalog[index].url, title: catalog[index].title)
             }
             #endif
         } catch {
@@ -337,16 +948,20 @@ struct BotafogoPicker: View {
         }
     }
 
-    private func open(_ url: URL) async {
+    private func open(_ url: URL, title: String) async {
         loadingURL = url
         errorMessage = nil
         defer { loadingURL = nil }
         do {
-            let page = try await BotafogoClient.course(at: url)
+            var page = try await BotafogoClient.course(at: url)
+            if page.title == "Botafogo" || page.title.isEmpty { page.title = title }
+            // Sans cours choisi, le semestre en cours : c'est lui qui date les
+            // enregistrements (« 16 sept » = semaine 2).
+            let term = course?.term ?? AcademicTerm.resolve(from: terms)
             draft = ContentDraftBuilder.draft(from: page,
                                               source: .botafogo,
-                                              termStart: course?.term?.startDate,
-                                              totalWeeks: course?.term?.totalWeeks ?? 14)
+                                              termStart: term?.startDate,
+                                              totalWeeks: term?.totalWeeks ?? 14)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -358,108 +973,51 @@ extension ContentDraft: Hashable, Identifiable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-// MARK: - Relecture
+// MARK: - Relecture d'un cours
 
-/// Le plan proposé, semaine par semaine, à corriger avant d'écrire.
-struct ContentReviewView: View {
-    @State var draft: ContentDraft
-    var course: Course?
-    var onDone: () -> Void
-
-    @Environment(\.modelContext) private var context
-    @Query(sort: \Course.code) private var courses: [Course]
-    /// Le cours cible ; `nil` = en créer un à partir du titre de la page.
-    @State private var targetID: UUID?
-    @State private var hasPickedTarget = false
-    @State private var result: ContentImportResult?
-
-    private var totalWeeks: Int { target?.term?.totalWeeks ?? course?.term?.totalWeeks ?? 14 }
-    private var target: Course? { courses.first { $0.id == targetID } }
+/// Les sections d'un brouillon, semaine par semaine, à corriger.
+///
+/// Partagé par la relecture d'un cours et par la relecture groupée.
+struct ContentDraftEditor: View {
+    @Binding var draft: ContentDraft
+    var totalWeeks: Int
+    var title: String
 
     var body: some View {
         List {
-            summarySection
-            if course == nil { targetSection }
-            ForEach($draft.sections) { $section in
-                sectionView($section)
-            }
+            ContentDraftSections(draft: $draft, totalWeeks: totalWeeks)
         }
-        .navigationTitle("Relecture")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) { importBar }
-        .onAppear(perform: pickTarget)
-        .alert("Import terminé", isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil; onDone() } })) {
-            Button("OK") { result = nil; onDone() }
-        } message: {
-            Text(result?.message ?? "")
+    }
+}
+
+struct ContentDraftSections: View {
+    @Binding var draft: ContentDraft
+    var totalWeeks: Int
+
+    var body: some View {
+        ForEach($draft.sections) { $section in
+            sectionView($section)
         }
-    }
-
-    private var summarySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: Layout.tight) {
-                Text(draft.courseTitle.isEmpty ? draft.source.label : draft.courseTitle)
-                    .font(.headline)
-                Text(summaryLine)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            .padding(.vertical, Layout.tight)
-        } footer: {
-            Text(draft.sections.contains(where: \.weekIsInferred)
-                 ? "Les semaines marquées « proposée » n'étaient pas écrites sur la page : vérifie-les. Rien n'est supprimé à l'import, et ton avancement est gardé."
-                 : "Semaines lues sur la page. Rien n'est supprimé à l'import, et ton avancement est gardé.")
-        }
-    }
-
-    private var summaryLine: String {
-        var parts: [String] = []
-        if draft.theoryCount > 0 { parts.append("\(draft.theoryCount) élément\(draft.theoryCount > 1 ? "s" : "") de théorie") }
-        if draft.videoCount > 0 { parts.append("\(draft.videoCount) vidéo\(draft.videoCount > 1 ? "s" : "")") }
-        if draft.seriesCount > 0 { parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")") }
-        return parts.joined(separator: " · ")
-    }
-
-    private var importTitle: String {
-        let total = draft.theoryCount + draft.seriesCount
-        return "Importer \(total) élément\(total > 1 ? "s" : "")"
-    }
-
-    private var targetSection: some View {
-        Section("Dans le cours") {
-            Picker("Cours", selection: $targetID) {
-                Text("Nouveau cours « \(shortTitle) »").tag(UUID?.none)
-                ForEach(courses.filter(\.isTracked)) { course in
-                    Text("\(course.displayCode) — \(course.name)").tag(UUID?.some(course.id))
-                }
-            }
-        }
-    }
-
-    private var shortTitle: String {
-        let title = draft.courseTitle
-        return title.count > 32 ? String(title.prefix(30)) + "…" : title
     }
 
     private func sectionView(_ section: Binding<ContentDraftSection>) -> some View {
         Section {
             if section.wrappedValue.isIncluded {
                 ForEach(section.items) { $item in
-                    itemRow($item)
+                    itemRow($item, in: section.wrappedValue)
                 }
             }
         } header: {
             VStack(alignment: .leading, spacing: Layout.snug) {
-                HStack(alignment: .firstTextBaseline) {
-                    Toggle(isOn: section.isIncluded) {
-                        MathText(section.wrappedValue.title.isEmpty ? "Sans titre" : section.wrappedValue.title,
-                                 font: .subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .textCase(nil)
-                    }
-                    .toggleStyle(CheckToggleStyle())
+                Toggle(isOn: section.isIncluded) {
+                    MathText(section.wrappedValue.title.isEmpty ? "Sans titre" : section.wrappedValue.title,
+                             font: .subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .textCase(nil)
                 }
+                .toggleStyle(CheckToggleStyle())
                 if section.wrappedValue.isIncluded {
                     weekMenu(section)
                 }
@@ -468,19 +1026,32 @@ struct ContentReviewView: View {
         }
     }
 
+    /// La semaine d'une section — ou sa plage, quand ses éléments s'étalent.
+    /// La changer **décale** tout le chapitre, étalement compris.
     private func weekMenu(_ section: Binding<ContentDraftSection>) -> some View {
-        Menu {
-            Picker("Semaine", selection: section.week) {
+        let value = section.wrappedValue
+        let range = value.weekRange
+        let label: String = {
+            guard let range else { return "Non planifié" }
+            return range.lowerBound == range.upperBound ? "Semaine \(range.lowerBound)" : "Semaines \(range.lowerBound)–\(range.upperBound)"
+        }()
+        return Menu {
+            Picker("Semaine", selection: Binding(get: { value.week }, set: { newWeek in
+                let delta = newWeek - value.week
+                section.wrappedValue.shiftWeeks(by: delta, totalWeeks: totalWeeks)
+                section.wrappedValue.week = newWeek
+                section.wrappedValue.weekIsInferred = false
+            })) {
                 Text("Non planifié").tag(0)
-                ForEach(1...max(totalWeeks, section.wrappedValue.week), id: \.self) { week in
-                    Text("Semaine \(week)").tag(week)
+                ForEach(1...max(totalWeeks, value.week, 1), id: \.self) { week in
+                    Text("Commence en semaine \(week)").tag(week)
                 }
             }
         } label: {
             HStack(spacing: Layout.tight) {
                 Image(systemName: "calendar")
-                Text(section.wrappedValue.week == 0 ? "Non planifié" : "Semaine \(section.wrappedValue.week)")
-                if section.wrappedValue.weekIsInferred {
+                Text(label)
+                if value.weekIsInferred {
                     Text("proposée").foregroundStyle(.secondary)
                 }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
@@ -488,12 +1059,9 @@ struct ContentReviewView: View {
             .font(.footnote.weight(.medium))
             .textCase(nil)
         }
-        .onChange(of: section.wrappedValue.week) { _, _ in
-            section.wrappedValue.weekIsInferred = false
-        }
     }
 
-    private func itemRow(_ item: Binding<ContentDraftItem>) -> some View {
+    private func itemRow(_ item: Binding<ContentDraftItem>, in section: ContentDraftSection) -> some View {
         let value = item.wrappedValue
         return HStack(spacing: Layout.block) {
             Image(systemName: value.kind == .series ? TaskType.exercise.icon : value.theoryKind.icon)
@@ -504,11 +1072,13 @@ struct ContentReviewView: View {
                          font: .subheadline)
                     .foregroundStyle(value.kind == .ignore ? .secondary : .primary)
                     .lineLimit(2)
-                if value.kind == .series, value.title != "Série \(value.number)" {
-                    Text(value.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                } else if value.kind == .theory, value.videoCount > 0 {
-                    Text("\(value.videoCount) vidéo\(value.videoCount > 1 ? "s" : "")")
-                        .font(.caption).foregroundStyle(.secondary)
+                let details = [
+                    value.kind == .series && value.title != "Série \(value.number)" ? value.title : nil,
+                    value.kind == .theory && value.videoCount > 0 ? "\(value.videoCount) vidéo\(value.videoCount > 1 ? "s" : "")" : nil,
+                    value.week != nil && value.kind != .ignore ? "semaine \(value.plannedWeek(in: section))" : nil
+                ].compactMap { $0 }
+                if !details.isEmpty {
+                    Text(details.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: Layout.inline)
@@ -533,6 +1103,79 @@ struct ContentReviewView: View {
                 }
             }
         }
+    }
+}
+
+/// Le plan proposé pour **un** cours, à corriger avant d'écrire.
+struct ContentReviewView: View {
+    @State var draft: ContentDraft
+    var course: Course?
+    var onDone: () -> Void
+
+    @Environment(\.modelContext) private var context
+    @Query(sort: \Course.code) private var courses: [Course]
+    /// Le cours cible ; `nil` = en créer un à partir du titre de la page.
+    @State private var targetID: UUID?
+    @State private var hasPickedTarget = false
+    @State private var result: ContentImportResult?
+
+    private var totalWeeks: Int { target?.term?.totalWeeks ?? course?.term?.totalWeeks ?? 14 }
+    private var target: Course? { courses.first { $0.id == targetID } }
+
+    var body: some View {
+        List {
+            summarySection
+            if course == nil { targetSection }
+            ContentDraftSections(draft: $draft, totalWeeks: totalWeeks)
+        }
+        .navigationTitle("Relecture")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) { importBar }
+        .onAppear(perform: pickTarget)
+        .alert("Import terminé", isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil; onDone() } })) {
+            Button("OK") { result = nil; onDone() }
+        } message: {
+            Text(result?.message ?? "")
+        }
+    }
+
+    private var summarySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: Layout.tight) {
+                Text(draft.courseTitle.isEmpty ? draft.source.label : draft.courseTitle)
+                    .font(.headline)
+                Text(ContentDraftSummary.line(draft))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .padding(.vertical, Layout.tight)
+        } footer: {
+            Text(draft.sections.contains(where: \.weekIsInferred)
+                 ? "Les semaines marquées « proposée » n'étaient pas écrites sur la page : vérifie-les. Rien n'est supprimé à l'import, et ton avancement est gardé."
+                 : "Semaines lues sur la page. Rien n'est supprimé à l'import, et ton avancement est gardé.")
+        }
+    }
+
+    private var importTitle: String {
+        let total = draft.theoryCount + draft.seriesCount
+        return "Importer \(total) élément\(total > 1 ? "s" : "")"
+    }
+
+    private var targetSection: some View {
+        Section("Dans le cours") {
+            Picker("Cours", selection: $targetID) {
+                Text("Nouveau cours « \(shortTitle) »").tag(UUID?.none)
+                ForEach(courses.filter(\.isTracked)) { course in
+                    Text("\(course.displayCode) — \(course.name)").tag(UUID?.some(course.id))
+                }
+            }
+        }
+    }
+
+    private var shortTitle: String {
+        let title = draft.courseTitle
+        return title.count > 32 ? String(title.prefix(30)) + "…" : title
     }
 
     private var importBar: some View {
