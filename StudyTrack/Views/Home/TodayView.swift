@@ -1,21 +1,18 @@
 import SwiftUI
 import SwiftData
 
-/// Tout ce que `TodayView` dérive de l'état persisté, calculé **une fois** par rendu.
-///
-/// Ces valeurs étaient des propriétés calculées de la `View`. SwiftUI les réévalue
-/// à chaque lecture, et `body` en faisait jusqu'à **17** pour `todos` : cinq
-/// lectures directes, plus `todos.last?.id` une fois *par ligne*. Or
-/// `DailyPlanner.todos` trie les vidéos et les séries de chaque cours suivi, et
-/// `WorkloadEngine.aggregate` reparcourt tous les cours — l'écran payait donc une
-/// quinzaine de planifications complètes par rendu, pour une liste plafonnée à 12.
+/// Tout ce que `TodayView` dérive de l'état persisté, calculé **une fois** par
+/// rendu : SwiftUI réévalue une propriété calculée à chaque lecture, et l'agrégat
+/// de charge reparcourt tous les cours.
 private struct TodayState {
     let tracked: [Course]
-    let todos: [StudyTodo]
     let term: AcademicTerm?
-    let weekSeconds: Int
-    let upcomingExams: [Exam]
-    let dueTasks: [LinkedTask]
+    /// La semaine en cours, du lundi au lundi suivant.
+    let weekStart: Date
+    /// Attendu (cadré + personnel) et réel (sessions + cours suivis) de la semaine.
+    let workload: WorkloadDelta
+    /// Temps d'étude enregistré, jour par jour, du lundi au dimanche.
+    let days: [Int]
     /// Le planning du jour : séances, sessions planifiées, évaluations.
     let todayItems: [TodayItem]
 }
@@ -31,7 +28,7 @@ struct TodayItem: Identifiable {
     let color: Color
 }
 
-/// Écran principal : une action évidente, puis le reste par ordre d'utilité.
+/// Aujourd'hui : le tableau de bord de la semaine.
 struct TodayView: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
@@ -52,36 +49,30 @@ struct TodayView: View {
     @State private var sheet: TodaySheet?
     @State private var openedExercise: Exercise?
     @State private var openedVideo: TheoryItem?
-    /// Chrono laissé en route dans Focus, relu à chaque passage au premier plan.
-    @State private var showAllTodos = false
     /// Un cours ouvert depuis « La semaine ».
     @State private var openedCourseDetail: Course?
-    /// Les lignes cochées à l'instant : leur coche se remplit avant qu'elles
-    /// ne quittent la liste, sinon la ligne disparaît sous le doigt.
-    @State private var justDone: Set<String> = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Une seule passe de dérivation, réutilisée par toutes les sections du rendu.
     private func derived() -> TodayState {
         let tracked = courses.filter(\.isTracked)
-        let todos = DailyPlanner.todos(for: tracked, limit: 12)
-        let week = DateUtils.dateRange(days: 7)
-        let today = DateUtils.startOfDay(Date())
+        let weekStart = DateUtils.startOfWeek(Date())
+        let weekEnd = DateUtils.addDays(7, to: weekStart)
+        var days = Array(repeating: 0, count: 7)
+        for session in sessions {
+            // Triées de la plus récente à la plus ancienne : on s'arrête au lundi.
+            if session.startedAt < weekStart { break }
+            guard session.startedAt < weekEnd else { continue }
+            let index = DateUtils.daysBetween(weekStart, session.startedAt)
+            if days.indices.contains(index) { days[index] += session.durationSeconds }
+        }
         return TodayState(
             tracked: tracked,
-            todos: todos,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
-            // Un seul parcours des sessions, au lieu d'un `filter` puis d'un `reduce`.
-            weekSeconds: sessions.reduce(0) { total, session in
-                session.startedAt >= week.start && session.startedAt < week.end
-                    ? total + session.durationSeconds
-                    : total
-            },
-            // Les trois `@Query` sont déjà triées : `prefix(3)` s'arrête au 3ᵉ match.
-            upcomingExams: Array(exams.lazy.filter { $0.date >= today }.prefix(3)),
-            dueTasks: Array(tasks.lazy
-                .filter { !$0.isDone && ($0.isOverdue || $0.isDueToday) }
-                .prefix(3)),
+            weekStart: weekStart,
+            workload: WorkloadEngine.aggregateWeekly(courses: tracked,
+                                                     hoursPerCredit: app.settings.hoursPerCredit,
+                                                     from: weekStart, to: weekEnd),
+            days: days,
             todayItems: todayItems()
         )
     }
@@ -179,6 +170,12 @@ struct TodayView: View {
                 // L'action de l'onglet, puis l'avatar — la même règle partout.
                 // La loupe vit dans « Cours », dont elle cherche le contenu.
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        app.router.openAgenda()
+                    } label: {
+                        Image(systemName: "calendar")
+                    }
+                    .accessibilityLabel("Agenda")
                     Menu {
                         Section {
                             Button {
@@ -281,15 +278,11 @@ struct TodayView: View {
         }
     }
 
-    /// Le contenu de l'accueil, extrait du corps.
-    ///
-    /// Onze vues empilées dans une seule expression faisaient échouer le
-    /// vérificateur de types (« unable to type-check this expression in reasonable
-    /// time »). Les nommer une par une dans une méthode donne au compilateur des
-    /// expressions courtes, et au lecteur un plan lisible de l'écran.
-    /// L'accueil, dans l'ordre où l'on s'en sert : reprendre ce qu'on faisait,
-    /// voir ce qui a une heure aujourd'hui, choisir la suite, ne pas rater une
-    /// échéance, et voir la semaine d'un coup d'œil.
+    /// L'accueil est **le tableau de bord de la semaine** : ce que la semaine a
+    /// coûté en temps, ce que la journée a d'heures fixes, et où en est chaque
+    /// cours dans sa semaine. Il ne propose plus « la prochaine chose à faire » :
+    /// on sait sur quoi on travaille ; ce qu'on ne voit pas d'un coup d'œil,
+    /// c'est la semaine entière.
     @ViewBuilder
     private func content(_ state: TodayState) -> some View {
         if state.tracked.isEmpty {
@@ -300,121 +293,41 @@ struct TodayView: View {
                 app.router.openContentImport()
             }
         } else {
-            resumeCard(state)
             importNews
+            WeekTimeCard(workload: state.workload, days: state.days, weekStart: state.weekStart) {
+                app.router.showingStats = true
+            }
             todaySchedule(state)
-            weeklyList(state)
-            deadlinesSection(state)
             weekCourses(state)
         }
     }
 
-    // MARK: Reprendre
+    // MARK: La semaine, cours par cours
 
-    /// La carte en verre du haut : la chose à reprendre, où on en est dedans
-    /// (l'anneau compte les sous-questions), et le bouton qui y retourne.
-    @ViewBuilder
-    private func resumeCard(_ state: TodayState) -> some View {
-        if let next = NextActionEngine.actions(for: state.tracked, limit: 1).first {
-            let exercise = next.targetID.flatMap { id in exercises.first { $0.id == id } }
-            let video = next.targetID.flatMap { id in videos.first { $0.id == id } }
-            let tint = Carnet.tint(next.colorHex)
-            let leaves = exercise?.leafSubQuestions ?? []
-            let done = leaves.filter(\.isDone).count
-            VStack(alignment: .leading, spacing: 12) {
-                CarnetKicker("\(next.reasonLabel) · \(next.courseCode)", color: tint)
-                HStack(spacing: 14) {
-                    if leaves.isEmpty {
-                        CarnetIconTile(systemName: next.icon, tint: tint, size: 52)
-                    } else {
-                        CarnetRing(value: Double(done) / Double(max(leaves.count, 1)), tint: tint,
-                                   label: "\(done)/\(leaves.count)")
-                    }
-                    Button {
-                        if let exercise { openedExercise = exercise } else if let video { openedVideo = video }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(MathMarkup.plain(next.title))
-                                .font(Carnet.serif(.title3))
-                                .foregroundStyle(Carnet.ink)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            Text(resumeDetail(next, exercise: exercise))
-                                .font(.footnote)
-                                .foregroundStyle(Carnet.inkSecondary)
-                                .lineLimit(2)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Button {
-                        app.router.startFocus(courseID: next.courseID, courseCode: next.courseCode,
-                                              taskType: next.taskType, targetID: next.targetID,
-                                              label: next.focusLabel)
-                        Haptics.tap()
-                    } label: {
-                        Image(systemName: "play.fill")
-                            .font(.body.weight(.bold))
-                            .foregroundStyle(Carnet.ground)
-                            .offset(x: 1)
-                            .frame(width: 50, height: 50)
-                            .background(Carnet.ink, in: Circle())
-                    }
-                    .buttonStyle(PressableStyle())
-                    .accessibilityLabel("Démarrer le chrono : \(next.focusLabel)")
-                }
-            }
-            .padding(16)
-            .carnetGlass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        }
-    }
-
-    private func resumeDetail(_ next: NextAction, exercise: Exercise?) -> String {
-        if let exercise, let current = exercise.leafSubQuestions.first(where: { !$0.isDone }) {
-            return "Sous-question \(current.displayLabel) · \(next.detail)"
-        }
-        return next.detail
-    }
-
-    // MARK: La semaine
-
-    /// Chaque cours en une colonne : la part faite de sa semaine.
+    /// Une ligne par cours : ce que sa semaine demande (théorie, exercices), ce
+    /// qui est fait, et le retard en mots.
     @ViewBuilder
     private func weekCourses(_ state: TodayState) -> some View {
-        let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
         VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("La semaine") {
-                Button(DateUtils.hoursLabel(seconds: state.weekSeconds) + " travaillées") {
-                    app.router.showingStats = true
+            CarnetSectionTitle(state.term.map { $0.isRunning ? "Semaine \($0.currentWeek)" : "Cours" } ?? "Cours") {
+                Button {
+                    app.router.selectedTab = .courses
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("Tous les cours")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
                 }
             }
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(state.tracked) { course in
-                    let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
-                    let done = week.watchedCount + week.doneCount
-                    let total = week.videoCount + week.exerciseCount
+            CarnetSheet {
+                ForEach(Array(state.tracked.enumerated()), id: \.element.id) { index, course in
                     Button {
                         openedCourseDetail = course
                     } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(course.displayCode)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Carnet.tint(course.colorHex))
-                            Text(total == 0 ? "—" : "\(done)/\(total)")
-                                .font(Carnet.serif(.title2))
-                                .foregroundStyle(Carnet.ink)
-                            CarnetBar(value: CourseProgress.ratio(done, total), tint: Carnet.tint(course.colorHex))
-                            Text(total == 0 ? "rien de prévu" : (done == total ? "semaine faite" : "reste \(total - done)"))
-                                .font(.caption)
-                                .foregroundStyle(Carnet.inkSecondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+                        WeekCourseRow(course: course)
                     }
-                    .buttonStyle(PressableStyle(scale: 0.98))
-                    .accessibilityLabel("\(course.name) : \(done) sur \(total) cette semaine")
+                    .buttonStyle(PressableStyle(scale: 0.99))
+                    if index < state.tracked.count - 1 { CarnetRule(inset: Carnet.rowInset) }
                 }
             }
         }
@@ -562,19 +475,6 @@ struct TodayView: View {
 
     // MARK: En-tête
 
-    /// La date d'abord, en sur-titre, puis le salut : on ouvre l'app pour savoir
-    /// quel jour et quelle semaine on est, avant tout le reste.
-    private func greeting(_ state: TodayState) -> some View {
-        VStack(alignment: .leading, spacing: Layout.tight) {
-            Text(dateLine(state))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(greetingText)
-                .font(.title3.weight(.semibold))
-        }
-        .accessibilityElement(children: .combine)
-    }
-
     private func dateLine(_ state: TodayState) -> String {
         var parts = [DateUtils.fullDayLabel(Date()).capitalizedFirst]
         if let term = state.term {
@@ -673,181 +573,5 @@ struct TodayView: View {
         .padding(.horizontal, Carnet.rowInset)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-    }
-
-    private var greetingText: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let base: String
-        switch hour {
-        case 5..<12: base = "Bonjour"
-        case 12..<18: base = "Bon après-midi"
-        default: base = "Bonsoir"
-        }
-        let name = app.settings.displayName.trimmingCharacters(in: .whitespaces)
-        return name.isEmpty ? base : "\(base) \(name)"
-    }
-
-    // MARK: À faire
-
-    /// Au-delà de cinq lignes, la liste se replie : en semaine 12 elle en compte
-    /// des dizaines, et l'accueil devenait un mur à faire défiler.
-    private static let collapsedTodoCount = 5
-
-    @ViewBuilder
-    private func weeklyList(_ state: TodayState) -> some View {
-        let rest = state.todos
-        if !rest.isEmpty {
-            let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
-            VStack(alignment: .leading, spacing: 10) {
-                CarnetSectionTitle("À faire") { Text("\(rest.count) cette semaine") }
-                CarnetSheet {
-                    ForEach(visible) { todo in
-                        VStack(spacing: 0) {
-                            TodoRow(todo: todo,
-                                    isDone: justDone.contains(todo.id),
-                                    onComplete: { checkOff(todo) },
-                                    onOpen: { open(todo) },
-                                    onStart: {
-                                        app.router.startFocus(courseID: todo.courseID,
-                                                              courseCode: todo.courseCode,
-                                                              taskType: todo.taskType,
-                                                              targetID: todo.targetID,
-                                                              label: "\(todo.courseCode) · \(todo.title)")
-                                    })
-                            if todo.id != visible.last?.id { CarnetRule(inset: 54) }
-                        }
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .leading)))
-                    }
-                    if rest.count > Self.collapsedTodoCount {
-                        CarnetRule(inset: 0)
-                        Button {
-                            withAnimation(Motion.snappy) { showAllTodos.toggle() }
-                        } label: {
-                            Text(showAllTodos ? "Afficher moins" : "Tout afficher (\(rest.count))")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Carnet.ink)
-                                .frame(maxWidth: .infinity, minHeight: 46)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: Échéances
-
-    @ViewBuilder
-    private func deadlinesSection(_ state: TodayState) -> some View {
-        let rows = deadlineRows(state)
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                CarnetSectionTitle("Échéances") {
-                    Button("Tâches") { app.router.showingTasks = true }
-                }
-                CarnetSheet {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        CarnetRow(icon: row.icon, tint: row.tint, title: row.title, subtitle: row.subtitle) {
-                            if let trailing = row.trailing {
-                                Text(trailing)
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(row.urgent ? Carnet.wrong : Carnet.inkSecondary)
-                            }
-                        }
-                        if index < rows.count - 1 { CarnetRule() }
-                    }
-                }
-            }
-        }
-    }
-
-    private struct DeadlineRow: Identifiable {
-        let id: String
-        let icon: String
-        let tint: Color
-        let title: String
-        let subtitle: String
-        let trailing: String?
-        var urgent = false
-    }
-
-    /// Les échéances aplaties en une liste, pour que les séparateurs tombent entre
-    /// deux lignes et jamais après la dernière.
-    private func deadlineRows(_ state: TodayState) -> [DeadlineRow] {
-        var rows: [DeadlineRow] = []
-        for exam in state.upcomingExams {
-            let soon = exam.date.timeIntervalSinceNow < 3 * 86_400
-            rows.append(DeadlineRow(id: "exam-\(exam.id)",
-                                    icon: exam.kind.icon,
-                                    tint: exam.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary,
-                                    title: exam.title,
-                                    subtitle: "\(exam.course?.displayCode ?? "") · \(DateUtils.shortDay.string(from: exam.date))",
-                                    trailing: DateUtils.countdownLabel(to: exam.date),
-                                    urgent: soon))
-        }
-        for task in state.dueTasks {
-            rows.append(DeadlineRow(id: "task-\(task.id)",
-                                    icon: "checklist",
-                                    tint: task.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary,
-                                    title: task.title,
-                                    subtitle: task.course?.displayCode ?? task.provider.label,
-                                    trailing: task.isOverdue ? "En retard" : "Aujourd'hui",
-                                    urgent: task.isOverdue))
-        }
-        return rows
-    }
-
-    // MARK: Actions
-
-    /// Cocher depuis la liste : la coche se remplit, puis la ligne s'en va.
-    ///
-    /// La correction ne se coche pas d'un geste — elle demande un jugement — et
-    /// ouvre donc la fiche tout de suite.
-    private func checkOff(_ todo: StudyTodo) {
-        guard todo.kind != .correction else { return complete(todo) }
-        guard !justDone.contains(todo.id) else { return }
-        justDone.insert(todo.id)
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.35))
-            withAnimation(Motion.snappy) {
-                complete(todo)
-            }
-            justDone.remove(todo.id)
-        }
-    }
-
-    private func complete(_ todo: StudyTodo) {
-        switch todo.kind {
-        case .video:
-            if let video = videos.first(where: { $0.id == todo.targetID }) {
-                video.watchedAt = video.watchedAt == nil ? Date() : nil
-                if video.watchedAt == nil { video.summarizedAt = nil }
-            }
-        case .exercise, .redo:
-            if let exercise = exercises.first(where: { $0.id == todo.targetID }) {
-                exercise.setDone(!exercise.isDone)
-            }
-        case .correction:
-            // La correction demande un jugement (juste, moyen, faux) : on ouvre la
-            // fiche de l'exercice, où le contrôle de correction est à un tap.
-            if let exercise = exercises.first(where: { $0.id == todo.targetID }) {
-                openedExercise = exercise
-            }
-            return
-        }
-        // Pas de vibration ici : `CheckCircleButton` a déjà la sienne.
-        try? context.save()
-    }
-
-    /// Ouvre la fiche de l'élément : c'est ce qu'un tap sur le texte doit faire.
-    /// Démarrer le chrono est le rôle du bouton de lecture, pas de la ligne.
-    private func open(_ todo: StudyTodo) {
-        switch todo.kind {
-        case .video:
-            openedVideo = videos.first { $0.id == todo.targetID }
-        case .exercise, .redo, .correction:
-            openedExercise = exercises.first { $0.id == todo.targetID }
-        }
     }
 }

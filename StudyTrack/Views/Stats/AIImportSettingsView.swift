@@ -119,7 +119,7 @@ struct AIImportSettingsView: View {
             }
 
         }
-        .carnetBackground()
+        .carnetForm()
         .navigationTitle("Import intelligent")
         .navigationBarTitleDisplayMode(.inline)
         .task {

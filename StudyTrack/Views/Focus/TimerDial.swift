@@ -34,9 +34,9 @@ struct TimerDial: View {
     /// viser la minute, assez large pour ajouter une heure en un geste.
     private static let minutesPerTurn: Double = 60
 
-    @ScaledMetric(relativeTo: .largeTitle) private var diameter: CGFloat = 236
-    @ScaledMetric(relativeTo: .largeTitle) private var timeSize: CGFloat = 52
-    @ScaledMetric(relativeTo: .body) private var ringWidth: CGFloat = 14
+    @ScaledMetric(relativeTo: .largeTitle) private var diameter: CGFloat = 270
+    @ScaledMetric(relativeTo: .largeTitle) private var timeSize: CGFloat = 64
+    @ScaledMetric(relativeTo: .body) private var ringWidth: CGFloat = 5
 
     private var clamped: Double { min(1, max(0, progress ?? 0)) }
 
@@ -60,12 +60,20 @@ struct TimerDial: View {
             // Piste : toujours visible, pour que l'anneau ne « saute » pas quand la
             // progression repart de zéro.
             Circle()
-                .stroke(tint.badgeFill, lineWidth: ringWidth)
+                .stroke(Carnet.rule, lineWidth: ringWidth)
+            // Les graduations d'un cadran : douze traits fins, sur le papier.
+            ForEach(0..<12, id: \.self) { index in
+                Capsule()
+                    .fill(Carnet.inkTertiary.opacity(index % 3 == 0 ? 0.9 : 0.45))
+                    .frame(width: 1.5, height: index % 3 == 0 ? 10 : 6)
+                    .offset(y: -diameter / 2 + ringWidth + 12)
+                    .rotationEffect(.degrees(Double(index) * 30))
+            }
 
             if progress != nil {
                 Circle()
                     .trim(from: 0, to: clamped)
-                    .stroke(tint.accessibleMark,
+                    .stroke(tint,
                             style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     // La progression doit glisser, pas sauter d'un coup à chaque
@@ -78,9 +86,9 @@ struct TimerDial: View {
             if isAdjusting {
                 // Le point à faire glisser, posé sur l'anneau.
                 Circle()
-                    .fill(tint.accessibleMark)
-                    .frame(width: ringWidth + 8, height: ringWidth + 8)
-                    .overlay(Circle().stroke(Theme.softBackground, lineWidth: 3))
+                    .fill(Carnet.ink)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(Carnet.ground, lineWidth: 3))
                     .offset(y: -diameter / 2)
                     .rotationEffect(.degrees(knobAngle))
                     .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
@@ -91,14 +99,14 @@ struct TimerDial: View {
                     // Un champ, au même endroit et à la même taille que le temps :
                     // on corrige ce qu'on lit, sans changer d'écran.
                     TextField("", text: $typed)
-                        .font(.system(size: timeSize * 0.8, weight: .bold, design: .rounded))
+                        .font(.system(size: timeSize * 0.8, weight: .regular, design: .serif))
                         .monospacedDigit()
                         .multilineTextAlignment(.center)
                         .keyboardType(.numbersAndPunctuation)
                         .textFieldStyle(.plain)
                         .focused($typingFocused)
                         .frame(maxWidth: diameter - ringWidth * 2 - 24)
-                        .foregroundStyle(tint.accessibleInk)
+                        .foregroundStyle(Carnet.ink)
                         .onSubmit(commitTyping)
                         .onChange(of: typingFocused) { _, focused in
                             if !focused { commitTyping() }
@@ -106,12 +114,12 @@ struct TimerDial: View {
                         .accessibilityLabel("Temps compté, format minutes:secondes")
                 } else {
                     Text(time)
-                        .font(.system(size: timeSize, weight: .bold, design: .rounded))
+                        .font(.system(size: timeSize, weight: .regular, design: .serif))
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .contentTransition(.numericText())
-                        .foregroundStyle(isRunning ? tint.accessibleInk : .primary)
+                        .foregroundStyle(isRunning ? Carnet.ink : Carnet.inkSecondary)
                         // En ajustement, taper le temps ouvre la saisie : c'est le
                         // geste qu'on essaie d'abord, avant de faire glisser.
                         .onTapGesture {
@@ -126,17 +134,14 @@ struct TimerDial: View {
                 if let context {
                     Text(context)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Carnet.inkSecondary)
                         .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .background(Theme.softBackground, in: Capsule())
                 }
 
                 if let caption {
                     Text(caption)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.inkSecondary)
                         .lineLimit(1)
                 }
             }
@@ -228,10 +233,10 @@ struct TimerPrimaryButton: View {
         } label: {
             VStack(spacing: Layout.inline) {
                 ZStack {
-                    Circle().fill(tint.accessibleMark)
+                    Circle().fill(Carnet.ink)
                     Image(systemName: icon)
-                        .font(.system(size: diameter * 0.34, weight: .bold))
-                        .foregroundStyle(Theme.knockedOutInk)
+                        .font(.system(size: diameter * 0.32, weight: .bold))
+                        .foregroundStyle(Carnet.ground)
                         .contentTransition(.symbolEffect(.replace))
                         // Le triangle a sa masse à gauche : centré au pixel, il
                         // paraît décalé. On le pousse vers son centre optique.
@@ -240,6 +245,7 @@ struct TimerPrimaryButton: View {
                 .frame(width: diameter, height: diameter)
                 Text(title)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Carnet.ink)
                     .contentTransition(.opacity)
             }
         }
@@ -269,13 +275,13 @@ struct TimerSideButton: View {
             VStack(spacing: Layout.inline) {
                 Image(systemName: icon)
                     .font(.system(size: diameter * 0.36, weight: .semibold))
-                    .foregroundStyle(role == .destructive ? Color.red.accessibleInk : Color.primary)
+                    .foregroundStyle(role == .destructive ? Carnet.wrong : Carnet.ink)
                     .frame(width: diameter, height: diameter)
-                    .background(Theme.softBackground, in: Circle())
+                    .background(Carnet.sheetRaised, in: Circle())
                     .contentTransition(.symbolEffect(.replace))
                 Text(title)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Carnet.inkSecondary)
             }
             .frame(minWidth: 72)
         }

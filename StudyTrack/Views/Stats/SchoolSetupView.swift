@@ -33,7 +33,7 @@ struct SchoolSetupView: View {
             coursesSection
             summarySection
         }
-        .carnetBackground()
+        .carnetForm()
         .navigationTitle("Section et semestre")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingCourseForm) {

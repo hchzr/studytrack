@@ -15,7 +15,6 @@ struct RootTabView: View {
         Group {
             if app.settings.hasCompletedOnboarding {
                 tabs
-                .modifier(FocusDockPlacement())
                 // Focus, bilan et agenda s'ouvrent depuis **n'importe quel**
                 // onglet : une seule présentation, pilotée par le routeur.
                 .sheet(item: rootSheet) { sheet in
@@ -168,33 +167,18 @@ struct RootTabView: View {
         })
     }
 
-    @ViewBuilder
+    /// Les quatre onglets, sous **notre** barre : la barre système est masquée
+    /// (elle mettait le chrono parmi les onglets) et `CarnetTabBar` la remplace —
+    /// les onglets dans une capsule, le chrono dans un rond à part.
     private var tabs: some View {
-        if #available(iOS 18.0, *) {
-            TabView(selection: tabSelection) {
-                ForEach([AppRouter.Tab.today, .courses, .groups, .me], id: \.self) { tab in
-                    Tab(tab.title, systemImage: tab.icon, value: tab) {
-                        tabContent(tab).modifier(LegacyFocusDockInset())
-                    }
-                }
-                // Le rôle « recherche » marque l'action à part (iOS 26 la
-                // détache parfois en rond à droite de la barre) : ce n'est pas
-                // une page, la choisir ouvre Focus.
-                Tab(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon,
-                    value: AppRouter.Tab.focus, role: .search) {
-                    Color.clear
-                }
-            }
-        } else {
-            TabView(selection: tabSelection) {
-                ForEach([AppRouter.Tab.today, .courses, .groups, .me], id: \.self) { tab in
-                    tabContent(tab)
-                        .modifier(LegacyFocusDockInset())
-                        .tabItem { Label(tab.title, systemImage: tab.icon) }
-                        .tag(tab)
-                }
+        TabView(selection: tabSelection) {
+            ForEach(CarnetTabBar.tabs, id: \.self) { tab in
+                tabContent(tab)
+                    .toolbar(.hidden, for: .tabBar)
+                    .tag(tab)
             }
         }
+        .modifier(CarnetTabBarInset())
     }
 
     /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.

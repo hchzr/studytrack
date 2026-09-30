@@ -74,7 +74,7 @@ struct AssistantSettingsView: View {
                 }
             }
         }
-        .carnetBackground()
+        .carnetForm()
         .navigationTitle("Assistant IA")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Déconnecter l'assistant ?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {

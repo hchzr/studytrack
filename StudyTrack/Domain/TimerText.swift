@@ -28,6 +28,15 @@ enum TimerText {
             : String(format: "%02d:%02d", minutes, secs)
     }
 
+    /// « 12:07 », « 1h05 » : un chrono qui tient dans un petit rond.
+    static func compact(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        if total >= 3600 {
+            return String(format: "%dh%02d", total / 3600, (total % 3600) / 60)
+        }
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+
     /// « 1:30 », « 90 », « 1h30 », « 45m », « 1,5h » → secondes.
     ///
     /// `nil` quand rien n'est lisible — l'appelant garde alors la valeur en place

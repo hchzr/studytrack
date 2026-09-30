@@ -32,6 +32,7 @@ struct FocusTimerPanel: View {
     @State private var confirmingDiscard = false
     /// « Session enregistrée · 42 min », affiché quelques secondes après « Terminer ».
     @State private var savedMessage: String?
+    @State private var openedExercise: Exercise?
 
     private var focus: FocusController { app.focus }
     private var pomodoroSettings: PomodoroSettings { app.settings.pomodoro }
@@ -44,7 +45,7 @@ struct FocusTimerPanel: View {
     private var targetID: UUID? { focus.hasSession ? focus.state?.targetID : draftTargetID }
     private var course: Course? { courses.first { $0.id == courseID } }
 
-    private var tint: Color { course.map { Carnet.tint($0.colorHex) } ?? Theme.accent }
+    private var tint: Color { course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink }
 
     private var courseBinding: Binding<UUID?> {
         Binding(get: { courseID }, set: { value in
@@ -92,8 +93,9 @@ struct FocusTimerPanel: View {
     // MARK: Corps
 
     var body: some View {
-        VStack(spacing: Layout.sectionSpacing) {
+        VStack(spacing: 22) {
             contextSection
+            targetCard
 
             // Le cadran et ses boutons se redessinent chaque seconde tant qu'il y a
             // quelque chose qui s'écoule : un travail compté ou une pause qui
@@ -110,10 +112,10 @@ struct FocusTimerPanel: View {
             if let savedMessage {
                 Label(savedMessage, systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.green.accessibleInk)
-                    .padding(.horizontal, Layout.gutter)
-                    .padding(.vertical, Layout.control)
-                    .background(Color.green.badgeFill, in: Capsule())
+                    .foregroundStyle(Carnet.correct)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Carnet.sheet, in: Capsule())
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
 
@@ -129,7 +131,7 @@ struct FocusTimerPanel: View {
                 // croire à un bug du chrono.
                 Label(problem, systemImage: "platter.filled.top.and.arrow.up.iphone")
                     .font(.footnote)
-                    .foregroundStyle(Color.orange.accessibleInk)
+                    .foregroundStyle(Carnet.review)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -193,101 +195,211 @@ struct FocusTimerPanel: View {
 
     // MARK: Sur quoi
 
+    /// « Sur quoi » : trois lignes de papier (cours, travail, cible), chacune un
+    /// menu ; puis le mode — chrono libre ou Pomodoro — en deux puces.
     private var contextSection: some View {
-        VStack(spacing: Layout.block) {
-            // Cours, type et cible : trois pastilles à menu, lisibles d'un coup
-            // d'œil, modifiables en deux touchers. Elles passent à la ligne au
-            // lieu d'être coupées au bord de l'écran.
-            FlowLayout(spacing: Layout.inline) {
-                    Menu {
-                        Picker("Cours", selection: courseBinding) {
-                            Label("Sans cours", systemImage: "circle.dashed").tag(UUID?.none)
-                            ForEach(trackedCourses) { course in
-                                Text("\(course.displayCode) — \(course.name)").tag(UUID?.some(course.id))
-                            }
+        VStack(alignment: .leading, spacing: 12) {
+            CarnetSheet {
+                Menu {
+                    Picker("Cours", selection: courseBinding) {
+                        Label("Sans cours", systemImage: "circle.dashed").tag(UUID?.none)
+                        ForEach(trackedCourses) { course in
+                            Text("\(course.displayCode) — \(course.name)").tag(UUID?.some(course.id))
                         }
-                    } label: {
-                        chip(icon: "books.vertical.fill",
-                             text: course?.displayCode ?? "Choisir un cours",
-                             tint: course.map { Carnet.tint($0.colorHex) } ?? .secondary,
-                             emphasized: course == nil)
                     }
-                    .accessibilityLabel("Cours")
-                    .accessibilityValue(course?.displayCode ?? "aucun")
-
-                    Menu {
-                        Picker("Catégorie", selection: taskTypeBinding) {
-                            ForEach(TaskType.choices) { type in
-                                Label(type.label, systemImage: type.icon).tag(type)
-                            }
-                        }
-                    } label: {
-                        chip(icon: taskType.icon, text: taskType.label, tint: taskType.tint)
-                    }
-                    .accessibilityLabel("Catégorie")
-                    .accessibilityValue(taskType.label)
-
-                    if let course, !targetOptions(for: course).isEmpty {
-                        Menu {
-                            Picker("Sur quoi ?", selection: targetBinding) {
-                                Text("Tout le cours").tag(UUID?.none)
-                                ForEach(targetOptions(for: course)) { option in
-                                    Text(option.label).tag(UUID?.some(option.id))
-                                }
-                            }
-                        } label: {
-                            chip(icon: "scope",
-                                 text: targetLabel ?? "Préciser",
-                                 tint: .secondary)
-                        }
-                        .accessibilityLabel("Cible")
-                        .accessibilityValue(targetLabel ?? "tout le cours")
-                    }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: Layout.control) {
-                Picker("Mode", selection: pomodoroBinding) {
-                    Text("Chrono libre").tag(false)
-                    Text("Pomodoro").tag(true)
+                } label: {
+                    contextRow(title: "Cours",
+                               value: course.map { "\($0.displayCode) · \($0.name)" } ?? "Choisir",
+                               tint: course.map { Carnet.tint($0.colorHex) })
                 }
-                .pickerStyle(.segmented)
+                .accessibilityLabel("Cours")
+                .accessibilityValue(course?.displayCode ?? "aucun")
+                CarnetRule(inset: Carnet.rowInset)
+                Menu {
+                    Picker("Travail", selection: taskTypeBinding) {
+                        ForEach(TaskType.choices) { type in
+                            Label(type.label, systemImage: type.icon).tag(type)
+                        }
+                    }
+                } label: {
+                    contextRow(title: "Travail", value: taskType.label, tint: nil)
+                }
+                .accessibilityLabel("Type de travail")
+                .accessibilityValue(taskType.label)
+                if let course, !targetOptions(for: course).isEmpty {
+                    CarnetRule(inset: Carnet.rowInset)
+                    Menu {
+                        Picker("Sur quoi ?", selection: targetBinding) {
+                            Text("Tout le cours").tag(UUID?.none)
+                            ForEach(targetOptions(for: course)) { option in
+                                Text(option.label).tag(UUID?.some(option.id))
+                            }
+                        }
+                    } label: {
+                        contextRow(title: "Sur", value: targetLabel ?? "Tout le cours", tint: nil)
+                    }
+                    .accessibilityLabel("Cible")
+                    .accessibilityValue(targetLabel ?? "tout le cours")
+                }
+            }
 
+            HStack(spacing: 8) {
+                modeChip("Chrono libre", selected: !focus.isPomodoro) { pomodoroBinding.wrappedValue = false }
+                modeChip("Pomodoro", selected: focus.isPomodoro) { pomodoroBinding.wrappedValue = true }
+                Spacer(minLength: 0)
                 if focus.isPomodoro {
                     Button {
                         showingPomodoroSettings = true
                     } label: {
-                        Text("\(pomodoroSettings.focusMinutes)/\(pomodoroSettings.shortBreakMinutes)")
-                            .font(.subheadline.weight(.semibold).monospacedDigit())
-                            .padding(.horizontal, Layout.block)
-                            .frame(minHeight: 32)
-                            .background(Theme.softBackground, in: Capsule())
+                        HStack(spacing: 4) {
+                            Text("\(pomodoroSettings.focusMinutes) / \(pomodoroSettings.shortBreakMinutes) min")
+                                .font(Carnet.mono(.footnote, weight: .medium))
+                            Image(systemName: "slider.horizontal.3").font(.caption)
+                        }
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 34)
                     }
-                    .buttonStyle(PressableStyle())
-                    .foregroundStyle(Theme.accentInk)
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Réglages Pomodoro : \(pomodoroSettings.focusMinutes) minutes de travail, \(pomodoroSettings.shortBreakMinutes) de pause")
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .transition(.opacity)
                 }
             }
         }
     }
 
-    private func chip(icon: String, text: String, tint: Color, emphasized: Bool = false) -> some View {
-        HStack(spacing: Layout.snug) {
-            Image(systemName: icon).font(.caption.weight(.semibold))
-            Text(text).font(.subheadline.weight(.semibold)).lineLimit(1)
-            Image(systemName: "chevron.down").font(.caption2.weight(.bold))
-        }
-        .padding(.horizontal, Layout.block)
-        .frame(minHeight: 36)
-        .background(emphasized ? Theme.softBackground : tint.badgeFill, in: Capsule())
-        .overlay {
-            if emphasized {
-                Capsule().strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+    private func contextRow(title: String, value: String, tint: Color?) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(Carnet.inkSecondary)
+                .frame(width: 64, alignment: .leading)
+            if let tint {
+                Circle().fill(tint).frame(width: 8, height: 8)
             }
+            Text(value)
+                .font(.body)
+                .foregroundStyle(Carnet.ink)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Carnet.inkTertiary)
         }
-        .foregroundStyle(emphasized ? Color.primary : tint.badgeInk)
-        .contentShape(Capsule())
+        .padding(.horizontal, Carnet.rowInset)
+        .frame(minHeight: 48)
+        .contentShape(Rectangle())
+    }
+
+    private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CarnetChip(text: title, isSelected: selected)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    // MARK: L'exercice suivi
+
+    /// Quand le chrono porte sur un exercice : ses sous-questions, et les deux
+    /// gestes qu'on fait sans quitter le chrono — cocher la question en cours,
+    /// ouvrir l'exercice. Sur un élément de théorie : le marquer vu.
+    @ViewBuilder
+    private var targetCard: some View {
+        let target = FocusController.target(of: targetID, in: course)
+        if let exercise = target.exercise {
+            let leaves = exercise.leafSubQuestions
+            let current = leaves.first { !$0.isDone }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(exercise.displayNumber)
+                            .font(Carnet.serif(.title3))
+                            .foregroundStyle(Carnet.ink)
+                        Text(ExerciseStage(exercise).label.capitalizedFirst)
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
+                    }
+                    Spacer()
+                    Button("Ouvrir") { openedExercise = exercise }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Carnet.ink)
+                }
+                if !leaves.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(leaves) { question in
+                            Text(question.displayLabel)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(question.isDone ? Carnet.ground : (question.id == current?.id ? Carnet.ink : Carnet.inkSecondary))
+                                .padding(.horizontal, 8)
+                                .frame(minWidth: 30, minHeight: 28)
+                                .background(question.isDone ? Carnet.ink : Carnet.sheetRaised,
+                                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(question.id == current?.id ? Carnet.ink : .clear, lineWidth: 1.2))
+                        }
+                    }
+                    .accessibilityElement()
+                    .accessibilityLabel("\(exercise.subQuestionDoneCount) sous-questions faites sur \(leaves.count)")
+                }
+                if let current {
+                    Button {
+                        current.toggle()
+                        try? context.save()
+                        Haptics.success()
+                    } label: {
+                        Label("\(current.displayLabel) faite", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.carnetSecondaryWide)
+                } else if !exercise.isDone {
+                    Button {
+                        exercise.setDone(true)
+                        try? context.save()
+                        Haptics.success()
+                    } label: {
+                        Label("Exercice fait", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.carnetSecondaryWide)
+                } else if let next = nextExercise(after: exercise) {
+                    Button {
+                        targetBinding.wrappedValue = next.id
+                        Haptics.tap()
+                    } label: {
+                        Label("Passer à l'exercice \(next.exerciseNumber)", systemImage: "arrow.right")
+                    }
+                    .buttonStyle(.carnetSecondaryWide)
+                }
+            }
+            .padding(16)
+            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+            .sheet(item: $openedExercise) { ExerciseSheet(exercise: $0) }
+        } else if let item = target.theoryItem {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MathMarkup.plain(item.title.isEmpty ? item.displayNumber : item.title))
+                        .font(Carnet.serif(.title3))
+                        .foregroundStyle(Carnet.ink)
+                        .lineLimit(2)
+                    Text(item.isWatched ? "Vu" : item.kind.label)
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.inkSecondary)
+                }
+                Spacer()
+                Button(item.isWatched ? "Vu ✓" : "Marquer vu") {
+                    item.watchedAt = item.isWatched ? nil : Date()
+                    try? context.save()
+                    Haptics.success()
+                }
+                .buttonStyle(.carnetSecondary)
+            }
+            .padding(16)
+            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+        }
+    }
+
+    private func nextExercise(after exercise: Exercise) -> Exercise? {
+        guard let series = exercise.series else { return nil }
+        return ExerciseFlow.next(after: exercise, in: series.sortedExercises)
     }
 
     // MARK: Le cadran
@@ -316,7 +428,7 @@ struct FocusTimerPanel: View {
             return DialContent(time: TimerText.clock(left.rounded(.up)),
                                progress: left / total,
                                caption: "\(kind.label) · bloc \(nextBlockNumber) ensuite",
-                               tint: .teal)
+                               tint: Color.teal)
         case .readyForBlock(let block):
             return DialContent(time: TimerText.clock(pomodoroSettings.blockDuration),
                                progress: 0,
@@ -329,7 +441,7 @@ struct FocusTimerPanel: View {
                                    caption: "Bloc 1 · \(pomodoroSettings.focusMinutes) min",
                                    tint: tint)
             }
-            return DialContent(time: TimerText.clock(0), progress: nil, caption: nil, tint: tint)
+            return DialContent(time: TimerText.clock(0), progress: 0, caption: "Prêt", tint: tint)
         case .working, .paused:
             let paused = phase == .paused
             if focus.isPomodoro {
@@ -342,8 +454,8 @@ struct FocusTimerPanel: View {
                                    tint: tint)
             }
             return DialContent(time: TimerText.clock(elapsed),
-                               progress: nil,
-                               caption: paused ? "En pause" : nil,
+                               progress: elapsed.truncatingRemainder(dividingBy: 3600) / 3600,
+                               caption: paused ? "En pause" : "Un tour = une heure",
                                tint: tint)
         }
     }
@@ -459,13 +571,15 @@ struct FocusTimerPanel: View {
         VStack(alignment: .leading, spacing: Layout.block) {
             HStack {
                 Text("Corriger le temps compté")
-                    .font(.headline)
+                    .font(Carnet.serif(.headline))
+                    .foregroundStyle(Carnet.ink)
                 Spacer()
                 Button("OK") {
                     withAnimation(Motion.snappy) { isAdjusting = false }
                     Haptics.tap()
                 }
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Carnet.ink)
             }
             // Trois façons, du plus grossier au plus fin : les boutons pour un
             // rattrapage courant, le glissement pour ajuster à la minute, le
@@ -480,8 +594,8 @@ struct FocusTimerPanel: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(Layout.gutter)
-        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+        .padding(16)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
     }
 
     private func adjustButton(_ title: String, delta: TimeInterval) -> some View {
@@ -492,9 +606,8 @@ struct FocusTimerPanel: View {
             Text(title)
                 .font(.subheadline.weight(.medium).monospacedDigit())
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, Layout.snug)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.carnetSecondaryWide)
     }
 
     // MARK: Note
@@ -503,14 +616,14 @@ struct FocusTimerPanel: View {
         HStack(alignment: .top, spacing: Layout.control) {
             Image(systemName: "text.alignleft")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Carnet.inkSecondary)
                 .padding(.top, 2)
             TextField("Ajouter une note à la session…", text: noteBinding, axis: .vertical)
                 .font(.subheadline)
                 .lineLimit(1...4)
         }
-        .padding(Layout.gutter)
-        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+        .padding(14)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
     }
 
     // MARK: Raccourcis
@@ -526,27 +639,23 @@ struct FocusTimerPanel: View {
     private var shortcutsSection: some View {
         let shortcuts = effectiveShortcuts
         if !shortcuts.isEmpty {
-            VStack(alignment: .leading, spacing: Layout.control) {
-                HStack {
-                    Text("Démarrer en un toucher")
-                        .font(.headline)
-                    Spacer()
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Démarrer en un toucher") {
                     Button("Modifier") { showingShortcutEditor = true }
-                        .font(.subheadline)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Layout.control)],
-                          spacing: Layout.control) {
-                    ForEach(shortcuts) { shortcut in
-                        shortcutTile(shortcut)
+                CarnetSheet {
+                    ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
+                        shortcutRow(shortcut)
+                        if index < shortcuts.count - 1 { CarnetRule() }
                     }
                 }
             }
         }
     }
 
-    private func shortcutTile(_ shortcut: FocusShortcut) -> some View {
+    private func shortcutRow(_ shortcut: FocusShortcut) -> some View {
         let course = courses.first { $0.displayCode == shortcut.courseCode }
-        let tint = course.map { Carnet.tint($0.colorHex) } ?? Theme.accent
+        let tint = course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
         return Button {
             Haptics.tap()
             startOrConfirm(FocusRequest(courseID: course?.id,
@@ -554,31 +663,13 @@ struct FocusTimerPanel: View {
                                  taskType: shortcut.taskType,
                                  label: ""))
         } label: {
-            HStack(spacing: Layout.control) {
-                Image(systemName: shortcut.icon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(tint.badgeInk)
-                    .frame(width: 36, height: 36)
-                    .background(tint.badgeFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(shortcut.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    Text(shortcut.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+            CarnetRow(icon: shortcut.icon, tint: tint, title: shortcut.title, subtitle: shortcut.subtitle) {
                 Image(systemName: "play.fill")
                     .font(.caption)
-                    .foregroundStyle(tint.accessibleMark)
+                    .foregroundStyle(Carnet.inkSecondary)
             }
-            .padding(Layout.block)
-            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(PressableStyle(scale: 0.97))
+        .buttonStyle(.plain)
         .accessibilityLabel("Démarrer \(shortcut.title), \(shortcut.subtitle)")
     }
 
@@ -597,7 +688,7 @@ struct FocusTimerPanel: View {
                     .font(.footnote)
                     .monospacedDigit()
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Carnet.inkSecondary)
             .frame(maxWidth: .infinity)
         }
     }
@@ -736,11 +827,11 @@ struct PomodoroDots: View {
                 let done = index < completed
                 let current = index == completed && !isOnBreak
                 Capsule()
-                    .fill(done ? tint.accessibleMark : tint.badgeFill)
+                    .fill(done ? Carnet.ink : Carnet.rule)
                     .frame(width: current ? 22 : 8, height: 8)
                     .overlay {
                         if current {
-                            Capsule().strokeBorder(tint.accessibleMark, lineWidth: 1.5)
+                            Capsule().strokeBorder(Carnet.ink, lineWidth: 1.5)
                         }
                     }
             }

@@ -13,6 +13,8 @@ struct MeView: View {
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
     @Query(sort: \LinkedTask.dueDate) private var tasks: [LinkedTask]
+    /// `-settings` (captures) : ouvre les réglages à l'arrivée.
+    @State private var debugSettings = false
 
     var body: some View {
         NavigationStack {
@@ -25,6 +27,12 @@ struct MeView: View {
                 settingsLinks
             }
             .navigationTitle("Moi")
+            .navigationDestination(isPresented: $debugSettings) { ProfileView(isEmbedded: true) }
+            .onAppear {
+                #if DEBUG
+                if CommandLine.arguments.contains("-settings") { debugSettings = true }
+                #endif
+            }
         }
     }
 
@@ -101,7 +109,7 @@ struct MeView: View {
                 ForEach(days) { day in
                     VStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Calendar.current.isDateInToday(day.day) ? Carnet.ink : Carnet.rule)
+                            .fill(Calendar.current.isDateInToday(day.day) ? Carnet.ink : Carnet.inkTertiary)
                             .frame(height: max(4, 70 * CGFloat(day.seconds) / CGFloat(peak)))
                         Text(DateUtils.weekdayInitial(day.day))
                             .font(.caption2)

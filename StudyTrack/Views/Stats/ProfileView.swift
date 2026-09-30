@@ -48,57 +48,28 @@ struct ProfileView: View {
 
     private var settingsForm: some View {
         Group {
-            // Une page par sujet. Les quinze sections empilées faisaient un
-            // formulaire de plusieurs écrans où rien ne se retrouvait ; la racine
-            // ne garde que qui tu es, ton bilan, et un sommaire.
+            // **Une seule page**, rangée par sujet. Les sous-pages d'avant
+            // cachaient un interrupteur derrière deux touchers ; ce qui se règle
+            // d'un geste (rappels, confidentialité, charge) est ici, et seules les
+            // intégrations — qui ont leur propre notice — gardent une page.
             Form {
-                storeSection
-                identitySection(app.settings)
-                Section {
-                    NavigationLink {
-                        StatsView()
-                    } label: {
-                        Label("Bilan et statistiques", systemImage: "chart.bar.xaxis")
-                    }
+                Group {
+                    storeSection
+                    identitySection(app.settings)
+                    sectionPicker(app.settings)
+                    workloadSection(app.settings)
+                    calendarSection(app.settings)
+                    integrationsSection
+                    notificationsSection(app.settings)
+                    focusLinkSection
+                    privacySection(app.settings)
+                    accountSection(app.settings)
+                    dataSection
+                    aboutSection
                 }
-                Section {
-                    page("Semestre et cours", icon: "graduationcap") {
-                        sectionPicker(app.settings)
-                        workloadSection(app.settings)
-                    }
-                    page("Calendrier et tâches", icon: "calendar.badge.checkmark") {
-                        calendarSection(app.settings)
-                        tasksSection(app.settings)
-                        ankiSection
-                    }
-                    page("Notifications", icon: "bell.badge") {
-                        notificationsSection(app.settings)
-                    }
-                    page("Focus et chrono", icon: "timer") {
-                        focusSection(app.settings)
-                    }
-                    page("Intelligence artificielle", icon: "sparkles") {
-                        assistantSection
-                        aiSection
-                    }
-                }
-                Section {
-                    page("Compte et groupes", icon: "person.2") {
-                        accountSection(app.settings)
-                    }
-                    page("Confidentialité et données", icon: "lock.shield") {
-                        privacySection(app.settings)
-                        dataSection
-                    }
-                    page("Diagnostic", icon: "stethoscope") {
-                        diagnosticsSection
-                    }
-                    page("À propos", icon: "info.circle") {
-                        aboutSection
-                    }
-                }
+                .listRowBackground(Carnet.sheet)
             }
-            .carnetBackground()
+            .carnetForm()
             .navigationTitle("Réglages")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingImport) {
@@ -137,7 +108,7 @@ struct ProfileView: View {
             Section {
                 Label(problem, systemImage: "externaldrive.badge.exclamationmark")
                     .font(.caption)
-                    .foregroundStyle(Color.orange.accessibleInk)
+                    .foregroundStyle(Carnet.review)
                     .fixedSize(horizontal: false, vertical: true)
             } header: {
                 Text("Stockage")
@@ -147,50 +118,69 @@ struct ProfileView: View {
         }
     }
 
-    /// Anki, à côté des autres intégrations.
-    private var ankiSection: some View {
-        Section {
+    /// Tâches, Anki, assistant IA, import des PDF : chaque intégration a sa page
+    /// (champs, notice), et son état se lit ici sans l'ouvrir.
+    private var integrationsSection: some View {
+        let tasks = TaskServiceFactory.shared.configuredServices(settings: app.settings)
+        return Section {
+            NavigationLink {
+                TaskIntegrationsView()
+            } label: {
+                settingsRow("Tâches", icon: "checklist",
+                            value: tasks.isEmpty ? "aucune" : tasks.map(\.provider.label).joined(separator: ", "))
+            }
             NavigationLink {
                 AnkiSettingsView()
             } label: {
-                HStack(spacing: Layout.control) {
-                    Label("Anki", systemImage: "rectangle.stack.fill")
-                    Spacer()
-                    Text(app.settings.isAnkiConfigured ? "configuré" : "non configuré")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                settingsRow("Anki", icon: "rectangle.stack", value: app.settings.isAnkiConfigured ? "relié" : "non relié")
+            }
+            NavigationLink {
+                AssistantSettingsView()
+            } label: {
+                settingsRow("Assistant IA", icon: "bubble.left.and.text.bubble.right",
+                            value: app.settings.assistantToken.isEmpty ? "non relié" : "relié")
+            }
+            NavigationLink {
+                AIImportSettingsView()
+            } label: {
+                settingsRow("Lecture des PDF", icon: "sparkles",
+                            value: SeriesAIExtractor.plannedSource(app.settings)?.label ?? "désactivée")
             }
         } header: {
-            Text("Révision espacée")
+            CarnetFormHeader("Intégrations")
         } footer: {
-            Text("Envoie tes exercices à refaire et ta théorie à résumer dans un paquet Anki, via AnkiConnect.")
+            Text("Rappels, Todoist, Things, Notion… ; Anki pour la révision espacée ; Claude ou ChatGPT par le serveur MCP.")
         }
     }
 
-    /// Le journal, à côté des intégrations.
-    private var diagnosticsSection: some View {
+    /// Le Pomodoro a son formulaire, le même que depuis le chrono.
+    private var focusLinkSection: some View {
         Section {
             NavigationLink {
-                DiagnosticsView()
+                Form { PomodoroSettingsForm(settings: app.settings) }
+                    .carnetForm()
+                    .navigationTitle("Chrono et Pomodoro")
+                    .navigationBarTitleDisplayMode(.inline)
             } label: {
-                Label("Diagnostics", systemImage: "stethoscope")
+                settingsRow("Chrono et Pomodoro", icon: "timer",
+                            value: "\(app.settings.pomodoro.focusMinutes) / \(app.settings.pomodoro.shortBreakMinutes) min")
             }
-        } footer: {
-            Text("Les erreurs de synchronisation, d'import et d'intégration, horodatées. Utile quand quelque chose ne marche pas et qu'on ne sait pas quoi.")
+        } header: {
+            CarnetFormHeader("Chrono")
         }
     }
 
-    /// Une sous-page de réglages : ses sections, dans un formulaire à elle.
-    private func page<Content: View>(_ title: String, icon: String,
-                                     @ViewBuilder content: @escaping () -> Content) -> some View {
-        NavigationLink {
-            Form { content() }
-                .carnetBackground()
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-        } label: {
+    /// Une ligne de réglage : icône d'encre, titre, et l'état à droite.
+    private func settingsRow(_ title: String, icon: String, value: String? = nil) -> some View {
+        HStack(spacing: 12) {
             Label(title, systemImage: icon)
+            Spacer(minLength: 8)
+            if let value {
+                Text(value)
+                    .font(.subheadline)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -205,15 +195,15 @@ struct ProfileView: View {
         return Section {
             HStack(spacing: Layout.gutter) {
                 ZStack {
-                    Circle().fill(Theme.accent.accessibleMark)
+                    Circle().fill(Carnet.ink)
                     if let initial {
                         Text(initial)
-                            .font(.system(.title2, design: .rounded).weight(.bold))
-                            .foregroundStyle(Theme.knockedOutInk)
+                            .font(Carnet.serif(.title2))
+                            .foregroundStyle(Carnet.ground)
                     } else {
                         Image(systemName: "person.fill")
                             .font(.title3)
-                            .foregroundStyle(Theme.knockedOutInk)
+                            .foregroundStyle(Carnet.ground)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -221,7 +211,7 @@ struct ProfileView: View {
 
                 VStack(alignment: .leading, spacing: Layout.tight) {
                     TextField("Ton prénom", text: $settings.displayName)
-                        .font(.title3.weight(.semibold))
+                        .font(Carnet.serif(.title2))
                         .textContentType(.givenName)
                         .submitLabel(.done)
                     Text(settings.section.map { "\($0.name)" } ?? "Section non renseignée")
@@ -244,24 +234,12 @@ struct ProfileView: View {
             NavigationLink {
                 SchoolSetupView()
             } label: {
-                HStack(spacing: Layout.control) {
-                    Label("Section et semestre", systemImage: "graduationcap.fill")
-                    Spacer()
-                    Text(app.sectionDisplayName(settings.sectionCode))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                settingsRow("Section et semestre", icon: "graduationcap",
+                            value: app.sectionDisplayName(settings.sectionCode))
             }
-            HStack(spacing: Layout.control) {
-                Label("Cours suivis", systemImage: "books.vertical.fill")
-                Spacer()
-                Text("\(courses.filter(\.isTracked).count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            settingsRow("Cours suivis", icon: "books.vertical", value: "\(courses.filter(\.isTracked).count)")
         } header: {
-            Text("Scolarité")
+            CarnetFormHeader("Semestre")
         } footer: {
             Text("Tout est modifiable : section, cours suivis, heures d'amphi et dates du semestre.")
         }
@@ -273,15 +251,14 @@ struct ProfileView: View {
         @Bindable var settings = settings
         return Section {
             HStack {
-                Image(systemName: "calendar")
-                Text(app.calendar.hasAccess ? "Calendrier autorisé" : "Calendrier non autorisé")
-                    .font(.subheadline)
+                Label(app.calendar.hasAccess ? "Calendrier autorisé" : "Calendrier non autorisé",
+                      systemImage: "calendar")
                 Spacer()
                 Button(app.calendar.hasAccess ? "Synchroniser" : "Autoriser") {
                     Task { await syncCalendar() }
                 }
-                .buttonStyle(.bordered)
-                .font(.caption)
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.borderless)
             }
 
             TextField("Flux iCalendar de ton horaire", text: $settings.timetableURLString)
@@ -295,7 +272,7 @@ struct ProfileView: View {
                 Label("Importer un horaire / JSON / CSV", systemImage: "square.and.arrow.down")
             }
         } header: {
-            Text("Calendrier et horaire")
+            CarnetFormHeader("Horaire")
         } footer: {
             Text("L'EPFL n'ouvre pas d'API aux étudiant·e·s : le flux .ics « Mon horaire » est le moyen fiable d'importer ton emploi du temps. StudyTrack en déduit tes cours et détecte ceux qui ont des heures de cours.")
         }
@@ -395,10 +372,8 @@ struct ProfileView: View {
                 get: { Int(settings.hoursPerCredit) },
                 set: { settings.hoursPerCredit = Double($0) }
             ), in: 20...40, step: 1) {
-                LabeledContent("Heures par crédit ECTS", value: "\(Int(settings.hoursPerCredit)) h")
+                Label("\(Int(settings.hoursPerCredit)) h par crédit ECTS", systemImage: "scalemass")
             }
-        } header: {
-            Text("Charge de travail EPFL")
         } footer: {
             Text("Charge attendue = crédits × heures par crédit, dont les heures d'amphi déclarées des cours qui en ont.")
         }
@@ -452,7 +427,7 @@ struct ProfileView: View {
                 Label("Autoriser les notifications", systemImage: "bell.badge")
             }
         } header: {
-            Text("Notifications")
+            CarnetFormHeader("Rappels")
         } footer: {
             Text("Les rappels d'évaluation (J-3, J-1) et de session (15 min avant) sont replanifiés automatiquement à chaque passage en arrière-plan.")
         }
@@ -471,7 +446,7 @@ struct ProfileView: View {
 
     private func privacySection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
-        return Section("Confidentialité") {
+        return Section(header: CarnetFormHeader("Groupes et confidentialité")) {
             Toggle("Apparaître anonymement dans les groupes", isOn: $settings.anonymousInLeaderboards)
             Toggle("Partager mon avancement avec mes groupes", isOn: $settings.shareProgressWithGroups)
             Toggle("Suivre la présence en amphi", isOn: $settings.trackAttendance)
@@ -482,11 +457,6 @@ struct ProfileView: View {
 
     private var dataSection: some View {
         Section {
-            NavigationLink {
-                StatsView()
-            } label: {
-                Label("Statistiques et récapitulatif", systemImage: "chart.bar.fill")
-            }
             NavigationLink {
                 SessionHistoryView(embedded: true)
             } label: {
@@ -529,7 +499,7 @@ struct ProfileView: View {
                 Label("Effacer toutes les données", systemImage: "trash")
             }
         } header: {
-            Text("Données")
+            CarnetFormHeader("Données")
         } footer: {
             Text("La sauvegarde contient les cours, l'avancement (vidéos vues, exercices faits, corrections) et les sessions. Elle se restaure par « Importer » › JSON, sans doublon.")
         }
@@ -644,15 +614,15 @@ struct ProfileView: View {
             if let message {
                 Text(message)
                     .font(.caption)
-                    .foregroundStyle(app.social.isSignedIn ? Color.green.accessibleInk : Color.orange.accessibleInk)
+                    .foregroundStyle(app.social.isSignedIn ? Carnet.correct : Carnet.review)
             }
             if let error = app.social.lastError {
                 Text(error)
                     .font(.footnote)
-                    .foregroundStyle(Color.red.accessibleInk)
+                    .foregroundStyle(Carnet.wrong)
             }
         } header: {
-            Text("Groupes (Supabase)")
+            CarnetFormHeader("Compte")
         } footer: {
             Text("Sans Supabase, tout le suivi privé fonctionne hors ligne : seules les fonctions de groupe restent locales.")
         }
@@ -726,7 +696,12 @@ struct ProfileView: View {
     }
 
     private var aboutSection: some View {
-        Section("À propos") {
+        Section(header: CarnetFormHeader("À propos")) {
+            NavigationLink {
+                DiagnosticsView()
+            } label: {
+                Label("Diagnostic", systemImage: "stethoscope")
+            }
             LabeledContent("Version", value: Self.versionLabel)
             Text("StudyTrack — suivi du temps d'étude EPFL : théorie par vidéos, exercices et corrections, charge attendue, agenda, groupes et intégrations.")
                 .font(.footnote)

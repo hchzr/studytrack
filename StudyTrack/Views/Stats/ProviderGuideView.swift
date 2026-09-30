@@ -24,7 +24,7 @@ struct ProviderGuideView: View {
                 .adaptiveColumn()
             }
             .background(Carnet.ground.ignoresSafeArea())
-            .carnetBackground()
+            .carnetForm()
             .navigationTitle(provider.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

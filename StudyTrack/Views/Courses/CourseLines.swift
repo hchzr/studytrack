@@ -6,6 +6,9 @@ import SwiftData
 /// le support — la vidéo elle-même quand il y en a une.
 struct CarnetTheoryLine: View {
     @Bindable var item: TheoryItem
+    /// Le détail commun à toute la section (« Lecture · Botafogo ») : dit une
+    /// fois dans son titre, il n'est pas répété sur chaque ligne.
+    var hiddenDetail: String? = nil
     var onOpen: () -> Void
     var onBrowse: (BrowsedLink) -> Void
 
@@ -29,10 +32,12 @@ struct CarnetTheoryLine: View {
                         .foregroundStyle(item.isWatched ? Carnet.inkSecondary : Carnet.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .lineLimit(1)
+                    if detail != hiddenDetail {
+                        Text(detail)
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -54,11 +59,19 @@ struct CarnetTheoryLine: View {
                 .padding(.trailing, 4)
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 2)
     }
 
+    /// Le détail partagé par **toutes** les lignes, s'il y en a un.
+    static func sharedDetail(_ items: [TheoryItem]) -> String? {
+        let details = Set(items.map { CarnetTheoryLine.detail(for: $0) })
+        return items.count > 1 && details.count == 1 ? details.first : nil
+    }
+
+    private var detail: String { Self.detail(for: item) }
+
     /// « Vidéo · 1 h 32 · MediaSpace » ; « 3 vidéos · Courseware ».
-    private var detail: String {
+    static func detail(for item: TheoryItem) -> String {
         var parts: [String] = []
         let videos = item.links.filter { $0.kind == .video }.count
         if videos > 1 {
@@ -72,7 +85,7 @@ struct CarnetTheoryLine: View {
         let others = Set(item.links.map(\.kind)).subtracting([.video]).map { $0.shortLabel }.sorted()
         parts.append(contentsOf: others)
         if let host = URL(string: item.links.first?.url ?? item.urlString)?.host {
-            parts.append(Self.siteName(host))
+            parts.append(siteName(host))
         }
         return parts.joined(separator: " · ")
     }

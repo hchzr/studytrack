@@ -14,7 +14,7 @@ struct FocusView: View {
 
     @Environment(AppContainer.self) private var app
 
-    @State private var mode: Mode = .timer
+    @State private var showingJournal = false
     @State private var showingManual = false
     @State private var showingPomodoroSettings = false
     @State private var showingShortcutEditor = false
@@ -22,44 +22,43 @@ struct FocusView: View {
     /// Mode ajustement du temps compté, partagé avec le panneau du chrono.
     @State private var isAdjusting = false
 
-    enum Mode: String, CaseIterable, Identifiable {
-        case timer, journal
-        var id: String { rawValue }
-        var title: String { self == .timer ? "Chrono" : "Journal" }
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                    Picker("Vue", selection: $mode) {
-                        ForEach(Mode.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-
-                    switch mode {
-                    case .timer:
-                        FocusTimerPanel(isAdjusting: $isAdjusting,
-                                        showingPomodoroSettings: $showingPomodoroSettings,
-                                        showingShortcutEditor: $showingShortcutEditor)
-                    case .journal:
-                        FocusJournalPanel(onAddManual: { showingManual = true },
-                                          onShowHistory: { showingHistory = true })
-                    }
-                }
-                .padding(Layout.screenPadding)
-                .adaptiveColumn()
+                FocusTimerPanel(isAdjusting: $isAdjusting,
+                                showingPomodoroSettings: $showingPomodoroSettings,
+                                showingShortcutEditor: $showingShortcutEditor)
+                    .padding(.horizontal, Carnet.screenPadding)
+                    .padding(.top, 8)
+                    .padding(.bottom, 32)
+                    .adaptiveColumn()
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Carnet.ground.ignoresSafeArea())
             .carnetBackground()
-            .navigationTitle("Focus")
+            .navigationTitle("Chrono")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showingJournal) {
+                ScrollView {
+                    FocusJournalPanel(onAddManual: { showingManual = true },
+                                      onShowHistory: { showingHistory = true })
+                        .padding(Carnet.screenPadding)
+                        .adaptiveColumn()
+                }
+                .background(Carnet.ground.ignoresSafeArea())
+                .navigationTitle("Journal")
+                .navigationBarTitleDisplayMode(.inline)
+            }
             .toolbar {
                 if let onClose {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Fermer", action: onClose)
+                        Button(action: onClose) { Image(systemName: "chevron.down") }
+                            .accessibilityLabel("Fermer le chrono")
                     }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingJournal = true } label: { Image(systemName: "list.bullet.rectangle") }
+                        .accessibilityLabel("Journal des sessions")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -69,7 +68,6 @@ struct FocusView: View {
                             Label("Ajouter une session passée", systemImage: "square.and.pencil")
                         }
                         Button {
-                            mode = .timer
                             withAnimation(Motion.snappy) { isAdjusting = true }
                         } label: {
                             Label("Corriger le temps compté", systemImage: "slider.horizontal.below.rectangle")
@@ -115,11 +113,9 @@ struct FocusView: View {
     private func applyFocusMode(_ requested: AppRouter.FocusMode?) {
         guard let requested else { return }
         switch requested {
-        case .timer: mode = .timer
-        case .manual:
-            mode = .journal
-            showingManual = true
-        case .journal: mode = .journal
+        case .timer: showingJournal = false
+        case .manual: showingManual = true
+        case .journal: showingJournal = true
         }
         app.router.focusMode = nil
     }

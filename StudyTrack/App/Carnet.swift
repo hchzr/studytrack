@@ -130,6 +130,49 @@ extension View {
     }
 }
 
+// MARK: - Formulaires
+
+extension View {
+    /// Un formulaire sur papier : fond crème, encre pour les contrôles, icônes
+    /// d'encre en retrait. Les lignes prennent `Carnet.sheet` via
+    /// `.listRowBackground` posé sur leurs sections.
+    func carnetForm() -> some View {
+        self.scrollContentBackground(.hidden)
+            .background(Carnet.ground.ignoresSafeArea())
+            .tint(Carnet.ink)
+            .labelStyle(CarnetFormLabelStyle())
+    }
+}
+
+/// L'icône d'une ligne de réglage : à l'encre secondaire, sur une largeur fixe
+/// pour que les titres s'alignent — pas de pastille bleue.
+struct CarnetFormLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 14) {
+            configuration.icon
+                .font(.body)
+                .foregroundStyle(Carnet.inkSecondary)
+                .frame(width: 24)
+            configuration.title
+        }
+    }
+}
+
+/// L'en-tête d'une section de formulaire : serif, à l'encre, sans capitales.
+struct CarnetFormHeader: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(Carnet.serif(.title3))
+            .foregroundStyle(Carnet.ink)
+            .textCase(nil)
+            .padding(.leading, -8)
+            .padding(.bottom, 2)
+    }
+}
+
 // MARK: - Boutons
 
 /// Le bouton plein : encre sur papier, papier sur encre la nuit.

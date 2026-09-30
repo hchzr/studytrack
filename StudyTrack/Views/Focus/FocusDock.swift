@@ -1,150 +1,211 @@
 import SwiftUI
 import SwiftData
 
-/// Le chrono, toujours à portée, au-dessus de la barre d'onglets.
+/// La barre du bas, **en deux** : les quatre onglets dans une capsule de verre,
+/// et le chrono à part, dans un rond.
 ///
-/// Focus était un onglet : démarrer une session obligeait à quitter l'écran où
-/// l'on était, et une session en cours ne se voyait que sur « Aujourd'hui ».
-/// Le dock remplace l'onglet :
-///   • **au repos**, il propose la prochaine chose à faire (`NextActionEngine`)
-///     en un toucher, et ouvre Focus pour tout le reste ;
-///   • **pendant une session**, c'est un mini-lecteur : temps qui défile, pause,
-///     arrêt — et un toucher rouvre Focus.
-struct FocusDock: View {
+/// La barre système mettait le chrono au milieu des onglets, et le mini-lecteur
+/// restait posé au-dessus même quand rien ne tournait — il proposait « la
+/// prochaine chose à faire », qu'on connaît déjà, et masquait le bas de chaque
+/// écran. Désormais :
+///   • **au repos**, le rond montre un chrono ; le toucher ouvre Focus ;
+///   • **pendant une session**, le rond devient un petit cadran qui avance, et
+///     le mini-lecteur (temps, pause, terminer) apparaît au-dessus de la barre.
+struct CarnetTabBar: View {
+    @Environment(AppContainer.self) private var app
+    @Namespace private var glass
+
+    static let tabs: [AppRouter.Tab] = [.today, .courses, .groups, .me]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if app.focus.hasSession {
+                FocusMiniPlayer()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            HStack(spacing: 10) {
+                tabCapsule
+                ChronoDot()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+        .animation(Motion.snappy, value: app.focus.hasSession)
+    }
+
+    private var tabCapsule: some View {
+        HStack(spacing: 0) {
+            ForEach(Self.tabs, id: \.self) { tab in
+                tabButton(tab)
+            }
+        }
+        .padding(4)
+        .carnetGlass(in: Capsule(), interactive: true)
+    }
+
+    private func tabButton(_ tab: AppRouter.Tab) -> some View {
+        let selected = app.router.selectedTab == tab
+        return Button {
+            app.router.selectedTab = tab
+            Haptics.soft()
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                    .symbolVariant(selected ? .fill : .none)
+                    .frame(height: 22)
+                Text(tab.title)
+                    .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(selected ? Carnet.ink : Carnet.inkSecondary)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background {
+                if selected {
+                    Capsule().fill(Carnet.ink.opacity(0.09))
+                        .matchedGeometryEffect(id: "selection", in: glass)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle(scale: 0.96))
+        .animation(Motion.snappy, value: selected)
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+/// Le rond du chrono, à droite de la barre.
+///
+/// Au repos, un chrono ; pendant une session, l'anneau avance (d'un tour par
+/// heure en chrono libre, d'un tour par bloc en Pomodoro) autour d'un point à
+/// la couleur du cours — ambre en pause, turquoise pendant une pause Pomodoro.
+struct ChronoDot: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
 
     private var focus: FocusController { app.focus }
 
     var body: some View {
-        Group {
-            if focus.hasSession, let state = focus.state {
-                player(state)
-            } else {
-                starter
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .animation(Motion.snappy, value: focus.hasSession)
-    }
-
-    // MARK: Au repos
-
-    /// Au repos, la bulle **propose** et n'agit pas : la toucher ouvre Focus
-    /// prêt sur la prochaine chose à faire, sans lancer le chrono. Le démarrage
-    /// est un geste à part — le bouton ▶, qui dit ce qu'il fait. Un chrono qui
-    /// partait au moindre toucher comptait du temps qu'on n'avait pas choisi de
-    /// compter.
-    private var starter: some View {
-        let next = NextActionEngine.actions(for: courses, limit: 1).first
-        let tint = next.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
-        return HStack(spacing: Layout.inline) {
-            Button {
-                if let next {
-                    app.router.prepareFocus(courseID: next.courseID, courseCode: next.courseCode,
-                                            taskType: next.taskType, targetID: next.targetID)
+        Button {
+            app.router.openFocus()
+            Haptics.tap()
+        } label: {
+            ZStack {
+                if focus.hasSession, let state = focus.state {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        running(state: state, now: context.date)
+                    }
                 } else {
-                    app.router.openFocus()
+                    Image(systemName: "timer")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(Carnet.ink)
                 }
-                Haptics.tap()
-            } label: {
-                HStack(spacing: Layout.control) {
-                    Image(systemName: next?.icon ?? "timer")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 34, height: 34)
-                        .background(tint.opacity(0.16), in: Circle())
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(next.map { "\($0.courseCode) · \(MathMarkup.plain($0.title))" } ?? "Focus")
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                        Text(next?.reasonLabel ?? "Chrono et journal")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(PressableStyle(scale: 0.98))
-            .accessibilityLabel(next.map { "Préparer Focus : \($0.courseCode), \(MathMarkup.plain($0.title))" } ?? "Ouvrir Focus")
-            .accessibilityHint("Ouvre le chrono sans le démarrer")
-
-            if let next {
-                Button {
-                    app.router.startFocus(courseID: next.courseID, courseCode: next.courseCode,
-                                          taskType: next.taskType, targetID: next.targetID,
-                                          label: next.focusLabel)
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "play.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Carnet.ground)
-                        .offset(x: 1)
-                        .frame(width: 34, height: 34)
-                        .background(Carnet.ink, in: Circle())
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel("Démarrer le chrono : \(next.courseCode), \(MathMarkup.plain(next.title))")
-            }
+            .frame(width: 58, height: 58)
+            .carnetGlass(in: Circle(), interactive: true)
+            .contentShape(Circle())
         }
-        .padding(.leading, Layout.block)
-        .padding(.trailing, Layout.tight)
+        .buttonStyle(PressableStyle(scale: 0.94))
+        .accessibilityLabel(focus.hasSession ? "Chrono en cours, ouvrir" : "Ouvrir le chrono")
     }
 
-    // MARK: Pendant une session
-
-    private func player(_ state: FocusTimerState) -> some View {
+    private func running(state: FocusTimerState, now: Date) -> some View {
+        let phase = focus.phase(at: now)
         let course = courses.first { $0.id == state.courseID }
-        let tint = course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
-        return TimelineView(.periodic(from: .now, by: 1)) { context in
-            let phase = focus.phase(at: context.date)
-            HStack(spacing: Layout.inline) {
-                Button {
-                    app.router.openFocus()
-                } label: {
-                    HStack(spacing: Layout.control) {
-                        statusMark(phase: phase, tint: tint)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(label(state, course: course))
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Text(statusText(phase))
-                                .font(.caption)
-                                .foregroundStyle(phase == .paused ? Color.orange.accessibleInk : .secondary)
-                                .lineLimit(1)
+        let tint: Color = {
+            if phase.isBreak { return Color.teal }
+            if phase == .paused { return Carnet.review }
+            return course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
+        }()
+        let progress: Double = {
+            if case .onBreak(_, let start, let end) = phase {
+                let total = max(1, end.timeIntervalSince(start))
+                return max(0, end.timeIntervalSince(now)) / total
+            }
+            if focus.isPomodoro { return focus.pomodoroStatus(at: now).progress }
+            return state.elapsed(at: now).truncatingRemainder(dividingBy: 3600) / 3600
+        }()
+        return ZStack {
+            Circle().stroke(Carnet.rule, lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: max(0.02, progress))
+                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text(TimerText.compact(state.elapsed(at: now)))
+                .font(Carnet.mono(.caption2, weight: .semibold))
+                .foregroundStyle(Carnet.ink)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(9)
+    }
+}
+
+/// Le mini-lecteur, **seulement pendant une session** : sur quoi, où on en est,
+/// pause et terminer. Le toucher ouvre Focus.
+struct FocusMiniPlayer: View {
+    @Environment(AppContainer.self) private var app
+    @Query(sort: \Course.code) private var courses: [Course]
+
+    private var focus: FocusController { app.focus }
+
+    var body: some View {
+        if let state = focus.state {
+            let course = courses.first { $0.id == state.courseID }
+            let tint = course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let phase = focus.phase(at: context.date)
+                HStack(spacing: 10) {
+                    Button {
+                        app.router.openFocus()
+                    } label: {
+                        HStack(spacing: 10) {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(phase.isBreak ? Color.teal : tint)
+                                .frame(width: 4, height: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(title(state, course: course))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Carnet.ink)
+                                    .lineLimit(1)
+                                Text(statusText(phase))
+                                    .font(.caption)
+                                    .foregroundStyle(phase == .paused ? Carnet.review : Carnet.inkSecondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Text(clock(phase: phase, state: state, now: context.date))
+                                .font(Carnet.mono(.body, weight: .medium))
+                                .foregroundStyle(Carnet.ink)
+                                .contentTransition(.numericText())
                         }
-                        Spacer(minLength: 0)
-                        Text(clock(phase: phase, state: state, now: context.date))
-                            .font(.subheadline.weight(.bold).monospacedDigit())
-                            .foregroundStyle(phase.isBreak ? Color.teal.accessibleInk : .primary)
-                            .contentTransition(.numericText())
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(label(state, course: course)), \(statusText(phase)). Ouvrir Focus")
-
-                primaryButton(phase: phase)
-
-                Button {
-                    focus.finish()
-                    Haptics.success()
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.body.weight(.semibold))
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
                         .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title(state, course: course)), \(statusText(phase)). Ouvrir le chrono")
+
+                    primaryButton(phase: phase)
+
+                    Button {
+                        focus.finish()
+                        Haptics.success()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Carnet.ink)
+                            .frame(width: 40, height: 40)
+                            .background(Carnet.ink.opacity(0.08), in: Circle())
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("Terminer et enregistrer la session")
                 }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel("Terminer et enregistrer la session")
+                .padding(.leading, 14)
+                .padding(.trailing, 8)
+                .padding(.vertical, 8)
+                .carnetGlass(in: Capsule(), interactive: true)
             }
         }
-        .padding(.leading, Layout.block)
-        .padding(.trailing, Layout.tight)
     }
 
     @ViewBuilder
@@ -165,30 +226,14 @@ struct FocusDock: View {
             Haptics.tap()
         } label: {
             Image(systemName: icon)
-                .font(.body.weight(.semibold))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Carnet.ground)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: Layout.minTouch, height: Layout.minTouch)
-                .contentShape(Rectangle())
+                .frame(width: 40, height: 40)
+                .background(Carnet.ink, in: Circle())
         }
         .buttonStyle(PressableStyle())
         .accessibilityLabel(label)
-    }
-
-    /// Le point d'état : plein quand on travaille, une tasse en pause Pomodoro.
-    @ViewBuilder
-    private func statusMark(phase: FocusPhase, tint: Color) -> some View {
-        if phase.isBreak {
-            Image(systemName: "cup.and.saucer.fill")
-                .font(.caption)
-                .foregroundStyle(Color.teal.accessibleMark)
-                .frame(width: 16)
-        } else {
-            Circle()
-                .fill(tint.accessibleMark)
-                .frame(width: 10, height: 10)
-                .opacity(phase == .working ? 1 : 0.35)
-                .frame(width: 16)
-        }
     }
 
     private func statusText(_ phase: FocusPhase) -> String {
@@ -201,54 +246,55 @@ struct FocusDock: View {
         }
     }
 
-    /// Le temps travaillé — ou, pendant une pause, ce qu'il en reste.
+    /// Le temps travaillé — ou, pendant une pause, ce qu'il en reste ; en
+    /// Pomodoro, ce qu'il reste du bloc.
     private func clock(phase: FocusPhase, state: FocusTimerState, now: Date) -> String {
         if case .onBreak(_, _, let end) = phase {
             return TimerText.clock(max(0, end.timeIntervalSince(now)).rounded(.up))
         }
+        if focus.isPomodoro, phase == .working || phase == .paused {
+            return TimerText.clock(focus.pomodoroStatus(at: now).remaining.rounded(.up))
+        }
         return TimerText.clock(state.elapsed(at: now))
     }
 
-    private func label(_ state: FocusTimerState, course: Course?) -> String {
-        if !state.contextLabel.isEmpty { return state.contextLabel }
-        return [course?.displayCode ?? "Session libre", state.taskType.label].joined(separator: " · ")
+    private func title(_ state: FocusTimerState, course: Course?) -> String {
+        FocusLabels.title(state: state, course: course)
     }
 }
 
-/// Place le dock : accessoire de la barre d'onglets sur iOS 26 (il se replie
-/// avec elle au défilement), bandeau au-dessus de la barre avant.
-struct FocusDockPlacement: ViewModifier {
-    @Environment(AppContainer.self) private var app
-
-    /// Sur l'accueil, la carte « Reprendre » propose déjà la suite : le dock
-    /// n'y paraît que pendant une session. Ailleurs, il est toujours là.
-    private var isShown: Bool {
-        app.focus.hasSession || app.router.selectedTab != .today
-    }
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.1, *) {
-            content.tabViewBottomAccessory(isEnabled: isShown) { FocusDock() }
-        } else if #available(iOS 26.0, *) {
-            content.tabViewBottomAccessory { FocusDock() }
-        } else {
-            content
-        }
+/// Ce que dit une session, partout où elle s'affiche : « CS-250 · Exercice 2.1 ».
+@MainActor
+enum FocusLabels {
+    static func title(state: FocusTimerState, course: Course?) -> String {
+        if !state.contextLabel.isEmpty { return MathMarkup.plain(state.contextLabel) }
+        let target = FocusController.target(of: state, in: course)
+        let what: String = {
+            if let exercise = target.exercise { return exercise.displayNumber }
+            if let item = target.theoryItem { return MathMarkup.plain(item.title.isEmpty ? item.displayNumber : item.title) }
+            return state.taskType.label
+        }()
+        return [course?.displayCode ?? "Session libre", what].joined(separator: " · ")
     }
 }
 
-/// Avant iOS 26 : le dock posé au bas de chaque onglet, sur un fond de barre.
-struct LegacyFocusDockInset: ViewModifier {
+/// Place la barre du bas sous chaque onglet : la barre système est masquée, le
+/// contenu défile au-dessus de la nôtre sans passer dessous.
+struct CarnetTabBarInset: ViewModifier {
+    @State private var keyboardShown = false
+
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-        } else {
-            content.safeAreaInset(edge: .bottom, spacing: 0) {
-                FocusDock()
-                    .padding(.vertical, Layout.snug)
-                    .background(.bar)
-                    .overlay(alignment: .top) { Divider() }
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !keyboardShown {
+                    CarnetTabBar()
+                }
             }
-        }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                keyboardShown = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardShown = false
+            }
     }
 }
