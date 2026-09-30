@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Exercices : séries, sous-exercices, bonus, sureté de réponse et correction.
+/// Exercices : séries, exercices, sous-questions et correction.
 ///
-/// Tout se gère **depuis la liste** : chaque série a son menu (modifier,
-/// réimporter, tout cocher, supprimer), chaque exercice un appui long, et les
-/// questions se cochent sur place sans ouvrir de fiche.
+/// Tout le suivi se fait **dans la liste** : cocher un exercice ou ses
+/// questions (visibles, avec leur texte), puis le corriger d'un toucher — vert,
+/// orange, rouge. La fiche d'un exercice sert à lire (énoncé complet,
+/// documents, indication, solution, théorie de la semaine) et au chrono.
 struct ExercisesTabView: View {
     let course: Course
 
@@ -31,9 +32,18 @@ struct ExercisesTabView: View {
     /// Séries dont l'étudiant·e a inversé le pliage par défaut (une série
     /// terminée rouverte, une série en cours repliée).
     @State private var toggledSeries: Set<UUID> = []
-    /// Exercices qu'on vient de cocher : la ligne demande la sureté, au lieu
-    /// d'en inventer une.
-    @State private var askingConfidence: Set<UUID> = []
+    /// Exercices dont l'étudiant·e a inversé l'affichage des questions : par
+    /// défaut elles sont visibles tant que l'exercice n'est pas fait.
+    @State private var toggledQuestions: Set<UUID> = []
+    /// Un document ouvert dans l'app (énoncé, corrigé, théorie).
+    @State private var browsing: BrowsedLink?
+    /// La théorie d'une semaine, ouverte depuis une série.
+    @State private var weekContext: WeekContextTarget?
+
+    struct WeekContextTarget: Identifiable {
+        let id = UUID()
+        var week: Int
+    }
 
     struct WorkspaceTarget: Identifiable {
         let id = UUID()
@@ -111,6 +121,12 @@ struct ExercisesTabView: View {
         .sheet(item: $workspace) { target in
             ExerciseWorkspace(series: target.series, start: target.start)
         }
+        .sheet(item: $browsing) { link in
+            InAppBrowser(link: link)
+        }
+        .sheet(item: $weekContext) { target in
+            WeekTheorySheet(course: course, week: target.week)
+        }
         #if DEBUG
         .onAppear {
             // Le simulateur ne sait pas taper : ce drapeau ouvre le détail d'un
@@ -170,14 +186,22 @@ struct ExercisesTabView: View {
         }
     }
 
-    /// La légende des glyphes d'étape, en une ligne discrète sous la liste.
+    /// La légende : la coche marque « fait », la couleur la **correction**.
     private var legend: some View {
-        HStack(spacing: Layout.block) {
-            legendItem(.toDo, "à faire")
-            legendItem(.toCorrect(.high), "fait")
-            legendItem(.corrected(.correct), "corrigé")
-            legendItem(.redo, "à refaire")
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: Layout.snug) {
+            HStack(spacing: Layout.block) {
+                legendItem(.toDo, "à faire")
+                legendItem(.toCorrect, "fait, à corriger")
+                legendItem(.redo, "à refaire")
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: Layout.block) {
+                Text("Correction").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                legendItem(.corrected(.correct), "juste")
+                legendItem(.corrected(.partial), "moyen")
+                legendItem(.corrected(.wrong), "faux")
+                Spacer(minLength: 0)
+            }
         }
         .padding(.horizontal, Layout.micro)
         .accessibilityHidden(true)
@@ -323,45 +347,25 @@ struct ExercisesTabView: View {
                     .buttonStyle(.borderless)
                 }
 
-                // Reprendre là où on s'est arrêté : le premier exercice pas
-                // fait, sinon le premier à refaire ou à corriger.
-                if let resume = ExerciseFlow.resumePoint(in: series.exercises) {
-                    Button {
-                        workspace = WorkspaceTarget(series: series, start: resume)
-                    } label: {
-                        HStack(spacing: Layout.control) {
-                            Image(systemName: "arrow.right.circle.fill")
-                                .font(.title3)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(series.exercises.contains(where: \.isDone) ? "Reprendre à \(resume.exerciseNumber)" : "Commencer à \(resume.exerciseNumber)")
-                                    .font(.subheadline.weight(.semibold))
-                                Text(ExerciseStage(resume).isDone || resume.redoRequired
-                                     ? "\(ExerciseStage(resume).label) · exercice par exercice, chrono compris"
-                                     : "Exercice par exercice, chrono compris")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundStyle(Theme.accentInk)
-                        .padding(Layout.control)
-                        .background(Theme.accent.badgeFill.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressableStyle(scale: 0.98))
-                }
+                seriesDocuments(series)
 
                 VStack(spacing: 0) {
                     ForEach(series.sortedExercises) { exercise in
                         ExerciseRow(exercise: exercise,
                                     seconds: ExerciseFlow.seconds(on: exercise.id, sessions: sessions),
-                                    isAskingConfidence: askingConfidence.contains(exercise.id),
+                                    showsQuestions: showsQuestions(exercise),
                                     onToggleDone: { toggleDone(exercise) },
-                                    onConfidence: { level in setConfidence(level, on: exercise) },
+                                    onCorrect: { result in correct(exercise, result) },
+                                    onToggleQuestions: { toggleQuestions(exercise) },
+                                    onToggleQuestion: { question in
+                                        question.toggle()
+                                        Haptics.tap()
+                                        try? context.save()
+                                    },
                                     onOpen: { workspace = WorkspaceTarget(series: series, start: exercise) })
                         .contextMenu {
                             Button { workspace = WorkspaceTarget(series: series, start: exercise) } label: {
-                                Label("Ouvrir", systemImage: "doc.text")
+                                Label("Ouvrir la fiche", systemImage: "doc.text")
                             }
                             Button { editingSeries = SeriesEditTarget(series: series) } label: {
                                 Label("Modifier la série…", systemImage: "pencil")
@@ -376,6 +380,43 @@ struct ExercisesTabView: View {
                     }
                 }
         }
+    }
+
+    /// Les documents de la série et la théorie de sa semaine, en pastilles :
+    /// l'énoncé, le corrigé, et « Théorie S3 » — de quoi s'y remettre sans
+    /// quitter la liste.
+    @ViewBuilder
+    private func seriesDocuments(_ series: ExerciseSeries) -> some View {
+        let links = ExerciseLinks.seriesLinks(series)
+        let theory = series.plannedWeek > 0 ? course.theoryItems.filter { $0.plannedWeek == series.plannedWeek }.count : 0
+        if !links.isEmpty || theory > 0 {
+            FlowLayout(spacing: Layout.inline) {
+                ForEach(links) { link in
+                    Button { browsing = link } label: {
+                        documentChip(link.title, icon: link.icon)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if theory > 0 {
+                    Button { weekContext = WeekContextTarget(week: series.plannedWeek) } label: {
+                        documentChip("Théorie S\(series.plannedWeek) · \(theory)", icon: TaskType.theory.icon)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func documentChip(_ title: String, icon: String) -> some View {
+        HStack(spacing: Layout.snug) {
+            Image(systemName: icon).font(.caption.weight(.semibold))
+            Text(title).font(.caption.weight(.semibold)).lineLimit(1)
+        }
+        .padding(.horizontal, Layout.control)
+        .frame(minHeight: 30)
+        .background(Color(.tertiarySystemFill), in: Capsule())
+        .foregroundStyle(Theme.accentInk)
+        .contentShape(Capsule())
     }
 
     @MainActor
@@ -433,156 +474,64 @@ struct ExercisesTabView: View {
         try? context.save()
     }
 
-    /// Cocher demande la sureté sur la ligne ; décocher l'efface. Aucune
-    /// sureté n'est posée d'office.
-    private func toggleDone(_ exercise: Exercise) {
-        let done = !exercise.isDone
-        exercise.setDone(done)
+    private func showsQuestions(_ exercise: Exercise) -> Bool {
+        let byDefault = !ExerciseStage(exercise).isDone
+        return byDefault != toggledQuestions.contains(exercise.id)
+    }
+
+    private func toggleQuestions(_ exercise: Exercise) {
         withAnimation(Motion.snappy) {
-            if done { askingConfidence.insert(exercise.id) } else { askingConfidence.remove(exercise.id) }
+            if toggledQuestions.contains(exercise.id) {
+                toggledQuestions.remove(exercise.id)
+            } else {
+                toggledQuestions.insert(exercise.id)
+            }
         }
+        Haptics.soft()
+    }
+
+    /// Cocher l'exercice (et ses questions) ; décocher efface sa correction.
+    private func toggleDone(_ exercise: Exercise) {
+        exercise.setDone(!exercise.isDone)
         // Pas de vibration ici : le glyphe d'étape a déjà la sienne.
         try? context.save()
     }
 
-    private func setConfidence(_ level: ConfidenceLevel, on exercise: Exercise) {
-        exercise.confidence = level
-        if !exercise.isDone {
-            exercise.setDone(true)
-            exercise.confidence = level
+    /// La couleur de la correction. Corriger un exercice le marque fait.
+    private func correct(_ exercise: Exercise, _ result: Correctness?) {
+        if let result {
+            exercise.correct(result)
+            if result == .wrong { Haptics.error() } else { Haptics.success() }
+        } else {
+            exercise.clearCorrection()
         }
-        withAnimation(Motion.snappy) { _ = askingConfidence.remove(exercise.id) }
-        Haptics.success()
         try? context.save()
     }
 }
 
-/// Ligne d'exercice : son étape, son numéro, ce qu'il demande, et le temps
-/// déjà passé dessus.
-///
-/// L'ancienne ligne montrait trois pastilles de sureté **sur chaque exercice**,
-/// fait ou non, plus un compteur de questions dépliable : une liste de douze
-/// exercices devenait un mur de trente-six ronds. Il reste un seul glyphe
-/// d'étape (`ExerciseStageMark`) qu'un toucher coche, et une ligne qui ouvre
-/// l'espace de travail. La sureté est **demandée** juste après avoir coché —
-/// jamais inventée.
-struct ExerciseRow: View {
-    let exercise: Exercise
-    var seconds: Int = 0
-    var isAskingConfidence = false
-    var onToggleDone: () -> Void
-    var onConfidence: (ConfidenceLevel) -> Void
-    var onOpen: () -> Void
+/// La théorie d'une semaine du cours, chaque élément ouvrable.
+struct WeekTheorySheet: View {
+    let course: Course
+    let week: Int
 
-    private var stage: ExerciseStage { ExerciseStage(exercise) }
+    @Environment(\.dismiss) private var dismiss
+    @State private var browsing: BrowsedLink?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                Button(action: onToggleDone) {
-                    ExerciseStageMark(stage: stage)
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
-                        .contentShape(Rectangle())
+        NavigationStack {
+            List {
+                ForEach(course.sortedTheoryItems.filter { $0.plannedWeek == week }) { item in
+                    TheoryLinkRow(item: item) { browsing = $0 }
                 }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel(exercise.isDone ? "Marquer \(exercise.displayNumber) à faire" : "Marquer \(exercise.displayNumber) fait")
-                .accessibilityValue(stage.label)
-
-                Button(action: onOpen) {
-                    HStack(spacing: Layout.control) {
-                        VStack(alignment: .leading, spacing: Layout.micro) {
-                            HStack(spacing: Layout.snug) {
-                                Text(exercise.exerciseNumber)
-                                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                                    .accessibilityLabel(exercise.displayNumber)
-                                if exercise.isBonus {
-                                    Image(systemName: "star.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.orange.accessibleMark)
-                                        .accessibilityLabel("bonus")
-                                }
-                            }
-                            if let line = summary {
-                                MathText(line, font: .caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Spacer(minLength: Layout.inline)
-                        VStack(alignment: .trailing, spacing: Layout.micro) {
-                            Text(stage.label)
-                                .font(.caption.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(stage.tint.accessibleInk)
-                            if seconds >= 60 {
-                                Text(DateUtils.durationLabel(seconds: seconds))
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(minHeight: Layout.minTouch)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Ouvre l'exercice : questions, sureté, correction et chrono")
             }
-
-            if isAskingConfidence {
-                VStack(alignment: .leading, spacing: Layout.snug) {
-                    Text("Sûr·e de ta réponse ?")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ConfidenceChoice(value: exercise.confidence, onChoose: onConfidence)
-                }
-                .padding(.leading, Layout.minTouch)
-                .padding(.bottom, Layout.control)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            .navigationTitle("\(course.displayCode) · semaine \(week)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } }
             }
+            .sheet(item: $browsing) { InAppBrowser(link: $0) }
         }
-    }
-
-    /// Le titre, sinon l'énoncé : une ligne qui dit de quoi parle l'exercice.
-    private var summary: String? {
-        if !exercise.title.isEmpty { return exercise.title }
-        if !exercise.statement.isEmpty { return exercise.statement }
-        return nil
-    }
-}
-
-/// Contrôle de correction : juste / moyennement juste / faux.
-struct CorrectnessControl: View {
-    var value: Correctness?
-    var onChange: (Correctness) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Correctness.allCases) { option in
-                Button {
-                    Haptics.tap()
-                    onChange(option)
-                } label: {
-                    Text(option.shortLabel)
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(value == option ? option.color.opacity(0.22) : Color.secondary.opacity(0.10))
-                        )
-                        .foregroundStyle(value == option ? option.color.accessibleInk : Color.secondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(value == option ? option.color.opacity(0.6) : Color.clear, lineWidth: 1.5)
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(value == option ? [.isSelected] : [])
-            }
-        }
+        .presentationDetents([.medium, .large])
     }
 }
 

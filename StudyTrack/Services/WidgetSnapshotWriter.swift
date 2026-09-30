@@ -123,8 +123,7 @@ enum WidgetSnapshotWriter {
             case "exercise":
                 let descriptor = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
                 if let exercise = try? context.fetch(descriptor).first, !exercise.isDone {
-                    if exercise.hasSubQuestions { exercise.setSubQuestions(done: true) } else { exercise.doneAt = Date() }
-                    if exercise.confidence == nil { exercise.confidence = .medium }
+                    exercise.setDone(true)
                     if exercise.redoRequired { exercise.redoRequired = false }
                     applied += 1
                 }

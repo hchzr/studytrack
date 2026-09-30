@@ -12,6 +12,13 @@ final class ExerciseSeries {
     var publishedAt: Date?
     var dueDate: Date?
     var urlString: String
+    /// Le thème de la série quand la source le donne (« Suites », « ℂ, Séries »).
+    var topic: String = ""
+    /// Quand le corrigé est publié, s'il l'est à date fixe (Botafogo).
+    var solutionsAt: Date? = nil
+    /// Où lire le corrigé (le PDF « Corrigé série 3 » de Moodle, la page de
+    /// la série sur Botafogo).
+    var solutionURLString: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \Exercise.series)
     var exercises: [Exercise] = []
@@ -70,6 +77,11 @@ final class Exercise {
     var isBonus: Bool
     var sortOrder: Int
     var statementURLString: String
+    /// L'indication de l'énoncé, quand la source en donne une (Botafogo).
+    var hint: String = ""
+    /// La solution, quand la source la publie : affichée seulement à partir de
+    /// `series.solutionsAt`, pour ne pas la lire avant d'avoir cherché.
+    var solution: String = ""
 
     // Fait
     var doneAt: Date?

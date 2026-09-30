@@ -133,7 +133,6 @@ enum AssistantExport {
                         "corrected": exercise.isCorrected,
                         "redo": exercise.redoRequired
                     ]
-                    if let confidence = exercise.confidence { entry["confidence"] = confidence.rawValue }
                     if let correctness = exercise.correctness { entry["correctness"] = correctness.rawValue }
                     if let note = exercise.correctionNote, !note.isEmpty { entry["correctionNote"] = note }
                     if !exercise.statement.isEmpty { entry["statement"] = exercise.statement }

@@ -833,13 +833,7 @@ struct TodayView: View {
             }
         case .exercise, .redo:
             if let exercise = exercises.first(where: { $0.id == todo.targetID }) {
-                if exercise.isDone {
-                    exercise.doneAt = nil
-                    exercise.confidence = nil
-                } else {
-                    exercise.doneAt = Date()
-                    if exercise.confidence == nil { exercise.confidence = .medium }
-                }
+                exercise.setDone(!exercise.isDone)
             }
         case .correction:
             // La correction demande un jugement (juste, moyen, faux) : on ouvre la

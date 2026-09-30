@@ -94,15 +94,10 @@ enum AssistantCommandApplier {
                 exercise.setDone(done)
                 changes.append(done ? "fait" : "à faire")
             }
-            if let raw = p.confidence {
-                guard let level = confidence(raw) else { throw Failure(message: "Sureté inconnue « \(raw) » (sure, medium, unsure).") }
-                if !exercise.isDone { exercise.setDone(true) }
-                exercise.confidence = level
-                changes.append("sureté \(level.choiceLabelPlain)")
-            }
-            if let raw = p.correctness {
-                guard let result = correctness(raw) else { throw Failure(message: "Correction inconnue « \(raw) » (correct, partial, wrong).") }
-                if !exercise.isDone { exercise.setDone(true) }
+            // `confidence` venait d'une version où la couleur était une
+            // « sureté » ; c'est la correction, et on la lit comme telle.
+            if let raw = p.correctness ?? p.confidence {
+                guard let result = correctness(raw) else { throw Failure(message: "Correction inconnue « \(raw) » (correct/green, partial/orange, wrong/red).") }
                 exercise.correct(result)
                 changes.append("corrigé \(result.shortLabel.lowercased())")
             }
@@ -269,9 +264,9 @@ enum AssistantCommandApplier {
 
     static func correctness(_ raw: String) -> Correctness? {
         switch ContentDraftBuilder.fold(raw) {
-        case "correct", "juste", "right": return .correct
-        case "partial", "moyen", "partiel", "moyennement juste": return .partial
-        case "wrong", "faux", "incorrect": return .wrong
+        case "correct", "juste", "right", "green", "vert", "sure", "high": return .correct
+        case "partial", "moyen", "partiel", "moyennement juste", "orange", "medium": return .partial
+        case "wrong", "faux", "incorrect", "red", "rouge", "unsure", "low": return .wrong
         default: return nil
         }
     }
@@ -291,12 +286,3 @@ enum AssistantCommandApplier {
     }
 }
 
-private extension ConfidenceLevel {
-    var choiceLabelPlain: String {
-        switch self {
-        case .high: return "sûr·e"
-        case .medium: return "moyenne"
-        case .low: return "pas sûr·e"
-        }
-    }
-}

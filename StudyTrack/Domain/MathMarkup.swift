@@ -66,7 +66,17 @@ enum MathMarkup {
         "Sigma": "Σ", "Phi": "Φ", "Psi": "Ψ", "Omega": "Ω",
         "ell": "ℓ", "lim": "lim", "sup": "sup", "inf": "inf", "max": "max", "min": "min",
         "sin": "sin", "cos": "cos", "tan": "tan", "ln": "ln", "log": "log", "exp": "exp",
-        "left": "", "right": "", "big": "", "Big": "", "displaystyle": "", "limits": ""
+        "left": "", "right": "", "big": "", "Big": "", "displaystyle": "", "limits": "",
+        // Macros du polycopié de Botafogo (\bR = ℝ) et commandes de mise en
+        // page qui n'ont pas de sens sur une ligne.
+        "bR": "ℝ", "bC": "ℂ", "bN": "ℕ", "bZ": "ℤ", "bQ": "ℚ",
+        "bigl": "", "bigr": "", "Bigl": "", "Bigr": "", "biggl": "", "biggr": "",
+        "textstyle": "", "nolimits": "", "notag": "", "nonumber": "",
+        "lvert": "|", "rvert": "|", "vert": "|",
+        "colon": ":", "setminus": "∖", "supset": "⊃", "supseteq": "⊇",
+        "longmapsto": "⟼", "searrow": "↘", "nearrow": "↗", "downarrow": "↓", "uparrow": "↑",
+        "cot": "cot", "arcsin": "arcsin", "arccos": "arccos", "arctan": "arctan",
+        "sinh": "sinh", "cosh": "cosh", "tanh": "tanh", "det": "det", "liminf": "lim inf", "limsup": "lim sup"
     ]
 
     static let blackboard: [Character: String] = [

@@ -202,21 +202,22 @@ struct AddStudyTaskIntent: AppIntent {
 
 // MARK: - Sureté exposée à Siri
 
-enum ConfidenceAppEnum: String, AppEnum {
-    case high, medium, low
+/// La correction d'un exercice, dite à Siri : vert, orange, rouge.
+enum CorrectionAppEnum: String, AppEnum {
+    case correct, partial, wrong
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Sureté"
-    static var caseDisplayRepresentations: [ConfidenceAppEnum: DisplayRepresentation] = [
-        .high: "Sûr",
-        .medium: "Moyennement sûr",
-        .low: "Pas sûr"
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Correction"
+    static var caseDisplayRepresentations: [CorrectionAppEnum: DisplayRepresentation] = [
+        .correct: "Juste",
+        .partial: "Moyen",
+        .wrong: "Faux"
     ]
 
-    var confidence: ConfidenceLevel {
+    var correctness: Correctness {
         switch self {
-        case .high: return .high
-        case .medium: return .medium
-        case .low: return .low
+        case .correct: return .correct
+        case .partial: return .partial
+        case .wrong: return .wrong
         }
     }
 }
@@ -303,8 +304,8 @@ struct MarkExerciseDoneIntent: AppIntent {
     @Parameter(title: "Numéro d'exercice", description: "Par exemple 3.2")
     var number: String
 
-    @Parameter(title: "Sureté")
-    var confidence: ConfidenceAppEnum?
+    @Parameter(title: "Correction")
+    var correction: CorrectionAppEnum?
 
     init() {}
 
@@ -326,12 +327,8 @@ struct MarkExerciseDoneIntent: AppIntent {
                         ?? target.allExercises.first(where: {
                             $0.exerciseNumber.hasSuffix(".\(wanted)")
                         }) else { continue }
-                exercise.doneAt = exercise.doneAt ?? Date()
-                if let confidence {
-                    exercise.confidence = confidence.confidence
-                } else if exercise.confidence == nil {
-                    exercise.confidence = .medium
-                }
+                exercise.setDone(true)
+                if let correction { exercise.correct(correction.correctness) }
                 try? context.save()
                 return "\(target.displayCode) · \(exercise.displayNumber)"
             }

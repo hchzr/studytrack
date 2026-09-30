@@ -7,6 +7,7 @@ struct ContentImportResult: Equatable {
     var theoryUpdated = 0
     var seriesAdded = 0
     var seriesUpdated = 0
+    var exercisesAdded = 0
 
     var isEmpty: Bool { theoryAdded + theoryUpdated + seriesAdded + seriesUpdated == 0 }
 
@@ -14,6 +15,7 @@ struct ContentImportResult: Equatable {
         var parts: [String] = []
         if theoryAdded > 0 { parts.append("\(theoryAdded) élément\(theoryAdded > 1 ? "s" : "") de théorie") }
         if seriesAdded > 0 { parts.append("\(seriesAdded) série\(seriesAdded > 1 ? "s" : "")") }
+        if exercisesAdded > 0 { parts.append("\(exercisesAdded) exercice\(exercisesAdded > 1 ? "s" : "")") }
         let updated = theoryUpdated + seriesUpdated
         if parts.isEmpty {
             return updated > 0 ? "Déjà à jour · \(updated) élément\(updated > 1 ? "s" : "") rafraîchi\(updated > 1 ? "s" : "")." : "Rien de nouveau."
@@ -29,6 +31,40 @@ struct ContentImportResult: Equatable {
 /// — même adresse, ou même numéro — est mis à jour (titre, semaine, vidéos) et
 /// garde ce qui a été coché.
 enum ContentDraftWriter {
+
+    /// Le thème, le corrigé et les exercices d'une série, quand la source les
+    /// donne. Les exercices passent par `SeriesDraftWriter` en mode fusion :
+    /// l'avancement (questions cochées, correction) est gardé par numéro.
+    @discardableResult
+    private static func writeDetails(of item: ContentDraftItem, into series: ExerciseSeries,
+                                     course: Course, context: ModelContext) -> Int {
+        let topic = item.title.trimmingCharacters(in: .whitespaces)
+        if !topic.isEmpty, topic != "Série \(series.seriesNumber)",
+           ContentDraftBuilder.seriesNumber(in: topic) == nil || topic.count > 12 {
+            series.topic = topic
+        }
+        if let date = item.solutionsAt { series.solutionsAt = date }
+        if !item.solutionURL.isEmpty { series.solutionURLString = item.solutionURL }
+        guard !item.exercises.isEmpty else { return 0 }
+        let before = series.exercises.count
+        let draft = SeriesDraft(existingID: series.id, number: series.seriesNumber, title: "",
+                                plannedWeek: series.plannedWeek,
+                                exercises: item.exercises.map { spec in
+                                    var exercise = ExerciseDraft(minor: spec.number.split(separator: ".").last.map(String.init) ?? spec.number,
+                                                                 title: spec.title, isBonus: spec.isBonus,
+                                                                 subQuestions: spec.questions)
+                                    exercise.statement = spec.statement
+                                    return exercise
+                                })
+        SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
+        for spec in item.exercises {
+            guard let exercise = series.exercises.first(where: { $0.exerciseNumber == spec.number }) else { continue }
+            if !spec.hint.isEmpty { exercise.hint = spec.hint }
+            if !spec.solution.isEmpty { exercise.solution = spec.solution }
+            if !spec.url.isEmpty { exercise.statementURLString = spec.url }
+        }
+        return max(0, series.exercises.count - before)
+    }
 
     /// - Parameter updateWeeks: réécrire la semaine des éléments déjà là. Vrai
     ///   pour un import **relu** (la relecture fait foi) ; faux pour une mise à
@@ -95,18 +131,21 @@ enum ContentDraftWriter {
                     }
                 case .series:
                     guard let number = item.seriesNumber ?? Int(item.number) else { continue }
+                    let series: ExerciseSeries
                     if let existing = course.series.first(where: { $0.seriesNumber == number }) {
                         if updateWeeks || existing.plannedWeek == 0 { existing.plannedWeek = item.plannedWeek(in: section) }
-                        if existing.urlString.isEmpty { existing.urlString = item.url }
+                        if existing.urlString.isEmpty { existing.urlString = item.pdfURL.isEmpty ? item.url : item.pdfURL }
+                        series = existing
                         result.seriesUpdated += 1
                     } else {
-                        let series = ExerciseSeries(course: course,
-                                                    seriesNumber: number,
-                                                    plannedWeek: item.plannedWeek(in: section),
-                                                    urlString: item.url)
+                        series = ExerciseSeries(course: course,
+                                                seriesNumber: number,
+                                                plannedWeek: item.plannedWeek(in: section),
+                                                urlString: item.pdfURL.isEmpty ? item.url : item.pdfURL)
                         context.insert(series)
                         result.seriesAdded += 1
                     }
+                    result.exercisesAdded += writeDetails(of: item, into: series, course: course, context: context)
                 }
             }
         }

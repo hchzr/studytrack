@@ -953,15 +953,12 @@ struct BotafogoPicker: View {
         errorMessage = nil
         defer { loadingURL = nil }
         do {
-            var page = try await BotafogoClient.course(at: url)
-            if page.title == "Botafogo" || page.title.isEmpty { page.title = title }
-            // Sans cours choisi, le semestre en cours : c'est lui qui date les
-            // enregistrements (« 16 sept » = semaine 2).
+            // Sans cours choisi, le semestre en cours : c'est lui qui date ce
+            // qui ne vient pas d'un programme.
             let term = course?.term ?? AcademicTerm.resolve(from: terms)
-            draft = ContentDraftBuilder.draft(from: page,
-                                              source: .botafogo,
-                                              termStart: term?.startDate,
-                                              totalWeeks: term?.totalWeeks ?? 14)
+            draft = try await BotafogoClient.draft(at: url, fallbackTitle: title,
+                                                   termStart: term?.startDate,
+                                                   totalWeeks: term?.totalWeeks ?? 14)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1074,8 +1071,11 @@ struct ContentDraftSections: View {
                     .lineLimit(2)
                 let details = [
                     value.kind == .series && value.title != "Série \(value.number)" ? value.title : nil,
+                    value.kind == .series && !value.exercises.isEmpty ? "\(value.exercises.count) exercices, \(value.exercises.reduce(0) { $0 + max($1.questions.count, 1) }) questions" : nil,
+                    value.kind == .series && !value.pdfURL.isEmpty && value.exercises.isEmpty ? "PDF à lire" : nil,
+                    value.solutionsAt.map { "corrigé le \(DateUtils.shortDay.string(from: $0))" },
                     value.kind == .theory && value.videoCount > 0 ? "\(value.videoCount) vidéo\(value.videoCount > 1 ? "s" : "")" : nil,
-                    value.week != nil && value.kind != .ignore ? "semaine \(value.plannedWeek(in: section))" : nil
+                    value.week != nil && value.week != section.week && value.kind != .ignore ? "semaine \(value.plannedWeek(in: section))" : nil
                 ].compactMap { $0 }
                 if !details.isEmpty {
                     Text(details.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -1151,7 +1151,7 @@ struct ContentReviewView: View {
             }
             .padding(.vertical, Layout.tight)
         } footer: {
-            Text(draft.sections.contains(where: \.weekIsInferred)
+            Text(draft.sections.contains(where: { $0.isIncluded && $0.weekIsInferred })
                  ? "Les semaines marquées « proposée » n'étaient pas écrites sur la page : vérifie-les. Rien n'est supprimé à l'import, et ton avancement est gardé."
                  : "Semaines lues sur la page. Rien n'est supprimé à l'import, et ton avancement est gardé.")
         }

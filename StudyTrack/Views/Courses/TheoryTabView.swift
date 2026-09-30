@@ -12,6 +12,8 @@ struct TheoryTabView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppContainer.self) private var app
     @State private var selectedVideo: TheoryItem?
+    /// L'élément ouvert dans l'app (section, vidéo, diapos).
+    @State private var browsing: BrowsedLink?
     @State private var showingAdd = false
     @State private var showsDone = true
 
@@ -59,6 +61,7 @@ struct TheoryTabView: View {
         .sheet(isPresented: $showingAdd) {
             AddVideoSheet(course: course)
         }
+        .sheet(item: $browsing) { InAppBrowser(link: $0) }
     }
 
     // MARK: Semaine
@@ -94,7 +97,8 @@ struct TheoryTabView: View {
                             VideoRow(video: item,
                                      isCurrentWeek: false,
                                      onToggleWatched: { toggleWatched(item) },
-                                     onOpen: { selectedVideo = item })
+                                     onOpen: { selectedVideo = item },
+                                     onOpenLink: { browsing = $0 })
                             if item.id != weekItems.last?.id {
                                 Divider().padding(.leading, 44)
                             }
@@ -130,7 +134,8 @@ struct TheoryTabView: View {
                         VideoRow(video: video,
                                  isCurrentWeek: video.plannedWeek == week && course.isTermRunning,
                                  onToggleWatched: { toggleWatched(video) },
-                                 onOpen: { selectedVideo = video })
+                                 onOpen: { selectedVideo = video },
+                                 onOpenLink: { browsing = $0 })
                         if video.id != items.last?.id {
                             Divider().padding(.leading, 44)
                         }
@@ -160,6 +165,9 @@ struct VideoRow: View {
     let isCurrentWeek: Bool
     var onToggleWatched: () -> Void
     var onOpen: () -> Void
+    /// Ouvre l'élément lui-même — la section du polycopié, la vidéo, les
+    /// diapos —, quand la source a donné son adresse.
+    var onOpenLink: ((BrowsedLink) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -193,10 +201,24 @@ struct VideoRow: View {
             }
             .buttonStyle(.plain)
 
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .padding(.leading, Layout.inline)
+            if let onOpenLink, let url = ExerciseLinks.web(video.urlString) {
+                Button {
+                    onOpenLink(BrowsedLink(title: "\(video.number) \(MathMarkup.plain(video.title))", url: url, icon: video.kind.icon))
+                } label: {
+                    Image(systemName: video.kind == .video ? "play.rectangle" : "arrow.up.right.square")
+                        .font(.body)
+                        .foregroundStyle(Theme.accentInk)
+                        .frame(width: Layout.minTouch, height: Layout.minTouch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel(video.kind == .video ? "Regarder" : "Ouvrir")
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, Layout.inline)
+            }
         }
     }
 
@@ -222,6 +244,7 @@ struct VideoDetailSheet: View {
     @Environment(AppContainer.self) private var app
 
     @State private var summary = ""
+    @State private var browsing: BrowsedLink?
     @State private var plannedWeek = 1
     @State private var durationMinutes = 0
 
@@ -286,9 +309,11 @@ struct VideoDetailSheet: View {
                                 try? context.save()
                             }
                     }
-                    if let url = URL(string: video.urlString), !video.urlString.isEmpty {
-                        Link(destination: url) {
-                            Label("Ouvrir le support", systemImage: "safari")
+                    if let url = ExerciseLinks.web(video.urlString) {
+                        Button {
+                            browsing = BrowsedLink(title: video.numberAndTitle, url: url, icon: video.kind.icon)
+                        } label: {
+                            Label(video.kind == .video ? "Regarder la vidéo" : "Ouvrir le support", systemImage: video.kind == .video ? "play.rectangle" : "doc.text")
                         }
                     }
                 } header: {
@@ -338,6 +363,7 @@ struct VideoDetailSheet: View {
                 }
             }
             .navigationTitle(video.displayNumber)
+            .sheet(item: $browsing) { InAppBrowser(link: $0) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

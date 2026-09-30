@@ -119,6 +119,14 @@ struct ContentDraftItem: Identifiable, Equatable {
     /// enregistrement de cours tombe la semaine de sa date. `nil` = celle de la
     /// section.
     var week: Int? = nil
+    /// Les exercices d'une série, quand la source les publie (Botafogo) ou
+    /// qu'ils ont été lus dans le PDF (Moodle) : énoncé, questions, liens.
+    var exercises: [ContentExerciseDraft] = []
+    /// Le PDF d'une série Moodle, à télécharger et lire à l'import.
+    var pdfURL: String = ""
+    /// Quand le corrigé est publié, et où.
+    var solutionsAt: Date? = nil
+    var solutionURL: String = ""
 
     /// La semaine à écrire.
     func plannedWeek(in section: ContentDraftSection) -> Int { week ?? section.week }
@@ -455,6 +463,11 @@ enum ContentDraftBuilder {
     /// Espaces normalisés, délimiteurs LaTeX retirés (`\(\mathbb{R}\)` → `\mathbb{R}`,
     /// que `MathText` sait afficher), suffixes techniques de Moodle ôtés.
     static func cleanTitle(_ raw: String) -> String {
+        // Les macros d'ensembles de Botafogo : « Nombres \bR » → « Nombres ℝ ».
+        var raw = raw
+        for (macro, symbol) in ["\\bR": "ℝ", "\\bC": "ℂ", "\\bN": "ℕ", "\\bZ": "ℤ", "\\bQ": "ℚ"] {
+            raw = raw.replacingOccurrences(of: macro, with: symbol)
+        }
         // Un saut de ligne LaTeX (`\\`) dans un titre sépare deux parties.
         var text = raw.replacingOccurrences(of: #"\\"#, with: " · ")
         for token in [#"\("#, #"\)"#, #"\["#, #"\]"#, "$"] { text = text.replacingOccurrences(of: token, with: "") }

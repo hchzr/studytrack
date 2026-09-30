@@ -252,6 +252,128 @@ enum BotafogoClient {
         return page
     }
 
+    // MARK: Programme hebdomadaire
+
+    /// Le brouillon d'import d'un polycopié, **au programme de la semaine**
+    /// quand le site en publie un.
+    ///
+    /// Les sites de cours (Analyse I GM, classe inversée) déclarent semaine par
+    /// semaine les cours filmés, les sections du polycopié couvertes et la
+    /// série, avec chaque exercice. L'import reprend ce programme tel quel : la
+    /// théorie tombe à la semaine où elle est enseignée, pas à une semaine
+    /// devinée. Les autres polycopiés, sans programme, sont étalés selon leur
+    /// volume (`ContentDraftBuilder`).
+    static func draft(at url: URL, fallbackTitle: String? = nil, termStart: Date?, totalWeeks: Int,
+                      session: URLSession = .shared) async throws -> ContentDraft {
+        var address = url
+        var html = try await text(at: address, session: session)
+        for _ in 0..<2 {
+            guard let next = BotafogoParser.metaRefresh(html: html, baseURL: address) else { break }
+            address = next
+            html = try await text(at: address, session: session)
+        }
+        let root = BotafogoParser.siteRoot(html: html, pageURL: address)
+        if html.contains("?cours="), let program = await program(html: html, root: root, session: session) {
+            let handout = NuxtPayload(html: html)?.navigation().chapters ?? []
+            var lectureURLs: [String] = []
+            var seriesURLs: [String] = []
+            for week in program where week.type == "week" {
+                for child in week.children ?? [] {
+                    guard let url = child.url else { continue }
+                    switch child.type {
+                    case "lecture", "weekContent", "session": lectureURLs.append(url)
+                    case "series": seriesURLs.append(url)
+                    default: break
+                    }
+                }
+            }
+            let documents = await nodes(lectureURLs + seriesURLs, root: root, session: session)
+            var lectures: [String: BotafogoLectureContent] = [:]
+            for url in lectureURLs { if let data = documents[url] { lectures[url] = BotafogoDocument.lecture(fromNodeJSON: data) } }
+            var series: [String: [BotafogoExercise]] = [:]
+            for url in seriesURLs { if let data = documents[url] { series[url] = BotafogoDocument.exercises(fromNodeJSON: data) } }
+            let pageTitle = BotafogoParser.parseNuxt(html: html, pageURL: address)?.title
+            return BotafogoProgramBuilder.draft(title: pageTitle ?? fallbackTitle ?? "Botafogo",
+                                                program: program, root: root, handout: handout,
+                                                lectures: lectures, series: series)
+        }
+        var page = try await course(at: url, session: session)
+        if page.title == "Botafogo" || page.title.isEmpty, let fallbackTitle { page.title = fallbackTitle }
+        return ContentDraftBuilder.draft(from: page, source: .botafogo, termStart: termStart, totalWeeks: totalWeeks)
+    }
+
+    /// Le fichier du site qui porte le programme, retenu d'une fois sur
+    /// l'autre : il change à chaque publication du site, mais pas entre deux
+    /// mises à jour de l'app.
+    private static let chunkKey = "botafogo.programChunk."
+
+    static func program(html: String, root: URL, session: URLSession) async -> [BotafogoNode]? {
+        // `URL.path` perd la barre finale : « /analyse-1-GM » + « _nuxt/ ».
+        let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        let prefix = NSRegularExpression.escapedPattern(for: base)
+        guard let regex = try? NSRegularExpression(pattern: prefix + #"_nuxt/[A-Za-z0-9_-]+\.js"#) else { return nil }
+        let range = NSRange(html.startIndex..., in: html)
+        var paths = Array(Set(regex.matches(in: html, range: range).compactMap { Range($0.range, in: html).map { String(html[$0]) } })).sorted()
+        guard !paths.isEmpty else { return nil }
+        let key = chunkKey + root.path
+        if let cached = UserDefaults.standard.string(forKey: key), let index = paths.firstIndex(of: cached) {
+            paths.swapAt(0, index)
+            if let program = try? await programIn(paths[0], session: session) { return program }
+        }
+        // Huit fichiers à la fois ; on s'arrête au premier qui porte le programme.
+        return await withTaskGroup(of: (String, [BotafogoNode]?).self) { group in
+            var iterator = paths.makeIterator()
+            for _ in 0..<8 {
+                guard let path = iterator.next() else { break }
+                group.addTask { (path, try? await programIn(path, session: session)) }
+            }
+            while let (path, found) = await group.next() {
+                if let found {
+                    UserDefaults.standard.set(path, forKey: key)
+                    group.cancelAll()
+                    return found
+                }
+                if let next = iterator.next() {
+                    group.addTask { (next, try? await programIn(next, session: session)) }
+                }
+            }
+            return nil
+        }
+    }
+
+    private static func programIn(_ path: String, session: URLSession) async throws -> [BotafogoNode]? {
+        guard let url = URL(string: path, relativeTo: home)?.absoluteURL else { return nil }
+        let script = try await text(at: url, session: session)
+        guard script.contains("type:`week`") else { return nil }
+        return BotafogoProgram.extract(fromScript: script)
+    }
+
+    /// Les documents du site par l'API des contenus, huit à la fois.
+    private static func nodes(_ urls: [String], root: URL, session: URLSession) async -> [String: Data] {
+        await withTaskGroup(of: (String, Data?).self) { group in
+            var iterator = Array(Set(urls)).makeIterator()
+            func enqueue() {
+                guard let url = iterator.next() else { return }
+                let path = BotafogoProgram.contentPath(url)
+                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? url
+                guard let address = URL(string: root.absoluteString + "api/content/node?collection=content&path=" + path) else { return }
+                group.addTask {
+                    var request = URLRequest(url: address)
+                    request.timeoutInterval = 20
+                    let data = try? await session.data(for: request).0
+                    return (url, data)
+                }
+            }
+            for _ in 0..<8 { enqueue() }
+            var result: [String: Data] = [:]
+            while let (url, data) = await group.next() {
+                if let data { result[url] = data }
+                enqueue()
+            }
+            return result
+        }
+    }
+
     private static func text(at url: URL, session: URLSession) async throws -> String {
         var request = URLRequest(url: url)
         request.timeoutInterval = 20

@@ -53,8 +53,9 @@ enum ContentRefresher {
         }
 
         for (course, link) in botafogoCourses {
-            guard let page = try? await BotafogoClient.course(at: link) else { continue }
-            if let line = apply(page, source: .botafogo, to: course, context: context) { news.append(line) }
+            guard let draft = try? await BotafogoClient.draft(at: link, termStart: course.term?.startDate,
+                                                              totalWeeks: course.term?.totalWeeks ?? 14) else { continue }
+            if let line = apply(draft, to: course, context: context) { news.append(line) }
         }
 
         try? context.save()
@@ -65,11 +66,15 @@ enum ContentRefresher {
         }
     }
 
-    /// Écrit ce qui est nouveau ; rend « MATH-101 : 1 série » s'il y en a.
     private static func apply(_ page: ScrapedCourse, source: ContentSource, to course: Course, context: ModelContext) -> String? {
-        let draft = ContentDraftBuilder.draft(from: page, source: source,
-                                              termStart: course.term?.startDate,
-                                              totalWeeks: course.term?.totalWeeks ?? 14)
+        apply(ContentDraftBuilder.draft(from: page, source: source,
+                                        termStart: course.term?.startDate,
+                                        totalWeeks: course.term?.totalWeeks ?? 14),
+              to: course, context: context)
+    }
+
+    /// Écrit ce qui est nouveau ; rend « MATH-101 : 1 série » s'il y en a.
+    private static func apply(_ draft: ContentDraft, to course: Course, context: ModelContext) -> String? {
         guard !draft.isEmpty else { return nil }
         let result = ContentDraftWriter.apply(draft, to: course, context: context, updateWeeks: false)
         var parts: [String] = []

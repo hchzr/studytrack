@@ -2,23 +2,21 @@ import Foundation
 
 /// Où en est un exercice, en **une** valeur.
 ///
-/// La ligne d'exercice empilait une coche, trois pastilles de sureté, un
-/// compteur de questions et une étiquette de correction : quatre indications
-/// qu'il fallait recomposer de tête pour savoir « qu'est-ce qui reste à faire
-/// sur 3.4 ». Ce type les réduit à l'étape du parcours — faire, juger, corriger,
-/// refaire — et c'est lui que la liste, l'espace de travail et l'assistant lisent.
+/// Le code vert / orange / rouge est celui de la **correction** — juste,
+/// moyen, faux — et non une « sureté » donnée en cochant : c'est en corrigeant
+/// qu'on sait si c'était juste. Le parcours d'un exercice est donc : à faire →
+/// questions en cours → fait (à corriger) → corrigé vert, orange ou rouge ;
+/// rouge le marque « à refaire », qui prime tant qu'il n'est pas refait.
 enum ExerciseStage: Equatable {
     /// Rien de coché.
     case toDo
     /// Des questions cochées, pas toutes.
     case inProgress(done: Int, total: Int)
-    /// Fait, sureté pas encore dite.
-    case needsConfidence
-    /// Fait et jugé, pas encore corrigé.
-    case toCorrect(ConfidenceLevel)
-    /// Corrigé.
+    /// Fait, pas encore corrigé.
+    case toCorrect
+    /// Corrigé : vert, orange ou rouge.
     case corrected(Correctness)
-    /// Marqué « à refaire » — prime sur tout le reste, c'est le travail qui attend.
+    /// À refaire (corrigé rouge, ou marqué à la main).
     case redo
 
     init(_ exercise: Exercise) {
@@ -27,11 +25,7 @@ enum ExerciseStage: Equatable {
         } else if let correctness = exercise.correctness, exercise.isCorrected {
             self = .corrected(correctness)
         } else if exercise.isDone {
-            if let confidence = exercise.confidence {
-                self = .toCorrect(confidence)
-            } else {
-                self = .needsConfidence
-            }
+            self = .toCorrect
         } else if exercise.hasSubQuestions, exercise.subQuestionDoneCount > 0 {
             self = .inProgress(done: exercise.subQuestionDoneCount, total: exercise.leafSubQuestions.count)
         } else {
@@ -39,28 +33,26 @@ enum ExerciseStage: Equatable {
         }
     }
 
-    /// Reste-t-il quelque chose à faire **sur** l'exercice (le faire, le juger,
-    /// le corriger ou le refaire) ?
+    /// Reste-t-il quelque chose à faire **sur** l'exercice (le faire, le
+    /// corriger ou le refaire) ?
     var isOpen: Bool {
-        if case .corrected = self { return false }
+        if case .corrected(let result) = self { return result == .wrong }
         return true
     }
 
     /// L'exercice est-il fait (au sens de la progression) ?
     var isDone: Bool {
         switch self {
-        case .toDo, .inProgress: return false
-        case .redo: return false
-        default: return true
+        case .toDo, .inProgress, .redo: return false
+        case .toCorrect, .corrected: return true
         }
     }
 
-    /// « à faire », « 2/5 », « sureté ? », « à corriger », « juste »…
+    /// « à faire », « 2/5 », « à corriger », « juste », « à refaire »…
     var label: String {
         switch self {
         case .toDo: return "à faire"
         case .inProgress(let done, let total): return "\(done)/\(total)"
-        case .needsConfidence: return "sureté ?"
         case .toCorrect: return "à corriger"
         case .corrected(let correctness): return correctness.shortLabel.lowercased()
         case .redo: return "à refaire"
@@ -118,24 +110,28 @@ enum ExerciseFlow {
 }
 
 extension Exercise {
-    /// Marque l'exercice fait ou à faire — questions comprises — **sans**
-    /// inventer de sureté.
+    /// Marque l'exercice fait ou à faire — questions comprises.
     ///
-    /// Cocher mettait « orange » d'office : une sureté que personne n'avait
-    /// donnée, qui faussait ensuite « ce que je maîtrise mal ». Elle reste vide,
-    /// et l'interface la demande.
+    /// Décocher efface aussi la correction : un exercice « à faire » n'a pas
+    /// encore de couleur.
     func setDone(_ done: Bool) {
         if hasSubQuestions {
             setSubQuestions(done: done)
         } else {
             doneAt = done ? (doneAt ?? Date()) : nil
         }
-        if !done { confidence = nil }
+        if !done {
+            correctness = nil
+            correctedAt = nil
+            confidence = nil
+        }
     }
 
-    /// Enregistre une correction. « Faux » marque à refaire ; « juste » retire
-    /// le « à refaire » qu'une correction précédente avait posé.
+    /// Enregistre la correction — la couleur de l'exercice. Corriger un
+    /// exercice le marque fait. Rouge le marque à refaire ; vert retire le
+    /// « à refaire » d'une correction précédente (il a été refait).
     func correct(_ result: Correctness) {
+        if !isDone { setDone(true) }
         correctness = result
         correctedAt = Date()
         switch result {
@@ -143,5 +139,12 @@ extension Exercise {
         case .correct: redoRequired = false
         case .partial: break
         }
+    }
+
+    /// Retire la correction (un toucher de trop sur une pastille).
+    func clearCorrection() {
+        correctness = nil
+        correctedAt = nil
+        redoRequired = false
     }
 }

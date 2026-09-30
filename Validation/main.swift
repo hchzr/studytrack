@@ -1092,7 +1092,7 @@ do {
 
     let json = """
     [{"id":"c1","kind":"check_questions","payload":{"course":"test-401","exercise":"1.1","questions":["(a)"]}},
-     {"id":"c2","kind":"update_exercise","payload":{"exerciseId":"\(aEx.id.uuidString)","confidence":"unsure"}},
+     {"id":"c2","kind":"update_exercise","payload":{"exerciseId":"\(aEx.id.uuidString)","correctness":"orange"}},
      {"id":"c3","kind":"update_exercise","payload":{"exerciseId":"\(aEx.id.uuidString)","correctness":"wrong","note":"signe"}},
      {"id":"c4","kind":"update_theory","payload":{"theoryId":"\(aItem.id.uuidString)","summary":"Définition de la limite"}},
      {"id":"c5","kind":"log_session","payload":{"course":"TEST-401","type":"exercise","minutes":45,"exercise":"1.1"}},
@@ -1107,7 +1107,7 @@ do {
     let status = Dictionary(uniqueKeysWithValues: results.map { ($0.id, $0.status) })
     check(status["c1"] == "applied" && results.first { $0.id == "c1" }?.message.contains("(1/2)") == true,
           "cocher une question par son étiquette")
-    check(aEx.confidence == .low && aEx.isDone, "une sureté donnée marque l'exercice fait")
+    check(results.first { $0.id == "c2" }?.message.contains("moyen") == true, "« orange » est compris comme une correction moyenne")
     check(aEx.correctness == .wrong && aEx.redoRequired && aEx.correctionNote == "signe", "corrigé faux : à refaire, remarque gardée")
     check(aItem.isSummarized && aItem.isWatched, "un résumé marque la théorie vue")
     check(status["c5"] == "applied" && aEx.series?.course?.id == aCourse.id, "session enregistrée")
@@ -1137,6 +1137,71 @@ do {
     try? context.save()
 }
 
+print("== Botafogo : programme hebdomadaire ==")
+do {
+    let script = #"var x=1;const P=[{type:`section`,name:`Infos`,metadata:{},index:0,children:[{type:`section`,name:`Bienvenue`,url:`sections/welcome`,metadata:{},index:0}]},{type:`week`,name:`Suites réelles`,metadata:{number:`03`,dates:`22-26 sept`,releaseDate:`2026-09-18T06:00:00.000Z`},index:1,children:[{type:`lecture`,name:`Cours 05`,url:`aulas/aula-05`,metadata:{day:`Mercredi`,date:`2026-09-23T12:00:00.000Z`,videoId:`0_5f16lokn`},index:0},{type:`series`,name:`Nombres $\\bR$`,url:`series/AN_serie_03`,metadata:{solutionsDate:`2026-09-24T06:00:00.000Z`},index:1,children:[{type:`exercise`,name:`Ex-03-01`,url:`exercices/a`,metadata:{serie:`03`,number:`01`},index:0},{type:`exercise`,name:`Ex-03-02`,url:`exercices/b`,metadata:{serie:`03`,number:`02`},index:1}]}]}],Q=!0,R=void 0;"#
+    let program = BotafogoProgram.extract(fromScript: script)
+    check(program?.count == 2, "le programme se relit dans le code du site (\(program?.count ?? 0) nœuds)")
+    let week = program?.first { $0.type == "week" }
+    check(week?.meta("number") == "03" && week?.meta("dates") == "22-26 sept", "une semaine : numéro et dates")
+    check(week?.children?.first?.meta("videoId") == "0_5f16lokn", "un cours filmé et sa vidéo")
+    check(BotafogoProgram.extract(fromScript: "const a=[{type:`section`}];") == nil, "sans semaine, pas de programme")
+    check(BotafogoProgram.contentPath("series/AN_serie_03") == "/course_material/series/an_serie_03", "chemin de l'API des contenus")
+    check(BotafogoProgram.seriesNumber(url: "series/AN_serie_03") == 3, "numéro de série lu dans l'adresse")
+
+    let lectureJSON = #"{"body":{"type":"root","children":[{"type":"element","tagName":"h4","properties":{},"children":[{"type":"text","value":"Matière"}]},{"type":"element","tagName":"latex-ref","properties":{"collection":"content","target":"m_suites_R_x"},"children":[{"type":"text","value":"3.5 Les suites"}]},{"type":"element","tagName":"latex-ref","properties":{"target":"seances-du-soir"},"children":[{"type":"text","value":"séances du soir"}]},{"type":"element","tagName":"videokaltura","properties":{"entryId":"0_abc","title":"Cours 05"},"children":[]}]}}"#
+    let lecture = BotafogoDocument.lecture(fromNodeJSON: Data(lectureJSON.utf8))
+    check(lecture.references.map(\.target) == ["m_suites_R_x"], "seules les sections du polycopié comptent comme théorie")
+    check(lecture.videos.first?.id == "0_abc", "la vidéo d'un cours")
+
+    let seriesJSON = #"{"body":{"type":"root","children":[{"type":"element","tagName":"exercise","properties":{},"children":[{"type":"element","tagName":"template","properties":{},"children":[],"content":{"type":"root","children":[{"type":"element","tagName":"b","properties":{},"children":[{"type":"text","value":"Ex-3-1:"}]},{"type":"element","tagName":"p","properties":{},"children":[{"type":"text","value":"Soit "},{"type":"element","tagName":"katex-renderer","properties":{"content":"(x_{n})"},"children":[]},{"type":"text","value":" une suite."}]},{"type":"element","tagName":"ol","properties":{},"children":[{"type":"element","tagName":"li","properties":{},"children":[{"type":"text","value":"Montrer que"},{"type":"element","tagName":"ol","properties":{},"children":[{"type":"element","tagName":"li","properties":{},"children":[{"type":"text","value":"elle est bornée"}]},{"type":"element","tagName":"li","properties":{},"children":[{"type":"text","value":"elle converge"}]}]}]},{"type":"element","tagName":"li","properties":{},"children":[{"type":"text","value":"Calculer sa limite"}]}]},{"type":"element","tagName":"indication","properties":{},"children":[{"type":"element","tagName":"template","properties":{},"children":[],"content":{"type":"root","children":[{"type":"text","value":"Penser aux gendarmes."}]}}]},{"type":"element","tagName":"solution","properties":{},"children":[{"type":"element","tagName":"template","properties":{},"children":[],"content":{"type":"root","children":[{"type":"text","value":"La limite vaut 1."}]}}]}]}}]}]}}"#
+    let parsed = BotafogoDocument.exercises(fromNodeJSON: Data(seriesJSON.utf8))
+    check(parsed.first?.number == "3.1", "numéro lu dans « Ex-3-1 »")
+    check(parsed.first?.statement == "Soit $(x_{n})$ une suite.", "énoncé, formules comprises (\(parsed.first?.statement ?? ""))")
+    check(parsed.first?.questions.map(\.label) == ["1", "2"] && parsed.first?.questions.first?.children.map(\.label) == ["a", "b"],
+          "questions 1, 2 et points (a), (b)")
+    check(parsed.first?.questions.first?.children.last?.text == "elle converge", "texte d'un point")
+    check(parsed.first?.hint == "Penser aux gendarmes." && parsed.first?.solution == "La limite vaut 1.", "indication et solution")
+
+    let handout = [NuxtPayload.NavNode(title: "3 Suites réelles", path: "#_3", children: [
+        NuxtPayload.NavNode(title: "3.5 Les suites monotones et bornées", path: "/handout/matiere/m_suites_r_x", children: []),
+        NuxtPayload.NavNode(title: "3.6 Suites qui tendent vers l'infini", path: "/handout/matiere/m_other", children: [])])]
+    let root = URL(string: "https://botafogo.epfl.ch/analyse-1-GM/")!
+    let draft = BotafogoProgramBuilder.draft(title: "Analyse I / GM", program: program ?? [], root: root, handout: handout,
+                                             lectures: ["aulas/aula-05": lecture],
+                                             series: ["series/AN_serie_03": parsed])
+    let weekSection = draft.sections.first
+    check(weekSection?.title.hasPrefix("Semaine 3 · Suites réelles") == true && weekSection?.week == 3, "une section par semaine du programme")
+    let items = weekSection?.items ?? []
+    check(items.first?.number == "C5" && items.first?.url == "https://mediaspace.epfl.ch/media/0_5f16lokn", "le cours filmé, avec sa vidéo")
+    check(items.contains { $0.number == "3.5" && $0.title == "Les suites monotones et bornées" },
+          "la section enseignée, titre complet malgré la casse de l'identifiant")
+    let seriesItem = items.first { $0.kind == .series }
+    check(seriesItem?.title == "Nombres ℝ" && seriesItem?.seriesNumber == 3, "la série de la semaine (\(seriesItem?.title ?? ""))")
+    check(seriesItem?.exercises.count == 2 && seriesItem?.exercises.first?.questions.count == 2, "ses exercices et leurs questions")
+    check(seriesItem?.exercises.first?.url == "https://botafogo.epfl.ch/analyse-1-GM/?cours=exercices/a&polycopie=", "le lien de chaque exercice")
+    check(seriesItem?.solutionsAt != nil, "la date de publication du corrigé")
+    let leftovers = draft.sections.last
+    check(leftovers?.isIncluded == false && leftovers?.items.map(\.number) == ["3.6"], "ce que le programme ne cite pas est proposé à part, décoché")
+
+    let aCourse = Course(code: "TEST-501", name: "Programme")
+    context.insert(aCourse)
+    let outcome = ContentDraftWriter.apply(draft, to: aCourse, context: context)
+    let written = aCourse.series.first { $0.seriesNumber == 3 }
+    check(outcome.exercisesAdded == 2 && written?.exercises.count == 2, "les exercices sont écrits à l'import")
+    let first = written?.exercises.first { $0.exerciseNumber == "3.1" }
+    check(first?.leafSubQuestions.count == 3 && first?.hint == "Penser aux gendarmes." && first?.solution == "La limite vaut 1.",
+          "…avec questions, indication et solution")
+    check(written?.plannedWeek == 3 && written?.solutionsAt != nil && written?.topic == "Nombres ℝ", "…à leur semaine, thème et corrigé")
+    check(aCourse.theoryItems.contains { $0.number == "3.5" && $0.plannedWeek == 3 && $0.urlString.contains("m_suites_r_x") },
+          "la théorie tombe à la semaine où elle est enseignée, avec son lien")
+    first?.subQuestions.first?.toggle()
+    ContentDraftWriter.apply(draft, to: aCourse, context: context, updateWeeks: false)
+    check(first?.subQuestionDoneCount == 2, "une mise à jour garde les questions cochées")
+    context.delete(aCourse)
+    try? context.save()
+}
+
 print("== Exercice par exercice ==")
 do {
     let flowSeries = ExerciseSeries(seriesNumber: 9)
@@ -1151,11 +1216,13 @@ do {
     check(ExerciseStage(e1) == .toDo, "rien de coché : à faire")
     check(ExerciseFlow.resumePoint(in: all)?.id == e1.id, "on reprend au premier exercice")
     e1.setDone(true)
-    check(e1.confidence == nil, "cocher n'invente plus de sureté")
-    check(ExerciseStage(e1) == .needsConfidence, "fait sans sureté : la sureté est demandée")
+    check(e1.correctness == nil, "cocher ne donne aucune couleur : la couleur est celle de la correction")
+    check(ExerciseStage(e1) == .toCorrect, "fait : à corriger")
     check(ExerciseFlow.resumePoint(in: all)?.id == e2.id, "puis au suivant pas fait")
-    e1.confidence = .low
-    check(ExerciseStage(e1) == .toCorrect(.low), "fait et jugé : à corriger")
+    e1.correct(.partial)
+    check(ExerciseStage(e1) == .corrected(.partial) && !e1.redoRequired, "corrigé orange")
+    e1.clearCorrection()
+    check(ExerciseStage(e1) == .toCorrect, "retirer la correction revient à « à corriger »")
     e1.correct(.wrong)
     check(e1.redoRequired && ExerciseStage(e1) == .redo, "corrigé faux : à refaire, et c'est ce qui s'affiche")
     e1.correct(.correct)
@@ -1167,8 +1234,14 @@ do {
     e4.redoRequired = false
     check(ExerciseFlow.next(after: e1, in: all)?.id == e3.id, "« Suivant » saute les exercices déjà faits")
     check(ExerciseFlow.next(after: e4, in: all) == nil, "fin de série : pas de suivant")
+    e2.correct(.correct)
     e2.setDone(false)
-    check(e2.confidence == nil && !e2.isDone, "décocher efface la sureté")
+    check(e2.correctness == nil && !e2.isDone, "décocher efface la correction")
+    let e5 = Exercise(series: flowSeries, exerciseNumber: "9.5", sortOrder: 4)
+    context.insert(e5)
+    e5.correct(.correct)
+    check(e5.isDone && ExerciseStage(e5) == .corrected(.correct), "corriger un exercice le marque fait")
+    context.delete(e5)
 
     let q1 = SubQuestion(exercise: e2, label: "a", sortOrder: 0)
     let q2 = SubQuestion(exercise: e2, label: "b", sortOrder: 1)

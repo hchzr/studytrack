@@ -50,6 +50,8 @@ enum PreviewLaunch {
     /// Avec `-course` et l'onglet exercices, ouvre le détail de l'exercice
     /// portant ce numéro (`-exerciseDetail 3.1`).
     static let exerciseDetailFlag = "-exerciseDetail"
+    /// `-scrollDown` : la fiche d'un cours s'ouvre défilée vers le bas (captures).
+    static let scrollDownFlag = "-scrollDown"
     /// Ouvre l'import de série sur ce PDF (`-importFile /chemin/serie4.pdf`).
     static let importFileFlag = "-importFile"
     /// Ouvre la recherche, avec la requête qui suit (`-search cs250`).

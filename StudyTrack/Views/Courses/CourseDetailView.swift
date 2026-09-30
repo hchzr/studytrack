@@ -42,11 +42,23 @@ struct CourseDetailView: View {
         }
     }
 
+    /// `-scrollDown` : `simctl` ne sait pas faire défiler ; l'en-tête est
+    /// masqué pour que la capture montre la liste.
+    private var debugHidesHeader: Bool {
+        #if DEBUG
+        return PreviewLaunch.isSet(PreviewLaunch.scrollDownFlag)
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                header
-                examsRow
+                if !debugHidesHeader {
+                    header
+                    examsRow
+                }
 
                 Picker("Section", selection: $tab) {
                     ForEach(Section.segments) { section in
