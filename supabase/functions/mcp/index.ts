@@ -35,12 +35,12 @@ const SERVER_INFO = { name: "studytrack", title: "StudyTrack", version: "2.0.0" 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const MAX_BODY = 4 * 1024 * 1024;
 
-const INSTRUCTIONS = `StudyTrack suit les études d'un·e étudiant·e de l'EPFL : cours, séries d'exercices (avec sous-questions, sureté, correction), théorie (vidéos, sections de polycopié), évaluations et temps de travail.
+const INSTRUCTIONS = `StudyTrack suit les études d'un·e étudiant·e de l'EPFL : cours, séries d'exercices (avec sous-questions et correction vert/orange/rouge), théorie (vidéos, sections de polycopié), évaluations et temps de travail.
 
 - Commence par get_overview. Pour agir sur un exercice précis, lis d'abord get_course : il donne les identifiants (id) à passer aux outils d'écriture.
 - Les outils d'écriture sont appliqués par l'app à sa prochaine ouverture ; la lecture reflète le changement immédiatement. list_pending_changes dit ce qui attend et ce qui a échoué.
-- Étapes d'un exercice : à faire → en cours (questions) → fait (sureté à donner) → à corriger → corrigé (juste / moyen / faux) ; « à refaire » prime.
-- Sois honnête dans ce que tu enregistres : une sureté ou une correction se demande à l'étudiant·e, elle ne s'invente pas.`;
+- Étapes d'un exercice : à faire → en cours (questions) → fait, à corriger → corrigé vert (juste), orange (moyen) ou rouge (faux, donc « à refaire »).
+- Le code vert/orange/rouge est celui de la CORRECTION. Sois honnête : une correction se constate (avec l'étudiant·e ou en comparant au corrigé), elle ne s'invente pas.`;
 
 // ─────────────────────────────────────────────────────────────── Base ────
 
@@ -127,7 +127,7 @@ const TOOLS = [
   {
     name: "get_course",
     title: "Détail d'un cours",
-    description: "Tout un cours : séries et exercices (id, étape, sureté, correction, remarque, questions), théorie (id, semaine, vu, résumé), évaluations, temps passé par exercice. Donne les identifiants nécessaires aux outils d'écriture.",
+    description: "Tout un cours : séries et exercices (id, étape, correction, remarque, questions), théorie (id, semaine, vu, résumé), évaluations, temps passé par exercice. Donne les identifiants nécessaires aux outils d'écriture.",
     inputSchema: {
       type: "object",
       properties: { course, series: { type: "number", description: "Limiter à une série" } },
@@ -176,14 +176,13 @@ const TOOLS = [
   {
     name: "update_exercise",
     title: "Mettre à jour un exercice",
-    description: "Marque un exercice fait / à faire, enregistre la sureté de l'étudiant·e, le résultat de la correction, « à refaire », ou une remarque. Donner une sureté ou une correction marque l'exercice fait. « wrong » le marque à refaire.",
+    description: "Marque un exercice fait / à faire, enregistre sa correction (correct = vert, partial = orange, wrong = rouge, qui le marque à refaire), « à refaire », ou une remarque. Corriger un exercice le marque fait.",
     inputSchema: {
       type: "object",
       properties: {
         ...exerciseTarget,
         done: { type: "boolean" },
-        confidence: { type: "string", enum: ["sure", "medium", "unsure"] },
-        correctness: { type: "string", enum: ["correct", "partial", "wrong"] },
+        correctness: { type: "string", enum: ["correct", "partial", "wrong"], description: "vert, orange, rouge" },
         redo: { type: "boolean" },
         note: { type: "string", description: "Remarque de correction (ce qu'il faut retenir)" },
       },
@@ -337,7 +336,7 @@ function whatToDo(data: any, args: any) {
   const filter = args.course ? findCourse(data, args.course) : null;
   const limit = Number.isFinite(args.limit) ? args.limit : 20;
   const items: any[] = [];
-  const rank: Record<string, number> = { "série en retard": 0, "à refaire": 1, "sureté à donner": 2, "à corriger": 3, "série de la semaine": 4, "théorie à voir": 5, "à résumer": 6 };
+  const rank: Record<string, number> = { "série en retard": 0, "à refaire": 1, "à corriger": 3, "série de la semaine": 4, "théorie à voir": 5, "à résumer": 6 };
   for (const c of data.courses ?? []) {
     if (filter && c.id !== filter.id) continue;
     const week = c.currentWeek || 1;
@@ -351,7 +350,6 @@ function whatToDo(data: any, args: any) {
       }
       for (const e of series.exercises ?? []) {
         if (e.redo) items.push({ urgence: "à refaire", cours: c.code, quoi: `Exercice ${e.number}`, id: e.id, note: e.correctionNote });
-        else if (e.done && !e.confidence) items.push({ urgence: "sureté à donner", cours: c.code, quoi: `Exercice ${e.number}`, id: e.id });
         else if (e.done && !e.corrected) items.push({ urgence: "à corriger", cours: c.code, quoi: `Exercice ${e.number}`, id: e.id });
       }
     }
@@ -414,7 +412,7 @@ function getCourse(data: any, args: any) {
       id: s.id, numero: s.number, titre: s.title, semaine: s.plannedWeek, terminee: s.complete,
       exercices: (s.exercises ?? []).map((e: any) => ({
         id: e.id, numero: e.number, titre: e.title || undefined, enonce: e.statement, etape: e.stage,
-        bonus: e.bonus || undefined, surete: e.confidence, correction: e.correctness, remarque: e.correctionNote,
+        bonus: e.bonus || undefined, correction: e.correctness, remarque: e.correctionNote,
         questions: e.questions?.map((q: any) => `${q.done ? "☑" : "☐"} ${q.path}${q.text ? " " + q.text : ""}`),
         tempsPasse: seconds[e.id] ? hours(seconds[e.id]) : undefined,
       })),
@@ -501,31 +499,28 @@ function resolveTheory(data: any, args: any): { course: any; item: any } {
 function restage(e: any) {
   if (e.redo) e.stage = "à refaire";
   else if (e.corrected && e.correctness) e.stage = ({ correct: "juste", partial: "moyen", wrong: "faux" } as any)[e.correctness];
-  else if (e.done) e.stage = e.confidence ? "à corriger" : "sureté ?";
+  else if (e.done) e.stage = "à corriger";
   else {
     const done = (e.questions ?? []).filter((q: any) => q.done).length;
     e.stage = done ? `${done}/${e.questions.length}` : "à faire";
   }
 }
 
-const CONFIDENCE: Record<string, string> = { sure: "green", medium: "orange", unsure: "red" };
 
 /// Valide, traduit en commande pour l'app, et met l'instantané à jour.
 function prepareWrite(name: string, args: any, data: any): { kind: string; payload: Record<string, unknown>; summary: string } {
   switch (name) {
     case "update_exercise": {
       const { course: c, exercise: e } = resolveExercise(data, args);
-      if (args.confidence && !CONFIDENCE[args.confidence]) throw new UserError("confidence : sure, medium ou unsure.");
       if (args.correctness && !["correct", "partial", "wrong"].includes(args.correctness)) throw new UserError("correctness : correct, partial ou wrong.");
       const payload: Record<string, unknown> = { exerciseId: e.id, courseId: c.id };
-      for (const key of ["done", "confidence", "correctness", "redo", "note"]) if (args[key] !== undefined) payload[key] = args[key];
-      if (Object.keys(payload).length === 2) throw new UserError("Rien à modifier : done, confidence, correctness, redo ou note.");
+      for (const key of ["done", "correctness", "redo", "note"]) if (args[key] !== undefined) payload[key] = args[key];
+      if (Object.keys(payload).length === 2) throw new UserError("Rien à modifier : done, correctness, redo ou note.");
       if (args.done !== undefined) {
         e.done = !!args.done;
         (e.questions ?? []).forEach((q: any) => (q.done = e.done));
-        if (!e.done) delete e.confidence;
+        if (!e.done) { delete e.correctness; e.corrected = false; }
       }
-      if (args.confidence) { e.done = true; e.confidence = CONFIDENCE[args.confidence]; }
       if (args.correctness) { e.done = true; e.corrected = true; e.correctness = args.correctness; if (args.correctness === "wrong") e.redo = true; if (args.correctness === "correct") e.redo = false; }
       if (args.redo !== undefined) e.redo = !!args.redo;
       if (args.note !== undefined) e.correctionNote = args.note;
