@@ -87,6 +87,7 @@ struct SeriesImportSheet: View {
                 case .failed(let message): failedStep(message)
                 }
             }
+            .carnetBackground()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -420,6 +421,7 @@ struct SeriesImportSheet: View {
                     Text("Colle l'énoncé tel quel. Tu relis la liste avant de créer.")
                 }
             }
+            .carnetBackground()
             .navigationTitle("Coller un énoncé")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

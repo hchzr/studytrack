@@ -89,7 +89,7 @@ struct TodayWeekCard: View {
     /// Un cours : son code, puis deux barres côte à côte — théorie et séries de
     /// **sa** semaine en cours. Les chiffres disent quoi, les barres combien.
     private func rowView(_ row: Row) -> some View {
-        let tint = Color(hex: row.course.colorHex)
+        let tint = Carnet.tint(row.course.colorHex)
         let week = row.week
         return HStack(spacing: Layout.block) {
             RoundedRectangle(cornerRadius: 2)

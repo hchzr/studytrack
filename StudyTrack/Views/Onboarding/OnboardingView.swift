@@ -81,7 +81,7 @@ struct OnboardingView: View {
                 }
                 footer
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
             .sheet(isPresented: $showingCourseForm) {
                 CourseFormView(course: nil, defaultSectionCode: sectionCode)
             }
@@ -339,7 +339,7 @@ struct OnboardingView: View {
     private func courseToggleRow(_ course: Course) -> some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: course.colorHex))
+                .fill(Carnet.tint(course.colorHex))
                 .frame(width: 4, height: 34)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -390,7 +390,7 @@ struct OnboardingView: View {
                               systemImage: "square.and.arrow.down")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.carnetPrimary)
                     .disabled(trackedCourses.isEmpty)
                     Button {
                         showingSeriesImport = true
@@ -452,7 +452,7 @@ struct OnboardingView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.carnetPrimary)
             .disabled(step == 0 && sectionCode.isEmpty && !search.isEmpty && EPFLCatalog.search(search).isEmpty)
         }
         .padding(Layout.screenPadding)

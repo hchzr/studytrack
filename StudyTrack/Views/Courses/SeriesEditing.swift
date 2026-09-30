@@ -333,6 +333,7 @@ struct ExerciseDraftEditor: View {
                      : "Glisse une ligne vers la droite pour en faire un point de la question du dessus (ou la remonter), vers la gauche pour la supprimer. « Partie » : un travail demandé sans numéro (« Ensuite, … »).")
             }
         }
+        .carnetBackground()
         .navigationTitle("Exercice \(seriesNumber).\(exercise.minor)")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { outline = SubQuestionTree.outline(exercise.subQuestions) }
@@ -460,6 +461,7 @@ struct SeriesEditorSheet: View {
             }
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.interactively)
+            .carnetBackground()
             .navigationTitle(series == nil ? "Nouvelle série" : "Modifier la série")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -550,6 +552,7 @@ struct SourcePreviewSheet: View {
                 }
             }
             .background(Theme.softBackground)
+            .carnetBackground()
             .navigationTitle(preview.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

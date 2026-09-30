@@ -73,7 +73,7 @@ extension View {
     func adaptiveListColumn(maxWidth: CGFloat = Layout.readableWidth) -> some View {
         frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity)
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
     }
 }
 
@@ -429,7 +429,7 @@ struct ActionCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.carnetPrimary)
             .buttonBorderShape(.roundedRectangle(radius: 12))
             // Le bouton est une **action** : toujours l'encre de l'app. La teinte
             // de l'icône porte le verdict (à refaire, à jour) ; un grand bouton
@@ -465,7 +465,7 @@ struct EmptyCard: View {
                     Haptics.tap()
                     action()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.carnetPrimary)
                 .padding(.top, 6)
             }
         }

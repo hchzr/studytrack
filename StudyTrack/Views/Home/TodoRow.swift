@@ -74,7 +74,7 @@ struct CourseProgressRow: View {
         let progress = ProgressEngine.progress(for: course)
         return HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: course.colorHex))
+                .fill(Carnet.tint(course.colorHex))
                 .frame(width: 4, height: 40)
 
             VStack(alignment: .leading, spacing: Layout.tight) {
@@ -97,7 +97,7 @@ struct CourseProgressRow: View {
             Spacer(minLength: 8)
 
             ProgressRing(progress: progress.overallPercent,
-                         color: Color(hex: course.colorHex),
+                         color: Carnet.tint(course.colorHex),
                          size: 46,
                          lineWidth: 5)
         }

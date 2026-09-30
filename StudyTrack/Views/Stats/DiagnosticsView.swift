@@ -129,6 +129,7 @@ struct DiagnosticsView: View {
                 Text("Le journal reste sur cet appareil. Il ne contient que des messages techniques — aucune donnée de cours ni identité.")
             }
         }
+        .carnetBackground()
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Vider le journal ?", isPresented: $showingClear, titleVisibility: .visible) {

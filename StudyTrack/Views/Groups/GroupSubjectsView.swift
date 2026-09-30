@@ -55,6 +55,7 @@ struct GroupSubjectsView: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Matières")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

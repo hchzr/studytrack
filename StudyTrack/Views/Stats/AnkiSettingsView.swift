@@ -151,6 +151,7 @@ struct AnkiSettingsView: View {
                 Text("Une carte par élément, avec le cours et le numéro au recto — sans eux, « Montrer que… » ne veut plus rien dire dans six semaines. Les doublons sont ignorés par Anki.")
             }
         }
+        .carnetBackground()
         .navigationTitle("Anki")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadDecks() }

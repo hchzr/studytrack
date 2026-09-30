@@ -42,11 +42,13 @@ enum Theme {
 
     // MARK: Surfaces
 
-    static let cardCorner: CGFloat = 16
+    static let cardCorner: CGFloat = 20
 
+    /// Une feuille de papier (« Carnet de verre ») : les anciennes cartes
+    /// prennent la même surface que les nouvelles.
     static var softBackground: Color {
         #if canImport(UIKit)
-        Color(uiColor: .secondarySystemGroupedBackground)
+        Carnet.sheet
         #else
         Color(nsColor: .windowBackgroundColor)
         #endif

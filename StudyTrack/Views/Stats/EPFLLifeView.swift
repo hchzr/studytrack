@@ -53,7 +53,8 @@ struct EPFLLifeView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Vie de l'EPFL")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -331,6 +332,7 @@ struct MilestoneFormView: View {
                         .lineLimit(2...5)
                 }
             }
+            .carnetBackground()
             .navigationTitle("Nouvelle échéance")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

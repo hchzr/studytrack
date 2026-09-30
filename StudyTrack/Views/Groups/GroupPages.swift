@@ -104,6 +104,7 @@ struct GroupMembersView: View {
             }
         }
         .adaptiveListColumn()
+        .carnetBackground()
         .navigationTitle("Membres")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingInvite) { GroupInviteView(group: group) }
@@ -252,7 +253,8 @@ struct GroupStudyTimeView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Temps d'étude")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -342,7 +344,7 @@ struct GroupPlanningView: View {
                         Text("Propose une séance de travail : chacun répond « je participe », « peut-être » ou « je ne peux pas ».")
                     } actions: {
                         Button("Planifier une session") { showingPlan = true }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.carnetPrimary)
                     }
                 }
             } else {
@@ -379,6 +381,7 @@ struct GroupPlanningView: View {
             }
         }
         .adaptiveListColumn()
+        .carnetBackground()
         .navigationTitle("Sessions planifiées")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -419,7 +422,7 @@ struct GroupPlanningView: View {
                     if let course = session.course {
                         Text(course.displayCode)
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Color(hex: course.colorHex).accessibleInk)
+                            .foregroundStyle(Carnet.tint(course.colorHex).accessibleInk)
                     }
                 }
                 Spacer()

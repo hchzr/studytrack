@@ -33,6 +33,7 @@ struct TaskIntegrationsView: View {
                 }
             }
         }
+        .carnetBackground()
         .navigationTitle("Fournisseurs de tâches")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $guideProvider) { provider in

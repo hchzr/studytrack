@@ -369,6 +369,7 @@ struct ExerciseWorkspace: View {
                 }
             }
             .background(Carnet.sheet.ignoresSafeArea())
+            .carnetBackground()
             .navigationTitle(current.map { "\($0.exerciseNumber) · \(index + 1)/\(exercises.count)" } ?? series.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -537,6 +538,7 @@ private struct ExerciseDetailContent: View {
                     extras.padding(20)
                 }
                 .background(Carnet.ground.ignoresSafeArea())
+                .carnetBackground()
                 .navigationTitle(exercise.displayNumber)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -1013,6 +1015,7 @@ struct InAppBrowser: View {
                     }
                 }
                 .ignoresSafeArea(edges: .bottom)
+                .carnetBackground()
                 .navigationTitle(link.title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

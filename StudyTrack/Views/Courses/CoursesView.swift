@@ -456,7 +456,7 @@ struct CourseSidebarRow: View {
         let progress = ProgressEngine.progress(for: course)
         return HStack(spacing: Layout.block) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: course.colorHex))
+                .fill(Carnet.tint(course.colorHex))
                 .frame(width: 4, height: 34)
 
             VStack(alignment: .leading, spacing: Layout.micro) {
@@ -470,7 +470,7 @@ struct CourseSidebarRow: View {
             Spacer(minLength: Layout.inline)
 
             ProgressRing(progress: progress.overallPercent,
-                         color: Color(hex: course.colorHex),
+                         color: Carnet.tint(course.colorHex),
                          size: 38,
                          lineWidth: 4)
         }
@@ -495,7 +495,7 @@ struct CourseCardRow: View {
             VStack(alignment: .leading, spacing: Layout.block) {
                 HStack(alignment: .center, spacing: Layout.block) {
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(hex: course.colorHex))
+                        .fill(Carnet.tint(course.colorHex))
                         .frame(width: 5, height: 44)
 
                     VStack(alignment: .leading, spacing: Layout.tight) {
@@ -510,7 +510,7 @@ struct CourseCardRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         HStack(spacing: Layout.snug) {
-                            Pill(text: "\(Int(course.credits)) ECTS", color: Color(hex: course.colorHex))
+                            Pill(text: "\(Int(course.credits)) ECTS", color: Carnet.tint(course.colorHex))
                             if let exam = course.nextExam, exam.daysUntil <= 21 {
                                 Pill(text: "\(exam.kind.label) \(DateUtils.countdownLabel(to: exam.date))",
                                      color: exam.kind.color, icon: exam.kind.icon)
@@ -521,7 +521,7 @@ struct CourseCardRow: View {
                     Spacer(minLength: Layout.inline)
 
                     ProgressRing(progress: progress.overallPercent,
-                                 color: Color(hex: course.colorHex),
+                                 color: Carnet.tint(course.colorHex),
                                  size: 52,
                                  lineWidth: 6)
                 }

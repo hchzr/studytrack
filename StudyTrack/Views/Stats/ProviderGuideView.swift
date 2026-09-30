@@ -23,7 +23,8 @@ struct ProviderGuideView: View {
                 .padding(Layout.screenPadding)
                 .adaptiveColumn()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
+            .carnetBackground()
             .navigationTitle(provider.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

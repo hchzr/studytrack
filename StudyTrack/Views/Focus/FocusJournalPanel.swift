@@ -226,6 +226,7 @@ struct ManualSessionSheet: View {
                         .lineLimit(2...4)
                 }
             }
+            .carnetBackground()
             .navigationTitle("Session passée")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -301,6 +302,7 @@ struct PomodoroSettingsSheet: View {
             Form {
                 PomodoroSettingsForm(settings: app.settings)
             }
+            .carnetBackground()
             .navigationTitle("Pomodoro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

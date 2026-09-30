@@ -76,6 +76,7 @@ struct PastExamFormSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle(isEditing ? "Modifier l'annale" : "Nouvelle annale")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

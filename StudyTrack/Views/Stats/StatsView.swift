@@ -83,7 +83,8 @@ struct StatsView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Statistiques")
         .navigationDestination(isPresented: $showingCoverage) {
             CoverageView()
@@ -335,7 +336,7 @@ struct StatsView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(byCourse.enumerated()), id: \.offset) { _, entry in
-                        let color = entry.course.map { Color(hex: $0.colorHex) } ?? .secondary
+                        let color = entry.course.map { Carnet.tint($0.colorHex) } ?? .secondary
                         LabeledProgress(title: entry.course?.code ?? "Sans cours",
                                         progress: Double(entry.seconds) / Double(max(totalSeconds, 1)),
                                         color: color,

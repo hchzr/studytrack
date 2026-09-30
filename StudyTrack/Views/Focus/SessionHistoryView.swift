@@ -76,6 +76,7 @@ struct SessionHistoryView: View {
                 }
             }
             .adaptiveListColumn()
+            .carnetBackground()
             .navigationTitle("Historique")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -269,6 +270,7 @@ struct SessionEditSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Modifier la session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

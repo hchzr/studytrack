@@ -43,7 +43,8 @@ struct RevisionPlanView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Plan de révision")
         .navigationBarTitleDisplayMode(.inline)
     }

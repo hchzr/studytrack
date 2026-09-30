@@ -78,6 +78,7 @@ struct ContentImportView: View {
                     Text(refreshFooter)
                 }
             }
+            .carnetBackground()
             .navigationTitle(course.map { "Importer · \($0.displayCode)" } ?? "Importer du contenu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -195,7 +196,7 @@ struct ContentImportView: View {
 
     private func courseStatusRow(_ course: Course) -> some View {
         HStack(spacing: Layout.control) {
-            Circle().fill(Color(hex: course.colorHex).accessibleMark).frame(width: 8, height: 8)
+            Circle().fill(Carnet.tint(course.colorHex).accessibleMark).frame(width: 8, height: 8)
             Text(course.displayCode).font(.subheadline.weight(.semibold))
             Text(course.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: Layout.inline)
@@ -431,6 +432,7 @@ struct SiteLoginSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.bar)
             }
+            .carnetBackground()
             .navigationTitle("Connexion à \(source.label)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -486,6 +488,7 @@ struct SectionChoiceSheet: View {
                     Text("Moodle a un cours par section d'étudiant·e·s. Ton choix est retenu : on ne te le redemandera pas.")
                 }
             }
+            .carnetBackground()
             .navigationTitle("\(question.course.displayCode) : quelle section ?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -542,6 +545,7 @@ struct BatchReviewView: View {
                 Text("Touche un cours pour vérifier ses semaines ou exclure un élément. Rien n'est supprimé à l'import, et ton avancement est gardé.")
             }
         }
+        .carnetBackground()
         .navigationTitle("Relecture")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
@@ -554,7 +558,7 @@ struct BatchReviewView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Layout.control)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.carnetPrimary)
             .disabled(count == 0)
             .padding(Layout.gutter)
             .background(.bar)
@@ -656,6 +660,7 @@ struct CoursewareImportView: View {
                 }
             }
         }
+        .carnetBackground()
         .navigationTitle("Courseware")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -735,6 +740,7 @@ struct WebImportBrowser: View {
                 }
             bottomBar
         }
+        .carnetBackground()
         .navigationTitle(source.label)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -783,7 +789,7 @@ struct WebImportBrowser: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Layout.control)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.carnetPrimary)
             .disabled(!isCoursePage || isReading)
         }
         .padding(Layout.gutter)
@@ -950,6 +956,7 @@ struct BotafogoPicker: View {
                 }
             }
         }
+        .carnetBackground()
         .navigationTitle("Botafogo")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadCatalog() }
@@ -1011,6 +1018,7 @@ struct ContentDraftEditor: View {
         List {
             ContentDraftSections(draft: $draft, totalWeeks: totalWeeks)
         }
+        .carnetBackground()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1156,6 +1164,7 @@ struct ContentReviewView: View {
             if course == nil { targetSection }
             ContentDraftSections(draft: $draft, totalWeeks: totalWeeks)
         }
+        .carnetBackground()
         .navigationTitle("Relecture")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { importBar }
@@ -1215,7 +1224,7 @@ struct ContentReviewView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Layout.control)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.carnetPrimary)
         .disabled(draft.isEmpty)
         .padding(Layout.gutter)
         .background(.bar)

@@ -137,6 +137,7 @@ struct CourseFormView: View {
                         .keyboardType(.URL)
                 }
             }
+            .carnetBackground()
             .navigationTitle(isEditing ? "Modifier le cours" : "Nouveau cours")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

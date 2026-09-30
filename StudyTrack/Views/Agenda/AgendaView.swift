@@ -154,7 +154,7 @@ struct AgendaView: View {
                 title: event.title,
                 subtitle: eventSubtitle(event),
                 icon: event.kind.icon,
-                color: event.course.map { Color(hex: $0.colorHex) } ?? event.kind.color,
+                color: event.course.map { Carnet.tint($0.colorHex) } ?? event.kind.color,
                 kind: .calendar,
                 courseID: event.course?.id,
                 event: event))
@@ -233,7 +233,8 @@ struct AgendaView: View {
                 .padding(Layout.screenPadding)
                 .adaptiveColumn()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
+            .carnetBackground()
             .navigationTitle("Agenda")
             .toolbar { toolbar }
             // Tirer vers le bas relit le calendrier système — le geste de toute
@@ -291,7 +292,10 @@ struct AgendaView: View {
                 Image(systemName: "plus")
             }
             .accessibilityLabel("Planifier une session d'étude")
-            ProfileButton()
+        }
+        // L'agenda s'ouvre en feuille, depuis n'importe quel onglet.
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Fermer") { app.router.showingAgenda = false }
         }
     }
 
@@ -445,7 +449,7 @@ struct AgendaView: View {
                 }
                 Divider().frame(height: 20)
                 ForEach(courses.filter(\.isTracked)) { course in
-                    chip(course.displayCode, icon: nil, color: Color(hex: course.colorHex),
+                    chip(course.displayCode, icon: nil, color: Carnet.tint(course.colorHex),
                          isOn: filter.courseID == course.id) {
                         filter.courseID = filter.courseID == course.id ? nil : course.id
                     }

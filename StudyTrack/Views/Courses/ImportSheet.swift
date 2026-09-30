@@ -115,6 +115,7 @@ struct ImportSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Importer")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -29,7 +29,8 @@ struct CourseExamsView: View {
             .padding(Layout.screenPadding)
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Examens · \(course.displayCode)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

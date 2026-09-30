@@ -33,6 +33,7 @@ struct SchoolSetupView: View {
             coursesSection
             summarySection
         }
+        .carnetBackground()
         .navigationTitle("Section et semestre")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingCourseForm) {
@@ -164,7 +165,7 @@ struct SchoolSetupView: View {
     private func courseRow(_ course: Course) -> some View {
         HStack(spacing: Layout.block) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: course.colorHex))
+                .fill(Carnet.tint(course.colorHex))
                 .frame(width: 4, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(course.displayCode).font(.subheadline.weight(.semibold))

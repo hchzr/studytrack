@@ -104,6 +104,7 @@ struct CreateGroupView: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Nouveau groupe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -224,6 +225,7 @@ struct JoinGroupView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .carnetBackground()
             .navigationTitle("Rejoindre un groupe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -370,6 +372,7 @@ struct PlanSessionView: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Planifier une session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

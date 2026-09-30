@@ -96,6 +96,7 @@ struct FocusShortcutsEditor: View {
                     .disabled(trackedCourses.isEmpty)
                 }
             }
+            .carnetBackground()
             .navigationTitle("Raccourcis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

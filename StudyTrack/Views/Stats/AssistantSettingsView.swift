@@ -45,7 +45,7 @@ struct AssistantSettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, Layout.tight)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.carnetPrimary)
                         .disabled(syncing)
                     }
                     .padding(.vertical, Layout.tight)
@@ -74,6 +74,7 @@ struct AssistantSettingsView: View {
                 }
             }
         }
+        .carnetBackground()
         .navigationTitle("Assistant IA")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Déconnecter l'assistant ?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {
@@ -114,7 +115,7 @@ struct AssistantSettingsView: View {
                 } label: {
                     Label(copied ? "Copiée" : "Copier l'adresse", systemImage: copied ? "checkmark" : "doc.on.doc")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.carnetPrimary)
                 Spacer()
                 ShareLink(item: url) {
                     Label("Partager", systemImage: "square.and.arrow.up")

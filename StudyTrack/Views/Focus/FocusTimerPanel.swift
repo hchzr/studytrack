@@ -44,7 +44,7 @@ struct FocusTimerPanel: View {
     private var targetID: UUID? { focus.hasSession ? focus.state?.targetID : draftTargetID }
     private var course: Course? { courses.first { $0.id == courseID } }
 
-    private var tint: Color { course.map { Color(hex: $0.colorHex) } ?? Theme.accent }
+    private var tint: Color { course.map { Carnet.tint($0.colorHex) } ?? Theme.accent }
 
     private var courseBinding: Binding<UUID?> {
         Binding(get: { courseID }, set: { value in
@@ -209,7 +209,7 @@ struct FocusTimerPanel: View {
                     } label: {
                         chip(icon: "books.vertical.fill",
                              text: course?.displayCode ?? "Choisir un cours",
-                             tint: course.map { Color(hex: $0.colorHex) } ?? .secondary,
+                             tint: course.map { Carnet.tint($0.colorHex) } ?? .secondary,
                              emphasized: course == nil)
                     }
                     .accessibilityLabel("Cours")
@@ -546,7 +546,7 @@ struct FocusTimerPanel: View {
 
     private func shortcutTile(_ shortcut: FocusShortcut) -> some View {
         let course = courses.first { $0.displayCode == shortcut.courseCode }
-        let tint = course.map { Color(hex: $0.colorHex) } ?? Theme.accent
+        let tint = course.map { Carnet.tint($0.colorHex) } ?? Theme.accent
         return Button {
             Haptics.tap()
             startOrConfirm(FocusRequest(courseID: course?.id,

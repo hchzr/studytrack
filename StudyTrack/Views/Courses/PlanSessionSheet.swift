@@ -49,6 +49,7 @@ struct PlanSessionSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Planifier")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

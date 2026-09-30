@@ -57,7 +57,8 @@ struct GroupSubjectProgressView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle(subject)
         .navigationBarTitleDisplayMode(.inline)
     }

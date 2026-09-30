@@ -31,7 +31,8 @@ struct GroupInviteView: View {
                 .padding()
                 .adaptiveColumn()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
+            .carnetBackground()
             .navigationTitle("Inviter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -137,7 +138,7 @@ struct GroupInviteView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.carnetPrimary)
     }
 
     private var hint: some View {

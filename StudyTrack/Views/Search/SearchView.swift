@@ -58,6 +58,7 @@ struct SearchView: View {
                     resultsList
                 }
             }
+            .carnetBackground()
             .navigationTitle("Recherche")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query,

@@ -41,7 +41,8 @@ struct CoverageView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Couverture du suivi")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingImport) {

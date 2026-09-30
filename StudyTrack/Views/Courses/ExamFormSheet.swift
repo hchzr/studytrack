@@ -75,6 +75,7 @@ struct ExamFormSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle(isEditing ? "Modifier l'évaluation" : "Nouvelle évaluation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

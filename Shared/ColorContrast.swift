@@ -146,12 +146,13 @@ extension ColorContrast.RGB {
     }
 }
 
-/// Surface de référence : la carte groupée, dans l'apparence demandée.
+/// Surface de référence : la feuille de papier du « Carnet de verre »
+/// (`Carnet.sheet`), dans l'apparence demandée.
 enum ContrastSurface {
     static func rgb(for style: UIUserInterfaceStyle) -> ColorContrast.RGB {
-        UIColor.secondarySystemGroupedBackground
-            .resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
-            .contrastRGB
+        style == .dark
+            ? (ColorContrast.rgb(fromHex: "#211E18") ?? ColorContrast.RGB(r: 0.13, g: 0.12, b: 0.09))
+            : (ColorContrast.rgb(fromHex: "#FFFDF8") ?? ColorContrast.RGB(r: 1, g: 1, b: 1))
     }
 
     /// Surface d'un widget : le système y applique son propre fond.

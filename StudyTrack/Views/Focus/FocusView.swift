@@ -51,7 +51,8 @@ struct FocusView: View {
                 .adaptiveColumn()
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Color(.systemGroupedBackground))
+            .background(Carnet.ground.ignoresSafeArea())
+            .carnetBackground()
             .navigationTitle("Focus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

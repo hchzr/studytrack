@@ -82,7 +82,8 @@ struct GroupSeriesProgressView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle("Avancement des séries")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

@@ -99,7 +99,7 @@ struct TodayView: View {
                                    subtitle: [event.course?.displayCode, event.location.isEmpty ? nil : event.location]
                                        .compactMap { $0 }.joined(separator: " · "),
                                    icon: event.kind.icon,
-                                   color: event.course.map { Color(hex: $0.colorHex) } ?? event.kind.color))
+                                   color: event.course.map { Carnet.tint($0.colorHex) } ?? event.kind.color))
         }
         for session in plannedSessions where calendar.isDateInToday(session.startsAt) {
             items.append(TodayItem(id: "planned-\(session.id)",

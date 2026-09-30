@@ -75,7 +75,8 @@ struct GroupDetailView: View {
             .padding()
             .adaptiveColumn()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Carnet.ground.ignoresSafeArea())
+        .carnetBackground()
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -417,7 +418,7 @@ struct GroupDetailView: View {
                             NavigationLink(value: GroupSubjectRoute(groupID: group.id, subject: code)) {
                                 HStack(spacing: Layout.snug) {
                                     if let course {
-                                        Circle().fill(Color(hex: course.colorHex)).frame(width: 8, height: 8)
+                                        Circle().fill(Carnet.tint(course.colorHex)).frame(width: 8, height: 8)
                                     }
                                     Text(code).font(.caption.weight(.semibold))
                                     if course == nil {
@@ -479,7 +480,7 @@ struct GroupDetailView: View {
                         Label("Partager", systemImage: "square.and.arrow.up")
                             .font(.caption)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.carnetPrimary)
                 }
 
                 HStack(spacing: Layout.snug) {
@@ -513,7 +514,7 @@ struct GroupDetailView: View {
                                 .font(.caption)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.carnetPrimary)
                     .disabled(isPublishing)
                 }
 

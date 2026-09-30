@@ -374,6 +374,7 @@ struct VideoDetailSheet: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle(video.displayNumber)
             .sheet(item: $browsing) { InAppBrowser(link: $0) }
             .navigationBarTitleDisplayMode(.inline)
@@ -440,6 +441,7 @@ struct AddVideoSheet: View {
                     Text("La semaine sert au calcul « à regarder cette semaine ». Par défaut, la section est le préfixe du numéro (1.4 → section 1).")
                 }
             }
+            .carnetBackground()
             .navigationTitle("Ajouter de la théorie")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

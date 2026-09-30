@@ -77,6 +77,7 @@ struct TasksView: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Tâches")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -278,6 +279,7 @@ struct AddTaskView: View {
                     }
                 }
             }
+            .carnetBackground()
             .navigationTitle("Nouvelle tâche")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

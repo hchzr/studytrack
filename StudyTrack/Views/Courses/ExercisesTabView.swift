@@ -340,7 +340,7 @@ struct ExercisesTabView: View {
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.carnetPrimary)
                         .disabled(downloadingSeries != nil)
                     }
                     Button {
@@ -529,6 +529,7 @@ struct WeekTheorySheet: View {
                     TheoryLinkRow(item: item) { browsing = $0 }
                 }
             }
+            .carnetBackground()
             .navigationTitle("\(course.displayCode) · semaine \(week)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
