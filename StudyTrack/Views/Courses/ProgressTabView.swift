@@ -29,7 +29,7 @@ struct ProgressTabView: View {
         }
         .onAppear { if current > 0 { expanded.insert(current) } }
         .sheet(item: $openedVideo) { VideoDetailSheet(video: $0) }
-        .sheet(item: $openedExercise) { ExerciseDetailSheet(exercise: $0) }
+        .sheet(item: $openedExercise) { ExerciseSheet(exercise: $0) }
     }
 
     // MARK: Semestre

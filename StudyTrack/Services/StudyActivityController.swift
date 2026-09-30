@@ -47,6 +47,8 @@ enum StudyActivityController {
         // directement, et un cache tenu ailleurs deviendrait faux dès qu'un
         // chemin l'oublierait.
         publishedQuestions = state.questionsLabel
+        publishedTitle = state.title
+        publishedSubtitle = state.subtitle
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             lastError = "Les Live Activities sont désactivées pour StudyTrack."
             AppLog.record(.warning, "îlot", "Live Activities désactivées dans les réglages")
@@ -121,6 +123,10 @@ enum StudyActivityController {
     /// de mises à jour identiques à ActivityKit, qui les limite. On ne republie
     /// donc que si le compte affiché change réellement.
     private static var publishedQuestions: String?
+    /// Les libellés publiés : un exercice renuméroté ou un cours renommé
+    /// ailleurs dans l'app doit se voir sur l'écran verrouillé.
+    private static var publishedTitle: String?
+    private static var publishedSubtitle: String?
 
     /// Publie l'activité depuis l'état persisté du chrono.
     ///
@@ -132,7 +138,8 @@ enum StudyActivityController {
         let exercise = exercise(for: state, course: course)
         let content = makeState(timer: state,
                                 settings: container.settings.pomodoro,
-                                exercise: exercise)
+                                exercise: exercise,
+                                course: course)
         sync(attributes: attributes(for: state, course: course), state: content)
     }
 
@@ -146,11 +153,15 @@ enum StudyActivityController {
               let state = FocusTimerStore.load(),
               state.isRestorable() || state.isRunning else { return }
         let context = ModelContext(container.modelContainer)
-        let exercise = exercise(for: state, course: course(for: state, context: context))
-        let label = makeState(timer: state,
-                              settings: container.settings.pomodoro,
-                              exercise: exercise).questionsLabel
-        guard label != publishedQuestions else { return }
+        let course = course(for: state, context: context)
+        let exercise = exercise(for: state, course: course)
+        let content = makeState(timer: state,
+                                settings: container.settings.pomodoro,
+                                exercise: exercise,
+                                course: course)
+        guard content.questionsLabel != publishedQuestions
+                || content.title != publishedTitle
+                || content.subtitle != publishedSubtitle else { return }
         publish(state, container: container)
     }
 
@@ -176,13 +187,15 @@ enum StudyActivityController {
                                target: targetLabel(state, course: course))
     }
 
-    private static func targetLabel(_ state: FocusTimerState, course: Course?) -> String? {
+    static func targetLabel(_ state: FocusTimerState, course: Course?) -> String? {
         guard let course, let targetID = state.targetID else { return nil }
+        // Le numéro seul : « Exercices · 3.4 » se lit, « Exercices · Exercice
+        // 3.4 » bégaie — et l'îlot n'a pas la place de bégayer.
         if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
-            return exercise.displayNumber
+            return exercise.exerciseNumber
         }
         if let item = course.theoryItems.first(where: { $0.id == targetID }) {
-            return item.displayNumber
+            return item.number
         }
         return nil
     }
@@ -202,6 +215,7 @@ enum StudyActivityController {
     static func makeState(timer: FocusTimerState,
                           settings: PomodoroSettings,
                           exercise: Exercise?,
+                          course: Course? = nil,
                           now: Date = Date()) -> StudyActivityAttributes.ContentState {
         let elapsed = timer.elapsed(at: now)
         var block: ActivityPomodoro?
@@ -231,6 +245,9 @@ enum StudyActivityController {
                      questionsDone: leaves.map { $0.filter(\.isDone).count },
                      questionsTotal: leaves.map(\.count),
                      pomodoro: block,
+                     title: course?.displayCode ?? "Session libre",
+                     subtitle: ActivityTimerState.subtitle(task: timer.taskType.label,
+                                                           target: targetLabel(timer, course: course)),
                      now: now)
     }
 

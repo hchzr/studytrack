@@ -131,6 +131,14 @@ struct StudyActivityWidget: Widget {
                     StudyActivityTimer(state: context.state, font: .title3, compact: true)
                         .padding(.trailing, 4)
                 }
+                DynamicIslandExpandedRegion(.center) {
+                    // Sur quoi on travaille, lu dans l'**état** : il suit les
+                    // changements de cours et d'exercice pendant la session.
+                    Text(StudyActivityTitle.text(context))
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 DynamicIslandExpandedRegion(.bottom) {
                     // Le bouton utile, centré, **sans** largeur imposée :
                     // `maxWidth: .infinity` faisait réclamer toute la place.
@@ -251,19 +259,28 @@ struct StudyActivityStateIcon: View {
 ///
 /// Le nom complet du cours est écarté : dans l'îlot, il chassait le reste. Il
 /// reste lisible dans l'écran verrouillé, où la place ne manque pas.
+///
+/// **L'état d'abord, les attributs ensuite.** Les attributs sont figés à la
+/// création de l'activité, qui est reprise de session en session : les lire
+/// affichait le premier cours démarré pour toujours. L'état porte les libellés
+/// à jour ; les attributs ne servent plus qu'aux activités publiées par une
+/// version précédente de l'app.
 enum StudyActivityTitle {
-    static func text(for attributes: StudyActivityAttributes) -> String {
-        var parts = [attributes.courseCode, attributes.taskLabel]
-        if let target = attributes.target, !target.isEmpty { parts.append(target) }
-        return parts.joined(separator: " · ")
+    static func course(_ context: ActivityViewContext<StudyActivityAttributes>) -> String {
+        context.state.title ?? context.attributes.courseCode
+    }
+
+    static func text(_ context: ActivityViewContext<StudyActivityAttributes>) -> String {
+        [course(context), StudyActivitySubtitle.text(context)].joined(separator: " · ")
     }
 }
 
 /// « Vidéo · 2.1 » — la version courte, pour l'écran verrouillé.
 enum StudyActivitySubtitle {
-    static func text(for attributes: StudyActivityAttributes) -> String {
-        var parts = [attributes.taskLabel]
-        if let target = attributes.target, !target.isEmpty { parts.append(target) }
+    static func text(_ context: ActivityViewContext<StudyActivityAttributes>) -> String {
+        if let subtitle = context.state.subtitle { return subtitle }
+        var parts = [context.attributes.taskLabel]
+        if let target = context.attributes.target, !target.isEmpty { parts.append(target) }
         return parts.joined(separator: " · ")
     }
 }
@@ -396,10 +413,10 @@ struct StudyActivityLockView: View {
                         .fill(context.state.pomodoro?.isOnBreak == true ? Color.teal
                               : (context.state.isRunning ? Color.green : Color.orange))
                         .frame(width: 7, height: 7)
-                    Text(context.attributes.courseCode)
+                    Text(StudyActivityTitle.course(context))
                         .font(.subheadline.weight(.bold))
                         .lineLimit(1)
-                    Text(StudyActivitySubtitle.text(for: context.attributes))
+                    Text(StudyActivitySubtitle.text(context))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -817,14 +834,6 @@ struct StudyTrackWidgetView: View {
             Text("StudyTrack")
                 .font(.caption.weight(.bold))
             Spacer(minLength: 4)
-            if snapshot.streak > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "flame.fill").font(.caption2)
-                    Text("\(snapshot.streak)").font(.caption2.weight(.bold))
-                }
-                .foregroundStyle(Color.orange.widgetInk)
-                .widgetAccentable()
-            }
         }
     }
 
@@ -900,21 +909,13 @@ struct StudyTrackTimerWidgetView: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 10) {
-                    if snapshot.streak > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "flame.fill").font(.caption2)
-                            Text("\(snapshot.streak) j").font(.caption2.weight(.bold))
-                        }
-                        .foregroundStyle(Color.orange.widgetInk)
-                        .widgetAccentable()
-                    }
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill").font(.caption2)
-                        Text("Niv. \(snapshot.level)").font(.caption2.weight(.bold))
-                    }
-                    .foregroundStyle(Color.yellow.widgetInk)
-                }
+                // Ce qui reste, pas une série de jours : la gamification a
+                // été retirée, le widget dit ce qu'il y a à faire.
+                Text(snapshot.todoCount == 0 ? "tout est à jour"
+                     : "\(snapshot.todoCount) à faire cette semaine")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         } else {

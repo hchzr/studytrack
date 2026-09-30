@@ -321,6 +321,7 @@ struct VideoDetailSheet: View {
                         app.router.startFocus(courseID: video.course?.id,
                                               courseCode: video.course?.code ?? "",
                                               taskType: .theory,
+                                              targetID: video.id,
                                               label: "\(video.course?.code ?? "") · \(video.displayNumber)")
                         dismiss()
                     } label: {

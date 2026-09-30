@@ -189,13 +189,6 @@ struct GroupRow: View {
 
     private var subjects: [String] { group.subjectCodes }
 
-    /// Mon rang au classement de la semaine, quand je suis identifié·e.
-    private var myRank: Int? {
-        let sorted = group.sortedMembers
-        guard let index = sorted.firstIndex(where: \.isMe) else { return nil }
-        return index + 1
-    }
-
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
@@ -232,19 +225,6 @@ struct GroupRow: View {
                 }
             }
             Spacer(minLength: Layout.inline)
-            // « 7 séries » comptait les séries de **tous** les membres — un chiffre
-            // qui ne veut rien dire pour moi. Mon rang au temps d'étude, si.
-            if let rank = myRank {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("#\(rank)")
-                        .font(.subheadline.weight(.bold))
-                        .monospacedDigit()
-                        .foregroundStyle(rank == 1 ? Color.yellow.accessibleInk : .primary)
-                    Text("sur \(group.members.count)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
@@ -263,7 +243,6 @@ struct GroupRow: View {
         var parts = [group.name, "\(group.members.count) membres"]
         if !live.isEmpty { parts.append(liveLine) }
         if !subjects.isEmpty { parts.append("matières : \(subjects.joined(separator: ", "))") }
-        if let rank = myRank { parts.append("rang \(rank) sur \(group.members.count) cette semaine") }
         return parts.joined(separator: ", ")
     }
 }

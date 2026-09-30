@@ -24,14 +24,14 @@ enum WidgetSnapshotWriter {
         let nextExam = exams
             .filter { $0.date >= DateUtils.startOfDay(Date()) }
             .min { $0.date < $1.date }
-        let xp = GamificationEngine.totalXP(courses: courses, sessions: sessions)
-
         let snapshot = WidgetSnapshot(
             updatedAt: Date(),
             weekSeconds: weekSeconds,
-            streak: GamificationEngine.currentStreak(sessions: sessions),
-            level: GamificationEngine.level(forXP: xp),
-            xp: xp,
+            // Champs gardés pour que l'instantané reste lisible par un widget
+            // d'une version précédente ; la gamification n'existe plus.
+            streak: 0,
+            level: 0,
+            xp: 0,
             todoCount: allTodos.count,
             todos: allTodos.prefix(5).map {
                 WidgetTodo(id: $0.id,

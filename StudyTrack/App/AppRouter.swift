@@ -1,12 +1,19 @@
 import Foundation
 import Observation
 
-/// Demande de démarrage d'un chrono, émise depuis n'importe quel écran.
+/// Demande de chrono, émise depuis n'importe quel écran.
 struct FocusRequest: Equatable {
     var courseID: UUID?
     var courseCode: String
     var taskType: TaskType
+    /// L'exercice ou l'élément de théorie visé : sans lui, « Travailler sur
+    /// 3.2 » enregistrait du temps sur le cours entier.
+    var targetID: UUID? = nil
     var label: String
+    /// Démarrer tout de suite (un bouton « Démarrer »), ou seulement préparer
+    /// Focus sur ce contexte (la bulle flottante) : ouvrir un écran ne doit pas
+    /// lancer un chrono qu'on n'a pas demandé.
+    var autoStart: Bool = true
 }
 
 /// Navigation applicative partagée (onglet actif, demandes de chrono, feuilles).
@@ -112,11 +119,26 @@ final class AppRouter {
     /// Le routeur le porte ; l'écran qui sait quoi en faire le consomme.
     var shortcut: ShortcutAction?
 
-    func startFocus(courseID: UUID?, courseCode: String, taskType: TaskType, label: String) {
+    /// Démarre le chrono sur ce contexte — pour un bouton qui dit « Démarrer ».
+    func startFocus(courseID: UUID?, courseCode: String, taskType: TaskType,
+                    targetID: UUID? = nil, label: String) {
         focusRequest = FocusRequest(courseID: courseID,
                                     courseCode: courseCode,
                                     taskType: taskType,
+                                    targetID: targetID,
                                     label: label)
+        showingFocus = true
+    }
+
+    /// Ouvre Focus **prêt** sur ce contexte, sans démarrer : c'est au bouton
+    /// « Démarrer » de le faire.
+    func prepareFocus(courseID: UUID?, courseCode: String, taskType: TaskType, targetID: UUID? = nil) {
+        focusRequest = FocusRequest(courseID: courseID,
+                                    courseCode: courseCode,
+                                    taskType: taskType,
+                                    targetID: targetID,
+                                    label: "",
+                                    autoStart: false)
         showingFocus = true
     }
 

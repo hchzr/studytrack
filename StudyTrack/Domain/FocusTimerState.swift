@@ -28,6 +28,19 @@ struct FocusTimerState: Codable, Equatable {
     var breakStartedAt: Date?
     var breakEndsAt: Date?
 
+    /// Le temps déjà passé sur les cibles **précédentes** de la session.
+    ///
+    /// On fait une série exercice après exercice, sans arrêter le chrono entre
+    /// deux : une heure notée « Exercices sur MATH-101 » ne disait pas que 3.2 a
+    /// pris quarante minutes et 3.3 dix. Chaque changement de cible clôt un
+    /// segment ; « Terminer » enregistre une session par cible.
+    ///
+    /// Optionnels, comme tout ce qui a été ajouté après coup : un état écrit par
+    /// une version précédente se relit, et « aucun segment » est `nil`.
+    var segments: [FocusSegment]?
+    /// Temps compté au moment où la cible actuelle a commencé.
+    var currentTargetSince: TimeInterval?
+
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,
          sessionStartedAt: Date = Date(),
@@ -83,6 +96,93 @@ struct FocusTimerState: Codable, Equatable {
         guard let since = runningSince else { return }
         accumulated += max(0, now.timeIntervalSince(since))
         runningSince = nil
+    }
+
+    // MARK: Segments
+
+    /// Change de cours, de type ou de cible **sans** couper le chrono : le temps
+    /// passé sur la cible précédente devient un segment.
+    ///
+    /// Rien ne change si la cible est la même — cocher une question n'ouvre pas
+    /// un segment de plus.
+    mutating func switchContext(courseID: UUID?, taskTypeRaw: String, targetID: UUID?, at now: Date = Date()) {
+        guard courseID != self.courseID || taskTypeRaw != self.taskTypeRaw || targetID != self.targetID else { return }
+        let total = elapsed(at: now)
+        let since = min(currentTargetSince ?? 0, total)
+        let spent = total - since
+        if spent >= 1 {
+            var list = segments ?? []
+            list.append(FocusSegment(courseID: self.courseID, taskTypeRaw: self.taskTypeRaw,
+                                     targetID: self.targetID, seconds: spent))
+            segments = list
+        }
+        currentTargetSince = total
+        self.courseID = courseID
+        self.taskTypeRaw = taskTypeRaw
+        self.targetID = targetID
+    }
+
+    /// Temps passé sur la cible **actuelle** depuis qu'elle l'est.
+    func currentTargetElapsed(at now: Date = Date()) -> TimeInterval {
+        max(0, elapsed(at: now) - min(currentTargetSince ?? 0, elapsed(at: now)))
+    }
+
+    /// La répartition du temps de la session, cible par cible, dans l'ordre.
+    ///
+    /// Deux passages sur la même cible (3.2, 3.3, retour à 3.2) sont fusionnés.
+    /// Si le total a été corrigé **à la baisse** sous la somme des segments, ils
+    /// sont réduits en proportion : la somme des sessions enregistrées est
+    /// toujours exactement le temps affiché.
+    func allocation(at now: Date = Date()) -> [FocusSegment] {
+        let total = elapsed(at: now)
+        var parts = segments ?? []
+        let prior = parts.reduce(0) { $0 + $1.seconds }
+        if prior > total, prior > 0 {
+            let factor = total / prior
+            parts = parts.map { var part = $0; part.seconds *= factor; return part }
+        }
+        let used = parts.reduce(0) { $0 + $1.seconds }
+        parts.append(FocusSegment(courseID: courseID, taskTypeRaw: taskTypeRaw,
+                                  targetID: targetID, seconds: max(0, total - used)))
+        var merged: [FocusSegment] = []
+        for part in parts {
+            if let index = merged.firstIndex(where: { $0.sameTarget(as: part) }) {
+                merged[index].seconds += part.seconds
+            } else {
+                merged.append(part)
+            }
+        }
+        return merged.filter { $0.seconds >= 1 }
+    }
+
+    /// Les durées **entières** à enregistrer, dont la somme vaut le total arrondi.
+    ///
+    /// Arrondir chaque segment séparément perdait ou inventait des secondes.
+    func allocatedSeconds(at now: Date = Date()) -> [(segment: FocusSegment, seconds: Int)] {
+        let parts = allocation(at: now)
+        let total = Int(elapsed(at: now))
+        var result: [(FocusSegment, Int)] = []
+        var assigned = 0
+        for (index, part) in parts.enumerated() {
+            let seconds = index == parts.count - 1 ? max(0, total - assigned) : Int(part.seconds.rounded(.down))
+            assigned += seconds
+            result.append((part, seconds))
+        }
+        return result.filter { $0.1 >= 1 }
+    }
+}
+
+/// Un morceau de session passé sur une cible précise.
+struct FocusSegment: Codable, Equatable {
+    var courseID: UUID?
+    var taskTypeRaw: String
+    var targetID: UUID?
+    var seconds: TimeInterval
+
+    var taskType: TaskType { TaskType(rawValue: taskTypeRaw) ?? .other }
+
+    func sameTarget(as other: FocusSegment) -> Bool {
+        courseID == other.courseID && taskTypeRaw == other.taskTypeRaw && targetID == other.targetID
     }
 }
 

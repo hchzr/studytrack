@@ -15,7 +15,6 @@ private struct TodayState {
     /// La prochaine action — la carte principale, que la liste ne répète pas.
     let hero: NextAction?
     let term: AcademicTerm?
-    let streak: Int
     let weekSeconds: Int
     let upcomingExams: [Exam]
     let dueTasks: [LinkedTask]
@@ -73,7 +72,6 @@ struct TodayView: View {
             todos: todos,
             hero: NextActionEngine.actions(for: tracked, limit: 1).first,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
-            streak: GamificationEngine.currentStreak(sessions: sessions),
             // Un seul parcours des sessions, au lieu d'un `filter` puis d'un `reduce`.
             weekSeconds: sessions.reduce(0) { total, session in
                 session.startedAt >= week.start && session.startedAt < week.end
@@ -212,9 +210,9 @@ struct TodayView: View {
                     Menu {
                         Section {
                             Button {
-                                app.router.startFocus(courseID: nil, courseCode: "", taskType: .theory, label: "Session libre")
+                                app.router.openFocus(.timer)
                             } label: {
-                                Label("Démarrer un chrono", systemImage: "timer")
+                                Label("Ouvrir le chrono", systemImage: "timer")
                             }
                             Button {
                                 app.router.openFocus(.manual)
@@ -431,7 +429,7 @@ struct TodayView: View {
                               initialFileURL: shared.flatMap(importFileURL),
                               initialText: shared?.text)
         case .exercise(let exercise):
-            ExerciseDetailSheet(exercise: exercise)
+            ExerciseSheet(exercise: exercise)
         case .video(let video):
             VideoDetailSheet(video: video)
         }
@@ -640,6 +638,7 @@ struct TodayView: View {
                 app.router.startFocus(courseID: next.courseID,
                                       courseCode: next.courseCode,
                                       taskType: next.taskType,
+                                      targetID: next.targetID,
                                       label: next.focusLabel)
             }
         } else {
@@ -662,7 +661,6 @@ struct TodayView: View {
     private func weekCard(_ state: TodayState) -> some View {
         TodayWeekCard(courses: state.tracked,
                       weekSeconds: state.weekSeconds,
-                      streak: state.streak,
                       onOpenCourse: { course in app.router.openCourse(course.id) },
                       onOpenStats: { app.router.showingStats = true })
     }
@@ -693,6 +691,7 @@ struct TodayView: View {
                                         app.router.startFocus(courseID: todo.courseID,
                                                               courseCode: todo.courseCode,
                                                               taskType: todo.taskType,
+                                                              targetID: todo.targetID,
                                                               label: "\(todo.courseCode) · \(todo.title)")
                                     })
                             if todo.id != visible.last?.id {

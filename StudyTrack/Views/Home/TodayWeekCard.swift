@@ -9,7 +9,6 @@ import SwiftUI
 struct TodayWeekCard: View {
     let courses: [Course]
     let weekSeconds: Int
-    let streak: Int
     var onOpenCourse: (Course) -> Void
     var onOpenStats: () -> Void
 
@@ -84,8 +83,7 @@ struct TodayWeekCard: View {
     }
 
     private var summary: String {
-        let hours = DateUtils.hoursLabel(seconds: weekSeconds)
-        return streak > 0 ? "\(hours) de travail sur 7 j · \(streak) j d'affilée" : "\(hours) de travail sur 7 j"
+        "\(DateUtils.hoursLabel(seconds: weekSeconds)) de travail sur 7 j"
     }
 
     /// Un cours : son code, puis deux barres côte à côte — théorie et séries de

@@ -316,16 +316,15 @@ struct GroupDetailView: View {
 
     /// Trois chiffres qui situent le groupe, avant d'entrer dans les pages.
     private var overviewCard: some View {
-        let ranked = group.sortedMembers
-        let myRank = ranked.firstIndex(where: \.isMe).map { $0 + 1 }
+        let me = group.members.first(where: \.isMe)
         let upcoming = groupSessions.count
         return HStack(spacing: Layout.block) {
             StatCard(icon: "person.3.fill",
                      value: "\(group.members.count)",
                      title: "membre\(group.members.count > 1 ? "s" : "")")
-            StatCard(icon: "trophy.fill",
-                     value: myRank.map { "#\($0)" } ?? "—",
-                     title: "ta place (7 j)")
+            StatCard(icon: "clock.fill",
+                     value: me.map { DateUtils.hoursLabel(seconds: $0.weeklySeconds) } ?? "—",
+                     title: "toi (7 j)")
             StatCard(icon: "calendar",
                      value: "\(upcoming)",
                      title: upcoming == 1 ? "session à venir" : "sessions à venir")
@@ -367,12 +366,9 @@ struct GroupDetailView: View {
     }
 
     private var timeDetail: String {
-        guard let me = group.members.first(where: \.isMe) else { return "Connecte-toi pour te comparer" }
-        let leader = group.sortedMembers.first
-        if let leader, !leader.isMe {
-            return "Toi \(me.weeklyLabel) · \(leader.shownName) \(leader.weeklyLabel)"
-        }
-        return "Toi \(me.weeklyLabel) · en tête"
+        let total = group.members.reduce(0) { $0 + $1.weeklySeconds }
+        guard let me = group.members.first(where: \.isMe) else { return "Groupe : \(DateUtils.hoursLabel(seconds: total)) sur 7 j" }
+        return "Toi \(me.weeklyLabel) · groupe \(DateUtils.hoursLabel(seconds: total)) sur 7 j"
     }
 
     private func pageRow(_ page: GroupPageRoute.Page, detail: String) -> some View {

@@ -164,17 +164,6 @@ check(week1 == 2700 + 3120 + 2400, "CS-250 semaine 1 = \(DateUtils.durationLabel
 check(!ProgressEngine.remainingVideos(for: cs, week: 2).isEmpty,
       "CS-250 semaine 2 : vidéos restantes (\(ProgressEngine.remainingVideos(for: cs, week: 2).count))")
 
-print("== GamificationEngine ==")
-let xp = GamificationEngine.totalXP(courses: courses, sessions: sessions)
-let streak = GamificationEngine.currentStreak(sessions: sessions)
-let badges = GamificationEngine.earnedBadges(courses: courses, sessions: sessions)
-print("  XP \(xp) · niveau \(GamificationEngine.level(forXP: xp)) · série \(streak) j · badges \(badges.count)")
-check(xp > 0, "XP > 0")
-check(streak >= 1, "série ≥ 1 j (\(streak))")
-check(!badges.isEmpty, "badges obtenus (\(badges.count))")
-check(GamificationEngine.level(forXP: 0) == 1, "niveau initial = 1")
-check((0...1).contains(GamificationEngine.levelProgress(forXP: xp)), "progression de niveau ∈ [0,1]")
-
 print("== Entités sociales ==")
 let group = StudyGroup(name: "Groupe test", courseCode: "CS-250")
 context.insert(group)
@@ -933,6 +922,126 @@ if let data = legacyJSON.data(using: .utf8),
     check(legacy.pomodoro == nil, "…y compris le bloc Pomodoro")
 } else {
     check(false, "un état d'avant les sous-questions doit se décoder")
+}
+
+// Les libellés vivent dans l'**état** : les attributs d'une activité sont
+// figés à sa création, et l'écran verrouillé affichait le premier cours
+// démarré pour toujours (« Analyse »).
+let labelled = ActivityTimerState.make(elapsed: 60, running: true, title: "CS-250",
+                                       subtitle: ActivityTimerState.subtitle(task: "Exercices", target: "3.4"),
+                                       now: activityNow)
+check(labelled.title == "CS-250", "le cours est porté par l'état de l'activité")
+check(labelled.subtitle == "Exercices · 3.4", "le type et la cible aussi")
+check(ActivityTimerState.subtitle(task: "Théorie", target: nil) == "Théorie", "sans cible, le type seul")
+check(ActivityTimerState.subtitle(task: "Théorie", target: "") == "Théorie", "une cible vide ne laisse pas de « · »")
+let relabelled = ActivityTimerState.make(elapsed: 60, running: true, title: "MATH-101", now: activityNow)
+check(relabelled != labelled, "changer de cours change l'état : l'activité est republiée")
+if let data = #"{"countingSince":null,"frozenTotal":30}"#.data(using: .utf8),
+   let old = try? legacyDecoder.decode(ActivityTimerState.self, from: data) {
+    check(old.title == nil && old.subtitle == nil, "un état sans libellés se décode : l'extension retombe sur les attributs")
+} else {
+    check(false, "un état sans libellés doit se décoder")
+}
+
+print("== Exercice par exercice ==")
+do {
+    let flowSeries = ExerciseSeries(seriesNumber: 9)
+    context.insert(flowSeries)
+    let e1 = Exercise(series: flowSeries, exerciseNumber: "9.1", sortOrder: 0)
+    let e2 = Exercise(series: flowSeries, exerciseNumber: "9.2", sortOrder: 1)
+    let e3 = Exercise(series: flowSeries, exerciseNumber: "9.3", isBonus: true, sortOrder: 2)
+    let e4 = Exercise(series: flowSeries, exerciseNumber: "9.4", sortOrder: 3)
+    for e in [e1, e2, e3, e4] { context.insert(e); flowSeries.exercises.append(e) }
+    let all = [e1, e2, e3, e4]
+
+    check(ExerciseStage(e1) == .toDo, "rien de coché : à faire")
+    check(ExerciseFlow.resumePoint(in: all)?.id == e1.id, "on reprend au premier exercice")
+    e1.setDone(true)
+    check(e1.confidence == nil, "cocher n'invente plus de sureté")
+    check(ExerciseStage(e1) == .needsConfidence, "fait sans sureté : la sureté est demandée")
+    check(ExerciseFlow.resumePoint(in: all)?.id == e2.id, "puis au suivant pas fait")
+    e1.confidence = .low
+    check(ExerciseStage(e1) == .toCorrect(.low), "fait et jugé : à corriger")
+    e1.correct(.wrong)
+    check(e1.redoRequired && ExerciseStage(e1) == .redo, "corrigé faux : à refaire, et c'est ce qui s'affiche")
+    e1.correct(.correct)
+    check(!e1.redoRequired && ExerciseStage(e1) == .corrected(.correct), "refait juste : le « à refaire » tombe")
+    e2.setDone(true); e4.setDone(true)
+    check(ExerciseFlow.resumePoint(in: all)?.id == e3.id, "les bonus passent après les obligatoires")
+    e4.redoRequired = true
+    check(ExerciseFlow.resumePoint(in: all)?.id == e4.id, "…et après ce qui est à refaire")
+    e4.redoRequired = false
+    check(ExerciseFlow.next(after: e1, in: all)?.id == e3.id, "« Suivant » saute les exercices déjà faits")
+    check(ExerciseFlow.next(after: e4, in: all) == nil, "fin de série : pas de suivant")
+    e2.setDone(false)
+    check(e2.confidence == nil && !e2.isDone, "décocher efface la sureté")
+
+    let q1 = SubQuestion(exercise: e2, label: "a", sortOrder: 0)
+    let q2 = SubQuestion(exercise: e2, label: "b", sortOrder: 1)
+    context.insert(q1); context.insert(q2)
+    e2.subQuestions = [q1, q2]
+    q1.toggle()
+    check(ExerciseStage(e2) == .inProgress(done: 1, total: 2), "une question sur deux : en cours, 1/2")
+    check(ExerciseStage(e2).label == "1/2", "…et c'est ce que dit la ligne")
+
+    let session = StudySession(taskType: .exercise, durationSeconds: 1200, exercise: e1)
+    context.insert(session)
+    check(ExerciseFlow.seconds(on: e1.id, sessions: [session], live: 30) == 1230, "temps d'un exercice : sessions + chrono en cours")
+    check(ExerciseFlow.seconds(on: flowSeries, sessions: [session]) == 1200, "temps d'une série")
+    context.delete(session)
+    for question in [q1, q2] { context.delete(question) }
+    for exercise in all { context.delete(exercise) }
+    context.delete(flowSeries)
+    try? context.save()
+}
+
+print("== Chrono : le temps suit l'exercice ==")
+do {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    let course = UUID(), ex1 = UUID(), ex2 = UUID(), ex3 = UUID()
+    var timer = FocusTimerState(sessionStartedAt: t0, courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex1)
+    timer.start(at: t0)
+    // 40 min sur 3.1, puis 3.2 pendant 10 min, retour sur 3.1 pendant 5 min.
+    timer.switchContext(courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex2, at: t0.addingTimeInterval(2400))
+    check(timer.currentTargetElapsed(at: t0.addingTimeInterval(2460)) == 60, "la nouvelle cible part de zéro")
+    timer.switchContext(courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex2, at: t0.addingTimeInterval(2500))
+    check(timer.segments?.count == 1, "revenir sur la même cible n'ouvre pas de segment")
+    timer.switchContext(courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex1, at: t0.addingTimeInterval(3000))
+    let end = t0.addingTimeInterval(3300)
+    let parts = timer.allocation(at: end)
+    check(parts.count == 2, "deux cibles, deux parts (\(parts.count)) — les passages sur 3.1 fusionnent")
+    check(parts.first { $0.targetID == ex1 }?.seconds == 2700, "3.1 : 40 + 5 min")
+    check(parts.first { $0.targetID == ex2 }?.seconds == 600, "3.2 : 10 min")
+    let whole = timer.allocatedSeconds(at: end)
+    check(whole.reduce(0) { $0 + $1.seconds } == 3300, "la somme des sessions vaut exactement le temps affiché")
+
+    // Pause : le temps en pause n'est attribué à personne.
+    var paused = FocusTimerState(sessionStartedAt: t0, courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex1)
+    paused.start(at: t0)
+    paused.pause(at: t0.addingTimeInterval(600))
+    paused.switchContext(courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: ex3, at: t0.addingTimeInterval(5000))
+    paused.start(at: t0.addingTimeInterval(5000))
+    let pausedParts = paused.allocation(at: t0.addingTimeInterval(5300))
+    check(pausedParts.first { $0.targetID == ex1 }?.seconds == 600, "une pause entre deux exercices ne compte pour aucun")
+    check(pausedParts.first { $0.targetID == ex3 }?.seconds == 300, "…et le suivant ne compte que son temps")
+
+    // Temps corrigé à la baisse sous la somme des segments : réduction proportionnelle.
+    var corrected = timer
+    corrected.pause(at: end)
+    corrected.accumulated = 1650
+    let shrunk = corrected.allocatedSeconds(at: end)
+    check(shrunk.reduce(0) { $0 + $1.seconds } == 1650, "un total corrigé à la baisse reste la somme exacte")
+    check(shrunk.allSatisfy { $0.seconds >= 1 }, "aucune session vide")
+
+    // Un état écrit avant les segments se relit.
+    let oldTimer = #"{"accumulated":120,"sessionStartedAt":"2026-09-20T10:00:00Z","taskTypeRaw":"exercise","note":"","contextLabel":"","pomodoro":false}"#
+    let timerDecoder = JSONDecoder(); timerDecoder.dateDecodingStrategy = .iso8601
+    if let decoded = try? timerDecoder.decode(FocusTimerState.self, from: Data(oldTimer.utf8)) {
+        check(decoded.segments == nil, "un chrono d'avant les segments se relit")
+        check(decoded.allocatedSeconds(at: t0).map(\.seconds) == [120], "…et s'enregistre en une seule session")
+    } else {
+        check(false, "un chrono d'avant les segments doit se relire")
+    }
 }
 
 // L'anneau : les bornes en horloge murale sont ce que le système sait animer.
@@ -3638,12 +3747,6 @@ func runBenchmark() {
     let workload = measure("WorkloadEngine.aggregate") {
         _ = WorkloadEngine.aggregate(courses: benchTracked, hoursPerCredit: 30)
     }
-    let streak = measure("GamificationEngine.currentStreak") {
-        _ = GamificationEngine.currentStreak(sessions: benchSessions)
-    }
-    let xp = measure("GamificationEngine.totalXP") {
-        _ = GamificationEngine.totalXP(courses: benchAll, sessions: benchSessions)
-    }
     let weekWindow = measure("sessions des 7 derniers jours") {
         let range = DateUtils.dateRange(days: 7)
         _ = benchSessions.reduce(0) { total, session in
@@ -3671,10 +3774,10 @@ func runBenchmark() {
 
     let before = Double(beforeTodos) * planner
         + weeklyVideo + Double(beforeWorkload) * workload
-        + streak + xp + weekWindow + Double(beforeTracked) * trackedFilter
+        + weekWindow + Double(beforeTracked) * trackedFilter
         + progress
     let after = planner + weeklyVideo + workload
-        + streak + xp + weekWindow + trackedFilter
+        + weekWindow + trackedFilter
         + progress
 
     func pair(_ label: String, _ old: String, _ new: String) {

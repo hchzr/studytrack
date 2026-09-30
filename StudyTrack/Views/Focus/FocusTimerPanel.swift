@@ -616,8 +616,20 @@ struct FocusTimerPanel: View {
     }
 
     /// Une demande venue d'ailleurs (dock, « Démarrer » d'une tâche, Siri).
+    ///
+    /// Une demande qui ne démarre pas (la bulle) ne fait que **préremplir** le
+    /// brouillon — et ne touche à rien si une session tourne déjà : ouvrir
+    /// Focus ne doit jamais déplacer le temps d'une session en cours.
     private func applyRequest() {
         guard let pending = app.router.consumeFocusRequest() else { return }
+        guard pending.autoStart else {
+            guard !focus.hasSession else { return }
+            let resolved = resolve(pending)
+            draftCourseID = resolved.courseID
+            draftTaskType = resolved.taskType
+            draftTargetID = resolved.targetID
+            return
+        }
         startOrConfirm(pending)
     }
 
@@ -632,12 +644,15 @@ struct FocusTimerPanel: View {
         begin(resolved)
     }
 
+    /// Même cours, même type, autre exercice : le chrono **continue** et le
+    /// temps déjà compté reste à l'exercice précédent (voir `switchContext`).
     private func begin(_ request: FocusRequest) {
         draftCourseID = request.courseID
         draftTaskType = request.taskType
-        draftTargetID = nil
+        draftTargetID = request.targetID
         focus.start(courseID: request.courseID,
                     taskType: request.taskType,
+                    targetID: request.targetID,
                     label: request.label)
     }
 

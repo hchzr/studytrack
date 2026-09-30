@@ -19,7 +19,7 @@ struct GroupPageRoute: Hashable {
         var icon: String {
             switch self {
             case .members: return "person.3.fill"
-            case .time: return "trophy.fill"
+            case .time: return "clock.fill"
             case .series: return "checkmark.seal.fill"
             case .planning: return "calendar"
             }
@@ -203,7 +203,11 @@ struct GroupMembersView: View {
 
 // MARK: - Temps d'étude
 
-/// Le classement du temps d'étude : semaine et total, avec ma position.
+/// Le temps d'étude de chacun, semaine et total.
+///
+/// Ce n'est **pas** un classement : pas de rang, pas de place, pas de podium.
+/// Travailler ensemble, c'est savoir qui avance, pas qui gagne — la
+/// gamification a été retirée de l'app. Toi d'abord, puis les autres par nom.
 struct GroupStudyTimeView: View {
     let group: StudyGroup
 
@@ -215,8 +219,11 @@ struct GroupStudyTimeView: View {
         var label: String { self == .week ? "7 derniers jours" : "Depuis le début" }
     }
 
-    private var ranked: [GroupMember] {
-        scope == .week ? group.sortedMembers : group.membersSortedByTotal
+    private var members: [GroupMember] {
+        group.members.sorted { lhs, rhs in
+            if lhs.isMe != rhs.isMe { return lhs.isMe }
+            return lhs.shownName.localizedStandardCompare(rhs.shownName) == .orderedAscending
+        }
     }
 
     private func seconds(_ member: GroupMember) -> Int {
@@ -234,7 +241,7 @@ struct GroupStudyTimeView: View {
                 .pickerStyle(.segmented)
 
                 summary
-                rankingCard
+                membersCard
                 Card {
                     Text("Le temps est calculé côté serveur à partir des sessions que chacun publie (Profil › Confidentialité › Partager mon avancement). Il compte **tout** le travail, pas seulement les matières du groupe — mais le code d'un cours hors groupe n'est jamais transmis.")
                         .font(.footnote)
@@ -251,39 +258,29 @@ struct GroupStudyTimeView: View {
     }
 
     private var summary: some View {
-        let total = ranked.reduce(0) { $0 + seconds($1) }
-        let me = ranked.firstIndex(where: \.isMe)
-        let average = ranked.isEmpty ? 0 : total / ranked.count
+        let total = members.reduce(0) { $0 + seconds($1) }
+        let average = members.isEmpty ? 0 : total / members.count
         return HStack(spacing: Layout.block) {
-            StatCard(icon: "number",
-                     value: me.map { "#\($0 + 1)" } ?? "—",
-                     title: "ta place",
-                     tint: Theme.accent)
             StatCard(icon: "clock.fill",
                      value: DateUtils.hoursLabel(seconds: total),
                      title: "groupe entier")
-            StatCard(icon: "chart.bar.fill",
+            StatCard(icon: "person.fill",
                      value: DateUtils.hoursLabel(seconds: average),
                      title: "par membre")
         }
     }
 
-    private var rankingCard: some View {
-        let top = max(ranked.first.map(seconds) ?? 1, 1)
-        return Card(title: "Classement", icon: "trophy.fill") {
+    private var membersCard: some View {
+        let top = max(members.map(seconds).max() ?? 1, 1)
+        return Card(title: "Membres", icon: "person.3.fill") {
             VStack(alignment: .leading, spacing: Layout.block) {
-                if ranked.isEmpty {
+                if members.isEmpty {
                     Text("Aucun membre.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                ForEach(Array(ranked.enumerated()), id: \.element.id) { index, member in
+                ForEach(members) { member in
                     HStack(spacing: Layout.control) {
-                        Text("\(index + 1)")
-                            .font(.subheadline.weight(.bold))
-                            .monospacedDigit()
-                            .frame(width: 22)
-                            .foregroundStyle(index == 0 ? Color.yellow.accessibleInk : .secondary)
                         VStack(alignment: .leading, spacing: Layout.tight) {
                             HStack(spacing: Layout.snug) {
                                 Text(member.isMe ? "Toi" : member.shownName)
@@ -304,7 +301,7 @@ struct GroupStudyTimeView: View {
                             .frame(width: 64, alignment: .trailing)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(index + 1). \(member.isMe ? "Toi" : member.shownName), \(DateUtils.hoursLabel(seconds: seconds(member)))")
+                    .accessibilityLabel("\(member.isMe ? "Toi" : member.shownName), \(DateUtils.hoursLabel(seconds: seconds(member)))")
                 }
                 if group.members.contains(where: \.isAnonymous) {
                     Text("Certains membres apparaissent anonymement.")

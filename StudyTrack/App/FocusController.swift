@@ -133,9 +133,8 @@ final class FocusController {
                label: String = "",
                pomodoro: Bool? = nil) {
         if var current = state, hasSession {
-            current.courseID = courseID
-            current.taskTypeRaw = taskType.rawValue
-            current.targetID = targetID
+            // Le temps déjà compté reste à la cible précédente.
+            current.switchContext(courseID: courseID, taskTypeRaw: taskType.rawValue, targetID: targetID)
             current.contextLabel = label
             if let pomodoro { current.pomodoro = pomodoro }
             current.start()
@@ -232,9 +231,11 @@ final class FocusController {
                        note: String? = nil,
                        label: String? = nil) {
         guard var current = state else { return }
-        if let courseID { current.courseID = courseID }
-        if let taskType { current.taskTypeRaw = taskType.rawValue }
-        if let targetID { current.targetID = targetID }
+        // Cours, type et cible passent par un **segment** : changer d'exercice
+        // en pleine session ne réattribue pas le temps déjà passé sur l'autre.
+        current.switchContext(courseID: courseID ?? current.courseID,
+                              taskTypeRaw: taskType?.rawValue ?? current.taskTypeRaw,
+                              targetID: targetID ?? current.targetID)
         if let note { current.note = note }
         if let label { current.contextLabel = label }
         guard current != state else { return }
@@ -270,6 +271,9 @@ final class FocusController {
     /// Enregistre la session dans le journal et libère le chrono.
     ///
     /// - Returns: la durée enregistrée, en secondes ; `nil` s'il n'y avait rien.
+    /// Une session passée sur plusieurs cibles (3.2, puis 3.3) est enregistrée
+    /// en **une session par cible**, bout à bout : le temps de chaque exercice
+    /// se lit ensuite sur l'exercice lui-même.
     @discardableResult
     func finish() -> Int? {
         guard let current = state, let app else { return nil }
@@ -278,17 +282,21 @@ final class FocusController {
         guard seconds >= 1 else { return nil }
         let context = ModelContext(app.modelContainer)
         let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        let course = courses.first { $0.id == current.courseID }
-        let target = Self.target(of: current, in: course)
-        let session = StudySession(course: course,
-                                   taskType: current.taskType,
-                                   startedAt: current.sessionStartedAt,
-                                   durationSeconds: seconds,
-                                   isManual: false,
-                                   note: current.note,
-                                   exercise: target.exercise,
-                                   theoryItem: target.theoryItem)
-        context.insert(session)
+        var start = current.sessionStartedAt
+        for (index, part) in current.allocatedSeconds().enumerated() {
+            let course = courses.first { $0.id == part.segment.courseID }
+            let target = Self.target(of: part.segment.targetID, in: course)
+            let session = StudySession(course: course,
+                                       taskType: part.segment.taskType,
+                                       startedAt: start,
+                                       durationSeconds: part.seconds,
+                                       isManual: false,
+                                       note: index == 0 ? current.note : "",
+                                       exercise: target.exercise,
+                                       theoryItem: target.theoryItem)
+            context.insert(session)
+            start = start.addingTimeInterval(TimeInterval(part.seconds))
+        }
         try? context.save()
         return seconds
     }
@@ -434,7 +442,11 @@ final class FocusController {
 
     /// La cible de la session : un exercice ou un élément de théorie.
     static func target(of state: FocusTimerState, in course: Course?) -> (exercise: Exercise?, theoryItem: TheoryItem?) {
-        guard let course, let targetID = state.targetID else { return (nil, nil) }
+        target(of: state.targetID, in: course)
+    }
+
+    static func target(of targetID: UUID?, in course: Course?) -> (exercise: Exercise?, theoryItem: TheoryItem?) {
+        guard let course, let targetID else { return (nil, nil) }
         if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
             return (exercise, nil)
         }

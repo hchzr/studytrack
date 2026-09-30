@@ -31,16 +31,33 @@ struct ActivityTimerState: Codable, Hashable {
     /// Le bloc Pomodoro en cours, quand la session est en Pomodoro.
     var pomodoro: ActivityPomodoro?
 
+    /// Sur quoi porte la session **maintenant** : « MATH-101 », « Exercices · 3.4 ».
+    ///
+    /// Ces libellés vivaient dans les `ActivityAttributes`, qui sont **figés** à
+    /// la création de l'activité. Or une activité est reprise d'une session à
+    /// l'autre (on n'en garde qu'une), et le cours change en pleine session :
+    /// l'écran verrouillé affichait donc pour toujours le premier cours
+    /// démarré — « Analyse » quoi qu'on fasse. L'état, lui, se met à jour.
+    ///
+    /// Optionnels : une activité publiée par une version précédente se décode
+    /// encore, et l'extension retombe alors sur les attributs.
+    var title: String?
+    var subtitle: String?
+
     init(countingSince: Date?,
          frozenTotal: TimeInterval,
          questionsDone: Int? = nil,
          questionsTotal: Int? = nil,
-         pomodoro: ActivityPomodoro? = nil) {
+         pomodoro: ActivityPomodoro? = nil,
+         title: String? = nil,
+         subtitle: String? = nil) {
         self.countingSince = countingSince
         self.frozenTotal = frozenTotal
         self.questionsDone = questionsDone
         self.questionsTotal = questionsTotal
         self.pomodoro = pomodoro
+        self.title = title
+        self.subtitle = subtitle
     }
 
     /// Construit l'état à publier.
@@ -51,19 +68,31 @@ struct ActivityTimerState: Codable, Hashable {
     ///   - questionsDone: sous-questions déjà cochées, s'il y en a.
     ///   - questionsTotal: sous-questions de la cible, s'il y en a.
     ///   - pomodoro: le bloc en cours, si la session est en Pomodoro.
+    ///   - title: le cours (« MATH-101 »), republié à chaque changement.
+    ///   - subtitle: le type de travail et la cible (« Exercices · 3.4 »).
     ///   - now: l'instant de référence, injectable pour les tests.
     static func make(elapsed: TimeInterval,
                      running: Bool,
                      questionsDone: Int? = nil,
                      questionsTotal: Int? = nil,
                      pomodoro: ActivityPomodoro? = nil,
+                     title: String? = nil,
+                     subtitle: String? = nil,
                      now: Date = Date()) -> ActivityTimerState {
         let total = max(0, elapsed)
         return ActivityTimerState(countingSince: running ? now.addingTimeInterval(-total) : nil,
                                   frozenTotal: total,
                                   questionsDone: questionsDone,
                                   questionsTotal: questionsTotal,
-                                  pomodoro: pomodoro)
+                                  pomodoro: pomodoro,
+                                  title: title,
+                                  subtitle: subtitle)
+    }
+
+    /// « Exercices · 3.4 » : le type de travail, puis la cible s'il y en a une.
+    static func subtitle(task: String, target: String?) -> String {
+        guard let target, !target.isEmpty else { return task }
+        return "\(task) · \(target)"
     }
 
     var isRunning: Bool { countingSince != nil }

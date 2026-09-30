@@ -454,7 +454,7 @@ struct ProfileView: View {
     private func privacySection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
         return Section("Confidentialité") {
-            Toggle("Apparaître anonymement dans les classements", isOn: $settings.anonymousInLeaderboards)
+            Toggle("Apparaître anonymement dans les groupes", isOn: $settings.anonymousInLeaderboards)
             Toggle("Partager mon avancement avec mes groupes", isOn: $settings.shareProgressWithGroups)
             Toggle("Suivre la présence en amphi", isOn: $settings.trackAttendance)
         }

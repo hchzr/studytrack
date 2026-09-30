@@ -30,31 +30,35 @@ struct FocusDock: View {
 
     // MARK: Au repos
 
+    /// Au repos, la bulle **propose** et n'agit pas : la toucher ouvre Focus
+    /// prêt sur la prochaine chose à faire, sans lancer le chrono. Le démarrage
+    /// est un geste à part — le bouton ▶, qui dit ce qu'il fait. Un chrono qui
+    /// partait au moindre toucher comptait du temps qu'on n'avait pas choisi de
+    /// compter.
     private var starter: some View {
         let next = NextActionEngine.actions(for: courses, limit: 1).first
         let tint = next.map { Color(hex: $0.colorHex) } ?? Theme.accent
         return HStack(spacing: Layout.inline) {
             Button {
                 if let next {
-                    app.router.startFocus(courseID: next.courseID, courseCode: next.courseCode,
-                                          taskType: next.taskType, label: next.focusLabel)
+                    app.router.prepareFocus(courseID: next.courseID, courseCode: next.courseCode,
+                                            taskType: next.taskType, targetID: next.targetID)
                 } else {
                     app.router.openFocus()
                 }
                 Haptics.tap()
             } label: {
                 HStack(spacing: Layout.control) {
-                    Image(systemName: "play.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Theme.knockedOutInk)
-                        .offset(x: 1)
+                    Image(systemName: next?.icon ?? "timer")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tint.accessibleMark)
                         .frame(width: 34, height: 34)
-                        .background(tint.accessibleMark, in: Circle())
+                        .background(tint.badgeFill, in: Circle())
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(next.map { "\($0.courseCode) · \($0.title)" } ?? "Démarrer une session")
+                        Text(next.map { "\($0.courseCode) · \(MathMarkup.plain($0.title))" } ?? "Focus")
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                        Text(next?.reasonLabel ?? "Chrono libre")
+                        Text(next?.reasonLabel ?? "Chrono et journal")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -64,22 +68,31 @@ struct FocusDock: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.98))
-            .accessibilityLabel(next.map { "Démarrer le chrono : \($0.courseCode), \($0.title)" } ?? "Démarrer une session")
+            .accessibilityLabel(next.map { "Préparer Focus : \($0.courseCode), \(MathMarkup.plain($0.title))" } ?? "Ouvrir Focus")
+            .accessibilityHint("Ouvre le chrono sans le démarrer")
 
-            Button {
-                app.router.openFocus()
-                Haptics.tap()
-            } label: {
-                Image(systemName: "timer")
-                    .font(.body.weight(.semibold))
-                    .frame(width: Layout.minTouch, height: Layout.minTouch)
-                    .contentShape(Rectangle())
+            if let next {
+                Button {
+                    app.router.startFocus(courseID: next.courseID, courseCode: next.courseCode,
+                                          taskType: next.taskType, targetID: next.targetID,
+                                          label: next.focusLabel)
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Theme.knockedOutInk)
+                        .offset(x: 1)
+                        .frame(width: 34, height: 34)
+                        .background(tint.accessibleMark, in: Circle())
+                        .frame(width: Layout.minTouch, height: Layout.minTouch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("Démarrer le chrono : \(next.courseCode), \(MathMarkup.plain(next.title))")
             }
-            .buttonStyle(PressableStyle())
-            .foregroundStyle(Theme.accentInk)
-            .accessibilityLabel("Ouvrir Focus : chrono et journal")
         }
-        .padding(.horizontal, Layout.block)
+        .padding(.leading, Layout.block)
+        .padding(.trailing, Layout.tight)
     }
 
     // MARK: Pendant une session

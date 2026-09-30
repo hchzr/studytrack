@@ -51,7 +51,7 @@ struct GroupSubjectProgressView: View {
             VStack(alignment: .leading, spacing: Layout.cardSpacing) {
                 summaryCard
                 axisPicker
-                rankingCard
+                membersCard
                 explanationCard
             }
             .padding()
@@ -117,16 +117,16 @@ struct GroupSubjectProgressView: View {
         .accessibilityLabel("Choisir l'axe comparé")
     }
 
-    // MARK: Classement
+    // MARK: Où en est chacun
 
-    private var rankingCard: some View {
+    private var membersCard: some View {
         Card(title: "Où en est chacun", icon: "list.number") {
-            rankingContent
+            membersContent
         }
     }
 
     @ViewBuilder
-    private var rankingContent: some View {
+    private var membersContent: some View {
         let comparison = self.comparison
         if comparison.rows.isEmpty {
             Text("Aucun membre dans ce groupe.")
@@ -134,8 +134,8 @@ struct GroupSubjectProgressView: View {
                 .foregroundStyle(.secondary)
         } else {
             VStack(spacing: 0) {
-                ForEach(Array(comparison.rows.enumerated()), id: \.element.id) { index, row in
-                    memberBlock(row, rank: index + 1)
+                ForEach(comparison.rows) { row in
+                    memberBlock(row)
                     if row.id != comparison.rows.last?.id {
                         Divider().padding(.vertical, Layout.block)
                     }
@@ -144,14 +144,10 @@ struct GroupSubjectProgressView: View {
         }
     }
 
-    private func memberBlock(_ row: SubjectMemberProgress, rank: Int) -> some View {
+    private func memberBlock(_ row: SubjectMemberProgress) -> some View {
         let tint: Color = row.isMe ? Theme.accent : .teal
         return VStack(alignment: .leading, spacing: Layout.inline) {
             HStack(spacing: Layout.control) {
-                Text("\(rank)")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 18)
-                    .foregroundStyle(rank == 1 ? Color.yellow.accessibleInk : .secondary)
                 Text(row.isMe ? "Toi" : row.displayName)
                     .font(.subheadline.weight(row.isMe ? .bold : .regular))
                     .lineLimit(1)
@@ -181,7 +177,7 @@ struct GroupSubjectProgressView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel(row, rank: rank))
+        .accessibilityLabel(accessibilityLabel(row))
     }
 
     @ViewBuilder
@@ -199,8 +195,8 @@ struct GroupSubjectProgressView: View {
         }
     }
 
-    private func accessibilityLabel(_ row: SubjectMemberProgress, rank: Int) -> String {
-        var parts = ["\(rank).", row.isMe ? "Toi" : row.displayName]
+    private func accessibilityLabel(_ row: SubjectMemberProgress) -> String {
+        var parts = [row.isMe ? "Toi" : row.displayName]
         if row.seriesTotal > 0 { parts.append("\(row.seriesDone) séries sur \(row.seriesTotal)") }
         if row.exerciseTotal > 0 { parts.append("\(row.exercisesDone) exercices sur \(row.exerciseTotal)") }
         if row.theoryTotal > 0 { parts.append("\(row.theoryDone) théorie sur \(row.theoryTotal)") }

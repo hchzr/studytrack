@@ -20,7 +20,6 @@ struct FocusJournalPanel: View {
         let today = sessions.filter { calendar.isDateInToday($0.startedAt) }
         let total = today.reduce(0) { $0 + $1.durationSeconds }
         let byType = Dictionary(grouping: today, by: \.taskType)
-        let streak = GamificationEngine.currentStreak(sessions: sessions)
 
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
             HStack(spacing: Layout.block) {
@@ -31,9 +30,6 @@ struct FocusJournalPanel: View {
                 StatCard(icon: "list.bullet",
                          value: "\(today.count)",
                          title: today.count > 1 ? "sessions" : "session")
-                StatCard(icon: "flame.fill",
-                         value: "\(streak) j",
-                         title: "série")
             }
 
             if today.isEmpty {

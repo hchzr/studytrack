@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Récap visuel du temps de travail + gamification + charge EPFL.
+/// Récap visuel du temps de travail et de la charge EPFL.
 struct StatsView: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
@@ -79,7 +79,6 @@ struct StatsView: View {
                 workloadCard
                 epflLifeCard
                 coverageCard
-                gamificationCard
             }
             .padding()
             .adaptiveColumn()
@@ -399,77 +398,4 @@ struct StatsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Gamification
-
-    private var gamificationCard: some View {
-        let xp = GamificationEngine.totalXP(courses: courses, sessions: sessions)
-        let level = GamificationEngine.level(forXP: xp)
-        let badges = GamificationEngine.earnedBadges(courses: courses, sessions: sessions)
-        return Card(title: "Niveau et badges", icon: "trophy.fill") {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 16) {
-                    workloadStat(title: "XP total", value: "\(xp)", tint: .yellow)
-                    workloadStat(title: "Niveau", value: "\(level)", tint: Theme.accent)
-                    workloadStat(title: "Meilleure série",
-                                 value: "\(GamificationEngine.longestStreak(sessions: sessions)) j",
-                                 tint: .orange)
-                }
-                LabeledProgress(title: "Vers le niveau \(level + 1)",
-                                progress: GamificationEngine.levelProgress(forXP: xp),
-                                color: Theme.accent)
-
-                Divider()
-
-                Text("Feuille récapitulative des cours")
-                    .font(.subheadline.weight(.semibold))
-                ForEach(courses.filter(\.isTracked)) { course in
-                    let progress = ProgressEngine.progress(for: course)
-                    HStack(spacing: 12) {
-                        ProgressRing(progress: progress.overallPercent,
-                                     color: Color(hex: course.colorHex),
-                                     size: 40,
-                                     lineWidth: 5)
-                        VStack(alignment: .leading, spacing: Layout.tight) {
-                            Text(course.displayCode).font(.subheadline.weight(.semibold))
-                            Text("Théorie \(pct(progress.theoryPercent)) · Exos \(pct(progress.exercisePercent)) · Corr. \(pct(progress.correctionPercent))")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text("\(GamificationEngine.xp(for: course)) XP")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                }
-
-                if !badges.isEmpty {
-                    Divider()
-                    Text("Badges (\(badges.count))")
-                        .font(.subheadline.weight(.semibold))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], spacing: 10) {
-                        ForEach(badges) { badge in
-                            VStack(spacing: 4) {
-                                Image(systemName: badge.icon)
-                                    .font(.title3)
-                                    .foregroundStyle(badge.color.accessibleMark)
-                                Text(badge.title)
-                                    .font(.caption2)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(8)
-                            .background(badge.color.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func pct(_ value: Double) -> String {
-        "\(Int((value * 100).rounded()))%"
-    }
 }
