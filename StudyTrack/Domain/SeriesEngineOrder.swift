@@ -11,14 +11,11 @@ enum SeriesEngineKind: String, Equatable, CaseIterable {
     case shared
     /// Le modèle embarqué (Apple Intelligence).
     case onDevice
-    /// Le service personnel de l'étudiant·e, avec sa propre clé.
-    case remote
 
     var label: String {
         switch self {
         case .shared: return "IA StudyTrack"
         case .onDevice: return "IA sur l'appareil"
-        case .remote: return "service personnel"
         }
     }
 }
@@ -37,12 +34,10 @@ enum SeriesEngineKind: String, Equatable, CaseIterable {
 enum SeriesEngineOrder {
 
     static func engines(sharedAvailable: Bool,
-                        onDeviceAvailable: Bool,
-                        remoteConfigured: Bool) -> [SeriesEngineKind] {
+                        onDeviceAvailable: Bool) -> [SeriesEngineKind] {
         var result: [SeriesEngineKind] = []
         if sharedAvailable { result.append(.shared) }
         if onDeviceAvailable { result.append(.onDevice) }
-        if remoteConfigured { result.append(.remote) }
         return result
     }
 }

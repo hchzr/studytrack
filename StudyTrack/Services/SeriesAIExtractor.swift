@@ -12,8 +12,6 @@ enum SeriesExtractionSource: Equatable {
     /// La même fonction, qui a lu les **pages en image** : colonnes, points
     /// imbriqués et formules compris. Sa lecture des questions fait foi.
     case vision
-    /// Un service configuré par l'étudiant·e, avec sa propre clé.
-    case remote(model: String)
 
     var label: String {
         switch self {
@@ -21,7 +19,6 @@ enum SeriesExtractionSource: Equatable {
         case .onDevice: return "IA sur l'appareil"
         case .shared: return "IA StudyTrack (sans clé)"
         case .vision: return "IA StudyTrack · lecture des pages"
-        case .remote(let model): return "IA perso · \(model)"
         }
     }
 
@@ -35,7 +32,6 @@ enum SeriesExtractionSource: Equatable {
         case .onDevice: return "apple.intelligence"
         case .shared: return "sparkles"
         case .vision: return "eye"
-        case .remote: return "cloud"
         }
     }
 }
@@ -47,8 +43,10 @@ enum SeriesExtractionSource: Equatable {
 ///      ligne. Le texte ne quitte pas le téléphone.
 ///   2. **La fonction Supabase de l'app** (`extract-series`) — la clé du
 ///      fournisseur est côté serveur, l'app n'a besoin que de sa clé `anon`.
-///   3. **Un service perso**, si l'étudiant·e a saisi une URL et une clé (Groq,
-///      OpenRouter, Ollama sur un Mac…) — pour qui veut choisir son modèle.
+///
+/// (Un troisième maillon, un « service perso » avec sa propre clé d'API, a été
+/// retiré : il n'apportait rien que la fonction de l'app ne fasse déjà, et
+/// gardait une clé en clair dans les réglages.)
 ///
 /// Dans les deux cas la réponse **complète** l'heuristique et passe par l'écran de
 /// relecture : le modèle propose, l'étudiant·e dispose. Rien n'est créé sur sa
@@ -114,14 +112,6 @@ enum SeriesAIExtractor {
         }
         #endif
         return "L'analyse sur l'appareil demande iOS 26."
-    }
-
-    /// Un service perso est prêt avec une URL, un modèle et une clé.
-    static func isRemoteConfigured(_ settings: SettingsStore) -> Bool {
-        guard let url = URL(string: settings.aiEndpoint.trimmingCharacters(in: .whitespaces)),
-              url.scheme?.hasPrefix("http") == true else { return false }
-        return !settings.aiModel.trimmingCharacters(in: .whitespaces).isEmpty
-            && !settings.aiAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// La fonction partagée existe dès que la build porte une configuration
@@ -202,11 +192,9 @@ enum SeriesAIExtractor {
     static func plannedSource(_ settings: SettingsStore) -> SeriesExtractionSource? {
         guard settings.aiExtractionEnabled else { return nil }
         switch engineOrder(sharedAvailable: isSharedAvailable && sharedIsReachable,
-                           onDeviceAvailable: isOnDeviceAvailable,
-                           remoteConfigured: isRemoteConfigured(settings)).first {
+                           onDeviceAvailable: isOnDeviceAvailable).first {
         case .shared: return .shared
         case .onDevice: return .onDevice
-        case .remote: return .remote(model: settings.aiModel)
         case nil: return nil
         }
     }
@@ -228,13 +216,11 @@ enum SeriesAIExtractor {
     private static func chain(_ settings: SettingsStore) -> [SeriesExtractionSource] {
         guard settings.aiExtractionEnabled else { return [] }
         return engineOrder(sharedAvailable: isSharedAvailable && sharedIsReachable,
-                           onDeviceAvailable: isOnDeviceAvailable,
-                           remoteConfigured: isRemoteConfigured(settings))
+                           onDeviceAvailable: isOnDeviceAvailable)
             .map { kind in
                 switch kind {
                 case .shared: return .shared
                 case .onDevice: return .onDevice
-                case .remote: return .remote(model: settings.aiModel)
                 }
             }
     }
@@ -244,11 +230,9 @@ enum SeriesAIExtractor {
     /// L'ordre vit dans `SeriesEngineOrder` (Domain) : il est ainsi testable sans
     /// FoundationModels, et une seule définition sert au service et aux tests.
     static func engineOrder(sharedAvailable: Bool,
-                            onDeviceAvailable: Bool,
-                            remoteConfigured: Bool) -> [SeriesEngineKind] {
+                            onDeviceAvailable: Bool) -> [SeriesEngineKind] {
         SeriesEngineOrder.engines(sharedAvailable: sharedAvailable,
-                                  onDeviceAvailable: onDeviceAvailable,
-                                  remoteConfigured: remoteConfigured)
+                                  onDeviceAvailable: onDeviceAvailable)
     }
 
     /// La fonction partagée a-t-elle répondu au moins une fois dans cette session ?
@@ -297,7 +281,6 @@ enum SeriesAIExtractor {
                         }
                     }
                     series = try await extractShared(prepared)
-                case .remote: series = try await extractRemote(prepared, settings: settings)
                 case .heuristic, .vision: continue
                 }
                 if !series.isEmpty { return (series, engine) }
@@ -374,63 +357,6 @@ enum SeriesAIExtractor {
         }
         #endif
         throw ExtractionError.unavailable
-    }
-
-    // MARK: Distant (API compatible OpenAI)
-
-    /// Le distant seul, pour le bouton « Tester » des réglages.
-    static func extractRemoteForTest(_ text: String, settings: SettingsStore) async throws -> [DetectedSeries] {
-        try await extractRemote(text, settings: settings)
-    }
-
-    private static func extractRemote(_ text: String, settings: SettingsStore) async throws -> [DetectedSeries] {
-        guard let base = URL(string: settings.aiEndpoint) else { throw ExtractionError.unavailable }
-        let url = base.appendingPathComponent("chat/completions")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 45
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let key = settings.aiAPIKey.trimmingCharacters(in: .whitespaces)
-        if !key.isEmpty {
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        }
-        let body: [String: Any] = [
-            "model": settings.aiModel.trimmingCharacters(in: .whitespaces),
-            "temperature": 0,
-            "response_format": ["type": "json_object"],
-            "messages": [
-                ["role": "system", "content": SeriesAIParsing.instructions],
-                ["role": "user", "content": "Texte du PDF :\n\n\(text)"]
-            ]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw ExtractionError.remote("réponse invalide") }
-        guard (200..<300).contains(http.statusCode) else {
-            let detail = String(data: data, encoding: .utf8)?.prefix(200) ?? ""
-            throw ExtractionError.remote("HTTP \(http.statusCode) \(detail)")
-        }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = object["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any] else {
-            // Certains services renvoient directement l'objet JSON demandé.
-            if let raw = String(data: data, encoding: .utf8) {
-                let parsed = SeriesAIParsing.parse(raw)
-                if !parsed.isEmpty { return parsed }
-            }
-            throw ExtractionError.remote("format de réponse inattendu")
-        }
-        // `content` est une chaîne… ou déjà l'objet, selon le service.
-        if let content = message["content"] as? String {
-            return SeriesAIParsing.parse(content)
-        }
-        if let contentObject = message["content"],
-           let encoded = try? JSONSerialization.data(withJSONObject: contentObject),
-           let raw = String(data: encoded, encoding: .utf8) {
-            return SeriesAIParsing.parse(raw)
-        }
-        throw ExtractionError.remote("format de réponse inattendu")
     }
 }
 

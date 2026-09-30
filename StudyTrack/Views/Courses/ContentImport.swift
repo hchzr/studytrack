@@ -365,6 +365,15 @@ final class MoodleImportModel {
             let weeks = course.term?.totalWeeks ?? term.weeks
             var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: weeks)
             var label = "Moodle · \(ref.shortname)"
+            // Le MOOC que Moodle cite (vidéos de la semaine, classe inversée) :
+            // lu sur Courseware et rangé dans les semaines du cours.
+            var moocNote: String?
+            if !snapshot.moocLinks.isEmpty {
+                status[course.id] = "MOOC cité — lecture de Courseware…"
+                let outcome = await MoocImport.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
+                draft = outcome.draft
+                moocNote = outcome.note
+            }
             // Un cours vide sur Moodle vit peut-être ailleurs : la classe
             // inversée d'Analyse I est tout entière sur Botafogo.
             if draft.theoryCount + draft.seriesCount == 0,
@@ -381,7 +390,7 @@ final class MoodleImportModel {
                 return
             }
             plans.append(ContentImportPlan(course: course, sourceLabel: label, draft: draft))
-            status[course.id] = ContentDraftSummary.line(draft)
+            status[course.id] = [ContentDraftSummary.line(draft), moocNote].compactMap { $0 }.joined(separator: " · ")
         } catch {
             status[course.id] = "erreur : \(error.localizedDescription)"
         }
@@ -837,7 +846,7 @@ struct WebView: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.allowsBackForwardNavigationGestures = true
         model.attach(view)
-        view.load(URLRequest(url: initialURL))
+        view.load(URLRequest(url: SiteLinks.normalize(initialURL)))
         return view
     }
 

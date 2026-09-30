@@ -8,14 +8,8 @@ import SwiftUI
 /// un modèle de quelques milliards de paramètres devant un modèle servi, sur une
 /// tâche qu'il rate souvent. Le modèle embarqué reste le filet : hors ligne, ou
 /// quand la fonction n'est pas déployée.
-///
-/// Le service perso est une troisième option, pour qui veut son propre fournisseur :
-/// n'importe quelle API compatible OpenAI, avec la clé de l'étudiant·e — jamais une
-/// clé de l'app.
 struct AIImportSettingsView: View {
     @Environment(AppContainer.self) private var app
-    @State private var testMessage: String?
-    @State private var isTesting = false
 
     /// État réel de la fonction partagée, **constaté** et non supposé.
     ///
@@ -50,7 +44,7 @@ struct AIImportSettingsView: View {
             } header: {
                 Text("Import de séries")
             } footer: {
-                Text("Rien à configurer : l'analyse essaie, dans l'ordre, la **fonction StudyTrack** (modèle servi, meilleure qualité), puis le **modèle sur l'appareil** (hors ligne), puis ton service perso si tu en as saisi un. La lecture par motifs est toujours faite d'abord ; le modèle la complète et tout passe par l'écran de relecture.")
+                Text("Rien à configurer : l'analyse essaie, dans l'ordre, la **fonction StudyTrack** (modèle servi, meilleure qualité), puis le **modèle sur l'appareil** (hors ligne). La lecture par motifs est toujours faite d'abord ; le modèle la complète et tout passe par l'écran de relecture.")
             }
 
             Section {
@@ -124,47 +118,6 @@ struct AIImportSettingsView: View {
                 Text("**Essayée en premier.** Le texte du PDF est envoyé à la fonction `extract-series` du projet Supabase de l'app, qui interroge un modèle servi (Groq par défaut). C'est le moteur qui lit le mieux les séries réelles : numéros, bonus, intitulés. Elle doit être **déployée** une fois (voir `Support/SUPABASE.md`) ; sans cela, l'analyse se rabat sur le modèle de l'appareil, puis sur la lecture par motifs.")
             }
 
-            Section {
-                TextField("URL de base (…/v1)", text: $settings.aiEndpoint)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                SecureField("Clé d'API", text: $settings.aiAPIKey)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                TextField("Modèle", text: $settings.aiModel)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-                Button {
-                    test()
-                } label: {
-                    if isTesting {
-                        HStack(spacing: Layout.snug) {
-                            ProgressView()
-                            Text("Test…")
-                        }
-                    } else {
-                        Label("Tester le service", systemImage: "antenna.radiowaves.left.and.right")
-                    }
-                }
-                .disabled(isTesting || !SeriesAIExtractor.isRemoteConfigured(settings))
-
-                Button("Pré-remplir pour Groq") {
-                    settings.aiEndpoint = SettingsStore.defaultAIEndpoint
-                    settings.aiModel = SettingsStore.defaultAIModel
-                }
-
-                if let testMessage {
-                    Text(testMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Service perso (facultatif)")
-            } footer: {
-                Text("Pour choisir ton propre modèle : n'importe quelle API compatible OpenAI (Groq et OpenRouter ont un palier gratuit, Ollama tourne sur un Mac). La clé reste sur l'appareil. Ce maillon n'est utilisé que si les deux précédents ont échoué.")
-            }
         }
         .navigationTitle("Import intelligent")
         .navigationBarTitleDisplayMode(.inline)
@@ -251,34 +204,6 @@ struct AIImportSettingsView: View {
             sharedStatus = .failing(detail)
         case .unconfigured:
             sharedStatus = .unconfigured("Aucun projet Supabase n'est compilé dans cette version.")
-        }
-    }
-
-    /// Un mini-PDF de test : deux exercices, un bonus. Si le service renvoie la
-    /// structure, il est prêt.
-    private func test() {
-        isTesting = true
-        testMessage = nil
-        let sample = "Série 3 — Récurrences\nExercice 3.1 Tri fusion\nExercice 3.2 (bonus) Master theorem"
-        Task {
-            defer { isTesting = false }
-            do {
-                // On force le distant : c'est lui qu'on teste, pas le modèle local.
-                let probe = SettingsStore(defaults: UserDefaults(suiteName: "studytrack.ai.probe") ?? .standard)
-                probe.aiExtractionEnabled = true
-                probe.aiEndpoint = app.settings.aiEndpoint
-                probe.aiAPIKey = app.settings.aiAPIKey
-                probe.aiModel = app.settings.aiModel
-                let result = try await SeriesAIExtractor.extractRemoteForTest(sample, settings: probe)
-                let count = result.reduce(0) { $0 + $1.exercises.count }
-                testMessage = count >= 2
-                    ? "Le service répond : \(result.count) série, \(count) exercices reconnus."
-                    : "Le service répond, mais n'a reconnu que \(count) exercice(s) sur 2 : essaie un autre modèle."
-                Haptics.success()
-            } catch {
-                testMessage = error.localizedDescription
-                Haptics.error()
-            }
         }
     }
 }

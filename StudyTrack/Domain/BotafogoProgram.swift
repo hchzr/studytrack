@@ -183,14 +183,14 @@ enum BotafogoProgram {
         "/course_material/" + url.lowercased()
     }
 
-    /// La page d'un élément du site : `…/analyse-1-GM/?cours=series/AN_serie_03&polycopie=`.
+    /// La page d'un élément du site : `…/analyse-1-GM/?cours=series/AN_serie_03`.
     static func pageURL(root: URL, url: String) -> String {
-        root.absoluteString + "?cours=" + url + "&polycopie="
+        BotafogoLinks.coursURL(root: root, path: url)
     }
 
-    /// Une section du polycopié : `…/?cours=&polycopie=/handout/matiere/m_suites_gendarmes`.
+    /// Une section du polycopié : `…/?polycopie=matiere/m_suites_gendarmes`.
     static func handoutURL(root: URL, target: String) -> String {
-        root.absoluteString + "?cours=&polycopie=/handout/matiere/" + target
+        BotafogoLinks.polycopieURL(root: root, path: "matiere/" + target)
     }
 
     /// `series/AN_serie_03` → 3.
@@ -596,5 +596,82 @@ enum BotafogoCatalog {
             path = nil
         }
         return path.flatMap { URL(string: $0, relativeTo: BotafogoParser.home)?.absoluteURL }
+    }
+}
+
+
+/// Les adresses des sites Botafogo, telles que le site les lit.
+///
+/// Le site a deux onglets, « Cours » et « Polycopié », chacun piloté par un
+/// paramètre : `?cours=series/AN_serie_03` ouvre une série,
+/// `?polycopie=matiere/m_reels_intro` une section du polycopié. Deux pièges,
+/// vérifiés dans le navigateur de l'app :
+///   • `?cours=&polycopie=/handout/…` (ce que l'app écrivait) affiche l'onglet
+///     Cours **vide** — « Sélectionnez une section depuis la barre latérale » —
+///     et le polycopié ne trouve pas la section : le site préfixe lui-même
+///     `/handout/` ;
+///   • sans la barre finale (`…/analyse-1-flipped?cours=…`), le serveur
+///     redirige vers l'accueil et la requête est perdue.
+enum BotafogoLinks {
+    static func coursURL(root: URL, path: String) -> String {
+        base(root) + "?cours=" + path
+    }
+
+    static func polycopieURL(root: URL, path: String) -> String {
+        base(root) + "?polycopie=" + handoutID(path)
+    }
+
+    /// `/handout/matiere/m_x` → `matiere/m_x`.
+    static func handoutID(_ path: String) -> String {
+        var id = path
+        while id.hasPrefix("/") { id.removeFirst() }
+        if id.lowercased().hasPrefix("handout/") { id.removeFirst("handout/".count) }
+        return id
+    }
+
+    private static func base(_ root: URL) -> String {
+        root.absoluteString.hasSuffix("/") ? root.absoluteString : root.absoluteString + "/"
+    }
+
+    /// Répare une adresse enregistrée par une version précédente de l'app.
+    static func normalize(_ url: URL) -> URL {
+        guard url.host?.contains("botafogo") == true,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems, !items.isEmpty else { return url }
+        var fixed: [URLQueryItem] = []
+        for item in items {
+            guard let value = item.value?.removingPercentEncoding ?? item.value, !value.isEmpty else { continue }
+            fixed.append(URLQueryItem(name: item.name, value: item.name == "polycopie" ? handoutID(value) : value))
+        }
+        components.queryItems = fixed.isEmpty ? nil : fixed
+        if !components.path.hasSuffix("/"), !(components.path.split(separator: "/").last?.contains(".") ?? false) {
+            components.path += "/"
+        }
+        return components.url ?? url
+    }
+}
+
+/// Les liens enregistrés, réparés avant d'être ouverts.
+enum SiteLinks {
+    static func normalize(_ url: URL) -> URL {
+        MoodleLinks.normalize(BotafogoLinks.normalize(url))
+    }
+}
+
+/// Un fichier Moodle s'ouvre sur le fichier, pas sur la page d'activité.
+///
+/// `mod/resource/view.php?id=…` est la page « Cliquer sur … pour ouvrir la
+/// ressource » ; avec `redirect=1`, Moodle redirige vers `pluginfile.php`,
+/// que le navigateur de l'app affiche directement. Les imports lisent
+/// désormais l'adresse finale ; ceci répare les liens enregistrés avant.
+enum MoodleLinks {
+    static func normalize(_ url: URL) -> URL {
+        guard url.host?.contains("moodle") == true, url.path.hasSuffix("/mod/resource/view.php"),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = components.queryItems ?? []
+        guard !items.contains(where: { $0.name == "redirect" }) else { return url }
+        items.append(URLQueryItem(name: "redirect", value: "1"))
+        components.queryItems = items
+        return components.url ?? url
     }
 }

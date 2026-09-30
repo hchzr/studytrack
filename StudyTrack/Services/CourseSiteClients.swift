@@ -157,6 +157,7 @@ final class MoodleClient {
         let wanted = snapshot.sections.flatMap(\.activities)
             .filter { $0.isVisible && ($0.module == "url" || $0.module == "assign") }
             .map { ["id": $0.id, "module": $0.module] }
+        snapshot.moocLinks = await moocLinks(courseID: course.id, snapshot: snapshot)
         guard !wanted.isEmpty else { return snapshot }
         let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: wanted), as: UTF8.self)
         let raw = try await session.run(#"""
@@ -192,6 +193,54 @@ final class MoodleClient {
             }
         }
         return snapshot
+    }
+
+    /// Les liens Courseware du cours : ceux de la page du cours (texte des
+    /// sections, étiquettes) et ceux des pages Moodle (« Matériel MOOC de la
+    /// semaine »), chacun avec le numéro de sa section.
+    private func moocLinks(courseID: Int, snapshot: MoodleCourseSnapshot) async -> [MoocReference] {
+        var pages: [[String: Any]] = []
+        for section in snapshot.sections {
+            for activity in section.activities where activity.isVisible && activity.module == "page" {
+                pages.append(["id": activity.id, "section": section.number])
+            }
+        }
+        guard let pagesJSON = try? JSONSerialization.data(withJSONObject: pages) else { return [] }
+        let raw = (try? await session.run(#"""
+        const out = [];
+        const collect = (doc, section) => {
+          doc.querySelectorAll('a[href*="courseware.epfl.ch"]').forEach(a => {
+            let s = section;
+            if (s === null || s === undefined) {
+              const holder = a.closest('[data-sectionnumber], [data-number], li.section');
+              const n = holder && (holder.getAttribute('data-sectionnumber') || holder.getAttribute('data-number') || (holder.id || '').replace('section-', ''));
+              s = n !== null && n !== undefined && n !== '' && !isNaN(Number(n)) ? Number(n) : null;
+            }
+            out.push({ url: a.href, title: (a.innerText || a.textContent || '').trim(), section: s });
+          });
+        };
+        try {
+          const r = await fetch('/course/view.php?id=' + course, { credentials: 'include' });
+          collect(new DOMParser().parseFromString(await r.text(), 'text/html'), null);
+        } catch (e) {}
+        const pages = JSON.parse(list);
+        for (let i = 0; i < pages.length; i += 6) {
+          await Promise.all(pages.slice(i, i + 6).map(async p => {
+            try {
+              const r = await fetch('/mod/page/view.php?id=' + p.id, { credentials: 'include' });
+              collect(new DOMParser().parseFromString(await r.text(), 'text/html'), p.section);
+            } catch (e) {}
+          }));
+        }
+        return JSON.stringify(out);
+        """#, arguments: ["course": String(courseID), "list": String(decoding: pagesJSON, as: UTF8.self)])) ?? "[]"
+        struct Row: Decodable { var url: String; var title: String; var section: Int? }
+        let rows = (try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? []
+        var seen = Set<String>()
+        return rows.compactMap { row in
+            guard MoocReference.courseKey(in: row.url) != nil, seen.insert(row.url + "|\(row.section ?? -1)").inserted else { return nil }
+            return MoocReference(url: row.url, title: row.title, sectionNumber: row.section)
+        }
     }
 
     /// Un appel AJAX, fait depuis la page. Rend le champ `data` en JSON, ou
@@ -306,5 +355,48 @@ final class CoursewareClient {
             throw WebContentScraper.ScrapeError.empty
         }
         return page
+    }
+}
+
+// MARK: - MOOC cités depuis Moodle
+
+/// Le MOOC qu'un cours Moodle cite, lu sur Courseware et rangé dans ses
+/// semaines (`MoocMerger`).
+@MainActor
+enum MoocImport {
+    struct Outcome {
+        var draft: ContentDraft
+        /// « + MOOC Algèbre linéaire (24 leçons) », ou pourquoi il manque.
+        var note: String?
+        /// Courseware demande une connexion.
+        var needsLogin = false
+    }
+
+    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
+                         termStart: Date?, totalWeeks: Int,
+                         client: CoursewareClient? = nil) async -> Outcome {
+        let client = client ?? CoursewareClient()
+        let keys = Array(Set(snapshot.moocLinks.compactMap(\.courseKey))).sorted()
+        guard !keys.isEmpty else { return Outcome(draft: draft) }
+        guard await client.isSignedIn() else {
+            return Outcome(draft: draft, note: "MOOC cité sur Moodle — connecte-toi à Courseware pour l'ajouter", needsLogin: true)
+        }
+        var result = draft
+        var notes: [String] = []
+        for key in keys {
+            do {
+                let mooc = try await client.content(of: key)
+                let before = result.theoryCount
+                result = MoocMerger.merge(mooc: mooc,
+                                          references: snapshot.moocLinks.filter { $0.courseKey == key },
+                                          snapshot: snapshot, into: result,
+                                          termStart: termStart, totalWeeks: totalWeeks)
+                notes.append("+ MOOC \(mooc.title) (\(result.theoryCount - before) leçons)")
+            } catch {
+                AppLog.record(.warning, "import", "MOOC illisible", detail: "\(key) — \(error.localizedDescription)")
+                notes.append("MOOC \(key) illisible")
+            }
+        }
+        return Outcome(draft: result, note: notes.joined(separator: " · "))
     }
 }

@@ -7,6 +7,7 @@ struct RootTabView: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @State private var debugBrowse: BrowsedLink?
 
     var body: some View {
         @Bindable var router = app.router
@@ -63,6 +64,10 @@ struct RootTabView: View {
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
             ExamActivityController.reconcileFromStore(context: context)
             #if DEBUG
+            if let address = PreviewLaunch.string(PreviewLaunch.browseFlag), let url = URL(string: address) {
+                try? await Task.sleep(for: .milliseconds(400))
+                debugBrowse = BrowsedLink(title: "Test", url: url, icon: "globe")
+            }
             if PreviewLaunch.isSet(PreviewLaunch.contentImportFlag) {
                 let code = PreviewLaunch.string(PreviewLaunch.courseFlag)
                 let course = (try? context.fetch(FetchDescriptor<Course>()))?.first { $0.code == code }
@@ -71,6 +76,7 @@ struct RootTabView: View {
             }
             #endif
         }
+        .sheet(item: $debugBrowse) { link in InAppBrowser(link: link) }
         .onOpenURL { url in
             handle(url)
         }

@@ -144,30 +144,50 @@ enum WebContentScraper {
     const blocks = outline && outline.course_blocks && outline.course_blocks.blocks;
     if (!blocks) return JSON.stringify({ error: "plan du cours illisible — es-tu connecté·e et inscrit·e à ce cours ?" });
 
-    let counts = {};
+    // L'arbre complet (API des blocs) : chaque leçon jusqu'à ses vidéos, pour
+    // lier **la vidéo elle-même** et non le premier élément de la leçon
+    // (`lms_web_url` d'une leçon ouvre son premier bloc, souvent un texte).
+    let tree = null;
     const me = await get('/api/user/v1/me');
     if (me && me.username) {
       const q = '/api/courses/v2/blocks/?course_id=' + encodeURIComponent(key)
         + '&username=' + encodeURIComponent(me.username)
-        + '&depth=all&block_counts=video&requested_fields=block_counts';
-      const tree = await get(q);
-      if (tree && tree.blocks) {
-        Object.values(tree.blocks).forEach(b => { if (b.block_counts) counts[b.id] = b.block_counts.video || 0; });
-      }
+        + '&depth=all&block_counts=video&requested_fields=children,block_counts,display_name,type,lms_web_url,student_view_url';
+      const t = await get(q);
+      if (t && t.blocks) tree = t.blocks;
     }
+    const descendants = (id) => {
+      const out = [];
+      const walk = (x) => { const b = tree && tree[x]; if (!b) return; (b.children || []).forEach(c => { out.push(c); walk(c); }); };
+      walk(id);
+      return out;
+    };
 
     const all = Object.values(blocks);
     const root = all.find(b => b.type === 'course');
     const chapters = root ? (root.children || []).map(id => blocks[id]).filter(Boolean)
                           : all.filter(b => b.type === 'chapter');
     const sections = chapters.map(ch => ({
+      id: ch.id,
       title: ch.display_name || '',
-      items: (ch.children || []).map(id => blocks[id]).filter(Boolean).map(seq => ({
-        title: seq.display_name || '',
-        url: seq.lms_web_url || '',
-        type: 'sequential',
-        videoCount: counts[seq.id] !== undefined ? counts[seq.id] : null
-      }))
+      items: (ch.children || []).map(id => blocks[id]).filter(Boolean).map(seq => {
+        const inner = descendants(seq.id);
+        const videos = inner.map(id => tree[id]).filter(b => b && b.type === 'video').map(v => ({
+          title: v.display_name || '',
+          url: v.student_view_url || v.lms_web_url || '',
+          kind: 'video'
+        })).filter(v => v.url);
+        const node = tree && tree[seq.id];
+        return {
+          id: seq.id,
+          blockIDs: inner,
+          title: seq.display_name || '',
+          url: seq.lms_web_url || '',
+          type: 'sequential',
+          videoCount: node && node.block_counts ? (node.block_counts.video || 0) : (tree ? videos.length : null),
+          links: videos
+        };
+      })
     }));
     const title = (root && root.display_name) || document.title;
     return JSON.stringify({ source: 'courseware', title: title, url: location.href, sections: sections });
@@ -392,7 +412,9 @@ enum BotafogoClient {
 enum AuthenticatedDownloader {
 
     @MainActor
-    static func download(_ url: URL) async throws -> URL {
+    static func download(_ address: URL) async throws -> URL {
+        // `mod/resource/view.php` → `…&redirect=1` : le fichier, pas la page.
+        let url = SiteLinks.normalize(address)
         let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
         // Tous les cookies EPFL : une ressource Moodle redirige vers
         // `pluginfile.php`, parfois via la page de connexion.

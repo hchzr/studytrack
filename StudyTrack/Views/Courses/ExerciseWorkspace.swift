@@ -746,7 +746,7 @@ enum ExerciseLinks {
 
     static func web(_ string: String) -> URL? {
         guard let url = URL(string: string), url.scheme?.hasPrefix("http") == true else { return nil }
-        return url
+        return SiteLinks.normalize(url)
     }
 }
 

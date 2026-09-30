@@ -76,11 +76,20 @@ struct ScrapedItem: Codable, Equatable {
     var type: String = ""
     /// Vidéos contenues, quand la source sait les compter.
     var videoCount: Int? = nil
+    /// Identifiant du bloc Open edX (`block-v1:…+type@sequential+block@…`).
+    var id: String? = nil
+    /// Les blocs contenus (unités, vidéos) : un lien Moodle vers l'un d'eux
+    /// désigne cette leçon.
+    var blockIDs: [String]? = nil
+    /// Les liens directs contenus : chaque vidéo d'une leçon Courseware.
+    var links: [ContentLink]? = nil
 }
 
 struct ScrapedSection: Codable, Equatable {
     var title: String
     var items: [ScrapedItem]
+    /// Identifiant du chapitre Open edX, quand la source en a un.
+    var id: String? = nil
 }
 
 struct ScrapedCourse: Codable, Equatable {
@@ -277,13 +286,18 @@ enum ContentDraftBuilder {
                     let lead = leadingNumber(in: title)
                     let number = lead?.number ?? "\(chapterLabel).\(theoryIndex)"
                     let videos = raw.videoCount ?? (isVideo(raw) ? 1 : 0)
-                    items.append(ContentDraftItem(kind: kind,
-                                                  number: number,
-                                                  title: lead.map { $0.rest.isEmpty ? title : $0.rest } ?? title,
-                                                  url: raw.url,
-                                                  videoCount: videos,
-                                                  seriesNumber: nil,
-                                                  theoryKind: theoryKind(for: raw, title: title, videos: videos)))
+                    var item = ContentDraftItem(kind: kind,
+                                                number: number,
+                                                title: lead.map { $0.rest.isEmpty ? title : $0.rest } ?? title,
+                                                url: raw.url,
+                                                videoCount: videos,
+                                                seriesNumber: nil,
+                                                theoryKind: theoryKind(for: raw, title: title, videos: videos))
+                    // Chaque vidéo d'une leçon Courseware, liée directement.
+                    item.links = (raw.links ?? []).map { link in
+                        ContentLink(title: link.title.isEmpty ? title : cleanTitle(link.title), url: link.url, kind: link.kind)
+                    }
+                    items.append(item)
                 }
             }
 
@@ -605,7 +619,7 @@ enum BotafogoParser {
     ///
     /// Deux façons d'adresser une section : un chemin (`/analyse-b/matiere/…`)
     /// ou, pour les sites de cours qui encadrent le polycopié, un paramètre
-    /// (`/analyse-1-GM/?cours=&polycopie=/handout/matiere/…`).
+    /// (`/analyse-1-GM/?polycopie=matiere/…`, voir `BotafogoLinks`).
     static func parseNuxt(html: String, pageURL: URL) -> ScrapedCourse? {
         guard let payload = NuxtPayload(html: html) else { return nil }
         let navigation = payload.navigation()
@@ -616,7 +630,7 @@ enum BotafogoParser {
         func link(_ path: String) -> String {
             if queryRouted {
                 let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
-                return root.absoluteString + "?cours=&polycopie=" + encoded
+                return BotafogoLinks.polycopieURL(root: root, path: encoded)
             }
             let trimmedRoot = root.absoluteString.hasSuffix("/") ? String(root.absoluteString.dropLast()) : root.absoluteString
             return trimmedRoot + (path.hasPrefix("/") ? path : "/" + path)
@@ -652,7 +666,7 @@ enum BotafogoParser {
     /// quand il en a une.
     static func videosPage(html: String, root: URL) -> URL? {
         guard let section = firstCapture(html, #"\?cours=(sections/[A-Za-z0-9_-]*vid[A-Za-z0-9_-]*)"#) else { return nil }
-        return URL(string: root.absoluteString + "?cours=" + section + "&polycopie=")
+        return URL(string: BotafogoLinks.coursURL(root: root, path: section))
     }
 
     /// Les enregistrements des cours, avec leur date : `0_8coayv4h` suivi de

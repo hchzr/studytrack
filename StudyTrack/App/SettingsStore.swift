@@ -40,21 +40,15 @@ final class SettingsStore {
         static let ankiLastReviewID = "settings.ankiLastReviewID"
         static let ankiLastSync = "settings.ankiLastSync"
         static let aiExtractionEnabled = "settings.aiExtractionEnabled"
-        static let aiEndpoint = "settings.aiEndpoint"
-        static let aiAPIKey = "settings.aiAPIKey"
-        static let aiModel = "settings.aiModel"
+        /// Anciennes clés du « service perso » (clé d'API saisie), retiré :
+        /// effacées au lancement pour ne pas garder une clé en clair.
+        static let legacyAI = ["settings.aiEndpoint", "settings.aiAPIKey", "settings.aiModel"]
         static let contentAutoRefresh = "settings.contentAutoRefresh"
         static let contentLastRefresh = "settings.contentLastRefresh"
         static let contentRefreshNews = "settings.contentRefreshNews"
         static let assistantToken = "settings.assistantToken"
         static let assistantLastSync = "settings.assistantLastSync"
     }
-
-    /// Pré-remplissage du service **perso** (facultatif) : une API compatible
-    /// OpenAI avec un palier gratuit. Sans clé saisie, ce maillon est ignoré —
-    /// l'analyse passe par le modèle embarqué ou la fonction Supabase de l'app.
-    static let defaultAIEndpoint = "https://api.groq.com/openai/v1"
-    static let defaultAIModel = "llama-3.1-8b-instant"
 
     private let defaults: UserDefaults
 
@@ -123,9 +117,6 @@ final class SettingsStore {
     /// Proposer l'analyse par modèle de langage à l'import d'un PDF.
     var aiExtractionEnabled: Bool { didSet { defaults.set(aiExtractionEnabled, forKey: Key.aiExtractionEnabled) } }
     /// Base d'une API compatible OpenAI (`…/v1`), utilisée si le modèle local manque.
-    var aiEndpoint: String { didSet { defaults.set(aiEndpoint, forKey: Key.aiEndpoint) } }
-    var aiAPIKey: String { didSet { defaults.set(aiAPIKey, forKey: Key.aiAPIKey) } }
-    var aiModel: String { didSet { defaults.set(aiModel, forKey: Key.aiModel) } }
 
     // MARK: Anki
     /// Adresse d'AnkiConnect. Vide = fonctionnalité éteinte.
@@ -218,15 +209,7 @@ final class SettingsStore {
         self.assistantToken = defaults.string(forKey: Key.assistantToken) ?? ""
         self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
-        // Une version intermédiaire proposait un service anonyme aujourd'hui
-        // épuisé : on revient au pré-remplissage courant si rien n'a été saisi.
-        let storedEndpoint = defaults.string(forKey: Key.aiEndpoint) ?? ""
-        let storedKey = defaults.string(forKey: Key.aiAPIKey) ?? ""
-        let legacyAnonymous = storedEndpoint.contains("pollinations")
-        self.aiEndpoint = (storedEndpoint.isEmpty || (legacyAnonymous && storedKey.isEmpty)) ? Self.defaultAIEndpoint : storedEndpoint
-        self.aiAPIKey = storedKey
-        let storedModel = defaults.string(forKey: Key.aiModel) ?? ""
-        self.aiModel = (storedModel.isEmpty || (legacyAnonymous && storedKey.isEmpty)) ? Self.defaultAIModel : storedModel
+        for key in Key.legacyAI { defaults.removeObject(forKey: key) }
     }
 
     /// Vrai quand la **build** porte une configuration Supabase — ce n'est plus un

@@ -459,22 +459,15 @@ check(SeriesAIParsing.normalizeNumber(nil, series: 2) == nil, "un numéro absent
 print("== Ordre des moteurs d'analyse ==")
 // Cet ordre a déjà été inversé une fois sans que rien ne le signale : le modèle
 // embarqué passait avant le modèle servi, et lisait nettement moins bien.
-func engines(_ shared: Bool, _ device: Bool, _ remote: Bool) -> [String] {
-    SeriesEngineOrder.engines(sharedAvailable: shared,
-                              onDeviceAvailable: device,
-                              remoteConfigured: remote).map(\.rawValue)
+func engines(_ shared: Bool, _ device: Bool) -> [String] {
+    SeriesEngineOrder.engines(sharedAvailable: shared, onDeviceAvailable: device).map(\.rawValue)
 }
-check(engines(true, true, true) == ["shared", "onDevice", "remote"],
-      "le service passé avant le modèle embarqué — \(engines(true, true, true))")
-check(engines(true, true, false) == ["shared", "onDevice"], "sans service perso")
-check(engines(false, true, false) == ["onDevice"],
+check(engines(true, true) == ["shared", "onDevice"],
+      "le service passé avant le modèle embarqué — \(engines(true, true))")
+check(engines(false, true) == ["onDevice"],
       "sans fonction déployée, le modèle embarqué prend le relais")
-check(engines(false, false, true) == ["remote"],
-      "sans fonction ni modèle embarqué, le service perso reste")
-check(engines(false, false, false).isEmpty, "aucun moteur : la lecture par motifs seule")
-check(engines(true, false, false) == ["shared"], "le service seul suffit")
-check(engines(false, true, true) == ["onDevice", "remote"],
-      "embarqué puis perso quand la fonction manque")
+check(engines(false, false).isEmpty, "aucun moteur : la lecture par motifs seule")
+check(engines(true, false) == ["shared"], "le service seul suffit")
 
 print("== Saisie d'un temps au clavier ==")
 // On accepte ce que les gens tapent vraiment : refuser tout sauf « 1:30 »
@@ -1179,7 +1172,23 @@ do {
     let seriesItem = items.first { $0.kind == .series }
     check(seriesItem?.title == "Nombres ℝ" && seriesItem?.seriesNumber == 3, "la série de la semaine (\(seriesItem?.title ?? ""))")
     check(seriesItem?.exercises.count == 2 && seriesItem?.exercises.first?.questions.count == 2, "ses exercices et leurs questions")
-    check(seriesItem?.exercises.first?.url == "https://botafogo.epfl.ch/analyse-1-GM/?cours=exercices/a&polycopie=", "le lien de chaque exercice")
+    check(seriesItem?.exercises.first?.url == "https://botafogo.epfl.ch/analyse-1-GM/?cours=exercices/a", "le lien de chaque exercice")
+    // Les adresses que le site lit vraiment (vérifiées dans le navigateur de
+    // l'app) : un onglet par paramètre, sans préfixe `/handout/`.
+    let bfRoot = URL(string: "https://botafogo.epfl.ch/analyse-1-flipped/")!
+    check(BotafogoProgram.handoutURL(root: bfRoot, target: "m_reels_intro") == "https://botafogo.epfl.ch/analyse-1-flipped/?polycopie=matiere/m_reels_intro",
+          "section du polycopié : ?polycopie=matiere/…")
+    check(BotafogoLinks.normalize(URL(string: "https://botafogo.epfl.ch/analyse-1-flipped/?cours=&polycopie=/handout/matiere/m_reels_intro")!).absoluteString
+          == "https://botafogo.epfl.ch/analyse-1-flipped/?polycopie=matiere/m_reels_intro",
+          "un ancien lien (cours vide, /handout/) est réparé à l'ouverture")
+    check(BotafogoLinks.normalize(URL(string: "https://botafogo.epfl.ch/analyse-1-flipped?cours=series/AN_serie_03&polycopie=")!).absoluteString
+          == "https://botafogo.epfl.ch/analyse-1-flipped/?cours=series/AN_serie_03",
+          "…et la barre finale, sans laquelle la requête est perdue")
+    check(BotafogoLinks.normalize(URL(string: "https://moodle.epfl.ch/course/view.php?id=1&x=")!).absoluteString == "https://moodle.epfl.ch/course/view.php?id=1&x=",
+          "les autres sites ne sont pas touchés")
+    check(SiteLinks.normalize(URL(string: "https://moodle.epfl.ch/mod/resource/view.php?id=42")!).absoluteString
+          == "https://moodle.epfl.ch/mod/resource/view.php?id=42&redirect=1",
+          "un fichier Moodle s'ouvre sur le fichier, pas sur la page « télécharger »")
     check(seriesItem?.solutionsAt != nil, "la date de publication du corrigé")
     let leftovers = draft.sections.last
     check(leftovers?.isIncluded == false && leftovers?.items.map(\.number) == ["3.6"], "ce que le programme ne cite pas est proposé à part, décoché")
@@ -1353,6 +1362,41 @@ do {
     let ex2 = w2.first { $0.kind == .series }
     check(ex2?.seriesNumber == 2 && ex2?.pdfURL.hasSuffix("exercises.pdf") == true && ex2?.solutionURL.hasSuffix("solutions.pdf") == true,
           "« Exercise » / « Solution » : la série 2, PDF public à lire")
+
+    // MOOC cité depuis Moodle : chaque leçon rangée à la semaine où Moodle
+    // la cite, sinon par « Semaine N », sinon par numéro de chapitre.
+    let moocSnapshot = MoodleCourseSnapshot(title: "Algèbre", url: "u", sections: [
+        MoodleSection(number: 3, title: "21 September - 27 September", activities: [act("03-Calcul-matriciel", "resource")]),
+        MoodleSection(number: 4, title: "28 September - 4 October", activities: [act("04-Espaces-vectoriels", "resource")])])
+    let moocBase = MoodleCourseAnalyzer.draft(from: moocSnapshot, termStart: term)
+    let key = "course-v1:EPFL+AlgebreLineaire+2026"
+    let moocRefs = [MoocReference(url: "https://courseware.epfl.ch/courses/\(key)/jump_to/block-v1:EPFL+AlgebreLineaire+2026+type@vertical+block@u1",
+                                  title: "Vidéos de la semaine", sectionNumber: 3)]
+    check(moocRefs.first?.courseKey == key, "clé du MOOC lue dans le lien")
+    let mooc = ScrapedCourse(source: "courseware", title: "Algèbre linéaire", url: "c", sections: [
+        ScrapedSection(title: "Matrices", items: [
+            ScrapedItem(title: "Produit matriciel", url: "https://courseware.epfl.ch/l1", type: "sequential", videoCount: 2,
+                        id: "block-v1:EPFL+AlgebreLineaire+2026+type@sequential+block@s1",
+                        blockIDs: ["block-v1:EPFL+AlgebreLineaire+2026+type@vertical+block@u1"],
+                        links: [ContentLink(title: "Vidéo 1", url: "https://courseware.epfl.ch/xblock/v1", kind: .video),
+                                ContentLink(title: "Vidéo 2", url: "https://courseware.epfl.ch/xblock/v2", kind: .video)])]),
+        ScrapedSection(title: "Semaine 6 : Déterminants", items: [ScrapedItem(title: "Définition", url: "https://courseware.epfl.ch/l2", type: "sequential")]),
+        ScrapedSection(title: "4. Espaces vectoriels", items: [ScrapedItem(title: "Sous-espaces", url: "https://courseware.epfl.ch/l3", type: "sequential")]),
+        ScrapedSection(title: "Annexe", items: [ScrapedItem(title: "Rappels", url: "https://courseware.epfl.ch/l4", type: "sequential")])])
+    let merged = MoocMerger.merge(mooc: mooc, references: moocRefs, snapshot: moocSnapshot, into: moocBase, termStart: term)
+    func moocWeek(_ url: String) -> Int? {
+        merged.sections.first { $0.items.contains { $0.url == url } }.map { section in
+            section.items.first { $0.url == url }?.week ?? section.week
+        }
+    }
+    check(moocWeek("https://courseware.epfl.ch/l1") == 3, "leçon citée depuis la section de la semaine 3 → semaine 3 (\(moocWeek("https://courseware.epfl.ch/l1") ?? -1))")
+    check(moocWeek("https://courseware.epfl.ch/l2") == 6, "« Semaine 6 » dans le titre du chapitre")
+    check(moocWeek("https://courseware.epfl.ch/l3") == 4, "chapitre 4 → la semaine où Moodle traite le chapitre 4 (\(moocWeek("https://courseware.epfl.ch/l3") ?? -1))")
+    check(moocWeek("https://courseware.epfl.ch/l4") == 0, "sans indice : à placer à la relecture")
+    let lesson = merged.sections.flatMap(\.items).first { $0.url == "https://courseware.epfl.ch/l1" }
+    check(lesson?.links.map(\.url) == ["https://courseware.epfl.ch/xblock/v1", "https://courseware.epfl.ch/xblock/v2"]
+          && lesson?.theoryKind == .video,
+          "chaque vidéo liée directement, pas le premier élément de la leçon")
 
     check(MoodleCourseAnalyzer.dueDate(fromActivityDates: "Opened: Monday, 31 August 2026, 12:00 PM Due: Friday, 2 October 2026, 11:59 PM")
           == Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: TimeZone(identifier: "Europe/Zurich"), year: 2026, month: 10, day: 2, hour: 23, minute: 59)),

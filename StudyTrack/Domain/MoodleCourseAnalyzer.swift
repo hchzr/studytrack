@@ -20,6 +20,30 @@ struct MoodleActivity: Equatable {
     var link: String { (target?.isEmpty == false ? target : nil) ?? url }
 }
 
+/// Un lien Moodle vers un cours Courseware, et la section où il apparaît.
+struct MoocReference: Equatable, Hashable {
+    var url: String
+    var title: String
+    /// Le numéro de la section Moodle (celui de `MoodleSection.number`).
+    var sectionNumber: Int?
+
+    /// `course-v1:EPFL+AlgebreLineaire+2026`.
+    var courseKey: String? { MoocReference.courseKey(in: url) }
+
+    static func courseKey(in url: String) -> String? {
+        let text = url.removingPercentEncoding ?? url
+        guard let range = text.range(of: #"course-v1:[^/?#]+"#, options: .regularExpression) else { return nil }
+        return String(text[range])
+    }
+
+    /// Le bloc visé (`block-v1:…`), quand le lien pointe dans le cours.
+    var blockID: String? {
+        let text = url.removingPercentEncoding ?? url
+        guard let range = text.range(of: #"block-v1:[^/?#]+"#, options: .regularExpression) else { return nil }
+        return String(text[range])
+    }
+}
+
 struct MoodleSection: Equatable {
     var number: Int
     var title: String
@@ -30,6 +54,10 @@ struct MoodleCourseSnapshot: Equatable {
     var title: String
     var url: String
     var sections: [MoodleSection]
+    /// Les liens vers un MOOC (Courseware) trouvés dans le cours : texte des
+    /// sections, étiquettes, pages. Le cours d'algèbre linéaire en classe
+    /// inversée ou CS-107 renvoient ainsi aux vidéos de la semaine.
+    var moocLinks: [MoocReference] = []
 
     var activityCount: Int { sections.reduce(0) { $0 + $1.activities.count } }
 }
@@ -87,6 +115,21 @@ struct ContentLink: Codable, Equatable, Hashable {
 ///   • **range** chaque élément à sa semaine.
 enum MoodleCourseAnalyzer {
 
+    /// « Semaine 3 : Structures de contrôle (semaine courante) » : la mention
+    /// du moment n'est pas le titre.
+    static func sectionTitle(_ section: MoodleSection) -> String {
+        ContentDraftBuilder.cleanTitle(section.title)
+            .replacingOccurrences(of: #"\s*\((semaine courante|current week|cette semaine|this week)\)"#,
+                                  with: "", options: [.regularExpression, .caseInsensitive])
+    }
+
+    /// La semaine d'une section, lue dans son titre (numéro ou dates).
+    static func week(of section: MoodleSection, termStart: Date?, totalWeeks: Int = 14,
+                     calendar: Calendar = .current) -> Int? {
+        ContentDraftBuilder.week(fromTitle: sectionTitle(section), termStart: termStart, calendar: calendar)
+            .map { min($0, max(totalWeeks, 1)) }
+    }
+
     static func draft(from snapshot: MoodleCourseSnapshot,
                       termStart: Date?,
                       totalWeeks: Int = 14,
@@ -97,14 +140,9 @@ enum MoodleCourseAnalyzer {
         var deadlines: [ContentDraftItem] = []
 
         for section in snapshot.sections {
-            // « Semaine 3 : Structures de contrôle (semaine courante) » : la
-            // mention du moment n'est pas le titre.
-            let title = ContentDraftBuilder.cleanTitle(section.title)
-                .replacingOccurrences(of: #"\s*\((semaine courante|current week|cette semaine|this week)\)"#,
-                                      with: "", options: [.regularExpression, .caseInsensitive])
+            let title = sectionTitle(section)
             let role = role(of: title, number: section.number)
-            let week = ContentDraftBuilder.week(fromTitle: title, termStart: termStart, calendar: calendar)
-                .map { min($0, max(totalWeeks, 1)) }
+            let week = self.week(of: section, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
             let visible = section.activities.filter(\.isVisible)
 
             switch role {

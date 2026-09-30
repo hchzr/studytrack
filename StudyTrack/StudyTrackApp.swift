@@ -74,6 +74,9 @@ enum PreviewLaunch {
     /// **Rétrograde** le créateur du groupe à « membre », pour reproduire l'état
     /// migré qui lui retirait ses droits sur son propre groupe.
     static let breakRoleFlag = "-breakGroupRole"
+    /// `-browse <url>` : ouvre l'adresse dans le navigateur intégré, pour voir
+    /// ce qu'une page donne *dans l'app* (et non dans Safari).
+    static let browseFlag = "-browse"
 
     static func isSet(_ flag: String) -> Bool {
         CommandLine.arguments.contains(flag)
