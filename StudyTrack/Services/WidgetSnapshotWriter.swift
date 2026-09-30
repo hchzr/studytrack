@@ -143,7 +143,10 @@ enum WidgetSnapshotWriter {
         let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
         let planned = (try? context.fetch(FetchDescriptor<PlannedSession>())) ?? []
         var items: [WidgetEvent] = []
-        for event in events where event.startsAt >= start && event.startsAt < end {
+        // Les événements « toute la journée » (anniversaires, congés) ne sont pas
+        // un horaire : ils remplissaient le widget de « 00:00 – 23:59 ».
+        for event in events where event.startsAt >= start && event.startsAt < end
+            && event.durationSeconds < 20 * 3600 && event.isAcademic {
             items.append(WidgetEvent(id: "event-\(event.id)", start: event.startsAt, end: event.endsAt,
                                      title: event.title,
                                      subtitle: [event.course?.displayCode, event.location.isEmpty ? nil : event.location]

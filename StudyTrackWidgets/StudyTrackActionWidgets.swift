@@ -128,23 +128,31 @@ struct WeekWidgetView: View {
             }
             .frame(width: 118)
             Rectangle().fill(Paper.rule).frame(width: 1)
-            courseList(limit: 4, compact: true)
+            courseList(limit: 3, compact: true)
         }
     }
 
+    /// Grand : le temps et la semaine en haut, puis un cours par ligne — cinq au
+    /// plus, chacune sur **une** ligne, pour que rien ne déborde.
     private var large: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 14) {
                 header
-                Spacer()
+                    .fixedSize()
+                WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 30)
             }
             HStack(spacing: 14) {
                 axis("Théorie", theory)
                 axis("Séries", series)
             }
-            WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 40)
             Rectangle().fill(Paper.rule).frame(height: 1)
-            courseList(limit: 6, compact: false)
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(courses.prefix(5)) { course in
+                    Link(destination: WidgetLink.course(course.id)) {
+                        WidgetCourseRow(course: course)
+                    }
+                }
+            }
             Spacer(minLength: 0)
         }
     }
@@ -229,6 +237,37 @@ struct WidgetCourseLine: View {
                 .foregroundStyle(Paper.inkSecondary)
                 .lineLimit(1)
                 .fixedSize()
+        }
+    }
+}
+
+/// Un cours sur une ligne (grand widget) : code, théorie, exercices, retard.
+struct WidgetCourseRow: View {
+    let course: WidgetCourse
+
+    var body: some View {
+        let tint = Paper.tint(course.colorHex)
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5).fill(tint).frame(width: 3, height: 26)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(course.code)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                Text("Th. \(course.theoryDone ?? 0)/\(course.theoryTotal ?? 0) · Ex. \(course.exercisesDone ?? 0)/\(course.exercisesTotal ?? 0)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(Paper.inkSecondary)
+                    .lineLimit(1)
+            }
+            .layoutPriority(1)
+            WidgetBar(value: Double(course.done) / Double(max(course.total, 1)), tint: tint)
+            if let late = course.late, late > 0 {
+                Text("\(late) en retard")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Paper.wrong)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
     }
 }
@@ -474,7 +513,8 @@ struct TodayWidgetView: View {
     }
 
     private func time(_ date: Date) -> String {
-        date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+        date.formatted(Date.FormatStyle(locale: Locale(identifier: "fr_CH"))
+                        .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
 
     private func timeRange(_ event: WidgetEvent) -> String {

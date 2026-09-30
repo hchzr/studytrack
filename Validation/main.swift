@@ -3353,8 +3353,11 @@ if let accent = ColorContrast.rgb(fromHex: Theme.accentHex),
           "accent clair sur carte claire = \(fmt(ColorContrast.ratio(accent, cardLight))):1")
     check(ColorContrast.ratio(accentDark, cardDark) >= 3.0,
           "accent sombre sur carte sombre ≥3:1 (glyphes) = \(fmt(ColorContrast.ratio(accentDark, cardDark))):1")
-    check(ColorContrast.ratio(.white, accentDark) >= 4.5,
-          "libellé blanc sur bouton plein sombre = \(fmt(ColorContrast.ratio(.white, accentDark))):1")
+    // La nuit, l'accent est l'encre crème : un bouton plein porte son libellé
+    // en papier sombre (`knockedOutInk`), pas en blanc.
+    let paperNight = ColorContrast.rgb(fromHex: "#15130F") ?? cardDark
+    check(ColorContrast.ratio(paperNight, accentDark) >= 4.5,
+          "libellé papier sur bouton plein sombre = \(fmt(ColorContrast.ratio(paperNight, accentDark))):1")
     check(ColorContrast.ratio(accentInkDark, cardDark) >= 4.5,
           "encre accent sombre ≥4.5:1 (texte) = \(fmt(ColorContrast.ratio(accentInkDark, cardDark))):1")
     // La valeur unique d'origine échouait en mode sombre : c'est ce qui a motivé la paire.

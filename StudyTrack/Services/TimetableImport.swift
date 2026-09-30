@@ -172,9 +172,13 @@ enum TimetableImport {
             // `CATEGORIES` tranche quand il se prononce : un événement marqué
             // « Cours » est un cours magistral, quoi que dise son intitulé. Sinon on
             // retombe sur l'analyse du titre.
-            let kind = ICSParser.isLectureCategory(event.categories) == true
-                ? CalendarEventKind.lecture
-                : CalendarSync.classify(title: event.summary, course: course)
+            let kind: CalendarEventKind = {
+                switch ICSParser.isLectureCategory(event.categories) {
+                case true?: return .lecture
+                case false?: return .exerciseSession
+                case nil: return CalendarSync.classify(title: event.summary, course: course)
+                }
+            }()
             if kind == .lecture, !course.hasLectures {
                 // Le cours a des heures d'amphi : c'est exactement ce que la question
                 // « cette classe a-t-elle cours ? » cherche à savoir.

@@ -11,6 +11,7 @@ struct ExternalCalendarEvent {
     var location: String
     var calendarTitle: String
     var notes: String
+    var isAllDay: Bool = false
 }
 
 /// Spécification de création d'un événement dans le calendrier système.
@@ -66,7 +67,8 @@ final class EventKitCalendarService: CalendarService {
                 endsAt: event.endDate,
                 location: event.location ?? "",
                 calendarTitle: event.calendar?.title ?? "",
-                notes: event.notes ?? ""
+                notes: event.notes ?? "",
+                isAllDay: event.isAllDay
             )
         }
     }
@@ -134,6 +136,19 @@ enum CalendarSync {
         var existing = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
 
         for item in external {
+            // L'agenda n'est pas le calendrier personnel : on ne garde que ce qui
+            // se rattache à un cours, ou qui est une évaluation ou une révision.
+            // Les journées entières (anniversaires, congés) n'y entrent jamais.
+            let course = matchCourse(for: item.title, in: courses)
+            let kind = classify(title: item.title, course: course)
+            let academic = course != nil || [.midterm, .exam, .study].contains(kind)
+            guard !item.isAllDay, academic else {
+                if let stale = existing.first(where: { $0.externalEventID == item.identifier }) {
+                    context.delete(stale)
+                    existing.removeAll { $0 === stale }
+                }
+                continue
+            }
             if let match = existing.first(where: { $0.externalEventID == item.identifier }) {
                 match.title = item.title
                 match.startsAt = item.startsAt
@@ -169,6 +184,9 @@ enum CalendarSync {
         return result
     }
 
+    /// Un événement lié a-t-il sa place dans l'agenda ?
+    static func isAcademic(_ event: LinkedCalendarEvent) -> Bool { event.isAcademic }
+
     /// Devine le cours d'un événement à partir de son titre (code ou nom).
     static func matchCourse(for title: String, in courses: [Course]) -> Course? {
         let haystack = title.uppercased()
@@ -193,8 +211,11 @@ enum CalendarSync {
         if haystack.contains("examen") || haystack.contains("exam") || haystack.contains("final") {
             return .exam
         }
-        if haystack.contains("cours") || haystack.contains("lecture") || haystack.contains("amphi")
-            || haystack.contains("série") || haystack.contains("exercise session") {
+        if haystack.contains("exercice") || haystack.contains("exercise") || haystack.contains("série")
+            || haystack.contains("serie") || haystack.contains(" tp") || haystack.contains("labo") {
+            return .exerciseSession
+        }
+        if haystack.contains("cours") || haystack.contains("lecture") || haystack.contains("amphi") {
             return .lecture
         }
         if haystack.contains("révision") || haystack.contains("revision") || haystack.contains("étude") {

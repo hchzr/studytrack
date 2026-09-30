@@ -145,7 +145,11 @@ struct ChronoDot: View {
 /// Le mini-lecteur, **seulement pendant une session** : sur quoi, où on en est,
 /// pause et terminer. Le toucher ouvre Focus.
 struct FocusMiniPlayer: View {
+    /// Dans l'accessoire de la barre système : pas de verre à nous, et une forme
+    /// réduite quand la barre se replie.
+    var inAccessory = false
     @Environment(AppContainer.self) private var app
+    @State private var isInline = false
     @Query(sort: \Course.code) private var courses: [Course]
 
     private var focus: FocusController { app.focus }
@@ -187,6 +191,7 @@ struct FocusMiniPlayer: View {
 
                     primaryButton(phase: phase)
 
+                    if !isInline {
                     Button {
                         focus.finish()
                         Haptics.success()
@@ -194,16 +199,18 @@ struct FocusMiniPlayer: View {
                         Image(systemName: "checkmark")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(Carnet.ink)
-                            .frame(width: 40, height: 40)
+                            .frame(width: inAccessory ? 34 : 40, height: inAccessory ? 34 : 40)
                             .background(Carnet.ink.opacity(0.08), in: Circle())
                     }
                     .buttonStyle(PressableStyle())
                     .accessibilityLabel("Terminer et enregistrer la session")
+                    }
                 }
                 .padding(.leading, 14)
                 .padding(.trailing, 8)
-                .padding(.vertical, 8)
-                .carnetGlass(in: Capsule(), interactive: true)
+                .padding(.vertical, inAccessory ? 0 : 8)
+                .modifier(PlayerGlass(enabled: !inAccessory))
+                .modifier(AccessoryPlacementReader(isInline: $isInline))
             }
         }
     }
@@ -229,7 +236,7 @@ struct FocusMiniPlayer: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(Carnet.ground)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 40, height: 40)
+                .frame(width: inAccessory ? 34 : 40, height: inAccessory ? 34 : 40)
                 .background(Carnet.ink, in: Circle())
         }
         .buttonStyle(PressableStyle())
@@ -260,6 +267,57 @@ struct FocusMiniPlayer: View {
 
     private func title(_ state: FocusTimerState, course: Course?) -> String {
         FocusLabels.title(state: state, course: course)
+    }
+}
+
+/// Le mini-lecteur en accessoire de la barre système : présent **seulement**
+/// pendant une session. Le verre est celui de la barre, pas le nôtre.
+@available(iOS 26.0, *)
+struct FocusAccessory: ViewModifier {
+    @Environment(AppContainer.self) private var app
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: app.focus.hasSession) {
+                FocusMiniPlayer(inAccessory: true)
+            }
+        } else {
+            content.tabViewBottomAccessory {
+                if app.focus.hasSession { FocusMiniPlayer(inAccessory: true) }
+            }
+        }
+    }
+}
+
+/// Lit si l'accessoire est « en ligne » (barre repliée) : le lecteur s'y réduit.
+private struct AccessoryPlacementReader: ViewModifier {
+    @Binding var isInline: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.modifier(Reader26(isInline: $isInline))
+        } else {
+            content
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private struct Reader26: ViewModifier {
+        @Binding var isInline: Bool
+        @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+
+        func body(content: Content) -> some View {
+            content
+                .onAppear { isInline = placement == .inline }
+                .onChange(of: placement) { _, value in isInline = value == .inline }
+        }
+    }
+}
+
+private struct PlayerGlass: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled { content.carnetGlass(in: Capsule(), interactive: true) } else { content }
     }
 }
 

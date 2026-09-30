@@ -18,9 +18,9 @@ enum Theme {
     // de stylo bleue la nuit — le noir disparaîtrait sur le papier sombre, et
     // un libellé blanc doit rester lisible sur le bouton plein (≥ 4.5:1).
     static let accentHex = "#1D1B16"
-    static let accentDarkHex = "#5470A0"
+    static let accentDarkHex = "#EDE6D6"
     static let accentInkHex = "#1D1B16"
-    static let accentInkDarkHex = "#B9C6DE"
+    static let accentInkDarkHex = "#EDE6D6"
 
     /// Teinte interactive : remplissages, `.tint`, grandes marques.
     static var accent: Color {

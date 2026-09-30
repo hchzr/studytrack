@@ -21,7 +21,7 @@ struct AgendaEntry: Identifiable {
     /// Une tâche a une échéance, pas une heure : elle se range en tête de journée.
     /// Une évaluation datée à minuit pile n'a pas d'heure connue non plus.
     var isAllDay: Bool {
-        if kind == .task { return true }
+        if kind == .task || kind == .milestone { return true }
         if kind == .exam {
             let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
             return parts.hour == 0 && parts.minute == 0
@@ -38,10 +38,11 @@ struct AgendaEntry: Identifiable {
 /// vivent les séances d'un cours depuis que sa page n'a plus d'onglet Agenda.
 struct AgendaFilter: Equatable {
     enum Family: String, CaseIterable, Identifiable {
-        case lectures, exams, sessions, tasks
+        case lectures, exams, sessions, tasks, epfl
         var id: String { rawValue }
         var label: String {
             switch self {
+            case .epfl: return "EPFL"
             case .lectures: return "Cours"
             case .exams: return "Évaluations"
             case .sessions: return "Sessions"
@@ -50,6 +51,7 @@ struct AgendaFilter: Equatable {
         }
         var icon: String {
             switch self {
+            case .epfl: return "building.2"
             case .lectures: return "building.columns"
             case .exams: return "graduationcap"
             case .sessions: return "timer"
@@ -72,6 +74,7 @@ struct AgendaFilter: Equatable {
         case .exam: return family == .exams
         case .planned: return family == .sessions
         case .task: return family == .tasks
+        case .milestone: return family == .epfl
         }
     }
 }
@@ -92,6 +95,10 @@ struct AgendaView: View {
     @Query(sort: \PlannedSession.startsAt) private var plannedSessions: [PlannedSession]
     @Query(sort: \LinkedTask.dueDate) private var tasks: [LinkedTask]
     @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
+    /// Le calendrier académique (« Vie de l'EPFL ») : vacances, sessions
+    /// d'examens, délais d'inscription.
+    @Query(sort: \AcademicMilestone.date) private var milestones: [AcademicMilestone]
+    @State private var showingEPFL = false
 
     @State private var selectedDay = DateUtils.startOfDay(Date())
     @State private var weekStart = DateUtils.startOfWeek(Date())
@@ -146,7 +153,23 @@ struct AgendaView: View {
                 plannedSession: session))
         }
 
-        for event in events where event.startsAt >= start && event.startsAt <= end {
+        for milestone in milestones where milestone.date >= start && milestone.date <= end {
+            result.append(AgendaEntry(
+                id: "milestone-\(milestone.id)",
+                date: milestone.date,
+                endDate: nil,
+                title: milestone.title,
+                subtitle: milestone.kind.label,
+                icon: milestone.kind.icon,
+                color: Carnet.inkSecondary,
+                kind: .milestone))
+        }
+
+        // L'agenda n'est pas le calendrier personnel : cours, séances
+        // d'exercices, évaluations et révisions seulement ; jamais de journée
+        // entière (anniversaires, congés).
+        for event in events where event.startsAt >= start && event.startsAt <= end
+            && event.isAcademic && event.durationSeconds < 20 * 3600 {
             result.append(AgendaEntry(
                 id: "event-\(event.id)",
                 date: event.startsAt,
@@ -207,7 +230,7 @@ struct AgendaView: View {
         var parts: [String] = []
         if let course = event.course { parts.append(course.displayCode) }
         if !event.location.isEmpty { parts.append(event.location) }
-        if event.isLecture, event.isAttended { parts.append("présence cochée") }
+        if event.isLecture, event.isSkipped { parts.append("manqué") }
         return parts.isEmpty ? event.kind.label : parts.joined(separator: " · ")
     }
 
@@ -245,6 +268,7 @@ struct AgendaView: View {
             .sheet(isPresented: $showingPlan, onDismiss: { planStart = nil }) {
                 PlanSessionView(group: nil, defaultStart: planStart ?? defaultPlanStart)
             }
+            .navigationDestination(isPresented: $showingEPFL) { EPFLLifeView() }
             .sheet(item: $editingExam) { exam in
                 if let course = exam.course {
                     ExamFormSheet(course: course, exam: exam)
@@ -286,6 +310,12 @@ struct AgendaView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
+            Button {
+                showingEPFL = true
+            } label: {
+                Image(systemName: "building.2")
+            }
+            .accessibilityLabel("Calendrier de l'EPFL")
             Button {
                 showingPlan = true
             } label: {
@@ -648,11 +678,12 @@ struct AgendaView: View {
                         }
                     }
                     Spacer(minLength: Layout.inline)
-                    if let event = entry.event, event.isLecture, event.course != nil {
-                        CheckCircleButton(isOn: event.isAttended,
+                    if let event = entry.event, event.isLecture, event.course != nil, event.endsAt <= Date() {
+                        // Un cours fini compte d'office ; le toucher le marque manqué.
+                        CheckCircleButton(isOn: !event.isSkipped,
                                           tint: TaskType.lecture.tint,
-                                          label: "Marquer la présence à \(event.title)") {
-                            event.isAttended.toggle()
+                                          label: event.isSkipped ? "Compter \(event.title) comme suivi" : "Marquer \(event.title) manqué") {
+                            event.isSkipped.toggle()
                             try? context.save()
                         }
                     } else {

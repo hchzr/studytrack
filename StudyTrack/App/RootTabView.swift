@@ -55,6 +55,15 @@ struct RootTabView: View {
             // épreuve passée doit disparaître, et une épreuve qui arrive dans les
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
             ExamActivityController.reconcileFromStore(context: context)
+            // Les séances d'exercices étaient rangées comme cours magistraux
+            // (« série » comptait pour « cours ») : elles comptaient d'office dans
+            // les heures d'amphi. Reclassées une fois ici.
+            for event in (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+            where event.kind == .lecture
+                && CalendarSync.classify(title: event.title, course: event.course) == .exerciseSession {
+                event.kind = .exerciseSession
+            }
+            try? context.save()
             #if DEBUG
             if let address = PreviewLaunch.string(PreviewLaunch.browseFlag), let url = URL(string: address) {
                 try? await Task.sleep(for: .milliseconds(400))
@@ -167,18 +176,40 @@ struct RootTabView: View {
         })
     }
 
-    /// Les quatre onglets, sous **notre** barre : la barre système est masquée
-    /// (elle mettait le chrono parmi les onglets) et `CarnetTabBar` la remplace —
-    /// les onglets dans une capsule, le chrono dans un rond à part.
+    /// La barre **système** (Liquid Glass d'iOS 26) : quatre onglets et le
+    /// chrono, qui porte le rôle « recherche » — le système le détache en rond à
+    /// droite quand il le fait (iOS 26.0), sinon il reste le dernier onglet. Elle
+    /// se replie au défilement ; pendant une session, le mini-lecteur est son
+    /// accessoire, qui se range à côté de la barre repliée.
+    ///
+    /// Avant iOS 26 : notre barre (`CarnetTabBar`) sur matière translucide.
+    @ViewBuilder
     private var tabs: some View {
-        TabView(selection: tabSelection) {
-            ForEach(CarnetTabBar.tabs, id: \.self) { tab in
-                tabContent(tab)
-                    .toolbar(.hidden, for: .tabBar)
-                    .tag(tab)
+        if #available(iOS 26.0, *) {
+            TabView(selection: tabSelection) {
+                ForEach(CarnetTabBar.tabs, id: \.self) { tab in
+                    Tab(tab.title, systemImage: tab.icon, value: tab) {
+                        tabContent(tab)
+                    }
+                }
+                Tab(value: AppRouter.Tab.focus, role: .search) {
+                    Color.clear
+                } label: {
+                    Label(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon)
+                }
             }
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .modifier(FocusAccessory())
+        } else {
+            TabView(selection: tabSelection) {
+                ForEach(CarnetTabBar.tabs, id: \.self) { tab in
+                    tabContent(tab)
+                        .toolbar(.hidden, for: .tabBar)
+                        .tag(tab)
+                }
+            }
+            .modifier(CarnetTabBarInset())
         }
-        .modifier(CarnetTabBarInset())
     }
 
     /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.

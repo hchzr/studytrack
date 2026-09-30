@@ -43,8 +43,6 @@ enum PreviewLaunch {
     static let aiImportFlag = "-aiImport"
     /// Ouvre Profil › Intelligence artificielle › Assistant IA.
     static let assistantFlag = "-assistant"
-    /// Avec `-stats`, ouvre en plus « Couverture du suivi ».
-    static let coverageFlag = "-coverage"
     /// Avec `-stats`, ouvre en plus « Vie de l'EPFL ».
     static let epflLifeFlag = "-epflLife"
     /// Avec `-course` et l'onglet exercices, ouvre le détail de l'exercice

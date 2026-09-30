@@ -14,6 +14,9 @@ final class LinkedCalendarEvent {
     var kindRaw: String
     var course: Course?
     var isAttended: Bool
+    /// Cours magistral **manqué**, signalé à la main. Un cours de l'horaire
+    /// compte dès qu'il est fini, sauf s'il est marqué ici.
+    var isSkipped: Bool = false
     var notes: String
     var lastSyncedAt: Date?
 
@@ -46,4 +49,20 @@ final class LinkedCalendarEvent {
     var durationSeconds: Int { max(0, Int(endsAt.timeIntervalSince(startsAt))) }
     var durationLabel: String { DateUtils.durationLabel(seconds: durationSeconds) }
     var isLecture: Bool { kind == .lecture }
+
+    /// Le cours magistral compte dans les heures d'amphi : fini, et pas manqué.
+    /// Une **séance d'exercices** ne compte jamais d'elle-même — on y reste plus
+    /// ou moins longtemps : elle se chronomètre.
+    var countsAsAttendedLecture: Bool {
+        isLecture && !isSkipped && endsAt <= Date()
+    }
+
+    /// Ce qui a sa place dans l'agenda : l'horaire (cours, exercices), les
+    /// évaluations, les sessions de révision — pas l'agenda personnel.
+    var isAcademic: Bool {
+        switch kind {
+        case .lecture, .exerciseSession, .midterm, .exam, .study: return true
+        default: return course != nil
+        }
+    }
 }

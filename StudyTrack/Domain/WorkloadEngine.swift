@@ -154,10 +154,11 @@ enum WorkloadEngine {
             .reduce(0) { $0 + $1.durationSeconds }
     }
 
-    /// Heures de cours « effectuées » : événements d'amphi liés, marqués comme suivis.
+    /// Heures d'amphi suivies : les cours magistraux de l'horaire, finis et pas
+    /// marqués manqués. Les séances d'exercices n'y entrent pas (chronométrées).
     static func classSeconds(for course: Course, from: Date? = nil, to: Date? = nil) -> Int {
         course.linkedEvents
-            .filter { $0.isLecture && $0.isAttended }
+            .filter(\.countsAsAttendedLecture)
             .filter { event in
                 if let from, event.startsAt < from { return false }
                 if let to, event.startsAt >= to { return false }

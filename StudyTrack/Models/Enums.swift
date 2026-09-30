@@ -367,13 +367,14 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
 // MARK: - Type d'événement d'agenda
 
 enum CalendarEventKind: String, Codable, CaseIterable, Identifiable {
-    case lecture, midterm, exam, study, personal, task, other
+    case lecture, exerciseSession, midterm, exam, study, personal, task, other
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .lecture: return "Cours"
+        case .exerciseSession: return "Séance d'exercices"
         case .midterm: return "Midterm"
         case .exam: return "Examen"
         case .study: return "Session d'étude"
@@ -386,6 +387,7 @@ enum CalendarEventKind: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .lecture: return "building.columns.fill"
+        case .exerciseSession: return "pencil.and.list.clipboard"
         case .midterm: return "clock.badge.exclamationmark.fill"
         case .exam: return "graduationcap.fill"
         case .study: return "timer"
@@ -398,6 +400,7 @@ enum CalendarEventKind: String, Codable, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .lecture: return .blue
+        case .exerciseSession: return .teal
         case .midterm: return .orange
         case .exam: return .red
         case .study: return .indigo
@@ -411,10 +414,11 @@ enum CalendarEventKind: String, Codable, CaseIterable, Identifiable {
 // MARK: - Événement d'agenda unifié (calendrier + examens + sessions)
 
 enum AgendaItemKind: String, Identifiable {
-    case exam, calendar, planned, task
+    case exam, calendar, planned, task, milestone
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .milestone: return "Calendrier EPFL"
         case .exam: return "Évaluation"
         case .calendar: return "Calendrier"
         case .planned: return "Session planifiée"
