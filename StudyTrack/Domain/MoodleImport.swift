@@ -162,6 +162,42 @@ enum MoodleStateParser {
         return ScrapedCourse(source: ContentSource.moodle.rawValue, title: title, url: url, sections: sections)
     }
 
+    /// Le cours, activité par activité, pour `MoodleCourseAnalyzer` : les
+    /// cibles des liens et les échéances des devoirs sont ajoutées ensuite,
+    /// lues sur les pages des activités.
+    static func snapshot(fromStateJSON json: String, title: String, url: String) -> MoodleCourseSnapshot? {
+        guard let data = json.data(using: .utf8),
+              let state = try? JSONDecoder().decode(State.self, from: data) else { return nil }
+        let modules = Dictionary(state.cm.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let delegated = Dictionary(state.section.compactMap { section -> (String, State.Section)? in
+            guard section.component == "mod_subsection", let item = section.itemid else { return nil }
+            return (item, section)
+        }, uniquingKeysWith: { first, _ in first })
+
+        func activities(of section: State.Section, depth: Int) -> [MoodleActivity] {
+            section.cmlist.flatMap { id -> [MoodleActivity] in
+                guard let module = modules[id] else { return [] }
+                if module.module == "subsection", let inner = delegated[id], depth < 2 {
+                    return activities(of: inner, depth: depth + 1)
+                }
+                let kind = module.module ?? ""
+                return [MoodleActivity(id: module.id, name: BotafogoParser.decode(module.name), module: kind,
+                                       url: module.url ?? "https://moodle.epfl.ch/mod/\(kind)/view.php?id=\(module.id)",
+                                       isVisible: module.uservisible != false)]
+            }
+        }
+
+        let sections = state.section
+            .filter { $0.component != "mod_subsection" && $0.visible != false }
+            .enumerated()
+            .map { index, section in
+                MoodleSection(number: section.number ?? index,
+                              title: BotafogoParser.decode(section.title),
+                              activities: activities(of: section, depth: 0))
+            }
+        return MoodleCourseSnapshot(title: title, url: url, sections: sections)
+    }
+
     /// La réponse d'une recherche ou de la liste des inscriptions.
     static func courses(fromJSON json: String) -> [MoodleCourseRef] {
         struct Envelope: Decodable {

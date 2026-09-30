@@ -11,6 +11,8 @@ final class Exam {
     var date: Date
     var weightPercent: Double?
     var location: String
+    /// La page de l'échéance (le devoir sur Moodle), quand elle vient d'un import.
+    var urlString: String = ""
     var notes: String
     var externalCalendarEventID: String?
 

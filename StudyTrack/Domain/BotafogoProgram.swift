@@ -564,3 +564,37 @@ enum BotafogoProgramBuilder {
         return ContentDraft(source: .botafogo, courseTitle: title, url: root.absoluteString, sections: sections)
     }
 }
+
+// MARK: - Quel site Botafogo pour quel cours
+
+/// Le site Botafogo d'un cours EPFL, quand il en a un.
+///
+/// Certains cours n'ont (presque) rien sur Moodle : la classe inversée
+/// d'Analyse I (MATH-101(pi)) vit entièrement sur Botafogo. Un cours Moodle
+/// vide n'est donc pas « rien à importer » : on va chercher son programme là
+/// où il est.
+enum BotafogoCatalog {
+    static func site(code: String, name: String) -> URL? {
+        let code = code.uppercased().replacingOccurrences(of: " ", with: "")
+        let name = ContentDraftBuilder.fold(name)
+        let path: String?
+        if code.hasPrefix("MATH-101") {
+            if code.contains("(PI)") || name.contains("inversee") || name.contains("flipped") {
+                path = "analyse-1-flipped/"
+            } else if code.contains("(C)") || name.contains("mecanique") || name.contains(" gm") {
+                path = "analyse-1-GM/"
+            } else {
+                path = "analyse-1/"
+            }
+        } else if name.contains("analyse b") {
+            path = "analyse-b/"
+        } else if name.contains("calcul scientifique") || code.hasPrefix("ICS") {
+            path = "ics/"
+        } else if name.contains("algebre lineaire et geometrie") {
+            path = "algebre-lineaire-geometrie/"
+        } else {
+            path = nil
+        }
+        return path.flatMap { URL(string: $0, relativeTo: BotafogoParser.home)?.absoluteURL }
+    }
+}

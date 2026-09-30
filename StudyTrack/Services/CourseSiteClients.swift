@@ -138,17 +138,60 @@ final class MoodleClient {
         return MoodleStateParser.courses(fromJSON: json)
     }
 
-    /// Le plan d'un cours.
-    func content(of course: MoodleCourseRef) async throws -> ScrapedCourse {
+    /// Le cours tel qu'un·e étudiant·e le lit : chaque activité, **où elle
+    /// mène vraiment** (la vidéo MediaSpace, le PDF d'un site de cours) et, pour
+    /// un devoir, son échéance.
+    ///
+    /// Ni la cible d'un lien ni l'échéance d'un devoir ne sont dans le plan du
+    /// cours : elles sont sur la page de l'activité (le lien de
+    /// « urlworkaround », la ligne « Due: … »). On lit ces pages dans la
+    /// session, six à la fois — c'est ce que ferait l'étudiant·e en cliquant.
+    func snapshot(of course: MoodleCourseRef) async throws -> MoodleCourseSnapshot {
         let json = try await call("core_courseformat_get_state", args: ["courseid": course.id])
-        // `data` est lui-même une chaîne JSON.
         let state = (try? JSONDecoder().decode(String.self, from: Data(json.utf8))) ?? json
-        guard let page = MoodleStateParser.course(fromStateJSON: state,
-                                                  title: "\(course.fullname) (\(course.shortname))",
-                                                  url: course.url.absoluteString) else {
+        guard var snapshot = MoodleStateParser.snapshot(fromStateJSON: state,
+                                                        title: "\(course.fullname) (\(course.shortname))",
+                                                        url: course.url.absoluteString) else {
             throw WebContentScraper.ScrapeError.empty
         }
-        return page
+        let wanted = snapshot.sections.flatMap(\.activities)
+            .filter { $0.isVisible && ($0.module == "url" || $0.module == "assign") }
+            .map { ["id": $0.id, "module": $0.module] }
+        guard !wanted.isEmpty else { return snapshot }
+        let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: wanted), as: UTF8.self)
+        let raw = try await session.run(#"""
+        const items = JSON.parse(list);
+        const out = {};
+        const one = async (item) => {
+          try {
+            const r = await fetch('/mod/' + item.module + '/view.php?id=' + item.id, { credentials: 'include' });
+            const html = await r.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            if (item.module === 'url') {
+              const a = doc.querySelector('.urlworkaround a, .resourceworkaround a, #region-main a[href^="http"]:not([href*="moodle.epfl.ch"])');
+              out[item.id] = { target: a ? a.href : (r.redirected ? r.url : '') };
+            } else {
+              const dates = doc.querySelector('[data-region="activity-dates"], .activity-dates');
+              out[item.id] = { dates: dates ? dates.innerText : '' };
+            }
+          } catch (e) { out[item.id] = {}; }
+        };
+        for (let i = 0; i < items.length; i += 6) { await Promise.all(items.slice(i, i + 6).map(one)); }
+        return JSON.stringify(out);
+        """#, arguments: ["list": argsJSON])
+        struct Found: Decodable { var target: String?; var dates: String? }
+        let found = (try? JSONDecoder().decode([String: Found].self, from: Data(raw.utf8))) ?? [:]
+        for s in snapshot.sections.indices {
+            for a in snapshot.sections[s].activities.indices {
+                let id = snapshot.sections[s].activities[a].id
+                guard let info = found[id] else { continue }
+                if let target = info.target, target.hasPrefix("http") { snapshot.sections[s].activities[a].target = target }
+                if let dates = info.dates, let due = MoodleCourseAnalyzer.dueDate(fromActivityDates: dates) {
+                    snapshot.sections[s].activities[a].dueDate = due
+                }
+            }
+        }
+        return snapshot
     }
 
     /// Un appel AJAX, fait depuis la page. Rend le champ `data` en JSON, ou

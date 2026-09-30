@@ -360,16 +360,28 @@ final class MoodleImportModel {
     private func load(_ ref: MoodleCourseRef, for course: Course) async {
         status[course.id] = "lecture de \(ref.shortname)…"
         do {
-            let page = try await client.content(of: ref)
-            let draft = ContentDraftBuilder.draft(from: page, source: .moodle,
-                                                  termStart: course.term?.startDate ?? term.start,
-                                                  totalWeeks: course.term?.totalWeeks ?? term.weeks)
-            guard !draft.isEmpty else {
-                status[course.id] = "rien de reconnaissable"
+            let snapshot = try await client.snapshot(of: ref)
+            let termStart = course.term?.startDate ?? term.start
+            let weeks = course.term?.totalWeeks ?? term.weeks
+            var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: weeks)
+            var label = "Moodle · \(ref.shortname)"
+            // Un cours vide sur Moodle vit peut-être ailleurs : la classe
+            // inversée d'Analyse I est tout entière sur Botafogo.
+            if draft.theoryCount + draft.seriesCount == 0,
+               let site = BotafogoCatalog.site(code: ref.shortname, name: "\(ref.fullname) \(course.name)") {
+                status[course.id] = "vide sur Moodle — lecture de Botafogo…"
+                if let botafogo = try? await BotafogoClient.draft(at: site, termStart: termStart, totalWeeks: weeks),
+                   !botafogo.isEmpty {
+                    draft = botafogo
+                    label = "Botafogo · \(botafogo.courseTitle) (vide sur Moodle)"
+                }
+            }
+            guard draft.theoryCount + draft.seriesCount + draft.deadlineCount > 0 else {
+                status[course.id] = snapshot.activityCount == 0 ? "vide sur Moodle" : "rien à suivre (pas de théorie ni de séries)"
                 return
             }
-            plans.append(ContentImportPlan(course: course, sourceLabel: "Moodle · \(ref.shortname)", draft: draft))
-            status[course.id] = "\(draft.theoryCount) théorie · \(draft.seriesCount) séries"
+            plans.append(ContentImportPlan(course: course, sourceLabel: label, draft: draft))
+            status[course.id] = ContentDraftSummary.line(draft)
         } catch {
             status[course.id] = "erreur : \(error.localizedDescription)"
         }
@@ -487,6 +499,7 @@ struct BatchReviewView: View {
     var onDone: () -> Void
 
     @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var app
     @State private var result: String?
 
     var body: some View {
@@ -546,14 +559,17 @@ struct BatchReviewView: View {
 
     private func apply() {
         var lines: [String] = []
+        var touched: [Course] = []
         for plan in model.plans where plan.isIncluded {
             let outcome = ContentDraftWriter.apply(plan.draft, to: plan.course, context: context)
             lines.append("\(plan.course.displayCode) — \(outcome.message)")
+            touched.append(plan.course)
         }
         try? context.save()
         Haptics.success()
         model.reset()
-        result = lines.joined(separator: "\n")
+        result = lines.joined(separator: "\n") + "\n\nLes énoncés des séries se lisent maintenant en arrière-plan."
+        SeriesAutoReading.start(courses: touched, context: context, settings: app.settings)
     }
 }
 
@@ -564,6 +580,8 @@ enum ContentDraftSummary {
         if draft.theoryCount > 0 { parts.append("\(draft.theoryCount) élément\(draft.theoryCount > 1 ? "s" : "") de théorie") }
         if draft.videoCount > 0 { parts.append("\(draft.videoCount) vidéo\(draft.videoCount > 1 ? "s" : "")") }
         if draft.seriesCount > 0 { parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")") }
+        if draft.deadlineCount > 0 { parts.append("\(draft.deadlineCount) échéance\(draft.deadlineCount > 1 ? "s" : "")") }
+        if draft.resourceCount > 0 { parts.append("\(draft.resourceCount) document\(draft.resourceCount > 1 ? "s" : "")") }
         return parts.isEmpty ? "rien de reconnaissable" : parts.joined(separator: " · ")
     }
 }
@@ -1113,6 +1131,7 @@ struct ContentReviewView: View {
     var onDone: () -> Void
 
     @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     /// Le cours cible ; `nil` = en créer un à partir du titre de la page.
     @State private var targetID: UUID?
@@ -1228,6 +1247,7 @@ struct ContentReviewView: View {
         try? context.save()
         Haptics.success()
         result = outcome
+        SeriesAutoReading.start(courses: [destination], context: context, settings: app.settings)
     }
 }
 

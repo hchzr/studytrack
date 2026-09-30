@@ -40,6 +40,15 @@ final class TheoryItem {
     var sectionTitle: String = ""
     /// D'où vient l'élément (`ContentSource.rawValue`), vide s'il a été saisi.
     var sourceRaw: String = ""
+    /// Tous les liens de l'élément (JSON de `ContentLink`) : l'enregistrement
+    /// du cours, ses transparents, ses notes annotées. `urlString` reste le
+    /// lien principal.
+    var linksRaw: String = ""
+
+    var links: [ContentLink] {
+        get { ContentLink.decodeList(linksRaw) }
+        set { linksRaw = ContentLink.encodeList(newValue) }
+    }
 
     init(id: UUID = UUID(),
          course: Course? = nil,

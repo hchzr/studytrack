@@ -44,8 +44,10 @@ enum ContentRefresher {
                 let enrolled = (try? await client.enrolled()) ?? []
                 for course in moodleCourses {
                     guard case .unique(let ref)? = try? await client.resolve(course, enrolled: enrolled),
-                          let page = try? await client.content(of: ref) else { continue }
-                    if let line = apply(page, source: .moodle, to: course, context: context) { news.append(line) }
+                          let snapshot = try? await client.snapshot(of: ref) else { continue }
+                    let draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: course.term?.startDate,
+                                                           totalWeeks: course.term?.totalWeeks ?? 14)
+                    if let line = apply(draft, to: course, context: context) { news.append(line) }
                 }
             } else {
                 AppLog.record(.info, "import", "Mise à jour Moodle sautée : session expirée")
@@ -60,17 +62,12 @@ enum ContentRefresher {
 
         try? context.save()
         settings.contentLastRefresh = now
+        // Une série apparue sur Moodle arrive avec son énoncé lu.
+        news.append(contentsOf: await SeriesAutoReader.shared.readPending(courses: courses, context: context, settings: settings))
         if !news.isEmpty {
             settings.contentRefreshNews = news.joined(separator: " · ")
             AppLog.record(.info, "import", "Mise à jour automatique", detail: settings.contentRefreshNews)
         }
-    }
-
-    private static func apply(_ page: ScrapedCourse, source: ContentSource, to course: Course, context: ModelContext) -> String? {
-        apply(ContentDraftBuilder.draft(from: page, source: source,
-                                        termStart: course.term?.startDate,
-                                        totalWeeks: course.term?.totalWeeks ?? 14),
-              to: course, context: context)
     }
 
     /// Écrit ce qui est nouveau ; rend « MATH-101 : 1 série » s'il y en a.

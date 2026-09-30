@@ -93,12 +93,23 @@ struct ScrapedCourse: Codable, Equatable {
 // MARK: - Brouillon à relire
 
 enum ContentItemKind: String, CaseIterable, Identifiable {
-    case theory, series, ignore
+    /// À suivre : de la matière, une série.
+    case theory, series
+    /// Une date à ne pas manquer : rendu noté, projet, examen.
+    case deadline
+    /// Un ancien examen, pour réviser.
+    case pastExam
+    /// Un document du cours, gardé comme lien mais pas suivi.
+    case resource
+    case ignore
     var id: String { rawValue }
     var label: String {
         switch self {
         case .theory: return "Théorie"
         case .series: return "Série"
+        case .deadline: return "Échéance"
+        case .pastExam: return "Annale"
+        case .resource: return "Document"
         case .ignore: return "Ignorer"
         }
     }
@@ -127,6 +138,14 @@ struct ContentDraftItem: Identifiable, Equatable {
     /// Quand le corrigé est publié, et où.
     var solutionsAt: Date? = nil
     var solutionURL: String = ""
+    /// Tout ce qui va avec l'élément : l'enregistrement d'un cours, ses
+    /// transparents et ses notes ; l'énoncé et le corrigé d'une série.
+    var links: [ContentLink] = []
+    /// La date d'une échéance.
+    var date: Date? = nil
+    var examKind: ExamKind = .assignment
+    /// La section d'origine d'un document (« Ressources et références »).
+    var group: String = ""
 
     /// La semaine à écrire.
     func plannedWeek(in section: ContentDraftSection) -> Int { week ?? section.week }
@@ -144,6 +163,8 @@ struct ContentDraftSection: Identifiable, Equatable {
     var items: [ContentDraftItem]
 
     var theoryCount: Int { items.filter { $0.kind == .theory }.count }
+    var deadlineCount: Int { items.filter { $0.kind == .deadline }.count }
+    var resourceCount: Int { items.filter { $0.kind == .resource || $0.kind == .pastExam }.count }
 
     /// « Semaine 3 », ou « Semaines 3–5 » quand les éléments s'étalent.
     var weekRange: ClosedRange<Int>? {
@@ -176,7 +197,9 @@ struct ContentDraft: Equatable {
     var theoryCount: Int { includedSections.reduce(0) { $0 + $1.theoryCount } }
     var seriesCount: Int { includedSections.reduce(0) { $0 + $1.seriesCount } }
     var videoCount: Int { includedSections.reduce(0) { $0 + $1.videoCount } }
-    var isEmpty: Bool { theoryCount == 0 && seriesCount == 0 }
+    var deadlineCount: Int { includedSections.reduce(0) { $0 + $1.deadlineCount } }
+    var resourceCount: Int { includedSections.reduce(0) { $0 + $1.resourceCount } }
+    var isEmpty: Bool { theoryCount == 0 && seriesCount == 0 && deadlineCount == 0 && resourceCount == 0 }
 }
 
 // MARK: - Interprétation
@@ -234,7 +257,7 @@ enum ContentDraftBuilder {
                                                   videoCount: 0,
                                                   seriesNumber: number,
                                                   theoryKind: .reading))
-                case .theory, .ignore:
+                default:
                     theoryIndex += 1
                     if raw.type == "recording" {
                         // L'enregistrement d'un cours : sa semaine est celle de

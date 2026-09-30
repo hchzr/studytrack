@@ -19,6 +19,7 @@ struct CourseDetailView: View {
     @State private var tab: Section = .exercises
     @State private var showingProgress = false
     @State private var showingExams = false
+    @State private var showingDocuments = false
     @State private var hasAppliedInitialSection = false
     @State private var showingEditor = false
     @State private var showingDelete = false
@@ -58,6 +59,7 @@ struct CourseDetailView: View {
                 if !debugHidesHeader {
                     header
                     examsRow
+                    if !course.documents.isEmpty { documentsRow }
                 }
 
                 Picker("Section", selection: $tab) {
@@ -97,6 +99,9 @@ struct CourseDetailView: View {
         }
         .navigationDestination(isPresented: $showingExams) {
             CourseExamsView(course: course)
+        }
+        .navigationDestination(isPresented: $showingDocuments) {
+            CourseDocumentsView(course: course)
         }
         .onAppear {
             if !hasAppliedInitialSection {
@@ -357,6 +362,42 @@ struct CourseDetailView: View {
         .buttonStyle(PressableStyle())
     }
 
+    /// Les documents du cours qui ne se suivent pas : formulaire, plan,
+    /// organisation, forum. Un lien, pas une tâche.
+    private var documentsRow: some View {
+        Button {
+            showingDocuments = true
+        } label: {
+            HStack(spacing: Layout.block) {
+                Image(systemName: "folder")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.accent.accessibleMark)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: Layout.micro) {
+                    Text("Documents du cours")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text(course.documents.prefix(3).map(\.title).joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: Layout.inline)
+                Text("\(course.documents.count)")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Layout.gutter)
+            .padding(.vertical, Layout.block)
+            .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+
     private func examsDetail(_ next: Exam?) -> String {
         guard let next else {
             return course.exams.isEmpty ? "Ajoute le midterm et l'examen final" : "Évaluations passées et annales"
@@ -403,5 +444,64 @@ struct WeekAxisRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title) : \(done) sur \(total)")
+    }
+}
+
+/// Les documents d'un cours, rangés par leur section d'origine sur Moodle.
+struct CourseDocumentsView: View {
+    let course: Course
+
+    @Environment(\.modelContext) private var context
+    @State private var browsing: BrowsedLink?
+
+    private var groups: [(title: String, documents: [CourseDocument])] {
+        var order: [String] = []
+        var byGroup: [String: [CourseDocument]] = [:]
+        for document in course.documents {
+            let key = document.group.isEmpty ? "Autres" : document.group
+            if byGroup[key] == nil { order.append(key) }
+            byGroup[key, default: []].append(document)
+        }
+        return order.map { ($0, byGroup[$0] ?? []) }
+    }
+
+    var body: some View {
+        List {
+            ForEach(groups, id: \.title) { group in
+                Section(group.title) {
+                    ForEach(group.documents) { document in
+                        row(document)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Documents · \(course.displayCode)")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $browsing) { InAppBrowser(link: $0) }
+    }
+
+    private func row(_ document: CourseDocument) -> some View {
+        Button {
+            if let url = ExerciseLinks.web(document.url) {
+                browsing = BrowsedLink(title: document.title, url: url, icon: document.kind.icon)
+            }
+        } label: {
+            Label(document.title, systemImage: document.kind.icon)
+                .foregroundStyle(Color.primary)
+        }
+        .swipeActions {
+            Button(role: .destructive) { remove(document) } label: {
+                Label("Retirer", systemImage: "trash")
+            }
+        }
+    }
+
+    private func remove(_ document: CourseDocument) {
+        course.documents.removeAll { $0 == document }
+        // Retiré à la main : une mise à jour automatique ne le remettra pas.
+        var ignored = course.contentIgnored
+        ignored.insert(document.url)
+        course.contentIgnored = ignored
+        try? context.save()
     }
 }

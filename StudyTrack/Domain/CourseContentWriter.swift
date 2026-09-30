@@ -8,14 +8,22 @@ struct ContentImportResult: Equatable {
     var seriesAdded = 0
     var seriesUpdated = 0
     var exercisesAdded = 0
+    var deadlinesAdded = 0
+    var pastExamsAdded = 0
+    var documentsAdded = 0
 
-    var isEmpty: Bool { theoryAdded + theoryUpdated + seriesAdded + seriesUpdated == 0 }
+    var isEmpty: Bool {
+        theoryAdded + theoryUpdated + seriesAdded + seriesUpdated + deadlinesAdded + pastExamsAdded + documentsAdded == 0
+    }
 
     var message: String {
         var parts: [String] = []
         if theoryAdded > 0 { parts.append("\(theoryAdded) élément\(theoryAdded > 1 ? "s" : "") de théorie") }
         if seriesAdded > 0 { parts.append("\(seriesAdded) série\(seriesAdded > 1 ? "s" : "")") }
         if exercisesAdded > 0 { parts.append("\(exercisesAdded) exercice\(exercisesAdded > 1 ? "s" : "")") }
+        if deadlinesAdded > 0 { parts.append("\(deadlinesAdded) échéance\(deadlinesAdded > 1 ? "s" : "")") }
+        if pastExamsAdded > 0 { parts.append("\(pastExamsAdded) ancien\(pastExamsAdded > 1 ? "s" : "") examen\(pastExamsAdded > 1 ? "s" : "")") }
+        if documentsAdded > 0 { parts.append("\(documentsAdded) document\(documentsAdded > 1 ? "s" : "")") }
         let updated = theoryUpdated + seriesUpdated
         if parts.isEmpty {
             return updated > 0 ? "Déjà à jour · \(updated) élément\(updated > 1 ? "s" : "") rafraîchi\(updated > 1 ? "s" : "")." : "Rien de nouveau."
@@ -35,6 +43,17 @@ enum ContentDraftWriter {
     /// Le thème, le corrigé et les exercices d'une série, quand la source les
     /// donne. Les exercices passent par `SeriesDraftWriter` en mode fusion :
     /// l'avancement (questions cochées, correction) est gardé par numéro.
+    /// Ajoute un document à la liste du cours s'il n'y est pas ; rend 1 s'il est nouveau.
+    private static func addDocument(_ item: ContentDraftItem, to course: Course) -> Int {
+        guard !item.url.isEmpty else { return 0 }
+        var documents = course.documents
+        guard !documents.contains(where: { $0.url == item.url }) else { return 0 }
+        documents.append(CourseDocument(title: item.title, url: item.url, group: item.group,
+                                        kind: item.links.first?.kind ?? .page))
+        course.documents = documents
+        return 1
+    }
+
     @discardableResult
     private static func writeDetails(of item: ContentDraftItem, into series: ExerciseSeries,
                                      course: Course, context: ModelContext) -> Int {
@@ -99,6 +118,34 @@ enum ContentDraftWriter {
                 switch item.kind {
                 case .ignore:
                     continue
+                case .deadline:
+                    // Une échéance est une évaluation du cours : rendu noté,
+                    // projet, examen. Retrouvée par son titre, jamais doublée.
+                    let title = item.title.trimmingCharacters(in: .whitespaces)
+                    if let existing = course.exams.first(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) {
+                        if let date = item.date, existing.date != date { existing.date = date }
+                        if existing.urlString.isEmpty { existing.urlString = item.url }
+                    } else if let date = item.date {
+                        let exam = Exam(course: course, kind: item.examKind, title: title, date: date)
+                        exam.urlString = item.url
+                        context.insert(exam)
+                        result.deadlinesAdded += 1
+                    } else {
+                        // Sans date, c'est un document : on garde le lien.
+                        result.documentsAdded += addDocument(item, to: course)
+                    }
+                case .pastExam:
+                    let year = Int(item.number) ?? Calendar.current.component(.year, from: Date())
+                    if let existing = course.pastExams.first(where: { $0.urlString == item.url || $0.title == item.title }) {
+                        if existing.solutionURLString.isEmpty { existing.solutionURLString = item.solutionURL }
+                    } else {
+                        let past = PastExam(course: course, title: item.title, year: year, kind: .exam,
+                                            urlString: item.url, solutionURLString: item.solutionURL)
+                        context.insert(past)
+                        result.pastExamsAdded += 1
+                    }
+                case .resource:
+                    result.documentsAdded += addDocument(item, to: course)
                 case .theory:
                     let existing = course.theoryItems.first { existing in
                         (!item.url.isEmpty && existing.urlString == item.url) || existing.number == item.number
@@ -111,6 +158,7 @@ enum ContentDraftWriter {
                         existing.sectionTitle = section.title
                         existing.kind = item.theoryKind
                         if existing.urlString.isEmpty { existing.urlString = item.url }
+                        if !item.links.isEmpty { existing.links = item.links }
                         existing.sourceRaw = draft.source.rawValue
                         result.theoryUpdated += 1
                     } else {
@@ -125,6 +173,7 @@ enum ContentDraftWriter {
                         theory.videoCount = item.videoCount
                         theory.sectionTitle = section.title
                         theory.sourceRaw = draft.source.rawValue
+                        theory.links = item.links
                         context.insert(theory)
                         nextSort += 1
                         result.theoryAdded += 1

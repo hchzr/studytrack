@@ -322,7 +322,12 @@ struct ExercisesTabView: View {
         VStack(alignment: .leading, spacing: Layout.block) {
                 Divider()
 
-                if series.exercises.isEmpty {
+                if series.exercises.isEmpty, SeriesAutoReader.shared.reading.contains(series.id) {
+                    HStack(spacing: Layout.inline) {
+                        ProgressView()
+                        Text("Lecture de l'énoncé…").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else if series.exercises.isEmpty {
                     // Une série venue de Moodle connaît son PDF : un tap le lit.
                     if let url = URL(string: series.urlString), !series.urlString.isEmpty {
                         Button {

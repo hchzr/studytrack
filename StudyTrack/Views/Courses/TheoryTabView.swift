@@ -201,7 +201,7 @@ struct VideoRow: View {
             }
             .buttonStyle(.plain)
 
-            if let onOpenLink, let url = ExerciseLinks.web(video.urlString) {
+            if let onOpenLink, let url = ExerciseLinks.web(video.links.first { $0.kind == .video }?.url ?? video.urlString) {
                 Button {
                     onOpenLink(BrowsedLink(title: "\(video.number) \(MathMarkup.plain(video.title))", url: url, icon: video.kind.icon))
                 } label: {
@@ -309,7 +309,19 @@ struct VideoDetailSheet: View {
                                 try? context.save()
                             }
                     }
-                    if let url = ExerciseLinks.web(video.urlString) {
+                    // Tous les supports de l'élément : l'enregistrement du cours,
+                    // ses transparents, ses notes annotées.
+                    if !video.links.isEmpty {
+                        ForEach(video.links, id: \.url) { link in
+                            if let url = ExerciseLinks.web(link.url) {
+                                Button {
+                                    browsing = BrowsedLink(title: link.title, url: url, icon: link.icon)
+                                } label: {
+                                    Label(link.title, systemImage: link.icon)
+                                }
+                            }
+                        }
+                    } else if let url = ExerciseLinks.web(video.urlString) {
                         Button {
                             browsing = BrowsedLink(title: video.numberAndTitle, url: url, icon: video.kind.icon)
                         } label: {

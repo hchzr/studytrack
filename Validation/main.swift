@@ -1202,6 +1202,246 @@ do {
     try? context.save()
 }
 
+print("== Moodle : analyse de vrais cours ==")
+do {
+    let term = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 9, day: 7))!
+    var nextID = 0
+    func act(_ name: String, _ module: String, target: String? = nil, due: Date? = nil, visible: Bool = true) -> MoodleActivity {
+        nextID += 1
+        return MoodleActivity(id: "\(nextID)", name: name, module: module,
+                              url: "https://moodle.epfl.ch/mod/\(module)/view.php?id=\(nextID)",
+                              target: target, dueDate: due, isVisible: visible)
+    }
+
+    // CS-107 : semaines à l'envers, un enregistrement et deux versions des
+    // transparents par semaine, un mini-projet, la date d'examen dans un titre.
+    let cs107 = MoodleCourseSnapshot(title: "Introduction à la programmation", url: "https://moodle.epfl.ch/course/view.php?id=14847", sections: [
+        MoodleSection(number: 0, title: "Informations générales", activities: []),
+        MoodleSection(number: 1, title: "Horaires et salles", activities: [act("Cours en présentiel: Mercredi 1415-1500 au RLCE124", "label")]),
+        MoodleSection(number: 2, title: "Calendrier", activities: [act("Plan du cours", "url", target: "https://proginsc.epfl.ch/wwwhiver/planning.php")]),
+        MoodleSection(number: 5, title: "Fora", activities: [act("Annonces du cours", "forum"), act("Forum de discussion", "lti")]),
+        MoodleSection(number: 7, title: "Mini-projet 1 en auto-évaluation", activities: [
+            act("Fin du projet (fin du challenge et objectif pour 60% des points a minima)", "label"),
+            act("⚠️Selection d'un groupe (DÉLAI 13.10, 18:00)⚠️", "choicegroup")]),
+        MoodleSection(number: 18, title: " Semaine 4 : Types «avancés»", activities: [
+            act("Enregistrement vidéo du cours du 1.10.2025", "url", target: "https://mediaspace.epfl.ch/media/CS-107+cours+4/0_abc"),
+            act("Transparents (4 pages sur 1)", "url", target: "https://proginsc.epfl.ch/wwwhiver/documents/cours04.pdf"),
+            act("Transparents (1 page sur 1)", "url", target: "https://proginsc.epfl.ch/wwwhiver/documents/cours04-full.pdf"),
+            act("Enoncé/Corrigé de la série 4", "url", target: "https://proginsc.epfl.ch/wwwhiver/series/serie04/serie.html")]),
+        MoodleSection(number: 21, title: "Semaine 1 : Introduction & Mise en place de l'environnement", activities: [
+            act("Transparents (Introduction) (1 page sur 1)", "url", target: "https://proginsc.epfl.ch/wwwhiver/documents/cours01a.pdf"),
+            act("Transparents (algorithmes) (1 page sur 1)", "url", target: "https://proginsc.epfl.ch/wwwhiver/documents/cours01b.pdf"),
+            act("Enoncé/Corrigé de la série 1", "url", target: "https://proginsc.epfl.ch/wwwhiver/series/serie01/serie.html"),
+            act("Matériel annexe :Mini-référence : Environnement", "label")]),
+        MoodleSection(number: 22, title: "Examen Final (samedi 12.12, 09:00-12:00)", activities: []),
+        MoodleSection(number: 24, title: "Questionnaires", activities: [act("Machines personnelles", "questionnaire")])])
+    let d107 = MoodleCourseAnalyzer.draft(from: cs107, termStart: term)
+    let weeks107 = d107.sections.filter { $0.week > 0 }
+    check(weeks107.map(\.week) == [1, 4], "semaines remises dans l'ordre du semestre (\(weeks107.map(\.week)))")
+    let week4 = weeks107.last?.items ?? []
+    let lecture4 = week4.first { $0.kind == .theory }
+    check(week4.filter { $0.kind == .theory }.count == 1, "l'enregistrement et les deux transparents font **un** cours")
+    check(lecture4?.title == "Types «avancés»" && lecture4?.theoryKind == .video && lecture4?.links.count == 3,
+          "…nommé par le sujet de la semaine, vidéo et transparents liés (\(lecture4?.title ?? ""))")
+    let series4 = week4.first { $0.kind == .series }
+    check(series4?.seriesNumber == 4 && series4?.solutionURL == series4?.url, "« Enoncé/Corrigé de la série 4 » : énoncé et corrigé")
+    check(weeks107.first?.items.filter { $0.kind == .theory }.map(\.title) == ["Introduction", "Algorithmes"],
+          "deux transparents à sujets différents restent deux cours")
+    let deadlines107 = d107.sections.first { $0.title.hasPrefix("Échéances") }?.items ?? []
+    check(deadlines107.contains { $0.examKind == .exam && $0.title == "Examen Final" && $0.date != nil },
+          "l'examen final est une échéance, daté par le titre de sa section")
+    check(deadlines107.contains { $0.examKind == .project && $0.title.contains("Selection d'un groupe") },
+          "le mini-projet n'est pas du travail à suivre : son délai devient une échéance")
+    check(!d107.sections.flatMap(\.items).contains { $0.title.contains("Fin du projet") && ($0.kind == .theory || $0.kind == .series) },
+          "rien du projet n'est rangé en théorie ou en série")
+    check(d107.sections.first { $0.title.hasPrefix("Documents") }?.items.contains { $0.title == "Plan du cours" } == true,
+          "le plan du cours est gardé comme document")
+
+    // PHYS-101(en) : notes vierges et annotées + enregistrement = un cours ;
+    // « Problem Set » et ses solutions ; anciens examens.
+    let phys = MoodleCourseSnapshot(title: "Physique générale : mécanique (anglais)", url: "u", sections: [
+        MoodleSection(number: 0, title: "General", activities: [act("Math review", "resource"), act("Formula sheet for Final exam", "resource")]),
+        MoodleSection(number: 1, title: "Previous final exams", activities: [
+            act("Final Exam 2025", "resource"), act("Final Exam Solutions 2025", "resource")]),
+        MoodleSection(number: 2, title: "7 September - 13 September", activities: [
+            act("Lecture notes 1a (blank)", "resource"), act("Lecture notes 1a (annotated)", "resource"),
+            act("Lecture notes 1b (blank)", "resource"), act("Lecture notes 1b (annotated)", "resource"),
+            act("Lecture 1a recording", "url", target: "https://mediaspace.epfl.ch/media/1a"),
+            act("Lecture 1b recording", "url", target: "https://mediaspace.epfl.ch/media/1b"),
+            act("Problem Set 1: Motion in 1D", "resource"),
+            act("Problem Set 1 Solutions: Motion in 1D", "resource")])])
+    let dphys = MoodleCourseAnalyzer.draft(from: phys, termStart: term)
+    let physWeek = dphys.sections.first { $0.week == 1 }?.items ?? []
+    check(physWeek.filter { $0.kind == .theory }.map(\.number) == ["1a", "1b"], "deux cours, 1a et 1b")
+    check(physWeek.first?.links.count == 3 && physWeek.first?.links.contains { $0.kind == .video } == true,
+          "chaque cours : ses deux notes et son enregistrement")
+    let ps1 = physWeek.first { $0.kind == .series }
+    check(ps1?.seriesNumber == 1 && ps1?.title == "Motion in 1D" && !(ps1?.solutionURL.isEmpty ?? true) && !(ps1?.pdfURL.isEmpty ?? true),
+          "Problem Set 1 : thème, PDF à lire, solutions rattachées")
+    check(dphys.sections.first { $0.title == "Anciens examens" }?.items.first.map { $0.number == "2025" && !$0.solutionURL.isEmpty } == true,
+          "l'examen 2025 et sa solution font une annale")
+
+    // MATH-111(pi) : « Série 1 » / « Série 1 - Corrigé », « serie04 sol »,
+    // chapitres « 01-Systemes-lineaires », rendus en groupe, méthodologie.
+    let due = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 10, day: 2, hour: 23, minute: 59))!
+    let alg = MoodleCourseSnapshot(title: "Algèbre linéaire (classe inversée)", url: "u", sections: [
+        MoodleSection(number: 1, title: "7 September - 13 September", activities: [
+            act("Série 1", "resource"), act("Série 1 - Corrigé", "resource"), act("Inscription à un groupe", "choicegroup"),
+            act("Rendu 01 (en groupe) - Contrat et inscription sur Moodle", "assign", due: due),
+            act("Notes du cours", "label"), act("introduction-2026", "resource"), act("01-Systemes-lineaires", "resource"),
+            act("Equipe et comportements constructif-destructif", "resource"), act("Contrat-d-equipe", "resource")]),
+        MoodleSection(number: 4, title: "28 September - 4 October", activities: [
+            act("serie04", "resource"), act("serie04 sol", "resource", visible: false), act("04-Espaces-vectoriels", "resource"),
+            act("Rendu 04 (en groupe)", "assign", due: due), act("rendu04 sol", "resource"),
+            act("Apprendre à étudier - 03 (comprendre des preuves)", "resource")])])
+    let dalg = MoodleCourseAnalyzer.draft(from: alg, termStart: term)
+    let algWeek1 = dalg.sections.first { $0.week == 1 }?.items ?? []
+    check(algWeek1.contains { $0.kind == .series && $0.seriesNumber == 1 && !$0.solutionURL.isEmpty }, "Série 1 et son corrigé")
+    check(algWeek1.contains { $0.kind == .theory && $0.title == "Systemes lineaires" }, "le chapitre 01 devient de la théorie lisible")
+    check(!algWeek1.contains { $0.title.contains("Contrat") || $0.title.contains("Equipe") }, "les documents d'équipe ne sont pas de la théorie")
+    let algWeek4 = dalg.sections.first { $0.week == 4 }?.items ?? []
+    check(algWeek4.contains { $0.kind == .series && $0.seriesNumber == 4 && $0.solutionURL.isEmpty },
+          "serie04 sans son corrigé (pas encore visible)")
+    check(!algWeek4.contains { $0.kind == .series && $0.url.contains("rendu") }, "le corrigé d'un rendu n'est pas une série")
+    let algDeadlines = dalg.sections.first { $0.title.hasPrefix("Échéances") }?.items ?? []
+    check(algDeadlines.count == 2 && algDeadlines.allSatisfy { $0.examKind == .assignment && $0.date == due },
+          "les rendus notés sont des échéances datées")
+    check(dalg.sections.first { $0.title.hasPrefix("Documents") }?.items.contains { $0.title.hasPrefix("Apprendre à étudier") } == true,
+          "« Apprendre à étudier » : un document, pas un cours")
+
+    // CS-101 : « Week N », cours du mardi = transparents + notes annotées,
+    // « Exercise » / « Solution » sans numéro = la série de la semaine.
+    let cs101 = MoodleCourseSnapshot(title: "AICC I", url: "u", sections: [
+        MoodleSection(number: 5, title: "Week 2: 14 September - 18 September", activities: [
+            act("Lecture — Tuesday", "url", target: "https://www.dropbox.com/week_2_1.pdf"),
+            act("Annotated lecture notes (Tuesday)", "resource"),
+            act("Lecture — Wednesday", "url", target: "https://www.dropbox.com/week_2_2.pdf"),
+            act("Exercise", "url", target: "https://urbanke.github.io/week02-exercises.pdf"),
+            act("Solution", "url", target: "https://urbanke.github.io/week02-solutions.pdf")])])
+    let d101 = MoodleCourseAnalyzer.draft(from: cs101, termStart: term)
+    let w2 = d101.sections.first?.items ?? []
+    check(d101.sections.first?.week == 2, "« Week 2 » est la semaine 2")
+    check(w2.filter { $0.kind == .theory }.map(\.title) == ["Cours du mardi", "Cours du mercredi"], "un cours par jour")
+    check(w2.first?.links.count == 2, "transparents et notes annotées du mardi réunis")
+    let ex2 = w2.first { $0.kind == .series }
+    check(ex2?.seriesNumber == 2 && ex2?.pdfURL.hasSuffix("exercises.pdf") == true && ex2?.solutionURL.hasSuffix("solutions.pdf") == true,
+          "« Exercise » / « Solution » : la série 2, PDF public à lire")
+
+    check(MoodleCourseAnalyzer.dueDate(fromActivityDates: "Opened: Monday, 31 August 2026, 12:00 PM Due: Friday, 2 October 2026, 11:59 PM")
+          == Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: TimeZone(identifier: "Europe/Zurich"), year: 2026, month: 10, day: 2, hour: 23, minute: 59)),
+          "échéance lue sur la page d'un devoir (anglais)")
+    check(MoodleCourseAnalyzer.dueDate(fromActivityDates: "Ouvert le : lundi 31 août 2026, 12:00 À remettre : vendredi 2 octobre 2026, 23:59") != nil,
+          "…et en français")
+
+    let written = Course(code: "TEST-601", name: "Écriture")
+    context.insert(written)
+    let outcome = ContentDraftWriter.apply(dalg, to: written, context: context)
+    check(outcome.deadlinesAdded == 2 && written.exams.count == 2, "les échéances deviennent des évaluations du cours")
+    check(written.documents.contains { $0.title.hasPrefix("Apprendre") }, "les documents sont gardés comme liens")
+    ContentDraftWriter.apply(dalg, to: written, context: context, updateWeeks: false)
+    check(written.exams.count == 2 && written.documents.count == outcome.documentsAdded, "une mise à jour ne double rien")
+    let wphys = Course(code: "TEST-602", name: "Liens")
+    context.insert(wphys)
+    ContentDraftWriter.apply(dphys, to: wphys, context: context)
+    check(wphys.theoryItems.first { $0.number == "1a" }?.links.count == 3, "les liens d'un cours sont écrits")
+    check(wphys.pastExams.count == 1, "l'annale est écrite")
+    context.delete(written); context.delete(wphys)
+    try? context.save()
+}
+
+print("== Séries publiées en HTML (CS-107) ==")
+do {
+    let html = #"""
+
+  
+
+</table>
+
+<br>
+
+<table border="0" cellpadding="2" cellspacing="0" width="100%">
+  <tbody><tr> 
+    <td width="75">&nbsp;</td>
+
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+    <td><b>Tous les exercices sur une page:</b> <a target="_blank" href="../serie03/serie_print.html">[Enonc&eacute;]</a>  | <a target="_blank" href="../serie03/solution_print.html">[Corrig&eacute;]</a> </td>
+  </tr>
+</tbody></table>
+
+<p>&nbsp; </p>
+<table width="100%" border="0" cellpadding="2" cellspacing="0">
+  <tr> 
+    <td width="75"><div align="right"><strong><font size="+1">
+	3.1
+	</font></strong></div></td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+    <td><strong><font size="+1">
+    <a href="../serie03/ex1/task.html">R&eacute;solution de polyn&ocirc;mes de degr&eacute; 2</a>
+    </font></strong></td>
+    <td width="100"><div align="right"><font size="+1"><strong>Niv. 0</strong></font></div></td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>    
+  </tr>
+  <tr> 
+    <td width="75">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+    <td><div align="justify"> Nous voulons &eacute;crire un programme permettant de trouver les z&eacute;ros de polyn&ocirc;mes de degr&eacute; 2.</div></td>
+	<td width="100">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>  </tr>
+  <tr> 
+    <td width="75">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+	<td>
+		<a href="../serie03/ex1/task.html">[Enonc&eacute;]</a> 
+		<a href="../serie03/ex1/solution.html">[Corrig&eacute;]</a>
+	</td>
+	<td width="100">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+  </tr>
+</table>
+<br>
+<table width="100%" border="0" cellpadding="2" cellspacing="0">
+  <tr> 
+    <td width="75"><div align="right"><strong><font size="+1">
+	3.2
+	</font></strong></div></td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+    <td><strong><font size="+1">
+    <a href="../serie03/ex2/task.html">MOOC (cours en ligne) </a>
+    </font></strong></td>
+    <td width="100"><div align="right"><font size="+1"><strong>Niv. 1</strong></font></div></td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>    
+  </tr>
+  <tr> 
+    <td width="75">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+    <td><div align="justify">Quiz : structures de contr&ocirc;le</div></td>
+	<td width="100">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>  </tr>
+  <tr> 
+    <td width="75">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+	<td>
+		<a href="../serie03/ex2/task.html">[Enonc&eacute;]</a> 
+		<a href="../serie03/ex2/solution.html">[Corrig&eacute;]</a>
+	</td>
+	<td width="100">&nbsp;</td>
+	<td width="25"><font color="#000000">&nbsp;</font></td>
+  </tr>
+</table>
+<br>
+
+"""#
+    let base = URL(string: "https://proginsc.epfl.ch/wwwhiver/series/serie03/serie.html")!
+    let page = SeriesPageParser.parseProginsc(html: html, baseURL: base)
+    check(page?.exercises.map(\.number) == ["3.1", "3.2"], "exercices lus sur la page (\(page?.exercises.map(\.number) ?? []))")
+    check(page?.exercises.first?.title == "Résolution de polynômes de degré 2", "titre, entités décodées (\(page?.exercises.first?.title ?? ""))")
+    check(page?.exercises.first?.statement.contains("zéros de polynômes") == true && page?.exercises.first?.statement.hasSuffix("Niveau 0") == true,
+          "résumé et niveau")
+    check(page?.exercises.first?.url == "https://proginsc.epfl.ch/wwwhiver/series/serie03/ex1/task.html", "lien de l'énoncé")
+    check(page?.solutionURL == "https://proginsc.epfl.ch/wwwhiver/series/serie03/solution_print.html", "corrigé complet")
+    check(SeriesPageParser.parseProginsc(html: "<html>rien</html>", baseURL: base) == nil, "une autre page n'est pas une série")
+}
+
 print("== Exercice par exercice ==")
 do {
     let flowSeries = ExerciseSeries(seriesNumber: 9)

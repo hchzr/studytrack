@@ -54,6 +54,15 @@ final class Course {
     /// automatique ne les réajoute pas. Une adresse par ligne.
     var contentIgnoredRaw: String = ""
 
+    /// Les documents du cours qui ne se suivent pas — formulaire, aide-mémoire,
+    /// organisation, forum — gardés comme liens (JSON de `CourseDocument`).
+    var documentsRaw: String = ""
+
+    var documents: [CourseDocument] {
+        get { CourseDocument.decodeList(documentsRaw) }
+        set { documentsRaw = CourseDocument.encodeList(newValue) }
+    }
+
     var contentIgnored: Set<String> {
         get { Set(contentIgnoredRaw.split(separator: "\n").map(String.init)) }
         set { contentIgnoredRaw = newValue.sorted().joined(separator: "\n") }
