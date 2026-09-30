@@ -204,6 +204,41 @@ struct RemotePlannedSession: Codable, Identifiable {
     }
 }
 
+/// Un message d'entraide : une question sur un exercice, ou sa réponse.
+struct RemotePost: Codable, Identifiable, Equatable {
+    var id: String
+    var groupId: String
+    var authorId: String
+    var authorName: String
+    var parentId: String?
+    var kind: String
+    var courseCode: String
+    var seriesNumber: Int?
+    var exerciseNumber: String
+    var body: String
+    var resolved: Bool
+    var createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, body, resolved
+        case groupId = "group_id"
+        case authorId = "author_id"
+        case authorName = "author_name"
+        case parentId = "parent_id"
+        case courseCode = "course_code"
+        case seriesNumber = "series_number"
+        case exerciseNumber = "exercise_number"
+        case createdAt = "created_at"
+    }
+
+    /// « CS-107 · 4.3 » : ce sur quoi porte la question.
+    var target: String {
+        [courseCode.isEmpty ? nil : courseCode,
+         exerciseNumber.isEmpty ? seriesNumber.map { "série \($0)" } : exerciseNumber]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 /// Ligne de classement calculée côté serveur (RPC `group_leaderboard`).
 struct LeaderboardRow: Codable, Identifiable {
     var userId: String
@@ -772,6 +807,57 @@ final class SocialService {
         return session
     }
 
+    // MARK: Entraide
+
+    /// Les questions et réponses d'un groupe, les plus récentes d'abord.
+    func fetchPosts(groupID: String, limit: Int = 60) async throws -> [RemotePost] {
+        guard let client else { throw SupabaseError.notConfigured }
+        let data = try await client.select("group_posts",
+                                           query: [URLQueryItem(name: "group_id", value: "eq.\(groupID)"),
+                                                   URLQueryItem(name: "select", value: "*"),
+                                                   URLQueryItem(name: "order", value: "created_at.desc"),
+                                                   URLQueryItem(name: "limit", value: String(limit))])
+        guard let data else { return [] }
+        return RemotePost.decodeList(data)
+    }
+
+    /// Pose une question (sur un exercice) ou répond à une question.
+    @discardableResult
+    func createPost(groupID: String, authorName: String, parentID: String? = nil,
+                    courseCode: String = "", seriesNumber: Int? = nil,
+                    exerciseNumber: String = "", body: String) async throws -> RemotePost {
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let userID = client.userID else { throw SupabaseError.notSignedIn }
+        var payload: [String: Any] = [
+            "group_id": groupID,
+            "author_id": userID,
+            "author_name": authorName,
+            "kind": parentID == nil ? "help" : "reply",
+            "course_code": courseCode,
+            "exercise_number": exerciseNumber,
+            "body": body
+        ]
+        if let parentID { payload["parent_id"] = parentID }
+        if let seriesNumber { payload["series_number"] = seriesNumber }
+        let data = try await client.insert("group_posts", values: payload)
+        guard let data, let post = RemotePost.decodeList(data).first else {
+            throw SupabaseError.decoding("group_posts")
+        }
+        return post
+    }
+
+    func setPostResolved(postID: String, resolved: Bool) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        _ = try await client.update("group_posts",
+                                    query: [URLQueryItem(name: "id", value: "eq.\(postID)")],
+                                    values: ["resolved": resolved])
+    }
+
+    func deletePost(postID: String) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        _ = try await client.delete("group_posts", query: [URLQueryItem(name: "id", value: "eq.\(postID)")])
+    }
+
     func setRSVP(sessionID: String, status: RSVPStatus) async {
         guard let client, let userID = client.userID else { return }
         _ = try? await client.upsert("session_rsvps",
@@ -800,5 +886,22 @@ enum AppleSignInSupport {
             }
         }
         return result
+    }
+}
+
+extension RemotePost {
+    /// Les dates de PostgREST portent des fractions de seconde et un fuseau :
+    /// les deux formes sont acceptées.
+    static func decodeList(_ data: Data) -> [RemotePost] {
+        let decoder = JSONDecoder()
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            if let date = precise.date(from: text) ?? plain.date(from: text) { return date }
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: text))
+        }
+        return (try? decoder.decode([RemotePost].self, from: data)) ?? []
     }
 }

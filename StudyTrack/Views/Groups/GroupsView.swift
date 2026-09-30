@@ -27,37 +27,42 @@ struct GroupsView: View {
     /// la liste est affichée.
     @State private var live: [UUID: [PresenceEntry]] = [:]
 
+    /// Le groupe affiché, retenu d'une ouverture à l'autre.
+    @AppStorage("groups.selected") private var selectedRaw = ""
+    @State private var showingSubjects = false
+    @State private var showingInvite = false
+
+    private var selected: StudyGroup? {
+        groups.first { $0.id.uuidString == selectedRaw } ?? groups.first
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
-            List {
+            CarnetScroll {
                 if let syncMessage {
-                    Section {
-                        Label(syncMessage, systemImage: "person.3.sequence.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(syncMessage)
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .padding(.horizontal, 6)
                 }
-
                 if groups.isEmpty {
-                    ContentUnavailableView(
-                        "Aucun groupe",
-                        systemImage: "person.3",
-                        description: Text("Créez un groupe d'étude ou rejoignez-en un avec un code d'invitation.")
-                    )
+                    emptyState
                 } else {
-                    Section("Mes groupes") {
-                        ForEach(groups) { group in
-                            NavigationLink(value: group) {
-                                GroupRow(group: group, live: live[group.id] ?? [])
-                            }
-                        }
-                        .onDelete(perform: delete)
+                    if groups.count > 1 { switcher }
+                    if let selected {
+                        GroupHubView(group: selected)
+                            .id(selected.id)
                     }
                 }
             }
-            .adaptiveListColumn()
-            .navigationTitle("Groupes")
-            .task { await watchPresence() }
+            .navigationTitle(groups.isEmpty ? "Groupes" : (selected?.name ?? "Groupes"))
+            .carnetSubtitle(subtitle)
+            .sheet(isPresented: $showingSubjects) {
+                if let selected { GroupSubjectsView(group: selected) }
+            }
+            .sheet(isPresented: $showingInvite) {
+                if let selected { GroupInviteView(group: selected) }
+            }
             .navigationDestination(for: StudyGroup.self) { group in
                 GroupDetailView(group: group)
             }
@@ -77,27 +82,46 @@ struct GroupsView: View {
                 }
             }
             .toolbar {
-                // Un « + » pour les deux façons d'entrer dans un groupe, puis
-                // l'avatar. La synchronisation se fait en tirant la liste vers
-                // le bas, comme partout sur iOS.
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Menu {
+                    if let selected {
                         Button {
-                            showingCreate = true
+                            showingInvite = true
                         } label: {
-                            Label("Créer un groupe", systemImage: "person.3")
+                            Image(systemName: "person.badge.plus")
                         }
-                        Button {
-                            joinCode = ""
-                            showingJoin = true
-                        } label: {
-                            Label("Rejoindre avec un code", systemImage: "person.badge.plus")
+                        .accessibilityLabel("Inviter dans \(selected.name)")
+                    }
+                    Menu {
+                        if let selected {
+                            Section(selected.name) {
+                                NavigationLink(value: GroupPageRoute(groupID: selected.id, page: .members)) {
+                                    Label("Membres", systemImage: "person.3")
+                                }
+                                Button { showingSubjects = true } label: {
+                                    Label("Matières du groupe", systemImage: "books.vertical")
+                                }
+                                NavigationLink(value: selected) {
+                                    Label("Réglages du groupe", systemImage: "gearshape")
+                                }
+                            }
+                        }
+                        Section {
+                            Button {
+                                showingCreate = true
+                            } label: {
+                                Label("Créer un groupe", systemImage: "plus")
+                            }
+                            Button {
+                                joinCode = ""
+                                showingJoin = true
+                            } label: {
+                                Label("Rejoindre avec un code", systemImage: "number")
+                            }
                         }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "ellipsis")
                     }
-                    .accessibilityLabel("Créer ou rejoindre un groupe")
-                    ProfileButton()
+                    .accessibilityLabel("Groupes")
                 }
             }
             .refreshable { await syncNow() }
@@ -144,6 +168,54 @@ struct GroupsView: View {
                     showingJoin = true
                 }
             }
+        }
+    }
+
+    private var subtitle: String {
+        guard let selected else { return "Travailler ensemble" }
+        var parts = ["\(selected.members.count) membre\(selected.members.count > 1 ? "s" : "")"]
+        if !selected.subjectCodes.isEmpty { parts.append(selected.subjectCodes.prefix(3).joined(separator: ", ")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var switcher: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(groups) { group in
+                    Button {
+                        withAnimation(Motion.snappy) { selectedRaw = group.id.uuidString }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(group.name)
+                            if !(live[group.id] ?? []).isEmpty {
+                                Circle().fill(Carnet.correct).frame(width: 6, height: 6)
+                            }
+                        }
+                        .font(.subheadline.weight(selected?.id == group.id ? .semibold : .regular))
+                        .foregroundStyle(selected?.id == group.id ? Carnet.ground : Carnet.ink)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .background(selected?.id == group.id ? Carnet.ink : Carnet.sheet, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            CarnetEmpty(icon: "person.2",
+                        title: "Travailler à plusieurs",
+                        message: "Vois qui travaille en ce moment et rejoins-le, compare où vous en êtes dans chaque série, demande de l'aide sur un exercice précis, planifie des sessions ensemble.",
+                        actionTitle: "Créer un groupe") {
+                showingCreate = true
+            }
+            Button("Rejoindre avec un code") {
+                joinCode = ""
+                showingJoin = true
+            }
+            .buttonStyle(.carnetSecondaryWide)
         }
     }
 
