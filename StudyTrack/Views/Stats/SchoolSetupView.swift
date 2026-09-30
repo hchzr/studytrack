@@ -83,7 +83,7 @@ struct SchoolSetupView: View {
                     get: { term.startDate },
                     set: { newValue in
                         term.startDate = DateUtils.startOfWeek(newValue)
-                        term.endDate = DateUtils.addWeeks(term.totalWeeks, to: term.startDate)
+                        term.endDate = DateUtils.addTeachingWeeks(term.totalWeeks, to: term.startDate)
                         try? context.save()
                     }
                 ), displayedComponents: .date)
@@ -93,7 +93,7 @@ struct SchoolSetupView: View {
                             get: { term.totalWeeks },
                             set: { newValue in
                                 term.totalWeeks = newValue
-                                term.endDate = DateUtils.addWeeks(newValue, to: term.startDate)
+                                term.endDate = DateUtils.addTeachingWeeks(newValue, to: term.startDate)
                                 try? context.save()
                             }
                         ),

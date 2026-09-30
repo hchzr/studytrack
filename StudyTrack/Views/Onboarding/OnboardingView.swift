@@ -495,7 +495,7 @@ struct OnboardingView: View {
             let start = DateUtils.startOfWeek(termStart)
             existing.startDate = start
             existing.totalWeeks = termWeeks
-            existing.endDate = DateUtils.addWeeks(termWeeks, to: start)
+            existing.endDate = DateUtils.addTeachingWeeks(termWeeks, to: start)
             existing.year = Calendar.current.component(.year, from: start)
             existing.season = DateUtils.monthNumber(start) >= 8 ? .autumn : .spring
             return existing
@@ -503,7 +503,7 @@ struct OnboardingView: View {
         let term = AcademicTerm(year: Calendar.current.component(.year, from: termStart),
                                 season: DateUtils.monthNumber(termStart) >= 8 ? .autumn : .spring,
                                 startDate: DateUtils.startOfWeek(termStart),
-                                endDate: DateUtils.addWeeks(termWeeks, to: DateUtils.startOfWeek(termStart)),
+                                endDate: DateUtils.addTeachingWeeks(termWeeks, to: DateUtils.startOfWeek(termStart)),
                                 totalWeeks: termWeeks)
         context.insert(term)
         return term

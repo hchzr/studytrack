@@ -476,7 +476,8 @@ enum ContentDraftBuilder {
             let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: termStart),
                                                to: calendar.startOfDay(for: date)).day ?? 0
             guard days > -7 else { return nil }
-            return max(1, days / 7 + 1)
+            // La semaine d'enseignement, pause d'automne déduite.
+            return DateUtils.weekNumber(from: termStart, to: date)
         }
         return nil
     }

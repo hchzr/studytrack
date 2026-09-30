@@ -1323,6 +1323,33 @@ do {
     check(d101.sections.first?.week == 2, "« Week 2 » est la semaine 2")
     check(w2.filter { $0.kind == .theory }.map(\.title) == ["Cours du mardi", "Cours du mercredi"], "un cours par jour")
     check(w2.first?.links.count == 2, "transparents et notes annotées du mardi réunis")
+    let dropboxPDF = w2.first?.links.first { $0.url.contains("dropbox") }
+    check(dropboxPDF?.kind == .slides || dropboxPDF?.kind == .pdf, "un PDF Dropbox (« .pdf?rlkey=… ») est un PDF, pas une page")
+
+    // Les vrais titres : une plage de dates n'est pas un sujet, « (semaine
+    // courante) » n'est pas un titre, une consigne datée n'est pas un cours
+    // du mercredi, le titre d'un enregistrement MediaSpace nomme le cours.
+    let real = MoodleCourseSnapshot(title: "t", url: "u", sections: [
+        MoodleSection(number: 2, title: "Week 1: 7 September - 11 September", activities: [
+            act("Introduction", "url", target: "https://www.dropbox.com/scl/fi/x/introduction.pdf?rlkey=k&raw=1"),
+            act("Lecture — Tuesday", "url", target: "https://www.dropbox.com/scl/fi/y/week_1_1.pdf?rlkey=k&raw=1")]),
+        MoodleSection(number: 3, title: "Semaine 3 : Structures de contrôle (semaine courante)", activities: [
+            act("Transparents (4 pages sur 1)", "url", target: "https://proginsc.epfl.ch/cours03.pdf")]),
+        MoodleSection(number: 4, title: "Semaine 1 : Introduction", activities: [
+            act("Vidéos à visionner et Quiz à résoudre avant le mercredi 16.9", "url", target: "https://mediaspace.epfl.ch/media/x"),
+            act("Transparents (Introduction) (1 page sur 1)", "url", target: "https://proginsc.epfl.ch/cours01a.pdf")]),
+        MoodleSection(number: 5, title: "14 September - 20 September", activities: [
+            act("Lecture notes 1a (blank)", "resource"),
+            act("Lecture 1a recording", "url", target: "https://mediaspace.epfl.ch/media/PHYS-101%28en%29+Lecture+1a%3A+Motion+in+one+dimension/0_6y8w1d2s/30253")])])
+    let dreal = MoodleCourseAnalyzer.draft(from: real, termStart: term)
+    let titles = dreal.sections.flatMap(\.items).filter { $0.kind == .theory }.map(\.title)
+    check(titles.contains("Introduction") && !titles.contains { $0.contains("September") }, "une plage de dates ne nomme pas un cours — \(titles)")
+    check(dreal.sections.contains { $0.title == "Semaine 3 : Structures de contrôle" }, "« (semaine courante) » retiré du titre")
+    check(titles.contains("Structures de contrôle"), "…et le sujet de la semaine nomme son cours")
+    check(!titles.contains("Cours du mercredi"), "une consigne « avant le mercredi » n'est pas le cours du mercredi")
+    check(titles.contains("Motion in one dimension"), "le titre de l'enregistrement nomme le cours 1a")
+    check(MoodleCourseAnalyzer.prettifyFileName("introduction-2026") == "Introduction", "nom de fichier rendu lisible")
+    check(MoodleCourseAnalyzer.prettifyFileName("Plan du cours") == "Plan du cours", "un vrai titre reste tel quel")
     let ex2 = w2.first { $0.kind == .series }
     check(ex2?.seriesNumber == 2 && ex2?.pdfURL.hasSuffix("exercises.pdf") == true && ex2?.solutionURL.hasSuffix("solutions.pdf") == true,
           "« Exercise » / « Solution » : la série 2, PDF public à lire")
@@ -3169,6 +3196,14 @@ check(DateUtils.weekNumber(from: autumn,
 check(DateUtils.weekNumber(from: autumn,
                            to: DateUtils.addDays(9, to: autumn)) == 2,
       "le mercredi de la deuxième semaine est bien la semaine 2")
+// L'interruption d'automne (16 → 26 octobre 2026) ne compte pas : les sites
+// des cours reprennent à « semaine 7 » le lundi de la reprise.
+check(DateUtils.weekNumber(from: autumn, to: DateUtils.addDays(35, to: autumn)) == 6, "12 octobre : semaine 6")
+check(DateUtils.weekNumber(from: autumn, to: DateUtils.addDays(49, to: autumn)) == 7,
+      "26 octobre, reprise après l'interruption : semaine 7 — \(DateUtils.weekNumber(from: autumn, to: DateUtils.addDays(49, to: autumn)))")
+check(DateUtils.weekNumber(from: autumn, to: DateUtils.addDays(98, to: autumn)) == 14, "14 décembre : semaine 14")
+check(DateUtils.addTeachingWeeks(14, to: autumn) == DateUtils.addDays(105, to: autumn),
+      "14 semaines d'enseignement finissent une semaine plus tard que 14 semaines de calendrier")
 
 print("== Import CSV ==")
 let csv = """

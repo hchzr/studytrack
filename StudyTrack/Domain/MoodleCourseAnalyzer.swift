@@ -97,7 +97,11 @@ enum MoodleCourseAnalyzer {
         var deadlines: [ContentDraftItem] = []
 
         for section in snapshot.sections {
+            // « Semaine 3 : Structures de contrôle (semaine courante) » : la
+            // mention du moment n'est pas le titre.
             let title = ContentDraftBuilder.cleanTitle(section.title)
+                .replacingOccurrences(of: #"\s*\((semaine courante|current week|cette semaine|this week)\)"#,
+                                      with: "", options: [.regularExpression, .caseInsensitive])
             let role = role(of: title, number: section.number)
             let week = ContentDraftBuilder.week(fromTitle: title, termStart: termStart, calendar: calendar)
                 .map { min($0, max(totalWeeks, 1)) }
@@ -321,12 +325,23 @@ enum MoodleCourseAnalyzer {
             return "n" + value
         }
         if let value = firstMatch(lower, #"^0*(\d{1,2})[-_ ]"#) { return "n" + value }
+        // Le jour ne relie que des supports **de cours** (« Lecture — Tuesday »,
+        // « Annotated lecture notes (Tuesday) ») : « Vidéos à visionner avant le
+        // mercredi 16.9 » n'est pas le cours du mercredi.
         let days = ["monday": "lundi", "tuesday": "mardi", "wednesday": "mercredi", "thursday": "jeudi", "friday": "vendredi",
                     "lundi": "lundi", "mardi": "mardi", "mercredi": "mercredi", "jeudi": "jeudi", "vendredi": "vendredi"]
-        for (day, canonical) in days where lower.contains(day) { return "d" + canonical }
+        if matches(lower, #"\b(lectures?|cours|notes?|slides?|transparents?)\b"#), !matches(lower, #"\b(avant|before|until|jusqu)\b"#) {
+            for (day, canonical) in days where lower.contains(day) { return "d" + canonical }
+        }
+        // Un sujet entre parenthèses (« Transparents (algorithmes) ») — pas une
+        // mise en page, un état, ni une consigne datée (« devait être étudié
+        // avant le 16.9 »).
         let layout = #"^(\d+ pages? sur \d+|\d+ pages? per \d+|blank|annotated|annotees?|annotes?|vierges?|complet|full|print|imprimable|\d+ par page)$"#
         let parentheticals = matchesAll(lower, #"\(([^)]+)\)"#).map { $0.trimmingCharacters(in: .whitespaces) }
-        if let topic = parentheticals.first(where: { !matches($0, layout) }) { return "t" + topic }
+        if let topic = parentheticals.first(where: { !matches($0, layout) && !matches($0, #"\d|avant|before|devait|due"#)
+                                                      && $0.split(separator: " ").count <= 4 }) {
+            return "t" + topic
+        }
         return "section"
     }
 
@@ -343,19 +358,31 @@ enum MoodleCourseAnalyzer {
             }.first
             if let chapter = activities.first(where: { firstMatch(fold($0.name), #"^0*(\d{1,2})[-_ ]"#) != nil }) {
                 title = prettifyFileName(chapter.name)
+            } else if let topic = named ?? activities.lazy.compactMap({ videoTopic($0.link) }).first {
+                // Le sujet du cours, lu dans le titre de l'enregistrement
+                // (« Lecture 1a: Motion in one dimension »).
+                title = topic
             } else {
-                title = "Cours \(number)" + (named.map { " · \($0)" } ?? "")
+                title = "Cours \(number)"
             }
         } else if key.hasPrefix("d") {
             title = "Cours du \(key.dropFirst())"
         } else if key.hasPrefix("t") {
             title = String(key.dropFirst()).capitalizedFirst
         } else {
-            // Un seul cours dans la semaine : son sujet est celui de la section
-            // (« Semaine 4 : Types avancés »).
+            // Le seul cours de la semaine prend le sujet de la section
+            // (« Semaine 4 : Types avancés ») — sauf si ce « sujet » n'est
+            // qu'une plage de dates (« Week 1: 7 September - 11 September ») ou
+            // si la semaine a d'autres cours : son propre nom, alors.
             let topic = sectionTitle.split(separator: ":", maxSplits: 1).dropFirst().first
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-            title = topic.flatMap { $0.isEmpty ? nil : $0 } ?? (activities.count == 1 ? activities[0].name : "Cours")
+                .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            let topicIsDate = ContentDraftBuilder.week(fromTitle: topic, termStart: Date()) != nil
+                || matches(fold(topic), #"\b\d{1,2}\s+[a-z]+\b"#)
+            if groups == 1, !topic.isEmpty, !topicIsDate {
+                title = topic
+            } else {
+                title = prettifyFileName(activities[0].name)
+            }
         }
         var number: String
         if key.hasPrefix("n") {
@@ -378,11 +405,30 @@ enum MoodleCourseAnalyzer {
         return item
     }
 
-    /// « 01-Systemes-lineaires » → « Systemes lineaires ».
+    /// Le sujet d'un enregistrement MediaSpace, lu dans son adresse :
+    /// `…/media/PHYS-101(en)+Lecture+1a:+Motion+in+one+dimension/0_6y8w…`
+    /// → « Motion in one dimension ».
+    static func videoTopic(_ link: String) -> String? {
+        guard let url = URL(string: link), url.host?.contains("mediaspace") == true else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard let index = parts.firstIndex(of: "media"), index + 1 < parts.count else { return nil }
+        let raw = (parts[index + 1].removingPercentEncoding ?? parts[index + 1]).replacingOccurrences(of: "+", with: " ")
+        guard raw.count > 3, !raw.hasPrefix("0_"), raw != "t" else { return nil }
+        guard let colon = raw.firstIndex(of: ":") else { return nil }
+        let topic = raw[raw.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        return topic.isEmpty ? nil : topic
+    }
+
+    /// « 01-Systemes-lineaires » → « Systemes lineaires » ; un nom de fichier
+    /// (« introduction-2026 ») devient lisible ; un vrai titre reste tel quel.
     static func prettifyFileName(_ name: String) -> String {
+        let looksLikeFile = !name.contains(" ") && (name.contains("-") || name.contains("_"))
+        guard looksLikeFile || firstMatch(fold(name), #"^0*(\d{1,2})[-_ ]"#) != nil else { return name }
         var text = name.replacingOccurrences(of: #"^0*\d{1,2}[-_ ]+"#, with: "", options: .regularExpression)
         text = text.replacingOccurrences(of: #"\.pdf$"#, with: "", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
+        // « introduction 2026 » : l'année d'un fichier n'est pas un titre.
+        text = text.replacingOccurrences(of: #"\s+20\d{2}$"#, with: "", options: .regularExpression)
         return text.capitalizedFirst
     }
 
@@ -399,7 +445,7 @@ enum MoodleCourseAnalyzer {
             kind = .slides
         } else if matches(name, #"(notes?|annot|polycop)"#) {
             kind = .notes
-        } else if activity.module == "resource" || target.hasSuffix(".pdf") {
+        } else if activity.module == "resource" || (URL(string: activity.link)?.pathExtension.lowercased() == "pdf") {
             kind = .pdf
         } else {
             kind = .page
@@ -423,8 +469,7 @@ enum MoodleCourseAnalyzer {
                                     seriesNumber: number,
                                     theoryKind: .reading)
         if let main {
-            let target = fold(main.link)
-            if main.module == "resource" || target.hasSuffix(".pdf") { item.pdfURL = main.link }
+            if main.module == "resource" || URL(string: main.link)?.pathExtension.lowercased() == "pdf" { item.pdfURL = main.link }
         }
         if let solution = solution.first { item.solutionURL = solution.link }
         item.links = (statement + solution.filter { s in !statement.contains(s) }).map(link(for:))

@@ -136,12 +136,75 @@ enum DateUtils {
     /// Extrait pour être utilisable **sans** `AcademicTerm` : un cours dont le
     /// semestre n'est pas renseigné ne doit pas se rabattre sur « semaine 1 », qui
     /// est une réponse fausse — et silencieuse.
+    ///
+    /// Les semaines **sans cours** ne comptent pas : l'EPFL interrompt les
+    /// enseignements une semaine en automne (19–23 octobre 2026) et à Pâques.
+    /// Compter les jours depuis la rentrée donnait « semaine 8 » le lundi de la
+    /// reprise, au lieu de 7 — et tout ce qui est rangé par semaine (séries,
+    /// théorie, progression, sections Moodle datées) glissait d'un cran jusqu'à
+    /// la fin du semestre. Pendant la pause, c'est la dernière semaine de cours.
     static func weekNumber(from start: Date, to date: Date = Date()) -> Int {
         let cal = Calendar.current
         let days = cal.dateComponents([.day],
                                       from: cal.startOfDay(for: start),
                                       to: cal.startOfDay(for: date)).day ?? 0
-        return max(1, days / 7 + 1)
+        let raw = days / 7 + 1
+        return max(1, raw - breakWeeks(from: start, to: date))
+    }
+
+    /// Une interruption des enseignements : du lundi qui suit la fin des cours
+    /// au lundi de la reprise.
+    struct TeachingBreak: Equatable {
+        var start: Date
+        var end: Date
+        var weeks: Int { max(0, (DateUtils.daysBetween(start, end) + 6) / 7) }
+    }
+
+    /// Les pauses du calendrier EPFL embarqué : chaque « Interruption des
+    /// enseignements » jusqu'à la « Reprise des enseignements » suivante.
+    static let teachingBreaks: [TeachingBreak] = {
+        let cal = Calendar.current
+        let entries = EPFLCalendarSnapshot.entries
+            .filter { $0.kind == .break }
+            .compactMap { entry -> (Date, String)? in
+                cal.date(from: DateComponents(year: entry.year, month: entry.month, day: entry.day)).map { ($0, entry.title.lowercased()) }
+            }
+            .sorted { $0.0 < $1.0 }
+        var result: [TeachingBreak] = []
+        var pending: Date?
+        for (date, title) in entries {
+            if title.contains("interruption") {
+                pending = date
+            } else if title.contains("reprise"), let stop = pending {
+                // Les cours s'arrêtent en fin de journée : la pause commence le
+                // lundi suivant.
+                let monday = startOfWeek(addDays(3, to: stop))
+                if monday < date { result.append(TeachingBreak(start: monday, end: startOfWeek(date))) }
+                pending = nil
+            }
+        }
+        return result
+    }()
+
+    /// Semaines de pause écoulées entre la rentrée et `date`.
+    static func breakWeeks(from start: Date, to date: Date, breaks: [TeachingBreak] = teachingBreaks) -> Int {
+        let day = startOfDay(date)
+        return breaks.reduce(0) { total, pause in
+            guard pause.start >= startOfDay(start), pause.start <= day else { return total }
+            if day >= pause.end { return total + pause.weeks }
+            // En pleine pause : les semaines de pause déjà entamées.
+            return total + daysBetween(pause.start, day) / 7 + 1
+        }
+    }
+
+    /// `weeks` semaines **de cours** après `start` : la fin d'un semestre de
+    /// quatorze semaines tombe une semaine plus tard s'il contient une pause.
+    static func addTeachingWeeks(_ weeks: Int, to start: Date) -> Date {
+        var end = addWeeks(weeks, to: start)
+        for pause in teachingBreaks where pause.start >= startOfDay(start) && pause.start < end {
+            end = addWeeks(pause.weeks, to: end)
+        }
+        return end
     }
 
     /// Numéro de semaine borné à la durée du semestre.

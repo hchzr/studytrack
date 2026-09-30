@@ -105,7 +105,7 @@ final class AcademicTerm {
         let term = AcademicTerm(year: Calendar.current.component(.year, from: monday),
                                 season: start.season,
                                 startDate: monday,
-                                endDate: DateUtils.addWeeks(start.weeks, to: monday),
+                                endDate: DateUtils.addTeachingWeeks(start.weeks, to: monday),
                                 totalWeeks: start.weeks)
         context.insert(term)
         return term
