@@ -2,438 +2,474 @@ import WidgetKit
 import AppIntents
 import SwiftUI
 
-// MARK: - Prochaine tâche
+// MARK: - La semaine
 
-/// « Que faire maintenant ? », sur l'écran d'accueil et l'écran verrouillé.
+/// La semaine, sur l'écran d'accueil et l'écran verrouillé.
 ///
-/// La même réponse que l'accueil et le dock de l'app (`NextActionEngine`, écrit
-/// dans l'instantané). Deux gestes sans ouvrir de liste : **✓** coche la tâche
-/// (appliqué par l'app à sa prochaine activation), **▶** ouvre l'app sur le
-/// chrono de cette tâche. Pendant une session, le widget montre le chrono.
-struct NextActionWidget: Widget {
-    let kind = "NextActionWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
-            NextActionWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        }
-        .configurationDisplayName("Prochaine tâche")
-        .description("La prochaine chose à faire, à cocher ou à démarrer d'un toucher — ou le chrono en cours.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
-    }
-}
-
-struct NextActionWidgetView: View {
-    let entry: StudyTrackEntry
-    @Environment(\.widgetFamily) private var family
-
-    private var snapshot: WidgetSnapshot { entry.snapshot ?? .empty }
-
-    var body: some View {
-        if let timer = snapshot.timer {
-            timerView(timer)
-                .widgetURL(WidgetLink.focus)
-        } else if let action = snapshot.next {
-            actionView(action)
-                .widgetURL(action.isDone ? WidgetLink.today : WidgetLink.start(action))
-        } else {
-            idleView
-                .widgetURL(WidgetLink.today)
-        }
-    }
-
-    // MARK: Chrono
-
-    @ViewBuilder
-    private func timerView(_ timer: WidgetTimer) -> some View {
-        if let breakEnd = timer.breakEndsAt, breakEnd > entry.date {
-            breakView(timer, endsAt: breakEnd)
-        } else {
-            workView(timer)
-        }
-    }
-
-    /// Une pause Pomodoro : ce qu'il en reste, en compte à rebours système.
-    @ViewBuilder
-    private func breakView(_ timer: WidgetTimer, endsAt: Date) -> some View {
-        let label = timer.breakLabel ?? "Pause"
-        switch family {
-        case .accessoryInline:
-            Label {
-                Text(timerInterval: entry.date...endsAt, countsDown: true)
-            } icon: {
-                Image(systemName: "cup.and.saucer.fill")
-            }
-        case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.headline).lineLimit(1)
-                Text(timerInterval: entry.date...endsAt, countsDown: true)
-                    .font(.title3.monospacedDigit().weight(.semibold))
-                Text(timer.label).font(.caption2).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        default:
-            VStack(alignment: .leading, spacing: 6) {
-                Label(label, systemImage: "cup.and.saucer.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.teal.widgetInk)
-                Text(timer.label)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                Spacer(minLength: 0)
-                Text(timerInterval: entry.date...endsAt, countsDown: true)
-                    .font(.title.monospacedDigit().weight(.bold))
-                    .foregroundStyle(Color.teal.widgetInk)
-                    .widgetAccentable()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-
-    @ViewBuilder
-    private func workView(_ timer: WidgetTimer) -> some View {
-        switch family {
-        case .accessoryInline:
-            Label {
-                if timer.isRunning {
-                    Text(timerInterval: timer.effectiveStart...StudyActivityTimer.horizon(from: timer.effectiveStart),
-                     countsDown: false)
-                } else {
-                    Text("En pause · \(WidgetFormat.hours(Int(timer.elapsedWhenPaused)))")
-                }
-            } icon: {
-                Image(systemName: timer.isRunning ? "timer" : "pause.fill")
-            }
-        case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 1) {
-                Text(timer.label).font(.headline).lineLimit(1)
-                clock(timer).font(.title3.monospacedDigit().weight(.semibold))
-                Text(timer.isRunning ? "En cours" : "En pause").font(.caption2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        default:
-            VStack(alignment: .leading, spacing: 6) {
-                Label(timer.isRunning ? "En cours" : "En pause", systemImage: timer.isRunning ? "timer" : "pause.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(timer.isRunning ? Color.accentColor : Color.orange.widgetInk)
-                Text(timer.label)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                Spacer(minLength: 0)
-                clock(timer)
-                    .font(.title.monospacedDigit().weight(.bold))
-                    .foregroundStyle(Color(hexString: timer.colorHex).widgetInk)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-
-    @ViewBuilder
-    private func clock(_ timer: WidgetTimer) -> some View {
-        if timer.isRunning {
-            Text(timerInterval: timer.effectiveStart...StudyActivityTimer.horizon(from: timer.effectiveStart),
-                     countsDown: false)
-        } else {
-            Text(Duration.seconds(timer.elapsedWhenPaused).formatted(.time(pattern: .hourMinuteSecond)))
-        }
-    }
-
-    // MARK: Action
-
-    @ViewBuilder
-    private func actionView(_ action: WidgetAction) -> some View {
-        let tint = Color(hexString: action.colorHex)
-        switch family {
-        case .accessoryInline:
-            Label("\(action.courseCode) · \(action.title)", systemImage: action.isDone ? "checkmark" : action.icon)
-        case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 1) {
-                Text(action.isDone ? "Fait ✓" : action.reason).font(.caption2.weight(.semibold))
-                Text("\(action.courseCode) · \(action.title)").font(.headline).lineLimit(1)
-                Text(action.detail).font(.caption).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        case .systemSmall:
-            VStack(alignment: .leading, spacing: 4) {
-                reasonLabel(action)
-                Text(action.courseCode)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(tint.widgetInk)
-                Text(action.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .strikethrough(action.isDone)
-                Spacer(minLength: 0)
-                HStack {
-                    completeButton(action)
-                    Spacer()
-                    Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(tint.widgetInk)
-                        .accessibilityLabel("Démarrer le chrono")
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        default:
-            HStack(alignment: .top, spacing: 12) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(tint)
-                    .frame(width: 4)
-                VStack(alignment: .leading, spacing: 4) {
-                    reasonLabel(action)
-                    Text("\(action.courseCode) · \(action.title)")
-                        .font(.headline)
-                        .lineLimit(1)
-                        .strikethrough(action.isDone)
-                    Text(action.isDone ? "Coché — l'app passe à la suite à la prochaine ouverture." : action.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer(minLength: 0)
-                    HStack(spacing: 10) {
-                        completeButton(action)
-                        if !action.isDone {
-                            Link(destination: WidgetLink.start(action)) {
-                                Label("Démarrer", systemImage: "play.fill")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(tint.opacity(0.18), in: Capsule())
-                                    .foregroundStyle(tint.widgetInk)
-                            }
-                        }
-                        Spacer()
-                        if snapshot.todoCount > 1 {
-                            Text("+\(snapshot.todoCount - 1) ensuite")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-
-    private func reasonLabel(_ action: WidgetAction) -> some View {
-        Label(action.isDone ? "Fait" : action.reason, systemImage: action.isDone ? "checkmark.circle.fill" : action.icon)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(action.isDone ? Color.green.widgetInk : Color.secondary)
-            .lineLimit(1)
-    }
-
-    @ViewBuilder
-    private func completeButton(_ action: WidgetAction) -> some View {
-        if action.canComplete, let kind = action.targetKind, let id = action.targetID {
-            Button(intent: CompleteNextActionIntent(kind: kind, targetID: id)) {
-                Image(systemName: action.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(action.isDone ? Color.green.widgetInk : Color.secondary)
-                    // Le cercle se change en coche : seul retour visible du geste.
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain)
-            .disabled(action.isDone)
-            .accessibilityLabel(action.isDone ? "Fait" : "Marquer \(action.title) comme fait")
-        }
-    }
-
-    // MARK: Rien à faire
-
-    @ViewBuilder
-    private var idleView: some View {
-        switch family {
-        case .accessoryInline:
-            Label("Tout est à jour", systemImage: "checkmark.seal")
-        case .accessoryRectangular:
-            VStack(alignment: .leading) {
-                Text("Tout est à jour").font(.headline)
-                Text(snapshot.hasContent ? "Rien d'urgent cette semaine" : "Ouvre StudyTrack").font(.caption)
-            }
-        default:
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.green.widgetInk)
-                Text(snapshot.hasContent ? "Tout est à jour" : "Ouvre StudyTrack")
-                    .font(.headline)
-                Text(snapshot.hasContent ? "Rien d'urgent cette semaine." : "Pour voir ta prochaine tâche ici.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-}
-
-// MARK: - Cours de la semaine
-
-/// Où en est chaque cours cette semaine — la carte « Cette semaine » de l'accueil.
+/// Petit : le temps de la semaine, l'attendu, et les sept jours. Moyen et
+/// grand : en plus, chaque cours — théorie et exercices faits sur prévus, et
+/// le retard. Sur l'écran verrouillé : un anneau (temps sur attendu) ou une
+/// ligne. Le `kind` est celui de l'ancien widget « Cours de la semaine » : les
+/// widgets déjà posés restent en place.
 struct WeekCoursesWidget: Widget {
     let kind = "WeekCoursesWidget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
-            WeekCoursesWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(WidgetLink.courses)
+            WeekWidgetView(entry: entry)
+                .containerBackground(Paper.ground, for: .widget)
+                .widgetURL(WidgetLink.today)
         }
-        .configurationDisplayName("Cours de la semaine")
-        .description("Ce qu'il reste à faire dans chaque cours cette semaine.")
-        .supportedFamilies([.systemMedium, .systemLarge, .accessoryCircular])
+        .configurationDisplayName("La semaine")
+        .description("Ton temps de la semaine et l'avancement de chaque cours.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
+                            .accessoryCircular, .accessoryInline, .accessoryRectangular])
     }
 }
 
-struct WeekCoursesWidgetView: View {
+struct WeekWidgetView: View {
     let entry: StudyTrackEntry
     @Environment(\.widgetFamily) private var family
 
-    private var courses: [WidgetCourse] {
-        (entry.snapshot?.courses ?? [])
-            .sorted { lhs, rhs in
-                let left = lhs.total - lhs.done, right = rhs.total - rhs.done
-                if (left > 0) != (right > 0) { return left > 0 }
-                return left != right ? left > right : lhs.code < rhs.code
-            }
+    private var week: WidgetWeek? { entry.snapshot?.week }
+    private var courses: [WidgetCourse] { entry.snapshot?.courses ?? [] }
+
+    var body: some View {
+        switch family {
+        case .accessoryCircular: circular
+        case .accessoryInline: inline
+        case .accessoryRectangular: rectangular
+        case .systemSmall: small
+        case .systemLarge: large
+        default: medium
+        }
     }
 
-    private var overall: (done: Int, total: Int) {
-        courses.reduce((0, 0)) { ($0.0 + $1.done, $0.1 + $1.total) }
+    // MARK: Écran verrouillé
+
+    private var ratio: Double {
+        guard let week, week.expectedSeconds > 0 else { return 0 }
+        return min(1, Double(week.actualSeconds) / Double(week.expectedSeconds))
+    }
+
+    private var circular: some View {
+        Gauge(value: ratio) {
+            Text("h")
+        } currentValueLabel: {
+            Text(WidgetFormat.shortHours(week?.actualSeconds ?? 0))
+                .font(.system(.body, design: .serif))
+        }
+        .gaugeStyle(.accessoryCircularCapacity)
+        .widgetAccentable()
+    }
+
+    private var inline: some View {
+        Text("\(WidgetFormat.hours(week?.actualSeconds ?? 0)) cette semaine")
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(weekTitle).font(.headline).widgetAccentable()
+            Text("\(WidgetFormat.hours(week?.actualSeconds ?? 0)) sur \(WidgetFormat.hours(week?.expectedSeconds ?? 0))")
+                .font(.caption)
+            ProgressView(value: ratio).progressViewStyle(.linear)
+        }
+    }
+
+    // MARK: Écran d'accueil
+
+    private var weekTitle: String {
+        week?.number.map { "Semaine \($0)" } ?? "Cette semaine"
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(weekTitle.uppercased())
+                .font(.caption2.weight(.bold))
+                .tracking(1)
+                .foregroundStyle(Paper.inkSecondary)
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                Text(WidgetFormat.hours(week?.actualSeconds ?? 0))
+                    .font(.system(.title, design: .serif))
+                    .foregroundStyle(Paper.ink)
+                    .minimumScaleFactor(0.7)
+                if let expected = week?.expectedSeconds, expected > 0 {
+                    Text("/ \(WidgetFormat.hours(expected))")
+                        .font(.caption)
+                        .foregroundStyle(Paper.inkSecondary)
+                }
+            }
+        }
+    }
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            WidgetBar(value: ratio, tint: Paper.ink)
+            Spacer(minLength: 0)
+            WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 30)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var medium: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                Spacer(minLength: 0)
+                WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 34)
+            }
+            .frame(width: 118)
+            Rectangle().fill(Paper.rule).frame(width: 1)
+            courseList(limit: 4, compact: true)
+        }
+    }
+
+    private var large: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom) {
+                header
+                Spacer()
+            }
+            WidgetBar(value: ratio, tint: Paper.ink)
+            WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 40)
+            Rectangle().fill(Paper.rule).frame(height: 1)
+            courseList(limit: 6, compact: false)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func courseList(limit: Int, compact: Bool) -> some View {
+        if courses.isEmpty {
+            Text("Aucun cours suivi")
+                .font(.caption)
+                .foregroundStyle(Paper.inkSecondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(alignment: .leading, spacing: compact ? 7 : 10) {
+                ForEach(courses.prefix(limit)) { course in
+                    Link(destination: WidgetLink.course(course.id)) {
+                        WidgetCourseLine(course: course, compact: compact)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+/// Un cours dans le widget : son code à sa couleur, deux compteurs, le retard.
+struct WidgetCourseLine: View {
+    let course: WidgetCourse
+    var compact: Bool
+
+    var body: some View {
+        let tint = Paper.tint(course.colorHex)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(course.code)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                if !compact, let name = course.name, !name.isEmpty {
+                    Text(name).font(.caption).foregroundStyle(Paper.ink).lineLimit(1)
+                }
+                Spacer(minLength: 2)
+                if let late = course.late, late > 0 {
+                    Text("\(late) en retard")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Paper.wrong)
+                } else if course.total > 0, course.done == course.total {
+                    Image(systemName: "checkmark")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Paper.correct)
+                }
+            }
+            if course.total > 0 {
+                HStack(spacing: 8) {
+                    counter("Th.", course.theoryDone, course.theoryTotal)
+                    counter("Ex.", course.exercisesDone, course.exercisesTotal)
+                    WidgetBar(value: Double(course.done) / Double(max(course.total, 1)), tint: tint)
+                }
+            } else {
+                Text("rien de prévu").font(.caption2).foregroundStyle(Paper.inkSecondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func counter(_ label: String, _ done: Int?, _ total: Int?) -> some View {
+        if let total, total > 0 {
+            Text("\(label) \(done ?? 0)/\(total)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Paper.inkSecondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+}
+
+/// Une barre fine, sur trait de papier.
+struct WidgetBar: View {
+    let value: Double
+    var tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Paper.rule)
+                Capsule().fill(tint).frame(width: proxy.size.width * max(0, min(value, 1)))
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
+/// Les sept jours de la semaine en colonnes ; aujourd'hui à l'encre.
+struct WidgetDayStrip: View {
+    let days: [Int]
+    let weekStart: Date
+    var height: CGFloat
+
+    var body: some View {
+        let peak = max(days.max() ?? 0, 3600)
+        let today = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: weekStart),
+                                                    to: Calendar.current.startOfDay(for: Date())).day ?? 0
+        HStack(alignment: .bottom, spacing: 4) {
+            ForEach(0..<7, id: \.self) { index in
+                let seconds = days.indices.contains(index) ? days[index] : 0
+                VStack(spacing: 3) {
+                    ZStack(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: 2).fill(Paper.rule)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(index == today ? Paper.ink : Paper.inkSecondary)
+                            .frame(height: seconds == 0 ? 0 : max(3, height * CGFloat(seconds) / CGFloat(peak)))
+                    }
+                    .frame(height: height)
+                    Text(["L", "M", "M", "J", "V", "S", "D"][index])
+                        .font(.system(size: 9, weight: index == today ? .bold : .regular))
+                        .foregroundStyle(index == today ? Paper.ink : Paper.inkSecondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+}
+
+// MARK: - Aujourd'hui
+
+/// L'horaire du jour et les échéances : le prochain cours, la suite de la
+/// journée, puis la prochaine évaluation. Sur l'écran verrouillé, le prochain
+/// créneau — ou le chrono s'il tourne.
+struct TodayScheduleWidget: Widget {
+    let kind = "TodayScheduleWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
+            TodayWidgetView(entry: entry)
+                .containerBackground(Paper.ground, for: .widget)
+                .widgetURL(WidgetLink.agenda)
+        }
+        .configurationDisplayName("Aujourd'hui")
+        .description("Tes cours du jour et les prochaines échéances.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
+    }
+}
+
+struct TodayWidgetView: View {
+    let entry: StudyTrackEntry
+    @Environment(\.widgetFamily) private var family
+
+    /// Les créneaux du jour de l'entrée, pas encore finis.
+    private var upcoming: [WidgetEvent] {
+        let calendar = Calendar.current
+        return (entry.snapshot?.schedule ?? []).filter {
+            calendar.isDate($0.start, inSameDayAs: entry.date) && ($0.end ?? $0.start) >= entry.date
+        }
+    }
+
+    private var deadlines: [WidgetDeadline] {
+        (entry.snapshot?.deadlines ?? []).filter { $0.date >= entry.date }
     }
 
     var body: some View {
-        if family == .accessoryCircular {
-            let totals = overall
-            Gauge(value: Double(totals.done), in: 0...Double(max(totals.total, 1))) {
-                Image(systemName: "books.vertical")
-            } currentValueLabel: {
-                Text("\(totals.total == 0 ? 0 : totals.done * 100 / totals.total)")
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
-            .widgetAccentable()
-            .accessibilityLabel("Semaine faite à \(totals.total == 0 ? 0 : totals.done * 100 / totals.total) %")
-        } else if courses.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: "books.vertical").foregroundStyle(.tint)
-                Text("Aucun cours suivi").font(.headline)
-                Text("Ajoute tes cours dans StudyTrack.").font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else {
-            VStack(alignment: .leading, spacing: family == .systemLarge ? 10 : 6) {
-                HStack {
-                    Label("Cette semaine", systemImage: "calendar")
-                        .font(.caption.weight(.bold))
-                    Spacer()
-                    let totals = overall
-                    Text("\(totals.done)/\(totals.total)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+        switch family {
+        case .accessoryRectangular: rectangular
+        case .accessoryInline: inline
+        case .systemSmall: small
+        default: medium
+        }
+    }
+
+    private var rectangular: some View {
+        Group {
+            if let timer = entry.snapshot?.timer {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(timer.label).font(.headline).lineLimit(1).widgetAccentable()
+                    if timer.isRunning {
+                        Text(timerInterval: timer.effectiveStart...timer.effectiveStart.addingTimeInterval(86_400),
+                             countsDown: false)
+                            .font(.system(.title3, design: .serif).monospacedDigit())
+                    } else {
+                        Text("en pause").font(.caption)
+                    }
                 }
-                ForEach(courses.prefix(family == .systemLarge ? 8 : 3)) { course in
-                    Link(destination: WidgetLink.course(course.id)) {
-                        row(course)
+            } else if let next = upcoming.first {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(timeRange(next)).font(.caption).widgetAccentable()
+                    Text(next.title).font(.headline).lineLimit(1)
+                    if !next.subtitle.isEmpty { Text(next.subtitle).font(.caption).lineLimit(1) }
+                }
+            } else if let deadline = deadlines.first {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(countdown(deadline.date)).font(.caption).widgetAccentable()
+                    Text(deadline.title).font(.headline).lineLimit(1)
+                    Text(deadline.courseCode).font(.caption).lineLimit(1)
+                }
+            } else {
+                Text("Rien à l'horaire").font(.headline)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var inline: some View {
+        if let next = upcoming.first {
+            return Text("\(time(next.start)) \(next.title)")
+        }
+        if let deadline = deadlines.first {
+            return Text("\(deadline.title) \(countdown(deadline.date).lowercased())")
+        }
+        return Text("Rien à l'horaire")
+    }
+
+    private var dateTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_CH")
+        formatter.dateFormat = "EEEE d"
+        return formatter.string(from: entry.date).capitalized
+    }
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(dateTitle.uppercased())
+                .font(.caption2.weight(.bold))
+                .tracking(1)
+                .foregroundStyle(Paper.inkSecondary)
+            if let next = upcoming.first {
+                eventBlock(next, large: true)
+                if upcoming.count > 1 {
+                    Text("puis \(upcoming.count - 1) autre\(upcoming.count > 2 ? "s" : "")")
+                        .font(.caption2)
+                        .foregroundStyle(Paper.inkSecondary)
+                }
+            } else {
+                Text("Plus rien à l'horaire")
+                    .font(.system(.headline, design: .serif))
+                    .foregroundStyle(Paper.ink)
+            }
+            Spacer(minLength: 0)
+            if let deadline = deadlines.first {
+                deadlineLine(deadline)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var medium: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(dateTitle.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .tracking(1)
+                    .foregroundStyle(Paper.inkSecondary)
+                if upcoming.isEmpty {
+                    Text("Plus rien à l'horaire aujourd'hui")
+                        .font(.system(.subheadline, design: .serif))
+                        .foregroundStyle(Paper.ink)
+                } else {
+                    ForEach(upcoming.prefix(3)) { event in
+                        eventBlock(event, large: false)
                     }
                 }
                 Spacer(minLength: 0)
             }
-        }
-    }
-
-    private func row(_ course: WidgetCourse) -> some View {
-        let tint = Color(hexString: course.colorHex)
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(course.code)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(tint.widgetInk)
-                Text(course.summary)
-                    .font(.caption2)
-                    .foregroundStyle(course.total > 0 && course.done == course.total ? Color.green.widgetInk : .secondary)
-                    .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(Paper.rule).frame(width: 1)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("ÉCHÉANCES")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1)
+                    .foregroundStyle(Paper.inkSecondary)
+                if deadlines.isEmpty {
+                    Text("Aucune").font(.caption).foregroundStyle(Paper.inkSecondary)
+                }
+                ForEach(deadlines.prefix(3)) { deadline in
+                    deadlineLine(deadline)
+                }
                 Spacer(minLength: 0)
-                if course.total > 0 {
-                    Text("\(course.done)/\(course.total)")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
             }
-            ProgressView(value: Double(course.done), total: Double(max(course.total, 1)))
-                .tint(tint)
-                .opacity(course.total == 0 ? 0.3 : 1)
+            .frame(width: 118, alignment: .leading)
         }
     }
-}
 
-// MARK: - Prochaine évaluation
-
-struct ExamCountdownWidget: Widget {
-    let kind = "ExamCountdownWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
-            ExamCountdownWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(WidgetLink.agenda)
-        }
-        .configurationDisplayName("Prochaine évaluation")
-        .description("Le compte à rebours jusqu'au prochain midterm ou examen.")
-        .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryInline])
-    }
-}
-
-struct ExamCountdownWidgetView: View {
-    let entry: StudyTrackEntry
-    @Environment(\.widgetFamily) private var family
-
-    var body: some View {
-        let snapshot = entry.snapshot ?? .empty
-        if let date = snapshot.nextExamDate, date >= Calendar.current.startOfDay(for: entry.date) {
-            let title = snapshot.nextExamTitle ?? "Évaluation"
-            let course = snapshot.nextExamCourse ?? ""
-            let countdown = WidgetFormat.countdown(to: date, from: entry.date)
-            switch family {
-            case .accessoryInline:
-                Label("\(course) \(title) · \(countdown)", systemImage: "graduationcap")
-            case .accessoryRectangular:
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(countdown).font(.headline)
-                    Text("\(course) · \(title)").font(.caption).lineLimit(1)
-                    Text(date, style: .date).font(.caption2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            default:
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Évaluation", systemImage: "graduationcap.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Color.orange.widgetInk)
-                    Text(countdown)
-                        .font(.largeTitle.weight(.bold))
-                        .contentTransition(.numericText())
-                        .widgetAccentable()
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(course).font(.caption.weight(.bold))
-                    Text(title).font(.caption).lineLimit(2)
-                    Text(date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
+    private func eventBlock(_ event: WidgetEvent, large: Bool) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Paper.tint(event.colorHex))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(timeRange(event))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(Paper.inkSecondary)
+                Text(event.title)
+                    .font(large ? .system(.headline, design: .serif) : .caption.weight(.semibold))
+                    .foregroundStyle(Paper.ink)
+                    .lineLimit(large ? 2 : 1)
+                if !event.subtitle.isEmpty {
+                    Text(event.subtitle)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Paper.inkSecondary)
+                        .lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-        } else {
-            switch family {
-            case .accessoryInline:
-                Label("Aucune évaluation prévue", systemImage: "graduationcap")
-            default:
-                VStack(alignment: .leading, spacing: 4) {
-                    Image(systemName: "graduationcap").foregroundStyle(.secondary)
-                    Text("Aucune évaluation prévue").font(.caption.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func deadlineLine(_ deadline: WidgetDeadline) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(countdown(deadline.date))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(daysUntil(deadline.date) <= 3 ? Paper.wrong : Paper.tint(deadline.colorHex))
+            Text("\(deadline.courseCode) · \(deadline.title)")
+                .font(.caption2)
+                .foregroundStyle(Paper.ink)
+                .lineLimit(1)
+        }
+    }
+
+    private func time(_ date: Date) -> String {
+        date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+    }
+
+    private func timeRange(_ event: WidgetEvent) -> String {
+        guard let end = event.end else { return time(event.start) }
+        return "\(time(event.start)) – \(time(end))"
+    }
+
+    private func daysUntil(_ date: Date) -> Int {
+        let calendar = Calendar.current
+        return calendar.dateComponents([.day], from: calendar.startOfDay(for: entry.date),
+                                       to: calendar.startOfDay(for: date)).day ?? 0
+    }
+
+    private func countdown(_ date: Date) -> String {
+        switch daysUntil(date) {
+        case 0: return "Aujourd'hui"
+        case 1: return "Demain"
+        case let days: return "Dans \(days) j"
         }
     }
 }
@@ -471,7 +507,7 @@ struct FocusPauseControl: ControlWidget {
                 Label(value.hasSession ? (isOn ? "En cours" : "En pause") : "Aucune session",
                       systemImage: isOn ? "pause.fill" : "play.fill")
             }
-            .tint(.indigo)
+            .tint(.brown)
         }
         .displayName("Pause du chrono")
         .description("Met en pause ou relance la session en cours.")

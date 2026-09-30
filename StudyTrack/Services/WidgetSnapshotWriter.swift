@@ -45,7 +45,18 @@ enum WidgetSnapshotWriter {
             nextExamDate: nextExam?.date,
             next: NextActionEngine.actions(for: tracked, limit: 1).first.map(widgetAction),
             courses: tracked.map(widgetCourse),
-            timer: widgetTimer(FocusTimerStore.load(), courses: courses))
+            timer: widgetTimer(FocusTimerStore.load(), courses: courses),
+            week: widgetWeek(tracked: tracked, sessions: sessions, settings: settings),
+            schedule: schedule(context: context, exams: exams),
+            deadlines: exams
+                .filter { $0.date >= Date() }
+                .sorted { $0.date < $1.date }
+                .prefix(3)
+                .map { WidgetDeadline(id: $0.id.uuidString,
+                                      title: $0.title.isEmpty ? $0.kind.label : $0.title,
+                                      courseCode: $0.course?.displayCode ?? "",
+                                      date: $0.date,
+                                      colorHex: $0.course?.colorHex ?? "#6B655A") })
 
         WidgetBridge.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
@@ -97,7 +108,63 @@ enum WidgetSnapshotWriter {
         if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
         let summary = total == 0 ? "rien de prévu" : (parts.isEmpty ? "à jour" : "reste " + parts.joined(separator: " · "))
         return WidgetCourse(id: course.id.uuidString, code: course.displayCode, colorHex: course.colorHex,
-                            done: done, total: total, summary: summary)
+                            done: done, total: total, summary: summary,
+                            name: course.name,
+                            theoryDone: week.watchedCount, theoryTotal: week.videoCount,
+                            exercisesDone: week.doneCount, exercisesTotal: week.exerciseCount,
+                            late: ProgressEngine.lateCount(for: course))
+    }
+
+    private static func widgetWeek(tracked: [Course], sessions: [StudySession],
+                                   settings: SettingsStore) -> WidgetWeek {
+        let start = DateUtils.startOfWeek(Date())
+        let end = DateUtils.addDays(7, to: start)
+        var days = Array(repeating: 0, count: 7)
+        for session in sessions where session.startedAt >= start && session.startedAt < end {
+            let index = DateUtils.daysBetween(start, session.startedAt)
+            if days.indices.contains(index) { days[index] += session.durationSeconds }
+        }
+        let workload = WorkloadEngine.aggregateWeekly(courses: tracked, hoursPerCredit: settings.hoursPerCredit,
+                                                      from: start, to: end)
+        let term = AcademicTerm.resolve(from: tracked.compactMap(\.term))
+        return WidgetWeek(weekStart: start,
+                          number: term.flatMap { $0.isRunning ? $0.currentWeek : nil },
+                          totalWeeks: term?.totalWeeks,
+                          actualSeconds: workload.actualSeconds,
+                          expectedSeconds: workload.expectedSeconds,
+                          days: days)
+    }
+
+    /// Aujourd'hui et demain : séances de l'horaire, sessions planifiées,
+    /// évaluations.
+    private static func schedule(context: ModelContext, exams: [Exam]) -> [WidgetEvent] {
+        let start = DateUtils.startOfDay(Date())
+        let end = DateUtils.addDays(2, to: start)
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        let planned = (try? context.fetch(FetchDescriptor<PlannedSession>())) ?? []
+        var items: [WidgetEvent] = []
+        for event in events where event.startsAt >= start && event.startsAt < end {
+            items.append(WidgetEvent(id: "event-\(event.id)", start: event.startsAt, end: event.endsAt,
+                                     title: event.title,
+                                     subtitle: [event.course?.displayCode, event.location.isEmpty ? nil : event.location]
+                                        .compactMap { $0 }.joined(separator: " · "),
+                                     colorHex: event.course?.colorHex ?? "#6B655A"))
+        }
+        for session in planned where session.startsAt >= start && session.startsAt < end {
+            items.append(WidgetEvent(id: "planned-\(session.id)", start: session.startsAt, end: session.endsAt,
+                                     title: session.title,
+                                     subtitle: [session.course?.displayCode, session.location.isEmpty ? nil : session.location]
+                                        .compactMap { $0 }.joined(separator: " · "),
+                                     colorHex: session.course?.colorHex ?? "#6B655A"))
+        }
+        for exam in exams where exam.date >= start && exam.date < end {
+            items.append(WidgetEvent(id: "exam-\(exam.id)", start: exam.date, end: nil,
+                                     title: exam.title.isEmpty ? exam.kind.label : exam.title,
+                                     subtitle: [exam.course?.displayCode, exam.location.isEmpty ? nil : exam.location]
+                                        .compactMap { $0 }.joined(separator: " · "),
+                                     colorHex: exam.course?.colorHex ?? "#6B655A"))
+        }
+        return items.sorted { $0.start < $1.start }
     }
 
     private static func widgetTimer(_ state: FocusTimerState?, courses: [Course]) -> WidgetTimer? {

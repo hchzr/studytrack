@@ -23,6 +23,13 @@ struct WidgetSnapshot: Codable, Equatable {
     var courses: [WidgetCourse]?
     /// Chrono en cours, pour l'écran verrouillé.
     var timer: WidgetTimer?
+    /// Le temps de la semaine (lundi → dimanche) et l'attendu EPFL.
+    var week: WidgetWeek?
+    /// Ce qui a une heure aujourd'hui **et demain** : le widget passe au
+    /// lendemain à minuit sans attendre l'app.
+    var schedule: [WidgetEvent]?
+    /// Les prochaines évaluations (trois au plus).
+    var deadlines: [WidgetDeadline]?
 
     static let empty = WidgetSnapshot(updatedAt: .distantPast,
                                       weekSeconds: 0,
@@ -68,6 +75,42 @@ struct WidgetCourse: Codable, Equatable, Identifiable {
     var total: Int
     /// « reste 2 théorie · 1 exo », « à jour », « rien de prévu ».
     var summary: String
+    var name: String? = nil
+    var theoryDone: Int? = nil
+    var theoryTotal: Int? = nil
+    var exercisesDone: Int? = nil
+    var exercisesTotal: Int? = nil
+    /// Éléments des semaines passées pas faits.
+    var late: Int? = nil
+}
+
+struct WidgetWeek: Codable, Equatable {
+    var weekStart: Date
+    /// Numéro de la semaine du semestre, s'il est en cours.
+    var number: Int?
+    var totalWeeks: Int?
+    /// Réel (sessions + cours suivis) et attendu (cadré + personnel).
+    var actualSeconds: Int
+    var expectedSeconds: Int
+    /// Secondes d'étude, du lundi au dimanche.
+    var days: [Int]
+}
+
+struct WidgetEvent: Codable, Equatable, Identifiable {
+    var id: String
+    var start: Date
+    var end: Date?
+    var title: String
+    var subtitle: String
+    var colorHex: String
+}
+
+struct WidgetDeadline: Codable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var courseCode: String
+    var date: Date
+    var colorHex: String
 }
 
 struct WidgetTimer: Codable, Equatable {
@@ -140,6 +183,13 @@ enum WidgetBridge {
 /// Le widget ne peut pas importer `DateUtils` : ces fonctions sont pures et
 /// compilées dans les deux cibles, et vérifiées par `validate.sh`.
 enum WidgetFormat {
+    /// « 12 », « 1,5 » : des heures, sans unité, pour un anneau.
+    static func shortHours(_ seconds: Int) -> String {
+        let hours = Double(max(0, seconds)) / 3600
+        if hours >= 10 || hours == hours.rounded() { return String(Int(hours.rounded())) }
+        return String(format: "%.1f", hours).replacingOccurrences(of: ".", with: ",")
+    }
+
     /// « 45 min », « 2 h », « 1,6 h » — dixièmes d'heure **arrondis**.
     ///
     /// La version précédente écrivait `minutes / 10` : 1 h 35 donnait « 1,3 h »,

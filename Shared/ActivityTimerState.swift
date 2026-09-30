@@ -43,6 +43,8 @@ struct ActivityTimerState: Codable, Hashable {
     /// encore, et l'extension retombe alors sur les attributs.
     var title: String?
     var subtitle: String?
+    /// La couleur du cours (« #4F46E5 »), pour l'îlot et l'écran verrouillé.
+    var colorHex: String? = nil
 
     init(countingSince: Date?,
          frozenTotal: TimeInterval,

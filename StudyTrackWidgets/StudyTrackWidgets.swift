@@ -65,106 +65,120 @@ struct StudyTrackProvider: TimelineProvider {
     }
 }
 
-// MARK: - Widgets
-
-struct StudyTrackWidget: Widget {
-    let kind = "StudyTrackWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
-            StudyTrackWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-                // Un tap ouvre « Aujourd'hui » : c'est là que la liste continue.
-                .widgetURL(WidgetLink.today)
-        }
-        .configurationDisplayName("Cette semaine")
-        .description("Ce qu'il te reste à faire et ton temps de travail.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-    }
-}
-
-/// Widget de la session en cours (chrono lancé depuis l'app).
-struct StudyTrackTimerWidget: Widget {
-    let kind = "StudyTrackTimerWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
-            StudyTrackTimerWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-                // Le widget « temps » mène au chrono, pas à la liste.
-                .widgetURL(WidgetLink.focus)
-        }
-        .configurationDisplayName("Temps de travail")
-        .description("Ton temps travaillé sur les 7 derniers jours.")
-        .supportedFamilies([.systemSmall])
-    }
-}
-
 // MARK: - Live Activity : le chrono en cours
 
 /// Chrono en cours, sur l'écran verrouillé et dans l'îlot dynamique.
 ///
-/// Le compteur s'appuie sur `Text(timerInterval:)` : c'est le **système** qui le
-/// fait avancer, chaque seconde, sans que l'app envoie quoi que ce soit. Une Live
-/// Activity qui recevrait une mise à jour par seconde coûterait de la batterie et
-/// du réseau pour un résultat identique.
+/// « Carnet de verre » : de l'encre sur un papier sombre, la couleur du cours en
+/// liseré et dans l'anneau, le temps en serif. Le compteur s'appuie sur
+/// `Text(timerInterval:)` : c'est le **système** qui le fait avancer.
 ///
-/// **Forme compacte** : l'îlot se contente d'une icône et du temps. Y écrire le
-/// code du cours l'élargissait en permanence, pour une information qu'on retrouve
-/// dans la forme dépliée — qui, elle, ne coûte rien tant qu'on ne la déplie pas.
+/// **Forme compacte** : un point (ou l'anneau du bloc) à la couleur du cours,
+/// et le temps. Le reste vit dans la forme dépliée.
 struct StudyActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: StudyActivityAttributes.self) { context in
             StudyActivityLockView(context: context)
-                .activityBackgroundTint(Color.black.opacity(0.55))
-                .activitySystemActionForegroundColor(.white)
+                .activityBackgroundTint(Paper.night.opacity(0.92))
+                .activitySystemActionForegroundColor(Paper.cream)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    // L'anneau remplace l'icône quand la session est en Pomodoro :
-                    // il porte la même information — le chrono tourne — et il dit
-                    // en plus où en est le bloc.
-                    StudyActivityLeading(state: context.state)
-                        .padding(.leading, 4)
+                    HStack(spacing: 8) {
+                        StudyActivityLeading(state: context.state)
+                        Text(StudyActivityTitle.course(context))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(StudyActivityTint.color(context.state))
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    StudyActivityTimer(state: context.state, font: .title3, compact: true)
-                        .padding(.trailing, 4)
-                }
-                DynamicIslandExpandedRegion(.center) {
-                    // Sur quoi on travaille, lu dans l'**état** : il suit les
-                    // changements de cours et d'exercice pendant la session.
-                    Text(StudyActivityTitle.text(context))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    StudyActivityTimer(state: context.state,
+                                       font: .system(.title2, design: .serif), compact: false)
+                        .foregroundStyle(Paper.cream)
+                        .padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    // Le bouton utile, centré, **sans** largeur imposée :
-                    // `maxWidth: .infinity` faisait réclamer toute la place.
-                    StudyActivityControls(state: context.state, compact: true)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(StudyActivitySubtitle.text(context))
+                            .font(.system(.body, design: .serif))
+                            .foregroundStyle(Paper.cream)
+                            .lineLimit(1)
+                        HStack(spacing: 10) {
+                            StudyActivityProgressLine(state: context.state)
+                            Spacer(minLength: 4)
+                            StudyActivityControls(state: context.state, compact: true)
+                        }
+                    }
+                    .padding(.horizontal, 6)
                 }
             } compactLeading: {
-                // L'état, à gauche ; le temps, à droite. **Ne plus vider ces deux
-                // régions** : les laisser vides ne rapetissait pas l'îlot, il
-                // n'affichait plus rien du tout.
                 StudyActivityLeading(state: context.state, tiny: true)
             } compactTrailing: {
                 StudyActivityTimer(state: context.state, font: .caption2, compact: true)
+                    .foregroundStyle(StudyActivityTint.color(context.state))
             } minimal: {
                 StudyActivityLeading(state: context.state, tiny: true)
             }
-            .keylineTint(context.state.pomodoro?.isOnBreak == true ? .teal
-                         : (context.state.isRunning ? .indigo : .orange))
+            .keylineTint(StudyActivityTint.color(context.state))
         }
     }
 }
 
-/// Ce qui occupe la gauche de l'îlot : l'anneau du bloc, sinon l'état.
-///
-/// Une seule région, deux contenus possibles, pour ne pas élargir l'îlot : un
-/// anneau **et** une icône côte à côte coûtent une place que la forme repliée n'a
-/// pas.
+/// Le papier et l'encre du widget : l'extension ne voit pas `Carnet`.
+enum Paper {
+    static let cream = Color(hexString: "#EDE6D6")
+    static let creamSecondary = Color(hexString: "#A89F8D")
+    static let night = Color(hexString: "#1A1712")
+    static let ruleNight = Color(hexString: "#3A342A")
+    static let ground = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#211E18")) : UIColor(Color(hexString: "#FFFDF8")) })
+    static let ink = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#EDE6D6")) : UIColor(Color(hexString: "#1D1B16")) })
+    static let inkSecondary = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#A89F8D")) : UIColor(Color(hexString: "#6B655A")) })
+    static let rule = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#353027")) : UIColor(Color(hexString: "#E6DFD0")) })
+    static let wrong = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#E7836F")) : UIColor(Color(hexString: "#A33A2A")) })
+    static let correct = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(Color(hexString: "#8FC58A")) : UIColor(Color(hexString: "#3F7A3F")) })
+
+    /// La couleur d'un cours adoucie pour le papier, comme `Carnet.tint`.
+    static func tint(_ hex: String) -> Color {
+        let base = UIColor(Color(hexString: hex))
+        return Color(uiColor: UIColor { traits in
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            base.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(hue: h, saturation: min(s, 0.45), brightness: max(b, 0.82), alpha: 1)
+            }
+            return UIColor(hue: h, saturation: min(s * 0.62, 0.62), brightness: min(b * 0.74, 0.62), alpha: 1)
+        })
+    }
+
+    /// Sur le papier sombre de l'activité : la teinte de nuit, quel que soit le
+    /// réglage du téléphone.
+    static func nightTint(_ hex: String) -> Color {
+        let base = UIColor(Color(hexString: hex))
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        base.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: h, saturation: min(s, 0.45), brightness: max(b, 0.85))
+    }
+}
+
+/// La couleur de la session : le cours, turquoise en pause Pomodoro, ambre
+/// quand le chrono est arrêté.
+enum StudyActivityTint {
+    static func color(_ state: StudyActivityAttributes.ContentState) -> Color {
+        if state.pomodoro?.isOnBreak == true { return Color(hexString: "#7CC7C0") }
+        if !state.isRunning { return Color(hexString: "#E0B04E") }
+        return state.colorHex.map(Paper.nightTint) ?? Paper.cream
+    }
+}
+
+/// Ce qui occupe la gauche de l'îlot : l'anneau du bloc, sinon un point.
 struct StudyActivityLeading: View {
     let state: StudyActivityAttributes.ContentState
     var tiny: Bool = false
@@ -173,49 +187,39 @@ struct StudyActivityLeading: View {
         if let pomodoro = state.pomodoro {
             StudyActivityPomodoroRing(pomodoro: pomodoro,
                                       isRunning: state.isRunning,
+                                      tint: StudyActivityTint.color(state),
                                       tiny: tiny)
-                .overlay {
-                    // Une tasse au centre de l'anneau qui se vide : c'est la
-                    // pause, et on le voit sans lire.
-                    if pomodoro.isOnBreak {
-                        Image(systemName: "cup.and.saucer.fill")
-                            .font(.system(size: tiny ? 7 : 11, weight: .bold))
-                            .foregroundStyle(.teal)
-                    }
-                }
         } else {
-            StudyActivityStateIcon(state: state, tiny: tiny)
+            ZStack {
+                Circle().fill(StudyActivityTint.color(state).opacity(0.22))
+                if state.isRunning {
+                    Circle().fill(StudyActivityTint.color(state))
+                        .padding(tiny ? 4 : 7)
+                } else {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: tiny ? 7 : 10, weight: .bold))
+                        .foregroundStyle(StudyActivityTint.color(state))
+                }
+            }
+            .frame(width: tiny ? 16 : 26, height: tiny ? 16 : 26)
+            .accessibilityLabel(state.isRunning ? "Chrono en cours" : "Chrono en pause")
         }
     }
 }
 
-/// L'anneau du bloc Pomodoro.
+/// L'anneau du bloc Pomodoro, rempli par le **système** (`ProgressView(timerInterval:)`).
 ///
-/// `ProgressView(timerInterval:)` est le même mécanisme que `Text(timerInterval:)`
-/// pour le compteur : c'est le **système** qui remplit l'anneau, seconde après
-/// seconde, à partir des deux bornes du bloc. L'app n'envoie rien pendant ce
-/// temps-là — une mise à jour par seconde coûterait de la batterie pour un
-/// résultat identique.
-///
-/// En pause, et sur un bloc arrivé à terme, il n'y a pas d'intervalle à animer :
-/// l'anneau est alors dessiné **figé**, à la fraction déjà faite. Un anneau qui
-/// continuerait de se remplir pendant une pause mentirait — le chrono compte le
-/// travail, et une pause n'en est pas.
+/// En pause, et sur un bloc arrivé à terme, l'anneau est dessiné **figé** à la
+/// fraction déjà faite : un anneau qui avancerait pendant une pause mentirait.
 struct StudyActivityPomodoroRing: View {
     let pomodoro: ActivityPomodoro
     let isRunning: Bool
+    var tint: Color
     var tiny: Bool = false
-
-    private var tint: Color {
-        if pomodoro.isOnBreak { return .teal }
-        if pomodoro.isBlockComplete { return .orange }
-        return isRunning ? .green : .orange
-    }
 
     var body: some View {
         Group {
             if let breakInterval = pomodoro.breakInterval, Date() < breakInterval.upperBound {
-                // La pause se **vide** : le système anime l'anneau jusqu'à sa fin.
                 ProgressView(timerInterval: breakInterval, countsDown: true) {
                     EmptyView()
                 } currentValueLabel: {
@@ -230,41 +234,18 @@ struct StudyActivityPomodoroRing: View {
                 }
                 .progressViewStyle(.circular)
             } else {
-                // Figé : la fraction déjà faite, sans animation.
                 ProgressView(value: pomodoro.frozenProgress)
                     .progressViewStyle(.circular)
             }
         }
         .tint(tint)
-        .frame(width: tiny ? 18 : 30, height: tiny ? 18 : 30)
+        .frame(width: tiny ? 18 : 28, height: tiny ? 18 : 28)
         .accessibilityLabel("\(pomodoro.label), \(Int(pomodoro.frozenProgress * 100)) %")
     }
 }
 
-/// L'état du chrono en une icône : elle remplace le liseré de couleur, qui
-/// élargissait l'îlot d'un cadre.
-struct StudyActivityStateIcon: View {
-    let state: StudyActivityAttributes.ContentState
-    var tiny: Bool = false
-
-    var body: some View {
-        Image(systemName: state.isRunning ? "play.circle.fill" : "pause.circle.fill")
-            .font(tiny ? .system(size: 11) : .title3)
-            .foregroundStyle(state.isRunning ? .green : .orange)
-            .accessibilityLabel(state.isRunning ? "Chrono en cours" : "Chrono en pause")
-    }
-}
-
-/// « CS-250 · Exercices · 3.2 » — tout sur une ligne, tronquée au milieu.
-///
-/// Le nom complet du cours est écarté : dans l'îlot, il chassait le reste. Il
-/// reste lisible dans l'écran verrouillé, où la place ne manque pas.
-///
-/// **L'état d'abord, les attributs ensuite.** Les attributs sont figés à la
-/// création de l'activité, qui est reprise de session en session : les lire
-/// affichait le premier cours démarré pour toujours. L'état porte les libellés
-/// à jour ; les attributs ne servent plus qu'aux activités publiées par une
-/// version précédente de l'app.
+/// « CS-250 » — le cours, lu dans l'**état** (les attributs sont figés à la
+/// création de l'activité, reprise de session en session).
 enum StudyActivityTitle {
     static func course(_ context: ActivityViewContext<StudyActivityAttributes>) -> String {
         context.state.title ?? context.attributes.courseCode
@@ -275,7 +256,7 @@ enum StudyActivityTitle {
     }
 }
 
-/// « Vidéo · 2.1 » — la version courte, pour l'écran verrouillé.
+/// « Exercices · 3.2 ».
 enum StudyActivitySubtitle {
     static func text(_ context: ActivityViewContext<StudyActivityAttributes>) -> String {
         if let subtitle = context.state.subtitle { return subtitle }
@@ -285,172 +266,138 @@ enum StudyActivitySubtitle {
     }
 }
 
-/// Les boutons du chrono, dans l'îlot et sur l'écran verrouillé.
+/// Sous la ligne du titre : les sous-questions (barre et compte), ou le bloc
+/// Pomodoro. Rien quand il n'y a ni l'un ni l'autre.
+struct StudyActivityProgressLine: View {
+    let state: StudyActivityAttributes.ContentState
+
+    var body: some View {
+        if let pomodoro = state.pomodoro {
+            Text(pomodoro.isOnBreak ? pomodoro.breakLabel : "Bloc \(pomodoro.blockNumber) · \(pomodoro.completedBlocks) fait\(pomodoro.completedBlocks > 1 ? "s" : "")")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Paper.creamSecondary)
+                .lineLimit(1)
+        } else if let label = state.questionsLabel, let progress = state.questionsProgress {
+            HStack(spacing: 8) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Paper.ruleNight)
+                        Capsule().fill(StudyActivityTint.color(state))
+                            .frame(width: proxy.size.width * progress)
+                    }
+                }
+                .frame(width: 72, height: 4)
+                Text("\(label) questions")
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(Paper.creamSecondary)
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sous-questions faites : \(label)")
+        } else {
+            Text(state.isRunning ? "en cours" : "en pause")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Paper.creamSecondary)
+        }
+    }
+}
+
+/// Les boutons du chrono : des ronds crème sur le papier sombre.
 ///
-/// Ils exécutent des `LiveActivityIntent`, qui tournent dans le **processus de
-/// l'app** : mettre en pause ou enregistrer une session depuis l'écran verrouillé
-/// ne demande donc pas d'ouvrir l'app.
+/// Des `LiveActivityIntent`, exécutés dans le processus de l'app : mettre en
+/// pause ou enregistrer depuis l'écran verrouillé n'ouvre pas l'app.
 struct StudyActivityControls: View {
     let state: StudyActivityAttributes.ContentState
     var compact: Bool = false
 
-    var body: some View {
-        // L'îlot n'a pas la place de tout : l'enregistrement reste sur l'écran
-        // verrouillé, où il y a de quoi aligner trois commandes. Ne garder ici que
-        // ce qui se fait pendant la session — cocher, mettre en pause.
-        HStack(spacing: 10) {
-            if !compact {
-                Button(intent: FinishFocusTimerIntent()) {
-                    Image(systemName: "stop.fill")
-                }
-                .tint(.red)
-                .accessibilityLabel("Enregistrer la session")
-            }
+    private var size: CGFloat { compact ? 34 : 42 }
 
-            // Pendant une pause Pomodoro, un seul geste compte : s'y remettre.
+    var body: some View {
+        HStack(spacing: 8) {
             if state.pomodoro?.isOnBreak == true {
                 Button(intent: SkipBreakIntent()) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "forward.fill")
-                        if !compact { Text("Reprendre") }
-                    }
+                    circle("forward.fill", filled: true)
                 }
-                .tint(.teal)
-                .buttonBorderShape(.capsule)
+                .buttonStyle(.plain)
                 .accessibilityLabel("Terminer la pause et reprendre le travail")
-            }
-
-            // « Question suivante » : le geste réel d'une série. Il n'apparaît que
-            // s'il reste une case à cocher — un bouton qui ne fait rien est pire
-            // qu'un bouton absent. Avec le compte à côté, on sait ce qu'il coche.
-            if state.hasNextQuestion, state.pomodoro?.isOnBreak != true {
-                Button(intent: NextQuestionIntent()) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                        if let label = state.questionsLabel {
-                            Text(label)
-                                .monospacedDigit()
-                                .contentTransition(.numericText())
-                        }
-                    }
-                }
-                .tint(.blue)
-                .buttonBorderShape(.capsule)
-                .accessibilityLabel("Cocher la question suivante")
-                .accessibilityValue(state.questionsLabel ?? "")
-            }
-
-            if state.pomodoro?.isOnBreak == true {
-                EmptyView()
-            } else if state.isRunning {
-                Button(intent: PauseFocusTimerIntent()) {
-                    Image(systemName: "pause.fill")
-                }
-                .tint(.indigo)
-                .accessibilityLabel("Mettre en pause")
             } else {
-                Button(intent: ResumeFocusTimerIntent()) {
-                    Image(systemName: "play.fill")
+                if state.hasNextQuestion {
+                    Button(intent: NextQuestionIntent()) {
+                        circle("checkmark", filled: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cocher la question suivante")
+                    .accessibilityValue(state.questionsLabel ?? "")
                 }
-                .tint(.green)
-                .accessibilityLabel("Reprendre")
+                if state.isRunning {
+                    Button(intent: PauseFocusTimerIntent()) {
+                        circle("pause.fill", filled: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Mettre en pause")
+                } else {
+                    Button(intent: ResumeFocusTimerIntent()) {
+                        circle("play.fill", filled: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Reprendre")
+                }
+            }
+            if !compact {
+                Button(intent: FinishFocusTimerIntent()) {
+                    circle("stop.fill", filled: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Enregistrer la session")
             }
         }
-        .font(compact ? .caption2.weight(.bold) : .footnote.weight(.bold))
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.circle)
-        .controlSize(compact ? .mini : .small)
+    }
+
+    private func circle(_ icon: String, filled: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: size * 0.36, weight: .bold))
+            .foregroundStyle(filled ? Paper.night : Paper.cream)
+            .frame(width: size, height: size)
+            .background(filled ? Paper.cream : Paper.ruleNight, in: Circle())
     }
 }
 
-/// Pastille d'état : le chrono tourne-t-il, ou est-il en pause ?
-///
-/// Sans elle, rien ne distinguait une session en cours d'une session suspendue :
-/// le compteur affichait la même chose dans les deux cas.
-struct StudyActivityState: View {
-    let state: StudyActivityAttributes.ContentState
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(state.isRunning ? Color.green : Color.orange)
-                .frame(width: 6, height: 6)
-            Text(state.isRunning ? "en cours" : "en pause")
-                .font(.caption2.weight(.semibold))
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(state.isRunning ? "Chrono en cours" : "Chrono en pause")
-    }
-}
-
-/// Vue de l'écran verrouillé et de la bannière.
-///
-/// Trois informations, dans l'ordre où on les cherche : combien de temps, sur
-/// quoi, et de quoi il s'agit. Les commandes sont à droite, assez grandes pour
-/// être touchées sans regarder.
+/// L'écran verrouillé : le cours et ce qu'on y fait, le temps en grand, la
+/// progression, et les commandes à droite.
 struct StudyActivityLockView: View {
     let context: ActivityViewContext<StudyActivityAttributes>
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // L'anneau du bloc, quand la session est en Pomodoro : ici la place ne
-            // manque pas, il accompagne le reste au lieu de le remplacer.
-            if let pomodoro = context.state.pomodoro {
-                VStack(spacing: 2) {
-                    StudyActivityPomodoroRing(pomodoro: pomodoro,
-                                              isRunning: context.state.isRunning)
-                    Text(pomodoro.label)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
+        let tint = StudyActivityTint.color(context.state)
+        HStack(alignment: .center, spacing: 14) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint)
+                .frame(width: 4)
+                .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(context.state.pomodoro?.isOnBreak == true ? Color.teal
-                              : (context.state.isRunning ? Color.green : Color.orange))
-                        .frame(width: 7, height: 7)
-                    Text(StudyActivityTitle.course(context))
-                        .font(.subheadline.weight(.bold))
-                        .lineLimit(1)
+                    Text(StudyActivityTitle.course(context).uppercased())
+                        .font(.caption2.weight(.bold))
+                        .tracking(1)
+                        .foregroundStyle(tint)
                     Text(StudyActivitySubtitle.text(context))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(.footnote, design: .serif))
+                        .foregroundStyle(Paper.cream)
                         .lineLimit(1)
                 }
-                StudyActivityTimer(state: context.state, font: .title2)
-
-                // Les sous-questions : la barre dit l'avancement d'un coup d'œil,
-                // le compte dit exactement où on en est. Rien ne s'affiche quand la
-                // cible n'a pas de sous-questions.
-                if let label = context.state.questionsLabel,
-                   let progress = context.state.questionsProgress {
-                    HStack(spacing: 6) {
-                        ProgressView(value: progress)
-                            .progressViewStyle(.linear)
-                            .tint(.blue)
-                            .frame(width: 64)
-                        Text(label)
-                            .font(.caption2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Sous-questions faites : \(label)")
-                }
+                StudyActivityTimer(state: context.state, font: .system(.largeTitle, design: .serif))
+                    .foregroundStyle(Paper.cream)
+                StudyActivityProgressLine(state: context.state)
             }
-
-            Spacer(minLength: 8)
-
+            Spacer(minLength: 6)
             StudyActivityControls(state: context.state)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 }
+
 
 /// Le compteur : vivant tant que la session tourne, figé en pause.
 ///
@@ -679,255 +626,13 @@ struct ExamActivityLockView: View {
 @main
 struct StudyTrackWidgetsBundle: WidgetBundle {
     var body: some Widget {
-        NextActionWidget()
         WeekCoursesWidget()
-        ExamCountdownWidget()
-        StudyTrackWidget()
-        StudyTrackTimerWidget()
+        TodayScheduleWidget()
         StudyActivityWidget()
         ExamActivityWidget()
         if #available(iOS 18.0, *) {
             FocusControl()
             FocusPauseControl()
-        }
-    }
-}
-
-// MARK: - Vues
-
-struct StudyTrackWidgetView: View {
-    @Environment(\.widgetFamily) private var family
-    let entry: StudyTrackEntry
-
-    // Tailles conservées, mais elles suivent la taille de texte du lecteur.
-    @ScaledMetric(relativeTo: .largeTitle) private var heroSmall: CGFloat = 30
-    @ScaledMetric(relativeTo: .title) private var heroMedium: CGFloat = 26
-    @ScaledMetric(relativeTo: .title2) private var heroLarge: CGFloat = 22
-
-    var body: some View {
-        if let snapshot = entry.snapshot, snapshot.hasContent {
-            switch family {
-            case .systemSmall: small(snapshot)
-            case .systemLarge: large(snapshot)
-            default: medium(snapshot)
-            }
-        } else {
-            emptyState
-        }
-    }
-
-    // MARK: Vide
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "timer")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-            Text("Ouvre StudyTrack")
-                .font(.caption.weight(.semibold))
-            Text("Tes données apparaîtront ici.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: Small
-
-    private func small(_ snapshot: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header(snapshot)
-            Spacer(minLength: 0)
-            Text(WidgetFormat.hours(snapshot.weekSeconds))
-                .font(.system(size: heroSmall, weight: .bold, design: .rounded))
-                .contentTransition(.numericText())
-                .widgetAccentable()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text("cette semaine")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            footer(snapshot)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-
-    // MARK: Medium
-
-    private func medium(_ snapshot: WidgetSnapshot) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                header(snapshot)
-                Spacer(minLength: 0)
-                Text(WidgetFormat.hours(snapshot.weekSeconds))
-                    .font(.system(size: heroMedium, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                    .widgetAccentable()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                Text("cette semaine")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                footer(snapshot)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Divider()
-
-            todoList(snapshot, limit: 3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    // MARK: Large
-
-    private func large(_ snapshot: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                header(snapshot)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(WidgetFormat.hours(snapshot.weekSeconds))
-                        .font(.system(size: heroLarge, weight: .bold, design: .rounded))
-                        .contentTransition(.numericText())
-                        .widgetAccentable()
-                    Text("cette semaine")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Divider()
-
-            todoList(snapshot, limit: 5)
-
-            if let title = snapshot.nextExamTitle, let date = snapshot.nextExamDate {
-                Spacer(minLength: 0)
-                Divider()
-                HStack(spacing: 6) {
-                    Image(systemName: "graduationcap.fill")
-                        .font(.caption2)
-                        .foregroundStyle(Color.orange.widgetInk)
-                    Text([snapshot.nextExamCourse, title].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer()
-                    Text(WidgetFormat.countdown(to: date))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.orange.widgetInk)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    // MARK: Fragments
-
-    private func header(_ snapshot: WidgetSnapshot) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "timer")
-                .font(.caption2)
-                .foregroundStyle(.tint)
-            Text("StudyTrack")
-                .font(.caption.weight(.bold))
-            Spacer(minLength: 4)
-        }
-    }
-
-    private func footer(_ snapshot: WidgetSnapshot) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: snapshot.todoCount == 0 ? "checkmark.circle.fill" : "list.bullet")
-                .font(.caption2)
-            Text(snapshot.todoCount == 0 ? "À jour" : "\(snapshot.todoCount) à faire")
-                .font(.caption2.weight(.semibold))
-        }
-        .foregroundStyle(snapshot.todoCount == 0 ? Color.green.widgetInk : Color.secondary)
-    }
-
-    private func todoList(_ snapshot: WidgetSnapshot, limit: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if snapshot.todos.isEmpty {
-                Text("Rien à faire cette semaine.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(snapshot.todos.prefix(limit)) { todo in
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color(hexString: todo.colorHex))
-                            .frame(width: 3, height: 16)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(todo.courseCode)
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(Color(hexString: todo.colorHex).widgetInk)
-                            Text(todo.title)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-                if snapshot.todoCount > limit {
-                    Text("+ \(snapshot.todoCount - limit) autres")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
-/// Widget compact centré sur le temps de travail.
-struct StudyTrackTimerWidgetView: View {
-    let entry: StudyTrackEntry
-
-    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 32
-
-    var body: some View {
-        if let snapshot = entry.snapshot, snapshot.hasContent {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
-                    Image(systemName: "clock.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.tint)
-                    Text("7 derniers jours")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
-
-                Text(WidgetFormat.hours(snapshot.weekSeconds))
-                    .font(.system(size: heroSize, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                    .widgetAccentable()
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                // Ce qui reste, pas une série de jours : la gamification a
-                // été retirée, le widget dit ce qu'il y a à faire.
-                Text(snapshot.todoCount == 0 ? "tout est à jour"
-                     : "\(snapshot.todoCount) à faire cette semaine")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        } else {
-            VStack(spacing: 6) {
-                Image(systemName: "clock")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text("Ouvre StudyTrack")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

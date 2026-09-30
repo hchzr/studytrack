@@ -240,7 +240,7 @@ enum StudyActivityController {
         // sous-questions ne doit pas publier « 0/0 », qui allumerait le bouton
         // « question suivante » sur une cible qui n'en a aucune.
         let leaves = exercise?.hasSubQuestions == true ? exercise?.leafSubQuestions : nil
-        return .make(elapsed: elapsed,
+        var state = ActivityTimerState.make(elapsed: elapsed,
                      running: timer.isRunning,
                      questionsDone: leaves.map { $0.filter(\.isDone).count },
                      questionsTotal: leaves.map(\.count),
@@ -249,6 +249,8 @@ enum StudyActivityController {
                      subtitle: ActivityTimerState.subtitle(task: timer.taskType.label,
                                                            target: targetLabel(timer, course: course)),
                      now: now)
+        state.colorHex = course?.colorHex
+        return state
     }
 
     /// Lance une activité d'essai, pour vérifier l'îlot sans attendre un chrono.
