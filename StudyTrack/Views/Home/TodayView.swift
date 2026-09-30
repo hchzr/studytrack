@@ -9,8 +9,11 @@ private struct TodayState {
     let term: AcademicTerm?
     /// La semaine en cours, du lundi au lundi suivant.
     let weekStart: Date
-    /// Attendu (cadré + personnel) et réel (sessions + cours suivis) de la semaine.
-    let workload: WorkloadDelta
+    /// La semaine du semestre, tous cours : théorie vue et exercices faits.
+    let theory: (done: Int, total: Int)
+    let series: (done: Int, total: Int)
+    /// Éléments des semaines passées pas faits.
+    let late: Int
     /// Temps d'étude enregistré, jour par jour, du lundi au dimanche.
     let days: [Int]
     /// Le planning du jour : séances, sessions planifiées, évaluations.
@@ -57,6 +60,7 @@ struct TodayView: View {
         let tracked = courses.filter(\.isTracked)
         let weekStart = DateUtils.startOfWeek(Date())
         let weekEnd = DateUtils.addDays(7, to: weekStart)
+        let weeks = tracked.map { ProgressEngine.weekProgress(for: $0, week: $0.currentWeek) }
         var days = Array(repeating: 0, count: 7)
         for session in sessions {
             // Triées de la plus récente à la plus ancienne : on s'arrête au lundi.
@@ -69,9 +73,9 @@ struct TodayView: View {
             tracked: tracked,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
             weekStart: weekStart,
-            workload: WorkloadEngine.aggregateWeekly(courses: tracked,
-                                                     hoursPerCredit: app.settings.hoursPerCredit,
-                                                     from: weekStart, to: weekEnd),
+            theory: (weeks.reduce(0) { $0 + $1.watchedCount }, weeks.reduce(0) { $0 + $1.videoCount }),
+            series: (weeks.reduce(0) { $0 + $1.doneCount }, weeks.reduce(0) { $0 + $1.exerciseCount }),
+            late: tracked.reduce(0) { $0 + ProgressEngine.lateCount(for: $1) },
             days: days,
             todayItems: todayItems()
         )
@@ -294,7 +298,8 @@ struct TodayView: View {
             }
         } else {
             importNews
-            WeekTimeCard(workload: state.workload, days: state.days, weekStart: state.weekStart) {
+            WeekTimeCard(days: state.days, weekStart: state.weekStart,
+                         theory: state.theory, series: state.series, late: state.late) {
                 app.router.showingStats = true
             }
             todaySchedule(state)

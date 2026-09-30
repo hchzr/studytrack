@@ -21,7 +21,7 @@ struct WeekCoursesWidget: Widget {
                 .widgetURL(WidgetLink.today)
         }
         .configurationDisplayName("La semaine")
-        .description("Ton temps de la semaine et l'avancement de chaque cours.")
+        .description("Tes heures depuis lundi, la théorie et les séries de la semaine.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
                             .accessoryCircular, .accessoryInline, .accessoryRectangular])
     }
@@ -47,16 +47,26 @@ struct WeekWidgetView: View {
 
     // MARK: Écran verrouillé
 
+    /// Les heures d'étude enregistrées depuis lundi.
+    private var studied: Int { week?.days.reduce(0, +) ?? 0 }
+
+    /// Théorie vue et exercices faits de la semaine, tous cours confondus.
+    private var theory: (done: Int, total: Int) {
+        (courses.reduce(0) { $0 + ($1.theoryDone ?? 0) }, courses.reduce(0) { $0 + ($1.theoryTotal ?? 0) })
+    }
+    private var series: (done: Int, total: Int) {
+        (courses.reduce(0) { $0 + ($1.exercisesDone ?? 0) }, courses.reduce(0) { $0 + ($1.exercisesTotal ?? 0) })
+    }
     private var ratio: Double {
-        guard let week, week.expectedSeconds > 0 else { return 0 }
-        return min(1, Double(week.actualSeconds) / Double(week.expectedSeconds))
+        let total = theory.total + series.total
+        return total == 0 ? 0 : Double(theory.done + series.done) / Double(total)
     }
 
     private var circular: some View {
         Gauge(value: ratio) {
             Text("h")
         } currentValueLabel: {
-            Text(WidgetFormat.shortHours(week?.actualSeconds ?? 0))
+            Text(WidgetFormat.shortHours(studied))
                 .font(.system(.body, design: .serif))
         }
         .gaugeStyle(.accessoryCircularCapacity)
@@ -64,15 +74,16 @@ struct WeekWidgetView: View {
     }
 
     private var inline: some View {
-        Text("\(WidgetFormat.hours(week?.actualSeconds ?? 0)) cette semaine")
+        Text("\(WidgetFormat.hours(studied)) · th. \(theory.done)/\(theory.total) · ex. \(series.done)/\(series.total)")
     }
 
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(weekTitle).font(.headline).widgetAccentable()
-            Text("\(WidgetFormat.hours(week?.actualSeconds ?? 0)) sur \(WidgetFormat.hours(week?.expectedSeconds ?? 0))")
+            Text("\(WidgetFormat.hours(studied)) depuis lundi")
                 .font(.caption)
-            ProgressView(value: ratio).progressViewStyle(.linear)
+            Text("Théorie \(theory.done)/\(theory.total) · Séries \(series.done)/\(series.total)")
+                .font(.caption)
         }
     }
 
@@ -89,15 +100,10 @@ struct WeekWidgetView: View {
                 .tracking(1)
                 .foregroundStyle(Paper.inkSecondary)
             HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(WidgetFormat.hours(week?.actualSeconds ?? 0))
+                Text(WidgetFormat.hours(studied))
                     .font(.system(.title, design: .serif))
                     .foregroundStyle(Paper.ink)
                     .minimumScaleFactor(0.7)
-                if let expected = week?.expectedSeconds, expected > 0 {
-                    Text("/ \(WidgetFormat.hours(expected))")
-                        .font(.caption)
-                        .foregroundStyle(Paper.inkSecondary)
-                }
             }
         }
     }
@@ -105,9 +111,9 @@ struct WeekWidgetView: View {
     private var small: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            WidgetBar(value: ratio, tint: Paper.ink)
             Spacer(minLength: 0)
-            WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 30)
+            axis("Théorie", theory)
+            axis("Séries", series)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -117,7 +123,8 @@ struct WeekWidgetView: View {
             VStack(alignment: .leading, spacing: 8) {
                 header
                 Spacer(minLength: 0)
-                WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 34)
+                axis("Théorie", theory)
+                axis("Séries", series)
             }
             .frame(width: 118)
             Rectangle().fill(Paper.rule).frame(width: 1)
@@ -131,11 +138,27 @@ struct WeekWidgetView: View {
                 header
                 Spacer()
             }
-            WidgetBar(value: ratio, tint: Paper.ink)
+            HStack(spacing: 14) {
+                axis("Théorie", theory)
+                axis("Séries", series)
+            }
             WidgetDayStrip(days: week?.days ?? [], weekStart: week?.weekStart ?? Date(), height: 40)
             Rectangle().fill(Paper.rule).frame(height: 1)
             courseList(limit: 6, compact: false)
             Spacer(minLength: 0)
+        }
+    }
+
+    private func axis(_ title: String, _ value: (done: Int, total: Int)) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(title).font(.caption2).foregroundStyle(Paper.inkSecondary)
+                Spacer(minLength: 2)
+                Text(value.total == 0 ? "—" : "\(value.done)/\(value.total)")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Paper.ink)
+            }
+            WidgetBar(value: value.total == 0 ? 0 : Double(value.done) / Double(value.total), tint: Paper.ink)
         }
     }
 

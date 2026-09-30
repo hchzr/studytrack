@@ -1,55 +1,63 @@
 import SwiftUI
 
-/// Le temps de la semaine : ce qui est fait, ce que l'EPFL attend, et la
-/// semaine jour par jour.
+/// La semaine en un coup d'œil : les heures travaillées depuis lundi, jour par
+/// jour, et l'avancement de la semaine — théorie vue, exercices des séries
+/// faits — tous cours confondus.
 ///
-/// Un grand chiffre en serif (« 12,5 h »), l'attendu à côté, une barre, puis
-/// sept colonnes du lundi au dimanche — aujourd'hui en encre, les jours à venir
-/// en pointillé. Toucher la carte ouvre le bilan.
+/// Pas d'« objectif » EPFL ici : un total attendu comparé à un mercredi dit
+/// toujours « en retard » et n'aide à rien. Ce qui compte est ce qui est fait.
 struct WeekTimeCard: View {
-    let workload: WorkloadDelta
     /// Secondes d'étude enregistrées, du lundi au dimanche.
     let days: [Int]
     let weekStart: Date
+    /// La semaine du semestre, tous cours suivis : faits sur prévus.
+    let theory: (done: Int, total: Int)
+    let series: (done: Int, total: Int)
+    /// Éléments des semaines passées pas faits, tous cours confondus.
+    let late: Int
     var onOpen: () -> Void
 
     private var todayIndex: Int {
         min(max(DateUtils.daysBetween(weekStart, Date()), 0), 6)
     }
 
+    private var total: Int { days.reduce(0, +) }
+
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    CarnetKicker("Cette semaine")
+                    CarnetKicker("Depuis lundi")
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Carnet.inkTertiary)
                 }
-                HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text(hours(workload.actualSeconds))
-                        .font(Carnet.serif(.largeTitle, weight: .regular))
-                        .foregroundStyle(Carnet.ink)
-                        .contentTransition(.numericText())
-                    if workload.expectedSeconds > 0 {
-                        Text("sur \(hours(workload.expectedSeconds))")
-                            .font(.subheadline)
+                HStack(alignment: .bottom, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(DateUtils.hoursLabel(seconds: total))
+                            .font(Carnet.serif(.largeTitle, weight: .regular))
+                            .foregroundStyle(Carnet.ink)
+                            .contentTransition(.numericText())
+                        Text(todayLine)
+                            .font(.footnote)
                             .foregroundStyle(Carnet.inkSecondary)
                     }
-                    Spacer(minLength: 8)
-                    Text(standing)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(standingColor)
-                        .multilineTextAlignment(.trailing)
+                    .fixedSize()
+                    dayStrip
                 }
-                if workload.expectedSeconds > 0 {
-                    CarnetBar(value: workload.completion, tint: Carnet.ink, height: 5)
+                Rectangle().fill(Carnet.rule).frame(height: 1)
+                HStack(spacing: 18) {
+                    axis("Théorie", theory)
+                    axis("Séries", series)
                 }
-                dayStrip
-                Text(breakdown)
-                    .font(.caption)
-                    .foregroundStyle(Carnet.inkSecondary)
+                if late > 0 {
+                    Label(late == 1 ? "1 élément des semaines passées à rattraper"
+                                    : "\(late) éléments des semaines passées à rattraper",
+                          systemImage: "exclamationmark.circle")
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.wrong)
+                }
             }
             .padding(16)
             .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
@@ -57,27 +65,50 @@ struct WeekTimeCard: View {
         }
         .buttonStyle(PressableStyle(scale: 0.99))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Cette semaine : \(hours(workload.actualSeconds)) sur \(hours(workload.expectedSeconds)) attendues. \(standing)")
         .accessibilityHint("Ouvre le bilan")
+    }
+
+    private var todayLine: String {
+        let today = days.indices.contains(todayIndex) ? days[todayIndex] : 0
+        return today > 0 ? "dont \(DateUtils.durationLabel(seconds: today)) aujourd'hui" : "rien encore aujourd'hui"
+    }
+
+    private func axis(_ title: String, _ value: (done: Int, total: Int)) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(title).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
+                Spacer(minLength: 4)
+                Text(value.total == 0 ? "—" : "\(value.done)")
+                    .font(Carnet.serif(.title3))
+                    .foregroundStyle(value.total > 0 && value.done == value.total ? Carnet.correct : Carnet.ink)
+                if value.total > 0 {
+                    Text("/\(value.total)").font(.footnote).foregroundStyle(Carnet.inkSecondary)
+                }
+            }
+            CarnetBar(value: CourseProgress.ratio(value.done, value.total), tint: Carnet.ink, height: 5)
+                .opacity(value.total == 0 ? 0.3 : 1)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title) cette semaine : \(value.done) sur \(value.total)")
     }
 
     private var dayStrip: some View {
         let peak = max(days.max() ?? 0, 3600)
-        return HStack(alignment: .bottom, spacing: 8) {
+        return HStack(alignment: .bottom, spacing: 6) {
             ForEach(0..<7, id: \.self) { index in
                 let seconds = days.indices.contains(index) ? days[index] : 0
                 let isToday = index == todayIndex
-                let isFuture = index > todayIndex
-                VStack(spacing: 5) {
+                VStack(spacing: 4) {
                     ZStack(alignment: .bottom) {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(Carnet.sheetRaised)
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(isToday ? Carnet.ink : Carnet.inkTertiary)
-                            .frame(height: seconds == 0 ? 0 : max(4, 44 * CGFloat(seconds) / CGFloat(peak)))
+                            .frame(height: seconds == 0 ? 0 : max(3, 40 * CGFloat(seconds) / CGFloat(peak)))
                     }
-                    .frame(height: 44)
-                    .opacity(isFuture ? 0.5 : 1)
+                    .frame(height: 40)
+                    .opacity(index > todayIndex ? 0.5 : 1)
                     Text(DateUtils.weekdayInitial(DateUtils.addDays(index, to: weekStart)))
                         .font(.caption2.weight(isToday ? .bold : .regular))
                         .foregroundStyle(isToday ? Carnet.ink : Carnet.inkTertiary)
@@ -86,41 +117,6 @@ struct WeekTimeCard: View {
             }
         }
         .accessibilityHidden(true)
-    }
-
-    /// « 1,5 h d'avance », « 4 h à rattraper », « dans le rythme ».
-    ///
-    /// L'attendu est celui de la semaine **entière** : le comparer au réel un
-    /// mercredi donne toujours un retard. On le ramène aux jours écoulés.
-    private var standing: String {
-        guard workload.expectedSeconds > 0 else { return "" }
-        let elapsedShare = Double(todayIndex + 1) / 7
-        let expectedSoFar = Int(Double(workload.expectedSeconds) * elapsedShare)
-        let delta = workload.actualSeconds - expectedSoFar
-        if abs(delta) < 1800 { return "dans le rythme" }
-        return delta > 0 ? "\(hours(delta)) d'avance" : "\(hours(-delta)) de retard"
-    }
-
-    private var standingColor: Color {
-        guard workload.expectedSeconds > 0 else { return Carnet.inkSecondary }
-        let expectedSoFar = Double(workload.expectedSeconds) * Double(todayIndex + 1) / 7
-        let ratio = Double(workload.actualSeconds) / max(expectedSoFar, 1)
-        if ratio >= 0.9 { return Carnet.correct }
-        if ratio >= 0.6 { return Carnet.review }
-        return Carnet.wrong
-    }
-
-    private var breakdown: String {
-        var parts: [String] = []
-        let study = workload.actualSeconds - workload.classSeconds
-        parts.append("\(hours(study)) d'étude")
-        if workload.classSeconds > 0 { parts.append("\(hours(workload.classSeconds)) en cours") }
-        if workload.expectedSeconds > 0 { parts.append("attendu EPFL \(hours(workload.expectedSeconds))") }
-        return parts.joined(separator: " · ")
-    }
-
-    private func hours(_ seconds: Int) -> String {
-        DateUtils.hoursLabel(seconds: max(0, seconds))
     }
 }
 

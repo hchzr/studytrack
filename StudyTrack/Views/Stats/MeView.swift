@@ -78,7 +78,6 @@ struct MeView: View {
 
     private var weekStats: some View {
         let seconds = weekSessions.reduce(0) { $0 + $1.durationSeconds }
-        let expected = tracked.reduce(0) { $0 + WorkloadEngine.expectedWeeklySeconds(for: $1, hoursPerCredit: app.settings.hoursPerCredit) }
         let progress = tracked.map { ProgressEngine.progress(for: $0) }
         let done = progress.reduce(0) { $0 + $1.watchedCount + $1.doneCount }
         let total = progress.reduce(0) { $0 + $1.videoCount + $1.exerciseCount }
@@ -90,7 +89,7 @@ struct MeView: View {
             }
             HStack(spacing: 8) {
                 CarnetStat(label: "Travail", value: DateUtils.hoursLabel(seconds: seconds),
-                           detail: expected > 0 ? "objectif \(DateUtils.hoursLabel(seconds: expected))" : nil)
+                           detail: "\(weekSessions.count) session\(weekSessions.count > 1 ? "s" : "")")
                 CarnetStat(label: "Fait", value: "\(Int((CourseProgress.ratio(done, total) * 100).rounded())) %",
                            detail: "du semestre")
                 CarnetStat(label: "Juste", value: corrected.isEmpty ? "—" : "\(Int((Double(right) / Double(corrected.count) * 100).rounded())) %",
