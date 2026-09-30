@@ -1075,6 +1075,68 @@ do {
     try? context.save()
 }
 
+print("== Assistant : commandes appliquées par l'app ==")
+do {
+    let aCourse = Course(code: "TEST-401", name: "Commandes")
+    context.insert(aCourse)
+    let aSeries = ExerciseSeries(course: aCourse, seriesNumber: 1)
+    context.insert(aSeries)
+    let aEx = Exercise(series: aSeries, exerciseNumber: "1.1", sortOrder: 0)
+    context.insert(aEx); aSeries.exercises.append(aEx)
+    let qa = SubQuestion(exercise: aEx, label: "a", sortOrder: 0)
+    let qb = SubQuestion(exercise: aEx, label: "b", sortOrder: 1)
+    context.insert(qa); context.insert(qb); aEx.subQuestions = [qa, qb]
+    let aItem = TheoryItem(course: aCourse, sectionNumber: 2, number: "2.1", title: "Suites")
+    context.insert(aItem)
+    try? context.save()
+
+    let json = """
+    [{"id":"c1","kind":"check_questions","payload":{"course":"test-401","exercise":"1.1","questions":["(a)"]}},
+     {"id":"c2","kind":"update_exercise","payload":{"exerciseId":"\(aEx.id.uuidString)","confidence":"unsure"}},
+     {"id":"c3","kind":"update_exercise","payload":{"exerciseId":"\(aEx.id.uuidString)","correctness":"wrong","note":"signe"}},
+     {"id":"c4","kind":"update_theory","payload":{"theoryId":"\(aItem.id.uuidString)","summary":"Définition de la limite"}},
+     {"id":"c5","kind":"log_session","payload":{"course":"TEST-401","type":"exercise","minutes":45,"exercise":"1.1"}},
+     {"id":"c6","kind":"add_series","payload":{"course":"TEST-401","number":2,"week":3,"exercises":[{"number":"2.1","questions":["a","b","c"]},{"number":"2.2","bonus":true}]}},
+     {"id":"c7","kind":"add_exam","payload":{"course":"TEST-401","title":"Midterm","date":"2026-10-19","examKind":"midterm"}},
+     {"id":"c8","kind":"update_exercise","payload":{"course":"TEST-401","exercise":"9.9","done":true}},
+     {"id":"c9","kind":"teleport","payload":{}}]
+    """
+    let commands = (try? JSONDecoder().decode([AssistantCommand].self, from: Data(json.utf8))) ?? []
+    check(commands.count == 9, "les commandes du serveur se décodent (\(commands.count))")
+    let results = AssistantCommandApplier.apply(commands, context: context)
+    let status = Dictionary(uniqueKeysWithValues: results.map { ($0.id, $0.status) })
+    check(status["c1"] == "applied" && results.first { $0.id == "c1" }?.message.contains("(1/2)") == true,
+          "cocher une question par son étiquette")
+    check(aEx.confidence == .low && aEx.isDone, "une sureté donnée marque l'exercice fait")
+    check(aEx.correctness == .wrong && aEx.redoRequired && aEx.correctionNote == "signe", "corrigé faux : à refaire, remarque gardée")
+    check(aItem.isSummarized && aItem.isWatched, "un résumé marque la théorie vue")
+    check(status["c5"] == "applied" && aEx.series?.course?.id == aCourse.id, "session enregistrée")
+    let newSeries = aCourse.series.first { $0.seriesNumber == 2 }
+    check(newSeries?.exercises.count == 2 && newSeries?.plannedWeek == 3, "série ajoutée, à sa semaine")
+    check(newSeries?.exercises.first { $0.exerciseNumber == "2.1" }?.leafSubQuestions.count == 3, "…avec ses questions")
+    check(newSeries?.exercises.first { $0.exerciseNumber == "2.2" }?.isBonus == true, "…et son bonus")
+    check(aCourse.exams.first?.kind == .midterm, "évaluation ajoutée")
+    check(status["c8"] == "failed" && results.first { $0.id == "c8" }?.message.contains("9.9") == true,
+          "une cible introuvable échoue avec un message clair")
+    check(status["c9"] == "failed", "une commande inconnue échoue sans rien casser")
+    check(AssistantCommandApplier.confidence("Vert") == .high && AssistantCommandApplier.correctness("juste") == .correct,
+          "les valeurs en français sont comprises")
+
+    let exported = AssistantExport.make(courses: [aCourse], sessions: [], milestones: [], groups: [],
+                                        hoursPerCredit: 30, displayName: "")
+    let firstCourse = (exported["courses"] as? [[String: Any]])?.first
+    let firstExercise = ((firstCourse?["series"] as? [[String: Any]])?.first?["exercises"] as? [[String: Any]])?.first
+    check(exported["version"] as? Int == 2 && firstCourse?["id"] as? String == aCourse.id.uuidString, "l'instantané porte les identifiants")
+    check(firstExercise?["stage"] as? String == "à refaire" && (firstExercise?["questions"] as? [[String: Any]])?.count == 2,
+          "…l'étape de chaque exercice et ses questions")
+
+    for session in ((try? context.fetch(FetchDescriptor<StudySession>())) ?? []) where session.course?.id == aCourse.id || session.exercise?.series?.course?.id == aCourse.id {
+        context.delete(session)
+    }
+    context.delete(aCourse)
+    try? context.save()
+}
+
 print("== Exercice par exercice ==")
 do {
     let flowSeries = ExerciseSeries(seriesNumber: 9)

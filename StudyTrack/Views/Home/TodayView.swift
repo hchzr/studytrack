@@ -12,8 +12,6 @@ import SwiftData
 private struct TodayState {
     let tracked: [Course]
     let todos: [StudyTodo]
-    /// La prochaine action — la carte principale, que la liste ne répète pas.
-    let hero: NextAction?
     let term: AcademicTerm?
     let weekSeconds: Int
     let upcomingExams: [Exam]
@@ -70,7 +68,6 @@ struct TodayView: View {
         return TodayState(
             tracked: tracked,
             todos: todos,
-            hero: NextActionEngine.actions(for: tracked, limit: 1).first,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
             // Un seul parcours des sessions, au lieu d'un `filter` puis d'un `reduce`.
             weekSeconds: sessions.reduce(0) { total, session in
@@ -180,7 +177,6 @@ struct TodayView: View {
                                 emptyState
                             } else {
                                 importNews
-                                primaryActionCard(state)
                                 todaySchedule(state)
                                 weekCard(state)
                             }
@@ -329,8 +325,11 @@ struct TodayView: View {
                 // heure aujourd'hui, où j'en suis par cours, la suite, les
                 // échéances. Le chrono en cours n'a plus de bandeau : le dock le
                 // montre sur tous les onglets.
+                // La prochaine action n'a plus de carte ici : la bulle Focus,
+                // au-dessus de la barre d'onglets, la montre déjà — sur tous
+                // les onglets. Deux fois la même chose l'une sous l'autre,
+                // c'était du poids pour rien.
                 importNews
-                primaryActionCard(state)
                 todaySchedule(state)
                 weekCard(state)
                 weeklyList(state)
@@ -657,40 +656,6 @@ struct TodayView: View {
         return name.isEmpty ? base : "\(base) \(name)"
     }
 
-    // MARK: Action principale
-
-    @ViewBuilder
-    private func primaryActionCard(_ state: TodayState) -> some View {
-        // Le même classement que le dock et les widgets : l'accueil ne propose
-        // jamais autre chose que le bouton « ▶ » au bas de l'écran.
-        if let next = state.hero {
-            ActionCard(icon: next.icon,
-                       title: "\(next.courseCode) · \(next.title)",
-                       subtitle: "\(next.reasonLabel) · \(next.detail)",
-                       actionTitle: "Démarrer le chrono",
-                       tint: next.reason == .redo ? .red : Color(hex: next.colorHex),
-                       eyebrow: "À faire maintenant") {
-                app.router.startFocus(courseID: next.courseID,
-                                      courseCode: next.courseCode,
-                                      taskType: next.taskType,
-                                      targetID: next.targetID,
-                                      label: next.focusLabel)
-            }
-        } else {
-            ActionCard(icon: "checkmark.seal.fill",
-                       title: "Tout est à jour pour cette semaine",
-                       subtitle: "Lance une session libre pour avancer sur ce que tu veux.",
-                       actionTitle: "Démarrer une session libre",
-                       tint: .green,
-                       eyebrow: "Semaine à jour") {
-                app.router.startFocus(courseID: nil,
-                                      courseCode: "",
-                                      taskType: .theory,
-                                      label: "Session libre")
-            }
-        }
-    }
-
     // MARK: Cette semaine
 
     private func weekCard(_ state: TodayState) -> some View {
@@ -708,8 +673,7 @@ struct TodayView: View {
 
     @ViewBuilder
     private func weeklyList(_ state: TodayState) -> some View {
-        // La prochaine action est déjà la carte principale : on ne la répète pas.
-        let rest = state.todos.filter { $0.targetID != state.hero?.targetID }
+        let rest = state.todos
         if !rest.isEmpty {
             let visible = showAllTodos ? rest : Array(rest.prefix(Self.collapsedTodoCount))
             VStack(alignment: .leading, spacing: 10) {

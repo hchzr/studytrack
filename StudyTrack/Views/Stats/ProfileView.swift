@@ -23,6 +23,7 @@ struct ProfileView: View {
     /// Écran « Section et semestre », ouvert par la barre de navigation.
     @State private var showingSchool = false
     @State private var showingAIImport = false
+    @State private var showingAssistant = false
     @State private var showingReset = false
     @State private var showingDeleteAccount = false
     @State private var csvURL: URL?
@@ -58,7 +59,8 @@ struct ProfileView: View {
                     page("Focus et chrono", icon: "timer") {
                         focusSection(app.settings)
                     }
-                    page("Import intelligent", icon: "sparkles") {
+                    page("Intelligence artificielle", icon: "sparkles") {
+                        assistantSection
                         aiSection
                     }
                 }
@@ -94,12 +96,16 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $showingAIImport) {
                 AIImportSettingsView()
             }
+            .navigationDestination(isPresented: $showingAssistant) {
+                AssistantSettingsView()
+            }
             .onAppear {
                 #if DEBUG
                 // `-school` : cet écran est au bout d'un tap, et `simctl` ne sait
                 // pas taper.
                 if PreviewLaunch.isSet(PreviewLaunch.schoolFlag) { showingSchool = true }
                 if PreviewLaunch.isSet(PreviewLaunch.aiImportFlag) { showingAIImport = true }
+                if PreviewLaunch.isSet(PreviewLaunch.assistantFlag) { showingAssistant = true }
                 #endif
             }
         }
@@ -246,29 +252,6 @@ struct ProfileView: View {
         }
     }
 
-    /// Écrit l'instantané destiné au serveur MCP et ouvre la feuille de partage.
-    private func shareAssistantExport() {
-        let payload = AssistantExport.data(courses: courses,
-                                           sessions: sessions,
-                                           milestones: milestones,
-                                           groups: groups,
-                                           hoursPerCredit: app.settings.hoursPerCredit,
-                                           displayName: app.settings.displayName)
-        guard let payload else {
-            message = "Export impossible."
-            return
-        }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(AssistantExport.fileName)
-        do {
-            try payload.write(to: url, options: .atomic)
-            exportURL = url
-            message = "Instantané prêt : enregistre-le sur ton Mac, puis lis-le avec le serveur MCP."
-        } catch {
-            message = "Export impossible — \(error.localizedDescription)"
-        }
-    }
-
     // MARK: Calendrier
 
     private func calendarSection(_ settings: SettingsStore) -> some View {
@@ -345,7 +328,27 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: Import intelligent
+    // MARK: Intelligence artificielle
+
+    /// L'assistant (Claude, ChatGPT…) relié par le serveur MCP.
+    private var assistantSection: some View {
+        Section {
+            NavigationLink {
+                AssistantSettingsView()
+            } label: {
+                HStack(spacing: Layout.control) {
+                    Label("Assistant IA (MCP)", systemImage: "bubble.left.and.text.bubble.right")
+                    Spacer()
+                    Text(app.settings.assistantToken.isEmpty ? "non relié" : "relié")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } footer: {
+            Text("Claude ou ChatGPT lisent où tu en es et notent ce que tu leur dis.")
+        }
+    }
+
 
     private var aiSection: some View {
         Section {
@@ -480,11 +483,6 @@ struct ProfileView: View {
                 message = exportURL == nil ? "Sauvegarde impossible." : "Sauvegarde prête à partager."
             } label: {
                 Label("Créer une sauvegarde (JSON)", systemImage: "square.and.arrow.down")
-            }
-            Button {
-                shareAssistantExport()
-            } label: {
-                Label("Exporter pour un assistant", systemImage: "sparkles")
             }
 
             if let exportURL {

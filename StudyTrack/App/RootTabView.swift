@@ -83,6 +83,8 @@ struct RootTabView: View {
             // vraiment : `didSave` se déclenche à chaque écriture, et ActivityKit
             // limite les mises à jour.
             StudyActivityController.refreshQuestions(container: app)
+            // L'assistant lit ce qu'on vient de cocher, sans attendre.
+            AssistantSync.scheduleSync(context: context, settings: app.settings)
         }
         .onReceive(NotificationCenter.default.publisher(for: FocusTimerStore.didSave)) { _ in
             WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
@@ -95,6 +97,9 @@ struct RootTabView: View {
             // Les rappels suivent les données : une évaluation ajoutée ou une
             // session planifiée a son rappel dès que l'app passe en arrière-plan,
             // sans passer par un bouton dans les réglages.
+            if phase == .background, !app.settings.assistantToken.isEmpty {
+                Task { await AssistantSync.sync(context: context, settings: app.settings) }
+            }
             if phase == .background, app.settings.hasCompletedOnboarding {
                 Task { await app.notifications.rescheduleFromStore(context: context, settings: app.settings) }
             }
@@ -122,6 +127,8 @@ struct RootTabView: View {
                     // La série de la semaine, publiée sur Moodle depuis la
                     // dernière fois, arrive toute seule elle aussi.
                     await ContentRefresher.refreshIfDue(context: context, settings: app.settings)
+                    // Ce que l'assistant a demandé pendant que l'app dormait.
+                    await AssistantSync.sync(context: context, settings: app.settings)
                 }
             }
         }

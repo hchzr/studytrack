@@ -13,3 +13,7 @@ project_id = "studytrack"
 # consomme des crédits de modèle : garde un œil sur l'usage du fournisseur, et
 # régénère la clé `anon` si tu constates des appels que tu n'as pas faits.
 verify_jwt = true
+
+# Le serveur MCP s'authentifie par le jeton de son adresse, pas par un JWT.
+[functions.mcp]
+verify_jwt = false

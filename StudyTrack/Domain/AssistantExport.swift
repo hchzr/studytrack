@@ -13,7 +13,10 @@ import Foundation
 enum AssistantExport {
 
     static let fileName = "studytrack-assistant.json"
-    static let formatVersion = 1
+    /// v2 : identifiants partout (cours, séries, exercices, questions,
+    /// théorie, sessions) et étape de chaque exercice — un assistant qui
+    /// **agit** doit désigner exactement ce qu'il modifie.
+    static let formatVersion = 2
 
     /// Construit l'instantané.
     static func make(courses: [Course],
@@ -41,6 +44,7 @@ enum AssistantExport {
 
         payload["sessions"] = sessions.prefix(2000).map { session in
             var entry: [String: Any] = [
+                "id": session.id.uuidString,
                 "taskType": session.taskTypeRaw,
                 "startedAt": ISO8601DateFormatter().string(from: session.startedAt),
                 "durationSeconds": session.durationSeconds,
@@ -48,6 +52,9 @@ enum AssistantExport {
             ]
             if let course = session.course { entry["course"] = course.displayCode }
             if let target = session.targetLabel { entry["target"] = target }
+            if let exercise = session.exercise { entry["exerciseId"] = exercise.id.uuidString }
+            if let item = session.theoryItem { entry["theoryId"] = item.id.uuidString }
+            if !session.sourceRaw.isEmpty { entry["source"] = session.sourceRaw }
             if !session.note.isEmpty { entry["note"] = session.note }
             return entry
         }
@@ -92,6 +99,7 @@ enum AssistantExport {
 
     private static func coursePayload(_ course: Course) -> [String: Any] {
         var payload: [String: Any] = [
+            "id": course.id.uuidString,
             "code": course.displayCode,
             "officialCode": course.code,
             "name": course.name,
@@ -109,14 +117,17 @@ enum AssistantExport {
 
         payload["series"] = course.sortedSeries.map { series in
             [
+                "id": series.id.uuidString,
                 "number": series.seriesNumber,
                 "title": series.title,
                 "plannedWeek": series.plannedWeek,
                 "complete": series.isComplete,
                 "exercises": series.sortedExercises.map { exercise in
                     var entry: [String: Any] = [
+                        "id": exercise.id.uuidString,
                         "number": exercise.exerciseNumber,
                         "title": exercise.title,
+                        "stage": ExerciseStage(exercise).label,
                         "bonus": exercise.isBonus,
                         "done": exercise.isDone,
                         "corrected": exercise.isCorrected,
@@ -125,6 +136,17 @@ enum AssistantExport {
                     if let confidence = exercise.confidence { entry["confidence"] = confidence.rawValue }
                     if let correctness = exercise.correctness { entry["correctness"] = correctness.rawValue }
                     if let note = exercise.correctionNote, !note.isEmpty { entry["correctionNote"] = note }
+                    if !exercise.statement.isEmpty { entry["statement"] = exercise.statement }
+                    if exercise.hasSubQuestions {
+                        entry["questions"] = exercise.leafSubQuestions.map { question in
+                            [
+                                "path": question.path,
+                                "label": question.parent.map { "\($0.displayLabel) \(question.displayLabel)" } ?? question.displayLabel,
+                                "text": question.text,
+                                "done": question.isDone
+                            ] as [String: Any]
+                        }
+                    }
                     return entry
                 }
             ]
@@ -132,6 +154,7 @@ enum AssistantExport {
 
         payload["theory"] = course.sortedTheoryItems.map { item in
             var entry: [String: Any] = [
+                "id": item.id.uuidString,
                 "number": item.number,
                 "title": item.title,
                 "kind": item.kindRaw,
@@ -146,6 +169,7 @@ enum AssistantExport {
 
         payload["exams"] = course.sortedExams.map { exam in
             var entry: [String: Any] = [
+                "id": exam.id.uuidString,
                 "title": exam.title,
                 "kind": exam.kindRaw,
                 "date": ISO8601DateFormatter().string(from: exam.date),

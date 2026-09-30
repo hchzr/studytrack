@@ -6,7 +6,7 @@ import SwiftData
 /// Le journal ne montrait que la journée : une session saisie à la mauvaise date,
 /// ou un chrono resté ouvert la veille, n'étaient plus atteignables — on ne pouvait
 /// ni les corriger ni les supprimer. Or c'est ce temps qui nourrit la charge EPFL
-/// et le classement : il doit rester **corrigeable**.
+/// et le temps partagé aux groupes : il doit rester **corrigeable**.
 struct SessionHistoryView: View {
     /// Poussé dans une pile existante (profil) plutôt que présenté en feuille.
     var embedded: Bool = false

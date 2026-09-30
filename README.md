@@ -68,7 +68,7 @@ La validation exécutable compile `Models/` + `Domain/` + les services d'import 
 binaire macOS et teste :
 
 - le schéma SwiftData (13 entités) et les relations inverses ;
-- les moteurs de progression, de charge EPFL et de gamification ;
+- les moteurs de progression et de charge EPFL, le parcours exercice par exercice (`ExerciseFlow`) et les segments du chrono ;
 - le **parseur iCalendar** (occurrences hebdomadaires, fuseaux, `BYDAY`) ;
 - l'**import d'horaire** (cours reconnu vs créé, section, détection « a un cours ») ;
 - l'**import CSV** (vidéos, exercices, bonus, évaluations) ;
@@ -113,7 +113,8 @@ arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaq
 | `-tab <0,1,3,4>` | ouvre directement un onglet (0 Aujourd'hui, 1 Cours, 3 Groupes, 4 Agenda). **`-tab 2` ouvre la feuille Focus** : 2 était l'onglet du chrono, et les valeurs brutes n'ont pas bougé pour que liens et captures restent valables |
 | `-course <code>` | présélectionne un cours dans le volet de droite (`-course CS-250`) |
 | `-courseTab <theory\|exercises\|progress\|exams>` | avec `-course`, ouvre cet onglet de la fiche (ou la page Progression / Examens) |
-| `-contentImport <moodle\|courseware\|botafogo>` | ouvre « Importer du contenu » sur cette source (avec `-course`, pour ce cours) |
+| `-contentImport <moodle\|courseware\|botafogo\|auto>` | ouvre « Importer du contenu » sur cette source (avec `-course`, pour ce cours) ; `auto` lance l'import Moodle automatique |
+| `-assistant` | avec `-profile`, ouvre Profil › Intelligence artificielle › Assistant IA |
 | `-botafogoCourse <index>` | avec `-contentImport botafogo`, lit ce polycopié du catalogue et ouvre la relecture |
 | `-onboardingStep <0…3>` | ouvre une étape de l'accueil — à lancer sur une installation **fraîche**, le seeding marquant l'accueil comme terminé |
 | `-profile` | ouvre « Profil & réglages » : les onze écrans de configuration sont autrement inatteignables sans taper |
@@ -169,15 +170,18 @@ encart au-dessus avant cela.
 
 | Onglet | Rôle |
 |---|---|
-| **Aujourd'hui** | La date et la semaine, « À faire maintenant », **Ta journée** (ce qui a une heure, ligne « maintenant », lien vers l'Agenda du jour), **Cette semaine** (deux barres par cours : Théorie et Séries), « À faire cette semaine », « À venir » (évaluations, tâches dues) |
+| **Aujourd'hui** | La date et la semaine, les **nouveautés** importées automatiquement (à fermer), **Ta journée** (ce qui a une heure, ligne « maintenant », lien vers l'Agenda du jour), **Cette semaine** (deux barres par cours : Théorie et Séries), « À faire cette semaine », « À venir » (évaluations, tâches dues) |
 | **Cours** | Une carte par cours avec la semaine en cours (Théorie, Série n). La fiche : en-tête (semaine en cours, lien Progression, chrono), ligne **Examens**, puis deux segments **Séries** et **Théorie**. La Progression est une page semaine par semaine |
-| **Groupes** | Une fiche qui **oriente** (direct, trois chiffres, matières) vers quatre sous-pages : **Avancement des séries** (série par série, membre par membre, numéros faits écrits), **Temps d'étude** (classement 7 j / total, ma place), **Membres** (rôles, gestion par glissement), **Sessions planifiées** (RSVP) |
+| **Groupes** | Une fiche qui **oriente** (direct, trois chiffres, matières) vers quatre sous-pages : **Avancement des séries** (série par série, membre par membre, numéros faits écrits), **Temps d'étude** (7 j / total, toi d'abord puis par nom — pas de rang), **Membres** (rôles, gestion par glissement), **Sessions planifiées** (RSVP) |
 | **Agenda** | Une **bande de semaine** (balayer pour changer de semaine), des **pastilles de filtre** visibles (Cours, Évaluations, Sessions, Tâches, et un cours précis), la journée choisie en timeline avec la ligne « maintenant », puis « Les jours suivants », groupés par jour. Tirer vers le bas relit le calendrier système. Les créneaux libres sont **tapables** |
 
 Le dock a deux états, et un seul à la fois :
 
 - **au repos**, il propose la prochaine action, classée par `NextActionEngine`
-  (série due sous 48 h → à refaire → évaluation sous 7 jours → planning) ;
+  (série due sous 48 h → à refaire → évaluation sous 7 jours → planning).
+  **Le toucher ouvre Focus prêt sur cette action, sans démarrer** ; seul le
+  bouton ▶ à droite démarre le chrono. C'est aussi pourquoi « Aujourd'hui »
+  n'a plus sa carte « À faire maintenant » : elle répétait la bulle ;
 - **pendant une session**, il devient un mini-lecteur : cours, temps, pause/arrêt.
 
 Focus, Profil et Statistiques sont des **feuilles**, ouvertes depuis n'importe
@@ -202,11 +206,12 @@ Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 | **Sous-questions** d'un exercice, sur deux niveaux | `SubQuestion` est un arbre (`parent` / `children`). Les cases à cocher réelles sont les **feuilles** (`Exercise.leafSubQuestions`) : « 1) (a) (b) 2) (a) » compte **trois** cases, pas cinq — 1) et 2) ne sont faits que lorsque leurs points le sont. Un nœud peut être une partie **sans numéro** (`kind: .part`, « Ensuite, … »). `refreshCompletion()` remonte l'état jusqu'à `doneAt`, qui reste la seule vérité pour le reste de l'app |
 | **Date de visionnage** | `TheoryVideo.watchedAt` |
 | **Date de résumé** | `TheoryVideo.summarizedAt` + texte du résumé |
-| **Date** de l'exercice + **code couleur vert/orange/rouge** | `Exercise.doneAt` + `ConfidenceControl` — **contrôle à trois pastilles toujours visible**, plus caché dans un menu |
+| **Date** de l'exercice + **code couleur vert/orange/rouge** | `Exercise.doneAt` + la sureté. Cocher un exercice **demande** la sureté sur la ligne (Sûr·e / Moyen / Pas sûr·e) ; elle n'est plus fixée à « orange » d'office |
+| **Suivi exercice par exercice** | `ExerciseWorkspace` : une série se parcourt en glissant d'un exercice au suivant (bande d'exercices en haut, « Reprendre à 3.4 » dans la liste). Chaque exercice est un parcours en trois étapes — **faire** (questions), **juger** (sureté), **corriger** (juste / moyen / faux, à refaire, remarque, points) — avec l'étape en cours soulignée. **Le chrono suit l'exercice affiché** : passer de 3.2 à 3.3 attribue le temps déjà compté à 3.2 (`FocusTimerState.switchContext`) et « Terminer » enregistre une session par exercice ; le temps passé s'affiche sur chaque exercice et chaque série. L'étape d'un exercice est une seule valeur, `ExerciseStage`, lue par la liste, l'espace de travail et l'assistant |
 | **Date de correction** + juste / moyennement juste / faux + **à refaire** | `Exercise.correctedAt`, `CorrectnessControl`, `redoRequired` (auto si « faux ») |
 | **Pourcentages** théorie / séries / corrections **par semaine** | page **Progression** : une ligne par semaine du semestre (S1…S14, vides comprises), deux barres Théorie et Séries, la semaine en cours pleine, une semaine passée incomplète cerclée d'orange ; toucher une semaine déplie ses éléments. `ProgressEngine.semesterWeeks` |
 | **Trois catégories** | Théorie (vidéos, lectures, sections, diapos : le support n'est qu'une icône), Séries, Correction — plus « Autre ». `TaskType.choices` ; les anciennes valeurs (« Vidéo », « Résumé »…) restent décodables et comptent via `TaskType.canonical` |
-| **Feuille récapitulative** + gamification | `StatsView` (anneaux par cours, XP, niveaux, badges) |
+| **Bilan** | `StatsView` : temps par période, par jour, par type et par cours, charge EPFL, vie de l'EPFL, couverture du suivi. **La gamification (XP, niveaux, badges, séries de jours, classements) a été retirée** : elle alourdissait l'app sans aider à savoir où l'on en est |
 | **Agenda** avec midterms / examens | `Exam`, saisis dans **Cours › Examens** (ou « + › Ajouter une évaluation »), avec rappels J-3 et J-1. La page Examens (`CourseExamsView`) réunit évaluations, plan de révision et annales ; séances et sessions sont dans l'Agenda, filtrable par cours |
 
 ### Temps et charge EPFL
@@ -249,7 +254,7 @@ Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 | **Import PDF assisté par IA** | ✅ **nouveau** | `SeriesAIExtractor` : le texte est **d'abord** lu par les motifs, puis **complété** par un modèle de langage, **routé automatiquement et sans rien demander à l'étudiant·e** : (1) la **fonction Supabase** `extract-series` — un modèle **servi**, la clé du fournisseur reste côté serveur et l'app n'utilise que sa clé `anon` ; (2) **sur l'appareil** — Apple Intelligence / FoundationModels, iOS 26, **relais hors ligne** ; (3) un **service perso** (URL + clé, compatible OpenAI) si l'étudiant·e en a saisi un. **Le service passe avant le modèle embarqué** : sur une série réelle, l'écart de qualité n'est pas marginal — l'ordre est épinglé par des tests (`SeriesEngineOrder`). Un maillon qui échoue passe au suivant. La fusion (`SeriesAIParsing.merge`, testée) ne retire jamais un numéro lu par les motifs ; on peut revenir aux motifs d'un tap. Plusieurs PDF à la fois, ou un énoncé **collé** (Moodle, mail). Réglages : Profil › Import intelligent | Réglages : Profil › Import intelligent |
 | **Ce que l'IA garantit** | ✅ **nouveau** | Une consigne explicite et testée : **un titre pour chaque exercice**, jamais vide — le modèle en écrit un de 2 à 6 mots à partir du titre de section quand le PDF n'en donne pas ; **dans la langue du document** (un PDF français donnait des titres anglais) ; et **un numéro qualifié par la série**, même quand le PDF recommence à 1 dans chaque section. Un exercice **sans aucun numéro** reçoit le suivant libre au lieu d'être jeté. La lecture de la réponse est **tolérante** : un modèle qui écrit `"02a"` au lieu de `2`, ou `"oui"` au lieu de `true`, ne fait plus perdre la réponse entière |
 | **Sous-questions** | ✅ **nouveau** | Un polycopié numérote souvent ses exercices 1, 2, 3 **dans chaque section**, et regroupe plusieurs questions sous un seul numéro. Le modèle `SubQuestion` porte ces questions : chacune se coche, l'exercice devient fait quand elles le sont toutes, et la série, la progression et les statistiques continuent de compter des **exercices**. Un compteur « 2/3 » se lit dans la liste sans ouvrir. L'IA les détecte et les regroupe ; l'import les crée sans jamais dupliquer ce qui existe |
-| **Import du contenu : Moodle, Courseware, Botafogo** | ✅ **nouveau** | « + › Importer du contenu ». Pas d'API : **Moodle** et **Courseware** (Open edX) s'ouvrent dans un navigateur intégré (`WebImportBrowser`, cookies persistants — on se connecte une fois), et un script lit la page du cours (`WebContentScraper`) ; Courseware passe par l'API du plan du cours, dans la session de l'étudiant·e. **Botafogo** (polycopié d'Analyse de S. Friedli) est public et lu directement, vidéos de chaque section comptées (`BotafogoClient`). La logique — théorie ou série, numéros, semaines lues dans « Semaine 3 » ou dans une plage de dates Moodle — est pure et testée (`ContentDraftBuilder`). Relecture obligatoire (sections à cocher, semaine par section, type par élément), écriture sans suppression (`ContentDraftWriter`). Une série importée sans exercices propose « Lire les exercices dans le PDF » : le PDF est téléchargé avec la session Moodle et passe dans l'import de série. **Vérifié en bout de chaîne sur Botafogo ; les scripts Moodle et Courseware n'ont pas encore été essayés sur une vraie session.** |
+| **Import du contenu : Moodle, Courseware, Botafogo** | ✅ **refait** | « + › Importer du contenu ». **Moodle, en un toucher pour tous les cours** : l'app trouve le cours Moodle de chaque code par `core_course_search_courses` — qui répond **sans connexion** —, ne demande de se connecter que si Moodle l'exige (`SiteLoginSheet`, qui se ferme seule), départage les sections (MATH-101(a)…(g)) par les inscriptions (`core_course_get_enrolled_courses_by_timeline_classification`) ou, à défaut, par une question posée une fois, puis lit le plan par `core_courseformat_get_state` — les appels AJAX que la page du cours fait elle-même, dans un navigateur invisible (`HiddenSiteSession`, `MoodleClient`). Une seule relecture groupée (`BatchReviewView`). **Courseware** : la liste des cours inscrits (`/api/enrollment/v1/enrollment`), import en un toucher. **Botafogo** : les **six** polycopiés — Analyse I (HTML) et les cinq sites Nuxt (Analyse I GM et classe inversée, Analyse B, ICS, Algèbre linéaire) dont le sommaire est lu dans `__NUXT_DATA__` (`NuxtPayload`) ; redirections `<meta refresh>` suivies ; enregistrements des cours **datés** placés à leur semaine ; matière **étalée sur le semestre selon son volume** au lieu d'« un chapitre par semaine » ; polycopié suggéré pour le cours. Le navigateur intégré reste en repli et **lit une page de cours dès qu'elle s'affiche**. **Mise à jour automatique** (`ContentRefresher`, 12 h, réglable) : n'ajoute que le nouveau, ne réécrit pas une semaine corrigée, ne réajoute pas un élément écarté à la relecture (`Course.contentIgnoredRaw`). **Vérifié** : les formes JSON de Moodle 4.5 (moodle.epfl.ch, cours public), la recherche sans connexion, la détection « pas connecté » et la page de connexion dans le simulateur, les six polycopiés Botafogo en direct. **Non vérifié** : la partie connectée (inscriptions, plan d'un cours réel) faute d'identifiants |
 | **Temps Anki** | ✅ **nouveau** | Relevé **automatique** à chaque ouverture (au plus toutes les 10 min) via AnkiConnect `cardReviews` : les révisions sont regroupées en sessions (`AnkiReviewImport`, testé), étiquetées « Anki » (`StudySession.sourceRaw`), rattachées au cours dont le paquet porte le code ou le nom |
 | ~~Moodle (web service)~~ | ❌ **supprimé** | L'EPFL ne délivre pas de jeton de service web aux étudiant·e·s. Remplacé par la lecture de la page dans le navigateur intégré (ci-dessus). |
 
@@ -289,6 +294,7 @@ d'analyse écrit `x^2` et `\alpha` reste lisible au lieu de s'afficher tel quel.
 
 | Fonction | État | Détail |
 |---|---|---|
+| **Cours affiché sur l'écran verrouillé** | ✅ **corrigé** | L'activité affichait pour toujours le **premier** cours démarré (« Analyse »). Cours, type et cible vivaient dans les `ActivityAttributes`, **figés à la création** — or l'activité est reprise d'une session à l'autre. Ils sont désormais dans l'**état** (`ActivityTimerState.title` / `subtitle`, optionnels et testés), republiés quand ils changent ; l'îlot déplié affiche aussi sur quoi l'on travaille |
 | **Compteur de la Live Activity** | ✅ **corrigé** | Il repartait de zéro à chaque reprise : l'état portait le total **et** l'instant de reprise, et le compteur système n'affichait que le second — « 00:01 » après une heure de travail. L'instant de départ est désormais **reculé du total écoulé** (`ActivityTimerState`, pur et testé) |
 | **Îlot compact** | ✅ **corrigé** | Les régions qui entourent la caméra ne portent plus qu'une **icône** : y écrire « en cours » ou le code du cours élargissait l'îlot. Le compteur s'écrit en `MM:SS`, sans les heures |
 | **Ajuster le chrono** | ✅ **nouveau** | Roue heures + minutes pour corriger le temps compté en cours de session : on lance le chrono en oubliant de le lancer avant, ou on le laisse tourner pendant une interruption |
@@ -382,7 +388,7 @@ activation de l'app.
 | **Invitations** | ✅ **nouveau** | Code, **lien** `studytrack://join?code=…` (reconnu par l'app) et **QR code** généré par CoreImage. Feuille de partage système |
 | **Rôles visibles** | ✅ **nouveau** | Pastille « Admin » sur les administrateurs ; nommer / rétrograder / retirer depuis la fiche, dans la limite des politiques RLS |
 | **Quitter un groupe** | ✅ **nouveau** | Bouton explicite dans la fiche (distinct de « Supprimer le groupe », réservé aux administrateurs), avec avertissement si tu es le dernier admin |
-| Classement du temps d'étude | ✅ | 7 derniers jours, calculé côté serveur (`group_leaderboard`) |
+| Temps d'étude du groupe | ✅ | 7 derniers jours et total, calculé côté serveur (`group_leaderboard`), affiché **sans rang** |
 | Matrice d'avancement des séries | ✅ | En complément de la vue par matière |
 | Planning partagé + RSVP | ✅ | Sessions d'étude planifiées, écrites aussi au calendrier |
 | Sign in with Apple + e-mail | ✅ | Supabase Auth |
@@ -550,6 +556,39 @@ npx -p typescript@5 tsc --noEmit --strict --target es2022 \
   --lib es2022,es2021.promise,dom index.ts deno.d.ts
 ```
 
+### Assistant IA : le serveur MCP (`supabase/functions/mcp`)
+
+Un assistant — Claude (app, web, Desktop, Code), ChatGPT, tout client MCP —
+lit l'état d'étude et **demande** des modifications. Profil › Intelligence
+artificielle › Assistant IA › « Relier un assistant » tire un jeton de 256 bits
+et affiche l'adresse `https://<projet>.supabase.co/functions/v1/mcp/<jeton>`, à
+coller comme connecteur personnalisé.
+
+- **Transport** : MCP Streamable HTTP, réponses JSON (protocoles 2025-06-18,
+  2025-03-26, 2024-11-05). Vérifié avec l'inspecteur MCP officiel.
+- **Outils** : lecture — `get_overview`, `list_courses`, `get_course`,
+  `what_to_do`, `search`, `upcoming_dates`, `study_time`,
+  `list_pending_changes` ; écriture — `update_exercise`, `check_questions`,
+  `update_theory`, `log_study_session`, `add_series`, `add_exam`. Rien ne
+  supprime.
+- **Données** : l'app publie un instantané (`AssistantExport`, v2 avec
+  identifiants) à l'ouverture, au passage en arrière-plan et quelques secondes
+  après chaque enregistrement (`AssistantSync`). L'assistant dépose des
+  commandes ; l'app les applique à sa synchronisation suivante
+  (`AssistantCommandApplier`, testé) et renvoie un compte rendu. L'instantané est
+  mis à jour tout de suite côté serveur : l'assistant relit ce qu'il a écrit.
+- **Sécurité** : le jeton est dans l'adresse (les connecteurs n'acceptent pas
+  d'en-tête) et la base n'en garde que le SHA-256. Tables
+  `assistant_links` / `assistant_commands`, RLS sans politique : seule la
+  fonction (clé de service) y accède. « Déconnecter » efface tout côté serveur.
+- **Déploiement** : `supabase db push` (ou la migration
+  `20260930000000_assistant_mcp.sql`) puis
+  `supabase functions deploy mcp --no-verify-jwt`. Déployé sur le projet
+  `aaigscutkuefhqftfszv` le 30 septembre 2026.
+
+L'ancien serveur local (`mcp/server.js`, lisant un fichier exporté à la main)
+est retiré.
+
 ### Widgets : App Group à enregistrer
 
 L'app et l'extension widget partagent leurs données via l'App Group
@@ -607,7 +646,8 @@ StudyTrack/                     # cible application
 │   └── Theme.swift
 ├── Models/                      # 13 entités SwiftData, énumérations,
 │                                # catalogue de sections EPFL, données d'exemple
-├── Domain/                      # ProgressEngine, WorkloadEngine, GamificationEngine,
+├── Domain/                      # ProgressEngine, WorkloadEngine, ExerciseFlow, NuxtPayload,
+│                                # MoodleImport, AssistantCommands,
 │                                # DailyPlanner, DateUtils, FocusTimerState, SessionStats,
 │                                # NextActionEngine (« quoi ensuite »), PomodoroEngine,
 │                                # SeriesLayout (arbre des sous-questions), SeriesDraft
@@ -647,7 +687,7 @@ StudyTrackShare/                 # cible d'extension de partage (recevoir un PDF
   de Dynamic Type restent à contrôler de la même façon.
 - Aucun test automatisé d'interface : la couverture reste `validate.sh` (domaine).
 - Le catalogue de sections EPFL est indicatif (28 entrées) ; il est modifiable.
-- Moodle : volontairement absent, faute d'accès API étudiant.
+- Moodle : pas d'API étudiant ; l'import passe par les appels AJAX de la page, dans la session de l'étudiant·e.
 - Things 3 est en écriture seule (pas d'API de lecture) — signalé dans l'interface.
 - Le widget « Cours de la semaine » montre **tous** les cours suivis : il n'a pas
   de sélecteur de cours (`AppIntentConfiguration`), qui reste à faire.

@@ -41,6 +41,8 @@ enum PreviewLaunch {
     static let schoolFlag = "-school"
     /// Ouvre « Import intelligent » depuis le profil.
     static let aiImportFlag = "-aiImport"
+    /// Ouvre Profil › Intelligence artificielle › Assistant IA.
+    static let assistantFlag = "-assistant"
     /// Avec `-stats`, ouvre en plus « Couverture du suivi ».
     static let coverageFlag = "-coverage"
     /// Avec `-stats`, ouvre en plus « Vie de l'EPFL ».

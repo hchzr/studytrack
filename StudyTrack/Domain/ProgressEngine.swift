@@ -25,7 +25,7 @@ struct CourseProgress: Equatable {
     /// Corrections : exos corrigés / exos faits.
     var correctionPercent: Double { Self.ratio(correctedCount, doneCount) }
 
-    /// Moyenne des trois axes principaux (gamification / récap).
+    /// Moyenne des trois axes principaux (récapitulatif).
     var overallPercent: Double {
         (theoryPercent + exercisePercent + correctionPercent) / 3
     }
