@@ -132,7 +132,8 @@ struct ProfileView: View {
             NavigationLink {
                 AnkiSettingsView()
             } label: {
-                settingsRow("Anki", icon: "rectangle.stack", value: app.settings.isAnkiConfigured ? "relié" : "non relié")
+                settingsRow("Anki", icon: "rectangle.stack",
+                            value: AnkiWebSync.shared.isSignedIn ? "AnkiWeb" : (app.settings.isAnkiConfigured ? "Anki Desktop" : "non relié"))
             }
             NavigationLink {
                 AssistantSettingsView()

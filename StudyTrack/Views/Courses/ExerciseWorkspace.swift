@@ -345,6 +345,7 @@ struct ExerciseWorkspace: View {
     @State private var editingSeries = false
     @State private var deleting: Exercise?
     @State private var browsing: BrowsedLink?
+    @State private var ankiCard: Exercise?
 
     init(series: ExerciseSeries, start: Exercise? = nil) {
         self.series = series
@@ -409,6 +410,11 @@ struct ExerciseWorkspace: View {
                             }
                             Divider()
                         }
+                        if let current {
+                            Button { ankiCard = current } label: {
+                                Label("Créer une carte Anki", systemImage: "rectangle.stack.badge.plus")
+                            }
+                        }
                         Button { editingSeries = true } label: {
                             Label("Modifier la série…", systemImage: "pencil")
                         }
@@ -431,6 +437,7 @@ struct ExerciseWorkspace: View {
             .sheet(item: $browsing) { link in
                 InAppBrowser(link: link)
             }
+            .sheet(item: $ankiCard) { AnkiCardComposer(exercise: $0) }
             .confirmationDialog("Supprimer l'exercice \(deleting?.exerciseNumber ?? "") ?",
                                 isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                                 titleVisibility: .visible,
@@ -897,7 +904,12 @@ private struct ExerciseDetailContent: View {
     private func setCorrection(_ result: Correctness?) {
         if let result {
             exercise.correct(result)
-            if result == .wrong { Haptics.error() } else { Haptics.success() }
+            if result == .wrong {
+                Haptics.error()
+                AnkiWebSync.shared.enqueueRedo(exercise)
+            } else {
+                Haptics.success()
+            }
         } else {
             exercise.clearCorrection()
         }

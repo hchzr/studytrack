@@ -21,25 +21,24 @@ enum AnkiReviewSync {
     @MainActor
     @discardableResult
     static func syncIfDue(context: ModelContext, settings: SettingsStore, force: Bool = false) async -> Outcome? {
-        guard settings.isAnkiConfigured else { return nil }
+        let web = AnkiWebSync.shared
+        guard web.isSignedIn || settings.isAnkiConfigured else { return nil }
         if !force, let last = settings.ankiLastSync, Date().timeIntervalSince(last) < minimumInterval { return nil }
         return try? await sync(context: context, settings: settings)
     }
 
+    /// Les révisions arrivent d'AnkiWeb (la copie de la collection, relue si le
+    /// serveur a changé) ; à défaut, d'AnkiConnect sur le réseau local.
     @MainActor
     static func sync(context: ModelContext, settings: SettingsStore) async throws -> Outcome {
-        let endpoint = settings.ankiEndpoint
-        let decks = try await AnkiService.deckNames(endpoint: endpoint)
-        // Premier relevé : le semestre en cours suffit (30 jours au plus tôt).
-        let floor = Date().addingTimeInterval(-30 * 86_400).timeIntervalSince1970 * 1000
-        let startID = settings.ankiLastReviewID > 0 ? settings.ankiLastReviewID : floor
-
         var reviews: [AnkiReview] = []
-        for deck in decks where deck != "Default" || decks.count == 1 {
-            let outcome = try await AnkiService.call("cardReviews",
-                                                     params: ["deck": deck, "startID": Int64(startID)],
-                                                     endpoint: endpoint)
-            reviews += AnkiReviewImport.reviews(from: outcome, deck: deck)
+        let web = AnkiWebSync.shared
+        if web.isSignedIn {
+            try await web.refreshMirror()
+            await web.pushPending()
+            reviews = web.newReviews()
+        } else {
+            reviews = try await connectReviews(settings: settings)
         }
 
         let drafts = AnkiReviewImport.sessions(from: reviews)
@@ -66,9 +65,27 @@ enum AnkiReviewSync {
         }
         if added > 0 { try? context.save() }
 
-        if let last = reviews.map(\.id).max() { settings.ankiLastReviewID = Double(last) + 1 }
+        if !web.isSignedIn, let last = reviews.map(\.id).max() { settings.ankiLastReviewID = Double(last) + 1 }
         settings.ankiLastSync = Date()
         AppLog.record(.info, "anki", "\(added) session(s) Anki relevée(s), \(seconds) s")
         return Outcome(sessionsAdded: added, seconds: seconds)
+    }
+
+    /// AnkiConnect (Anki Desktop sur le réseau local), l'ancienne voie.
+    @MainActor
+    private static func connectReviews(settings: SettingsStore) async throws -> [AnkiReview] {
+        let endpoint = settings.ankiEndpoint
+        let decks = try await AnkiService.deckNames(endpoint: endpoint)
+        // Premier relevé : le semestre en cours suffit (30 jours au plus tôt).
+        let floor = Date().addingTimeInterval(-30 * 86_400).timeIntervalSince1970 * 1000
+        let startID = settings.ankiLastReviewID > 0 ? settings.ankiLastReviewID : floor
+        var reviews: [AnkiReview] = []
+        for deck in decks where deck != "Default" || decks.count == 1 {
+            let outcome = try await AnkiService.call("cardReviews",
+                                                     params: ["deck": deck, "startID": Int64(startID)],
+                                                     endpoint: endpoint)
+            reviews += AnkiReviewImport.reviews(from: outcome, deck: deck)
+        }
+        return reviews
     }
 }

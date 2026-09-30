@@ -54,7 +54,7 @@ final class LinkedCalendarEvent {
     /// Une **séance d'exercices** ne compte jamais d'elle-même — on y reste plus
     /// ou moins longtemps : elle se chronomètre.
     var countsAsAttendedLecture: Bool {
-        isLecture && !isSkipped && endsAt <= Date()
+        isLecture && !isSkipped && (endsAt <= Date() || isAttended)
     }
 
     /// Ce qui a sa place dans l'agenda : l'horaire (cours, exercices), les

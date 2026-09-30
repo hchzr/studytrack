@@ -1,279 +1,367 @@
 import SwiftUI
 import SwiftData
 
-/// Anki : envoyer ses exercices et sa théorie dans un paquet de révision.
+/// Anki, par AnkiWeb : sans ordinateur.
 ///
-/// L'app mesure le temps d'étude ; Anki fait tenir le vocabulaire et les
-/// définitions. Le pont entre les deux passe par **AnkiConnect**, l'extension
-/// d'Anki Desktop — donc Anki doit être ouvert, sur le même réseau, et l'extension
-/// installée. L'écran le dit avant de laisser croire à une panne.
+/// On se connecte avec son compte AnkiWeb, une fois. L'app garde une copie de
+/// la collection (pour les paquets, les types de notes et les statistiques) et
+/// y **ajoute** des cartes par une synchronisation normale — comme AnkiMobile.
+/// Elle n'envoie jamais la collection entière : rien ne peut écraser ce qui
+/// est sur AnkiWeb.
 struct AnkiSettingsView: View {
     @Environment(AppContainer.self) private var app
+    @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
 
-    @State private var isTesting = false
-    @State private var status: Status = .unknown
-    @State private var decks: [String] = []
-    @State private var selectedCourseID: UUID?
-    @State private var isSending = false
-    @State private var sendMessage: String?
-    @State private var isSyncingReviews = false
-    @State private var reviewMessage: String?
-    @Environment(\.modelContext) private var context
+    @State private var email = ""
+    @State private var password = ""
+    @State private var collection: AnkiCollection?
+    @State private var refreshToken = UUID()
+    @State private var showingLocal = false
 
-    private enum Status: Equatable {
-        case unknown
-        case ok(Int)
-        case failed(String)
-    }
-
+    private var sync: AnkiWebSync { AnkiWebSync.shared }
     private var tracked: [Course] { courses.filter(\.isTracked) }
-    private var course: Course? { tracked.first { $0.id == selectedCourseID } ?? tracked.first }
 
     var body: some View {
         @Bindable var settings = app.settings
         Form {
-            Section {
-                TextField("Adresse (ex : 192.168.1.42:8765)", text: $settings.ankiEndpoint)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-
-                HStack(alignment: .top, spacing: Layout.control) {
-                    Image(systemName: statusIcon)
-                        .foregroundStyle(statusTint)
-                    VStack(alignment: .leading, spacing: Layout.tight) {
-                        Text(statusTitle)
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if sync.isSignedIn {
+                    accountSection
+                    if let collection {
+                        decksSection(collection)
+                        notetypeSection(collection)
                     }
-                    Spacer(minLength: Layout.inline)
-                    if isTesting { ProgressView() }
+                    automationSection
+                    pendingSection
+                } else {
+                    signInSection
                 }
-
-                Button {
-                    Task { await test() }
-                } label: {
-                    Label("Tester la connexion", systemImage: "antenna.radiowaves.left.and.right")
-                }
-                .disabled(isTesting || !settings.isAnkiConfigured)
-            } header: {
-                Text("AnkiConnect")
-            } footer: {
-                Text("Sur Anki Desktop : Outils › Modules complémentaires › **Obtenir des modules**, code **2055492159**, puis redémarre Anki. L'extension écoute sur le port 8765 de l'ordinateur — sur un iPhone, écris l'**adresse du Mac** sur le réseau local, pas `127.0.0.1`.")
-            }
-
-            Section {
-                HStack {
-                    Label("Temps de révision", systemImage: TaskType.flashcards.icon)
-                    Spacer()
-                    Text(settings.ankiLastSync.map { "relevé \(DateUtils.relativeLabel($0).lowercased()) à \(DateUtils.time.string(from: $0))" } ?? "jamais relevé")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Button {
-                    Task { await syncReviews() }
-                } label: {
-                    HStack {
-                        Label("Relever maintenant", systemImage: "arrow.triangle.2.circlepath")
-                        if isSyncingReviews { Spacer(); ProgressView() }
-                    }
-                }
-                .disabled(!settings.isAnkiConfigured || isSyncingReviews)
-                if let reviewMessage {
-                    Text(reviewMessage).font(.footnote).foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Temps passé dans Anki")
-            } footer: {
-                Text("Automatique : à chaque ouverture de l'app (au plus toutes les dix minutes), les révisions faites depuis le dernier relevé deviennent des sessions étiquetées « Anki ». Un paquet qui porte le code ou le nom d'un cours y est rattaché ; les autres restent comptés sans cours.")
-            }
-
-            if !decks.isEmpty {
+                statusSection
                 Section {
-                    Picker("Paquet", selection: $settings.ankiDeck) {
-                        ForEach(decks, id: \.self) { deck in
-                            Text(deck).tag(deck)
-                        }
-                        if !decks.contains(settings.ankiDeck) {
-                            Text(settings.ankiDeck.isEmpty ? "StudyTrack" : settings.ankiDeck)
-                                .tag(settings.ankiDeck)
-                        }
+                    DisclosureGroup("Anki Desktop sur le réseau local", isExpanded: $showingLocal) {
+                        TextField("Adresse AnkiConnect (192.168.1.42:8765)", text: $settings.ankiEndpoint)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                        Text("Facultatif : relève aussi le temps passé dans Anki Desktop quand l'ordinateur est allumé.")
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
                     }
-                    TextField("Modèle de note", text: $settings.ankiModel)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                } header: {
-                    Text("Destination")
-                } footer: {
-                    Text("Le paquet est créé s'il n'existe pas. « Basic » est le modèle par défaut d'Anki ; il a deux champs, Recto et Verso.")
+                    .tint(Carnet.ink)
                 }
             }
-
-            Section {
-                Picker("Cours", selection: $selectedCourseID) {
-                    Text("Tous les cours suivis").tag(UUID?.none)
-                    ForEach(tracked) { value in
-                        Text("\(value.displayCode) — \(value.name)").tag(UUID?.some(value.id))
-                    }
-                }
-
-                Button {
-                    Task { await sendExercises() }
-                } label: {
-                    Label("Envoyer les exercices à refaire", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .disabled(isSending || !canSend)
-                .accessibilityHint("Crée une carte par exercice marqué « à refaire » ou fait mais non corrigé")
-
-                Button {
-                    Task { await sendTheory() }
-                } label: {
-                    Label("Envoyer la théorie non résumée", systemImage: "text.book.closed")
-                }
-                .disabled(isSending || !canSend)
-
-                if isSending {
-                    HStack(spacing: Layout.snug) {
-                        ProgressView()
-                        Text("Envoi…").font(.caption)
-                    }
-                }
-                if let sendMessage {
-                    Text(sendMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            } header: {
-                Text("Envoyer")
-            } footer: {
-                Text("Une carte par élément, avec le cours et le numéro au recto — sans eux, « Montrer que… » ne veut plus rien dire dans six semaines. Les doublons sont ignorés par Anki.")
-            }
+            .listRowBackground(Carnet.sheet)
         }
         .carnetForm()
         .navigationTitle("Anki")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadDecks() }
+        .task(id: refreshToken) { reload() }
+        .refreshable { await refresh() }
     }
 
-    private var canSend: Bool {
-        app.settings.isAnkiConfigured
-    }
+    // MARK: Connexion
 
-    // MARK: État
-
-    private var statusIcon: String {
-        switch status {
-        case .ok: return "checkmark.circle.fill"
-        case .unknown: return "questionmark.circle"
-        case .failed: return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private var statusTint: Color {
-        switch status {
-        case .ok: return .green.accessibleMark
-        case .unknown: return .secondary
-        case .failed: return .orange.accessibleInk
-        }
-    }
-
-    private var statusTitle: String {
-        switch status {
-        case .ok(let version):
-            return "Anki répond (protocole \(version)) · \(decks.count) paquet\(decks.count > 1 ? "s" : "")"
-        case .unknown:
-            return app.settings.isAnkiConfigured
-                ? "Connexion non testée. Anki doit être ouvert sur ton ordinateur."
-                : "Renseigne l'adresse du Mac où tourne Anki."
-        case .failed(let message):
-            return message
-        }
-    }
-
-    @MainActor
-    private func syncReviews() async {
-        isSyncingReviews = true
-        defer { isSyncingReviews = false }
-        do {
-            let outcome = try await AnkiReviewSync.sync(context: context, settings: app.settings)
-            reviewMessage = outcome.sessionsAdded == 0
-                ? "Rien de nouveau depuis le dernier relevé."
-                : "\(outcome.sessionsAdded) session\(outcome.sessionsAdded > 1 ? "s" : "") ajoutée\(outcome.sessionsAdded > 1 ? "s" : "") · \(DateUtils.durationLabel(seconds: outcome.seconds))."
-            Haptics.success()
-        } catch {
-            reviewMessage = error.localizedDescription
-        }
-    }
-
-    private func test() async {
-        isTesting = true
-        status = .unknown
-        do {
-            let connection = try await AnkiService.test(endpoint: app.settings.ankiEndpoint)
-            decks = connection.decks
-            status = .ok(connection.version)
-            if app.settings.ankiDeck.isEmpty, let first = decks.first {
-                app.settings.ankiDeck = first
+    private var signInSection: some View {
+        Section {
+            TextField("Adresse e-mail AnkiWeb", text: $email)
+                .textContentType(.username)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            SecureField("Mot de passe", text: $password)
+                .textContentType(.password)
+            Button {
+                Task {
+                    if await sync.signIn(username: email, password: password) {
+                        password = ""
+                        refreshToken = UUID()
+                        Haptics.success()
+                    }
+                }
+            } label: {
+                HStack {
+                    Text("Se connecter à AnkiWeb")
+                    if sync.isWorking { Spacer(); ProgressView() }
+                }
             }
-            Haptics.success()
-        } catch {
-            decks = []
-            status = .failed(error.localizedDescription)
-            Haptics.error()
+            .disabled(email.isEmpty || password.isEmpty || sync.isWorking)
+        } header: {
+            CarnetFormHeader("AnkiWeb")
+        } footer: {
+            Text("Le compte de synchronisation d'Anki (ankiweb.net). Le mot de passe sert une fois à obtenir une clé, gardée dans le trousseau ; il n'est jamais enregistré.")
         }
-        isTesting = false
     }
 
-    private func loadDecks() async {
-        guard app.settings.isAnkiConfigured else { return }
-        await test()
-    }
-
-    // MARK: Envoi
-
-    private func scopedCourses() -> [Course] {
-        course.map { [$0] } ?? tracked
-    }
-
-    private func sendExercises() async {
-        let notes = scopedCourses().flatMap { course in
-            course.allExercises
-                .filter { $0.redoRequired || ($0.isDone && !$0.isCorrected) }
-                .map { AnkiNoteFactory.exercise($0, deck: deckName, model: app.settings.ankiModel) }
+    private var accountSection: some View {
+        Section {
+            HStack {
+                Label(sync.username, systemImage: "person.crop.circle")
+                Spacer()
+                if sync.isWorking { ProgressView() }
+            }
+            if let date = sync.lastRefresh {
+                LabeledContent("Dernière lecture", value: DateUtils.relativeLabel(date) + " " + DateUtils.time.string(from: date))
+            }
+            Button {
+                Task { await refresh() }
+            } label: {
+                Label("Synchroniser maintenant", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(sync.isWorking)
+            Button(role: .destructive) {
+                sync.signOut()
+                collection = nil
+            } label: {
+                Label("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } header: {
+            CarnetFormHeader("AnkiWeb")
         }
-        await send(notes, label: "exercice")
     }
 
-    private func sendTheory() async {
-        let notes = scopedCourses().flatMap { course in
-            course.theoryItems
-                .filter { !$0.isSummarized }
-                .map { AnkiNoteFactory.theory($0, deck: deckName, model: app.settings.ankiModel) }
+    // MARK: Paquets
+
+    private func decksSection(_ collection: AnkiCollection) -> some View {
+        let decks = collection.decks.filter { !$0.isFiltered }
+        return Section {
+            ForEach(tracked) { course in
+                let current = sync.deck(for: course, in: collection)
+                let stats = current.map { collection.stats(deck: $0) }
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker(selection: Binding(
+                        get: { current?.id ?? 0 },
+                        set: { value in
+                            var map = sync.deckMap
+                            map[course.code] = value
+                            sync.deckMap = map
+                            refreshToken = UUID()
+                        })) {
+                        Text("Aucun").tag(Int64(0))
+                        ForEach(decks) { deck in Text(deck.name).tag(deck.id) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle().fill(Carnet.tint(course.colorHex)).frame(width: 8, height: 8)
+                            Text(course.displayCode).foregroundStyle(Carnet.ink)
+                        }
+                    }
+                    if let stats {
+                        Text(statsLine(stats))
+                            .font(.caption)
+                            .foregroundStyle(Carnet.inkSecondary)
+                    }
+                }
+            }
+        } header: {
+            CarnetFormHeader("Un paquet par cours")
+        } footer: {
+            Text("Les cartes d'un cours vont dans son paquet ; le temps de révision de ce paquet compte pour le cours.")
         }
-        await send(notes, label: "élément de théorie")
     }
 
-    private var deckName: String {
-        let trimmed = app.settings.ankiDeck.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? "StudyTrack" : trimmed
+    private func statsLine(_ stats: AnkiCollection.DeckStats) -> String {
+        var parts = ["\(stats.due) à revoir", "\(stats.new) nouvelles"]
+        if stats.reviewedToday > 0 { parts.append("\(stats.reviewedToday) révisées aujourd'hui") }
+        if let retention = stats.retention { parts.append("rétention \(Int((retention * 100).rounded())) %") }
+        return parts.joined(separator: " · ")
     }
 
-    private func send(_ notes: [AnkiNote], label: String) async {
-        guard !notes.isEmpty else {
-            sendMessage = "Rien à envoyer : aucun \(label) dans ce périmètre."
+    private func notetypeSection(_ collection: AnkiCollection) -> some View {
+        let types = collection.notetypes.filter { !$0.isCloze && $0.fields.count >= 2 }
+        return Section {
+            Picker("Type de note", selection: Binding(
+                get: { sync.basicNotetype(in: collection)?.id ?? 0 },
+                set: { sync.notetypeID = $0; refreshToken = UUID() })) {
+                ForEach(types) { type in Text(type.name).tag(type.id) }
+            }
+        } footer: {
+            Text("Pour les cartes question / réponse. Une carte qui contient {{c1::…}} utilise ton type « à trous ».")
+        }
+    }
+
+    // MARK: Automatique et file
+
+    private var automationSection: some View {
+        Section {
+            Toggle(isOn: Binding(get: { sync.autoRedo }, set: { sync.autoRedo = $0 })) {
+                Label("Exercices faux → carte", systemImage: "arrow.counterclockwise")
+            }
+        } footer: {
+            Text("Un exercice corrigé « faux » devient une carte : l'énoncé au recto, ta note de correction et la solution au verso.")
+        }
+    }
+
+    @ViewBuilder
+    private var pendingSection: some View {
+        if !sync.pending.isEmpty {
+            Section {
+                ForEach(sync.pending) { note in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(note.origin).font(.subheadline).foregroundStyle(Carnet.ink)
+                        Text(note.fields.first.map { String($0.prefix(80)) } ?? "")
+                            .font(.caption)
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .lineLimit(1)
+                    }
+                    .swipeActions {
+                        Button("Retirer", role: .destructive) { sync.discard(note) }
+                    }
+                }
+                Button {
+                    Task { await sync.pushPending(); refreshToken = UUID() }
+                } label: {
+                    Label("Envoyer à AnkiWeb", systemImage: "paperplane")
+                }
+                .disabled(sync.isWorking)
+            } header: {
+                CarnetFormHeader("En attente d'envoi")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusSection: some View {
+        if let error = sync.lastError {
+            Section {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(Carnet.wrong)
+            }
+        } else if !sync.status.isEmpty {
+            Section {
+                Text(sync.status).font(.footnote).foregroundStyle(Carnet.inkSecondary)
+            }
+        }
+    }
+
+    // MARK: Actions
+
+    private func reload() {
+        collection = sync.isSignedIn ? AnkiCollection() : nil
+    }
+
+    private func refresh() async {
+        guard sync.isSignedIn else { return }
+        _ = await AnkiReviewSync.syncIfDue(context: context, settings: app.settings, force: true)
+        refreshToken = UUID()
+    }
+}
+
+/// « Créer une carte » : recto, verso, paquet — prérempli depuis un exercice
+/// ou un élément de théorie, envoyé à AnkiWeb d'un toucher.
+struct AnkiCardComposer: View {
+    let course: Course?
+    let origin: String
+    @State var front: String
+    @State var back: String
+    var tags: [String] = []
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var collection = AnkiCollection()
+    @State private var deckID: Int64 = 0
+    @State private var sending = false
+    @State private var error: String?
+
+    private var sync: AnkiWebSync { AnkiWebSync.shared }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Group {
+                    if !sync.isSignedIn || collection == nil {
+                        Section {
+                            Text("Connecte d'abord ton compte AnkiWeb : Moi › Réglages › Intégrations › Anki.")
+                                .foregroundStyle(Carnet.inkSecondary)
+                        }
+                    } else if let collection {
+                        Section {
+                            TextField("Recto", text: $front, axis: .vertical).lineLimit(3...10)
+                        } header: {
+                            CarnetFormHeader("Recto")
+                        } footer: {
+                            Text("Écris {{c1::…}} autour d'un mot pour en faire une carte à trous.")
+                        }
+                        if !isCloze {
+                            Section {
+                                TextField("Verso", text: $back, axis: .vertical).lineLimit(3...10)
+                            } header: {
+                                CarnetFormHeader("Verso")
+                            }
+                        }
+                        Section {
+                            Picker("Paquet", selection: $deckID) {
+                                ForEach(collection.decks.filter { !$0.isFiltered }) { deck in
+                                    Text(deck.name).tag(deck.id)
+                                }
+                            }
+                        }
+                        if let error {
+                            Section { Text(error).font(.footnote).foregroundStyle(Carnet.wrong) }
+                        }
+                    }
+                }
+                .listRowBackground(Carnet.sheet)
+            }
+            .carnetForm()
+            .navigationTitle("Carte Anki")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if sending {
+                        ProgressView()
+                    } else {
+                        Button("Ajouter") { Task { await add() } }
+                            .fontWeight(.semibold)
+                            .disabled(front.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || deckID == 0)
+                    }
+                }
+            }
+            .onAppear {
+                if let collection, let deck = sync.deck(for: course, in: collection) { deckID = deck.id }
+            }
+        }
+    }
+
+    private var isCloze: Bool { !AnkiWebSync.clozeNumbers(in: front).isEmpty }
+
+    private func add() async {
+        guard let collection else { return }
+        let type = isCloze ? collection.notetypes.first(where: \.isCloze) : sync.basicNotetype(in: collection)
+        guard let type else {
+            error = "Aucun type de note adapté dans ta collection."
             return
         }
-        isSending = true
-        sendMessage = nil
-        let result = await AnkiService.add(notes, endpoint: app.settings.ankiEndpoint)
-        isSending = false
+        let html = { (text: String) in text.replacingOccurrences(of: "\n", with: "<br>") }
+        let fields = isCloze ? [html(front), html(back)] : [html(front), html(back)]
+        sending = true
+        sync.enqueue(AnkiDraftNote(deckID: deckID, notetypeID: type.id, fields: fields,
+                                   tags: ["studytrack"] + tags, origin: origin))
+        await sync.pushPending()
+        sending = false
+        if let failure = sync.lastError {
+            // La carte reste en file : elle partira au prochain passage.
+            error = "\(failure) La carte est gardée et sera renvoyée."
+        } else {
+            Haptics.success()
+            dismiss()
+        }
+    }
+}
 
-        var parts = ["\(result.added) carte\(result.added > 1 ? "s" : "") envoyée\(result.added > 1 ? "s" : "")"]
-        if result.skipped > 0 { parts.append("\(result.skipped) ignorée\(result.skipped > 1 ? "s" : "")") }
-        sendMessage = parts.joined(separator: " · ")
-            + (result.firstError.map { "\n\($0)" } ?? "")
-        if result.added > 0 { Haptics.success() } else { Haptics.warning() }
+extension AnkiCardComposer {
+    /// Recto : le cours, l'exercice et son énoncé ; verso : ce qu'il faut
+    /// retenir et la solution.
+    init(exercise: Exercise) {
+        let course = exercise.series?.course
+        var front = [course?.displayCode, exercise.displayNumber].compactMap { $0 }.joined(separator: " · ")
+        let statement = exercise.statement.isEmpty ? exercise.title : exercise.statement
+        if !statement.isEmpty { front += "\n\n" + statement }
+        let back = [exercise.correctionNote ?? "", exercise.solution]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        self.init(course: course, origin: "\(exercise.displayNumber) · \(course?.displayCode ?? "")",
+                  front: front, back: back,
+                  tags: [course?.code.replacingOccurrences(of: " ", with: "_")].compactMap { $0 })
     }
 }
