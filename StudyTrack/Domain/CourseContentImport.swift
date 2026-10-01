@@ -214,6 +214,54 @@ struct ContentDraft: Equatable {
     var isEmpty: Bool { theoryCount == 0 && seriesCount == 0 && deadlineCount == 0 && resourceCount == 0 }
 }
 
+extension ContentDraft {
+    /// Le brouillon en quelques lignes, pour le modèle : chaque semaine, sa
+    /// théorie et ses séries (une autre source du cours, comme Botafogo).
+    var outline: String {
+        var lines = ["# \(courseTitle) (\(source.label))"]
+        for section in sections where section.isIncluded {
+            lines.append("## \(section.title)" + (section.week > 0 ? " [semaine \(section.week)]" : ""))
+            for item in section.items.prefix(30) {
+                let what: String
+                switch item.kind {
+                case .series: what = "série \(item.seriesNumber ?? 0)" + (item.exercises.isEmpty ? "" : " (\(item.exercises.count) exercices)")
+                case .theory: what = item.videoCount > 0 ? "théorie, \(item.videoCount) vidéo(s)" : "théorie"
+                default: what = "\(item.kind)"
+                }
+                lines.append("- \(item.number.isEmpty ? "" : item.number + " ")\(item.title) [\(what)]")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Ce que ce brouillon n'a pas, pris dans un autre : les séries absentes,
+    /// et la théorie des semaines qui n'en ont pas.
+    func completed(with other: ContentDraft) -> ContentDraft {
+        var result = self
+        let series = Set(sections.flatMap(\.items).compactMap { $0.kind == .series ? $0.seriesNumber : nil })
+        let theoryWeeks = Set(sections.filter { $0.week > 0 && $0.theoryCount > 0 }.map(\.week))
+        for section in other.sections where section.week > 0 {
+            let extra = section.items.filter { item in
+                (item.kind == .series && !series.contains(item.seriesNumber ?? -1))
+                    || (item.kind == .theory && !theoryWeeks.contains(section.week))
+            }
+            guard !extra.isEmpty else { continue }
+            if let index = result.sections.firstIndex(where: { $0.week == section.week }) {
+                result.sections[index].items.append(contentsOf: extra)
+            } else {
+                var copy = section
+                copy.items = extra
+                result.sections.append(copy)
+            }
+        }
+        result.sections.sort { lhs, rhs in
+            if lhs.week == 0 || rhs.week == 0 { return lhs.week != 0 && rhs.week == 0 }
+            return lhs.week < rhs.week
+        }
+        return result
+    }
+}
+
 // MARK: - Interprétation
 
 enum ContentDraftBuilder {

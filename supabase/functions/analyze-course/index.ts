@@ -12,7 +12,7 @@
 // quel cours, où sont les énoncés et ce qu'il faut faire chaque semaine.
 // DeepSeek d'abord (contexte long, bon en lecture de plans), Groq en repli :
 //   supabase functions deploy analyze-course --project-ref aaigscutkuefhqftfszv
-//   OPENROUTER_API_KEY, ANALYZE_MODEL (facultatif, « deepseek/deepseek-v4-pro » par défaut),
+//   OPENROUTER_API_KEY, ANALYZE_MODEL (facultatif, « deepseek/deepseek-v4.1-flash » par défaut),
 //   LLM_API_KEY (Groq), LLM_BASE_URL / LLM_MODEL (facultatifs, ensemble).
 
 const CORS = {
@@ -33,7 +33,7 @@ const MAX_OUTLINE = 60000;
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; instructions?: string };
+  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; sources?: string; instructions?: string };
   try {
     body = await request.json();
   } catch {
@@ -43,7 +43,8 @@ Deno.serve(async (request) => {
   if (!outline.trim()) return json({ error: "plan vide" }, 400);
   let user = `Cours : ${body.course ?? "?"}\nNombre de semaines : ${body.weeks ?? 14}\n\nActivités Moodle :\n${outline}`;
   if (body.plan) user += `\n\nPLAN DU COURS (texte) :\n${body.plan.slice(0, 16000)}`;
-  if (body.mooc) user += `\n\nMOOC (chapitres) :\n${body.mooc.slice(0, 16000)}`;
+  if (body.mooc) user += `\n\nMOOC (chapitres et leçons) :\n${body.mooc.slice(0, 30000)}`;
+  if (body.sources) user += `\n\nAUTRES SOURCES DU COURS (site du cours, polycopié) :\n${body.sources.slice(0, 16000)}`;
   // La consigne vient de l'app (une seule source, testée avec elle) ; celle
   // d'ici sert aux versions qui ne l'envoient pas encore.
   const system = body.instructions && body.instructions.length < 8000 ? body.instructions : INSTRUCTIONS;
@@ -55,7 +56,7 @@ Deno.serve(async (request) => {
     candidates.push({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: openRouter,
-      model: Deno.env.get("ANALYZE_MODEL") ?? "deepseek/deepseek-v4-pro",
+      model: Deno.env.get("ANALYZE_MODEL") ?? "deepseek/deepseek-v4.1-flash",
     });
   }
   const key = Deno.env.get("LLM_API_KEY");
@@ -75,9 +76,9 @@ Deno.serve(async (request) => {
       const start = content.indexOf("{"), end = content.lastIndexOf("}");
       if (start < 0 || end <= start) throw new Error("réponse sans JSON");
       const parsed = JSON.parse(content.slice(start, end + 1));
-      if (!Array.isArray(parsed.activities)) throw new Error("champ « activities » absent");
+      if (!Array.isArray(parsed.activities) && !Array.isArray(parsed.weeks)) throw new Error("champs « activities » et « weeks » absents");
       return json({
-        activities: parsed.activities,
+        activities: Array.isArray(parsed.activities) ? parsed.activities : [],
         mooc: Array.isArray(parsed.mooc) ? parsed.mooc : [],
         series: Array.isArray(parsed.series) ? parsed.series : [],
         weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],

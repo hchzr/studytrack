@@ -20,15 +20,17 @@ enum MoodleCourseAIService {
     /// Le cours rangé par le modèle : ses activités, et — quand le plan du cours
     /// et le MOOC sont fournis — les chapitres du MOOC à regarder chaque semaine.
     static func analyze(_ snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
-                        plan: String? = nil, moocs: [ScrapedCourse] = [],
+                        plan: String? = nil, moocs: [ScrapedCourse] = [], sources: String? = nil,
                         settings: SettingsStore) async -> MoodleCourseAI.Answer {
         guard settings.aiExtractionEnabled else { return .init() }
-        let payload = MoodleCourseAI.payload(for: snapshot, termStart: termStart, totalWeeks: totalWeeks,
+        var payload = MoodleCourseAI.payload(for: snapshot, termStart: termStart, totalWeeks: totalWeeks,
                                              plan: plan, moocs: moocs)
-        let outline = payload["outline"] as? String ?? ""
+        if let sources, !sources.isEmpty { payload["sources"] = String(sources.prefix(16_000)) }
+        var outline = payload["outline"] as? String ?? ""
+        if outline.isEmpty, let sources { outline = "(cours vide sur Moodle)"; payload["outline"] = outline + "\n" + sources.prefix(200) }
         guard !outline.isEmpty else { return .init() }
         // La consigne fait partie de l'empreinte : la changer redemande au modèle.
-        let fingerprint = MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "")
+        let fingerprint = MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "") + "|" + (payload["sources"] as? String ?? "")
         let key = "moodleAI3." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
         if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.answer(cached) }
 
@@ -41,7 +43,7 @@ enum MoodleCourseAIService {
         }
         guard let raw else { return .init() }
         let answer = MoodleCourseAI.answer(raw)
-        if !answer.hints.isEmpty {
+        if !answer.hints.isEmpty || !answer.guide.isEmpty {
             UserDefaults.standard.set(raw, forKey: key)
             AppLog.record(.info, "import", "Cours rangé avec l'IA",
                           detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.series.count) séries, \(answer.moocWeeks.count) chapitres de MOOC, \(answer.guide.count) semaines expliquées")
@@ -76,6 +78,7 @@ enum MoodleCourseAIService {
             var prompt = "Cours : \(payload["course"] ?? "")\nSemaines : \(payload["weeks"] ?? 14)\n\nActivités Moodle :\n\(payload["outline"] ?? "")"
             if let plan = payload["plan"] as? String { prompt += "\n\nPLAN DU COURS :\n" + String(plan.prefix(4000)) }
             if let mooc = payload["mooc"] as? String { prompt += "\n\nMOOC :\n" + String(mooc.prefix(2500)) }
+            if let sources = payload["sources"] as? String { prompt += "\n\nAUTRES SOURCES DU COURS :\n" + String(sources.prefix(2500)) }
             return try await session.respond(to: prompt).content
         }
         #endif

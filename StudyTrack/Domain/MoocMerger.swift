@@ -23,6 +23,7 @@ enum MoocMerger {
                       totalWeeks: Int = 14,
                       calendar: Calendar = .current,
                       plannedWeeks: [String: Int] = [:],
+                      plannedLessons: [String: Int] = [:],
                       ordinal: Int = 1) -> ContentDraft {
         var result = draft
         let sectionWeeks = Dictionary(snapshot.sections.compactMap { section -> (Int, Int)? in
@@ -74,12 +75,20 @@ enum MoocMerger {
             var byWeek: [Int: [ContentLink]] = [:]
             var firstURL: [Int: String] = [:]
             var videoCounts: [Int: Int] = [:]
+            // **Leçon par leçon**, quand le plan le dit (« vidéos 1.6 à 1.8 » en
+            // semaine 2) : seules les leçons demandées, chacune à sa semaine.
+            // Un chapitre n'est plus posé en bloc sur une semaine.
+            func lessonPlan(_ lesson: ScrapedItem) -> Int? {
+                ([lesson.id, lesson.url] + (lesson.blockIDs ?? [])).compactMap { $0 }.compactMap { plannedLessons[$0] }.min()
+            }
+            let byLesson = chapter.items.contains { lessonPlan($0) != nil }
             for lesson in chapter.items {
                 // Les exercices du MOOC ne sont pas à faire, sauf ses quiz en
                 // ligne (« Exercices online (6 Questions) ») : une ligne du chapitre.
-                guard !lesson.url.isEmpty, !isExercise(lesson) || isQuiz(lesson) else { continue }
+                guard !lesson.url.isEmpty, !isExercise(lesson) || isQuiz(lesson) || lessonPlan(lesson) != nil else { continue }
                 let ids = [lesson.id].compactMap { $0 } + (lesson.blockIDs ?? [])
-                guard let raw = ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek, raw > 0 else { continue }
+                let planned = byLesson ? lessonPlan(lesson) : (ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek)
+                guard let raw = planned, raw > 0 else { continue }
                 let week = min(raw, max(totalWeeks, 1))
                 let lessonTitle = ContentDraftBuilder.cleanTitle(lesson.title)
                 let videoLinks = (lesson.links ?? []).filter { $0.kind == .video }
@@ -98,11 +107,14 @@ enum MoocMerger {
                     videoCounts[week, default: 0] += videoLinks.count
                 }
             }
+            let split = byWeek.count > 1
             for week in byWeek.keys.sorted() {
                 let links = byWeek[week] ?? []
                 guard !links.isEmpty, let url = firstURL[week] else { continue }
+                // Un chapitre réparti sur plusieurs semaines : un élément par
+                // semaine, chacun avec ses seules leçons.
                 var item = ContentDraftItem(kind: .theory,
-                                            number: "M\(ordinal)-\(chapterIndex + 1)",
+                                            number: "M\(ordinal)-\(chapterIndex + 1)" + (split ? "-s\(week)" : ""),
                                             title: "MOOC · \(title)",
                                             url: url,
                                             videoCount: videoCounts[week] ?? 0,

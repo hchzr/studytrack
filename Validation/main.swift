@@ -4994,6 +4994,71 @@ do {
     check(BotafogoCatalog.site(in: cited)?.absoluteString.contains("analyse-b") == true, "un lien Botafogo cité par le cours l'emporte")
 }
 
+print("== MOOC : seulement les leçons demandées, chacune à sa semaine ==")
+do {
+    func lesson(_ n: String, _ id: String) -> ScrapedItem {
+        ScrapedItem(title: n, url: "https://courseware.epfl.ch/\(id)", type: "sequential", videoCount: 1, id: "block-\(id)",
+                    links: [ContentLink(title: "Leçon", url: "https://courseware.epfl.ch/video-\(id)", kind: .video)])
+    }
+    let mooc = ScrapedCourse(source: "courseware", title: "Algèbre", url: "https://courseware.epfl.ch/c", sections: [
+        ScrapedSection(title: "Chapitre 1 : Systèmes", items: [lesson("1.1 Intro", "a"), lesson("1.2 Gauss", "b"), lesson("1.3 Échelonnées", "c"),
+                                                              lesson("1.4 Option", "d")], id: "chap-1"),
+        ScrapedSection(title: "Chapitre 2 : Matrices", items: [lesson("2.1 Produit", "e"), lesson("2.2 Inverse", "f")], id: "chap-2")])
+    let payload = MoodleCourseAI.payload(for: MoodleCourseSnapshot(title: "MATH-999", url: "u", sections: []), termStart: nil, totalWeeks: 14, moocs: [mooc])
+    check((payload["mooc"] as? String)?.contains("· m1.1.2 1.2 Gauss (1 vidéo)") == true, "chaque leçon du MOOC a sa référence")
+    let answer = MoodleCourseAI.answer(#"{"mooc":[{"week":1,"lessons":["m1.1.1","m1.1.2"]},{"week":2,"lessons":["M1.1.3","m1.2.1","m9.9.9"]}]}"#)
+    let lessons = MoodleCourseAI.lessonWeeks(answer, moocs: [mooc])
+    check(lessons == ["block-a": 1, "block-b": 1, "block-c": 2, "block-e": 2], "références résolues, inconnues ignorées (\(lessons))")
+    let snapshot = MoodleCourseSnapshot(title: "MATH-999", url: "u", sections: [])
+    let merged = MoocMerger.merge(mooc: mooc, references: [], snapshot: snapshot,
+                                  into: ContentDraft(source: .moodle, courseTitle: "", url: "", sections: []),
+                                  termStart: nil, plannedLessons: lessons)
+    let items = merged.sections.flatMap { section in section.items.filter { $0.title.hasPrefix("MOOC") }.map { (section.week, $0) } }
+    let week1 = items.filter { $0.0 == 1 }.flatMap { $0.1.links.map(\.url) }
+    let week2 = items.filter { $0.0 == 2 }.flatMap { $0.1.links.map(\.url) }
+    check(week1 == ["https://courseware.epfl.ch/video-a", "https://courseware.epfl.ch/video-b"]
+          && Set(week2) == ["https://courseware.epfl.ch/video-c", "https://courseware.epfl.ch/video-e"],
+          "semaine 1 : 1.1–1.2 ; semaine 2 : 1.3 et 2.1 — ni 1.4 ni 2.2, non demandées")
+    let numbers = items.map(\.1.number)
+    check(Set(numbers).count == numbers.count && numbers.contains("M1-1-s1") && numbers.contains("M1-1-s2"),
+          "un chapitre réparti : un élément par semaine, numéros distincts (\(numbers))")
+
+    // Ce qui était vu le reste après le découpage.
+    let course = Course(code: "TEST-999", name: "Algèbre")
+    context.insert(course)
+    let old = TheoryItem(course: course, sectionNumber: 1, number: "M1-1", title: "MOOC · Chapitre 1 : Systèmes", kind: .video, plannedWeek: 1,
+                         urlString: "https://courseware.epfl.ch/a")
+    old.links = ["a", "b", "c", "d"].map { ContentLink(title: "Leçon", url: "https://courseware.epfl.ch/video-\($0)", kind: .video) }
+    old.watchedAt = Date()
+    context.insert(old)
+    ContentDraftWriter.apply(merged, to: course, context: context)
+    try? context.save()
+    let chapterOne = course.theoryItems.filter { $0.number.hasPrefix("M1-1") }
+    check(chapterOne.count == 2 && chapterOne.allSatisfy(\.isWatched),
+          "le chapitre vu, réparti sur deux semaines, reste vu des deux côtés (\(chapterOne.map(\.number)))")
+    check(!course.theoryItems.contains { $0.number == "M1-1" }, "l'ancien élément du chapitre entier ne reste pas en double")
+    context.delete(course)
+}
+
+print("== Une autre source du cours complète Moodle ==")
+do {
+    var moodle = ContentDraft(source: .moodle, courseTitle: "A", url: "", sections: [
+        ContentDraftSection(title: "Semaine 1", week: 1, weekIsInferred: false, isIncluded: true, items: [
+            ContentDraftItem(kind: .series, number: "1", title: "Série 1", url: "m1", videoCount: 0, seriesNumber: 1, theoryKind: .reading)])])
+    moodle.weekGuide = [1: "x"]
+    let other = ContentDraft(source: .botafogo, courseTitle: "Poly", url: "", sections: [
+        ContentDraftSection(title: "Semaine 1", week: 1, weekIsInferred: false, isIncluded: true, items: [
+            ContentDraftItem(kind: .series, number: "1", title: "Série 1", url: "b1", videoCount: 0, seriesNumber: 1, theoryKind: .reading),
+            ContentDraftItem(kind: .theory, number: "1.1", title: "Suites", url: "t1", videoCount: 2, seriesNumber: nil, theoryKind: .video)]),
+        ContentDraftSection(title: "Semaine 2", week: 2, weekIsInferred: false, isIncluded: true, items: [
+            ContentDraftItem(kind: .series, number: "2", title: "Série 2", url: "b2", videoCount: 0, seriesNumber: 2, theoryKind: .reading)])])
+    let done = moodle.completed(with: other)
+    let all = done.sections.flatMap(\.items)
+    check(all.filter { $0.kind == .series }.map(\.url) == ["m1", "b2"] && all.contains { $0.url == "t1" },
+          "la série 1 reste celle de Moodle ; la série 2 et la théorie manquantes viennent de l'autre source")
+    check(other.outline.contains("## Semaine 2 [semaine 2]") && other.outline.contains("Série 2 [série 2]"), "résumé lisible pour le modèle")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

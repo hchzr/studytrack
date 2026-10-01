@@ -26,8 +26,10 @@ enum ContentRefresher {
 
         let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
         let moodleCourses = courses.filter { MoodleCourseMatcher.linkedID(in: $0.contentSources) != nil }
+        // Un cours lié à Moodle passe par la chaîne d'import, qui lit Botafogo
+        // elle-même quand il le faut : pas de seconde lecture.
         let botafogoCourses = courses.compactMap { course -> (Course, URL)? in
-            guard let link = course.contentSources.compactMap(URL.init(string:))
+            guard MoodleCourseMatcher.linkedID(in: course.contentSources) == nil, let link = course.contentSources.compactMap(URL.init(string:))
                     .first(where: { ContentSource.detect(host: $0.host) == .botafogo }) else { return nil }
             return (course, link)
         }

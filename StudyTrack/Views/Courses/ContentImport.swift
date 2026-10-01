@@ -370,24 +370,12 @@ final class MoodleImportModel {
                                                            settings: AppRuntime.container?.settings) { [weak self] step in
                 self?.status[course.id] = step
             }
-            var draft = outcome.draft
+            let draft = outcome.draft
             var label = "Moodle · \(ref.shortname)"
-            var site: URL?
             let moocNote: String? = outcome.notes.isEmpty ? nil : outcome.notes.joined(separator: " · ")
-            // Un cours vide sur Moodle vit peut-être ailleurs : un site
-            // Botafogo cité par le cours, ou celui dont le titre lui correspond.
-            if draft.theoryCount + draft.seriesCount == 0 {
-                let catalog = (try? await BotafogoClient.catalog()) ?? []
-                site = BotafogoCatalog.site(in: snapshot)
-                    ?? BotafogoCatalog.match(courseName: "\(ref.shortname) \(ref.fullname) \(course.name)", in: catalog)
-            }
-            if let site {
-                status[course.id] = "vide sur Moodle — lecture de Botafogo…"
-                if let botafogo = try? await BotafogoClient.draft(at: site, termStart: termStart, totalWeeks: weeks),
-                   !botafogo.isEmpty {
-                    draft = botafogo
-                    label = "Botafogo · \(botafogo.courseTitle) (vide sur Moodle)"
-                }
+            // Un cours vide sur Moodle a été lu sur Botafogo par la chaîne d'import.
+            if let title = outcome.botafogoTitle {
+                label = "Botafogo · \(title) (vide sur Moodle)"
             }
             guard draft.theoryCount + draft.seriesCount + draft.deadlineCount > 0 else {
                 status[course.id] = snapshot.activityCount == 0 ? "vide sur Moodle" : "rien à suivre (pas de théorie ni de séries)"

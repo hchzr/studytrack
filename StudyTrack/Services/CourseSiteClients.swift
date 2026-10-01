@@ -813,7 +813,8 @@ enum MoocImport {
 
     /// Range les leçons demandées de chaque MOOC dans les semaines du cours.
     static func merge(_ draft: ContentDraft, moocs: [(key: String, course: ScrapedCourse)], snapshot: MoodleCourseSnapshot,
-                      termStart: Date?, totalWeeks: Int, plannedWeeks: [String: Int]) -> (draft: ContentDraft, note: String?) {
+                      termStart: Date?, totalWeeks: Int, plannedWeeks: [String: Int],
+                      plannedLessons: [String: Int] = [:]) -> (draft: ContentDraft, note: String?) {
         var result = draft
         var notes: [String] = []
         for (index, mooc) in moocs.enumerated() {
@@ -822,7 +823,7 @@ enum MoocImport {
                                       references: snapshot.moocLinks.filter { $0.courseKey == mooc.key },
                                       snapshot: snapshot, into: result,
                                       termStart: termStart, totalWeeks: totalWeeks, plannedWeeks: plannedWeeks,
-                                      ordinal: index + 1)
+                                      plannedLessons: plannedLessons, ordinal: index + 1)
             let chapters = result.theoryCount - before
             notes.append("+ MOOC \(mooc.course.title) (\(chapters) chapitre\(chapters > 1 ? "s" : "") à travailler)")
         }
@@ -875,11 +876,28 @@ enum CourseImportPipeline {
     struct Outcome {
         var draft: ContentDraft
         var notes: [String]
+        /// Le polycopié Botafogo lu à la place (ou en plus) de Moodle.
+        var botafogoTitle: String?
     }
 
     static func draft(from snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
                       settings: SettingsStore?, progress: (String) -> Void = { _ in }) async -> Outcome {
         var notes: [String] = []
+        // Un cours vide sur Moodle vit ailleurs : le site Botafogo cité par le
+        // cours, ou celui du catalogue dont le titre correspond. Lu dès que
+        // besoin, et donné au modèle avec le reste.
+        let rulesOnly = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: totalWeeks)
+        let thin = rulesOnly.theoryCount + rulesOnly.seriesCount == 0
+        var botafogo: ContentDraft?
+        var site = BotafogoCatalog.site(in: snapshot)
+        if site == nil, thin {
+            progress("vide sur Moodle — recherche du site du cours…")
+            site = BotafogoCatalog.match(courseName: snapshot.title, in: (try? await BotafogoClient.catalog()) ?? [])
+        }
+        if let site {
+            progress("lecture de Botafogo…")
+            botafogo = (try? await BotafogoClient.draft(at: site, termStart: termStart, totalWeeks: totalWeeks)).flatMap { $0.isEmpty ? nil : $0 }
+        }
         var moocs: [(key: String, course: ScrapedCourse)] = []
         if !snapshot.moocLinks.isEmpty {
             progress("MOOC cité — lecture de Courseware…")
@@ -894,7 +912,15 @@ enum CourseImportPipeline {
             plan = await CoursePlanReader.text(for: snapshot)
             progress("rangement du cours…")
             answer = await MoodleCourseAIService.analyze(snapshot, termStart: termStart, totalWeeks: totalWeeks,
-                                                         plan: plan, moocs: moocs.map(\.course), settings: settings)
+                                                         plan: plan, moocs: moocs.map(\.course),
+                                                         sources: botafogo.map(\.outline), settings: settings)
+        }
+        if thin, var botafogo {
+            // Le cours est sur Botafogo : son programme, avec la consigne de
+            // chaque semaine comprise par le modèle.
+            botafogo.weekGuide = answer.guide
+            notes.append("lu sur Botafogo (vide sur Moodle)")
+            return Outcome(draft: botafogo, notes: notes, botafogoTitle: botafogo.courseTitle)
         }
         var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: totalWeeks, hints: answer.hints)
         // Ce que le modèle a compris du cours entier : où sont les énoncés,
@@ -911,8 +937,9 @@ enum CourseImportPipeline {
             if !parsed.isEmpty {
                 AppLog.record(.info, "import", "Plan du cours lu", detail: "\(parsed.count) chapitres de MOOC rangés d'après le plan")
             }
+            let lessons = MoodleCourseAI.lessonWeeks(answer, moocs: moocs.map(\.course))
             let merged = MoocImport.merge(draft, moocs: moocs, snapshot: snapshot, termStart: termStart,
-                                          totalWeeks: totalWeeks, plannedWeeks: plannedWeeks)
+                                          totalWeeks: totalWeeks, plannedWeeks: plannedWeeks, plannedLessons: lessons)
             draft = merged.draft
             if let note = merged.note { notes.append(note) }
         }
@@ -923,6 +950,12 @@ enum CourseImportPipeline {
         let media = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: totalWeeks)
         draft = media.draft
         if let note = media.note { notes.append(note) }
-        return Outcome(draft: draft, notes: notes)
+        if let botafogo {
+            // Moodle et Botafogo à la fois : ce que Moodle n'a pas (une série,
+            // la théorie d'une semaine) vient de Botafogo.
+            draft = draft.completed(with: botafogo)
+            notes.append("+ Botafogo")
+        }
+        return Outcome(draft: draft, notes: notes, botafogoTitle: nil)
     }
 }

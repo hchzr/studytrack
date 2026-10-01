@@ -94,6 +94,9 @@ enum ContentDraftWriter {
                       updateWeeks: Bool = true) -> ContentImportResult {
         var result = ContentImportResult()
         var nextSort = (course.theoryItems.map(\.sortOrder).max() ?? -1) + 1
+        // Les vidéos déjà vues : un chapitre réparti autrement (leçon par leçon,
+        // sur deux semaines) reste vu là où ses vidéos l'étaient.
+        let watchedVideos = Set(course.theoryItems.filter(\.isWatched).flatMap { $0.links.filter { $0.kind == .video }.map(\.url) })
 
         // Ce qui a été écarté à une relecture reste écarté : une relecture le
         // décide (et peut le reprendre), une mise à jour automatique jamais.
@@ -199,6 +202,10 @@ enum ContentDraftWriter {
                         theory.sectionTitle = section.title
                         theory.sourceRaw = draft.source.rawValue
                         theory.links = item.links
+                        let videos = item.links.filter { $0.kind == .video }.map(\.url)
+                        if item.title.hasPrefix("MOOC · "), !videos.isEmpty, videos.allSatisfy(watchedVideos.contains) {
+                            theory.watchedAt = Date()
+                        }
                         context.insert(theory)
                         nextSort += 1
                         result.theoryAdded += 1
@@ -273,7 +280,16 @@ enum ContentDraftWriter {
             if !started { context.delete(series) }
         }
 
-        let chapters = course.theoryItems.filter { $0.title.hasPrefix("MOOC · ") && $0.plannedWeek > 0 }
+        // Les éléments « MOOC · » que le brouillon ne contient plus (un chapitre
+        // désormais réparti leçon par leçon, un chapitre plus demandé) disparaissent.
+        let draftedMOOC = Set(draft.sections.flatMap(\.items).filter { $0.title.hasPrefix("MOOC · ") }.map(\.number))
+        if !draftedMOOC.isEmpty {
+            for stale in course.theoryItems where stale.title.hasPrefix("MOOC · ") && !draftedMOOC.contains(stale.number) {
+                context.delete(stale)
+            }
+        }
+
+        let chapters = course.theoryItems.filter { $0.title.hasPrefix("MOOC · ") && $0.plannedWeek > 0 && draftedMOOC.contains($0.number) }
         guard !chapters.isEmpty else { return }
         let drafted = Set(draft.sections.flatMap(\.items).map(\.url))
         let leftovers = course.theoryItems.filter { item in

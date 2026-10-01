@@ -28,12 +28,13 @@ enum MoodleCourseAI {
     static let instructions = """
     Tu lis un cours de l'EPFL comme un·e étudiant·e attentif·ve, pour une app de suivi d'études. Tu reçois les sections Moodle (titre, semaine si connue, texte et consignes, liens cités « Lnn »), chaque activité (id, type Moodle, nom, où mène le lien, ce qu'est la cible et le début de son texte), et parfois le PLAN DU COURS et les MOOC cités (chapitres numérotés). Le cours peut avoir n'importe quelle forme : comprends-le d'après son contenu, pas d'après des habitudes.
     Réponds UNIQUEMENT par un objet JSON :
-    {"activities":[{"id":"123","kind":"theory","week":3,"series":null}],"series":[{"number":3,"week":3,"statement":"a123","solution":"a124"}],"mooc":[{"id":"<id du chapitre>","week":3}],"weeks":[{"week":3,"todo":"…"}]}
+    {"activities":[{"id":"123","kind":"theory","week":3,"series":null}],"series":[{"number":3,"week":3,"statement":"a123","solution":"a124"}],"mooc":[{"week":3,"lessons":["m1.2.4","m1.2.5"]}],"weeks":[{"week":3,"todo":"…"}]}
     - activities : une entrée par activité reçue, avec son id exact. kind : "theory" (cours, enregistrement, transparents, notes, polycopié, chapitre à lire), "series" (énoncé d'exercices à faire), "solution" (corrigé), "deadline" (rendu noté, devoir, projet, quiz noté), "document" (organisation, formulaire, ressource générale, ancien examen, matériel facultatif), "ignore" (forum, annonce, sondage, lien sans contenu). week : la semaine du semestre (1 à N) où l'activité se travaille — d'après la section, une date, un numéro (« Lecture 7 » avec deux cours par semaine → semaine 4) ou une consigne ; null si inconnue. series : son numéro de série pour "series" et "solution", sinon null.
     - series : chaque série d'exercices du cours, une entrée par numéro. statement : la référence (« a » + id d'activité, ou « Lnn » pour un lien du texte d'une section) qui mène à l'ÉNONCÉ LUI-MÊME, la page ou le PDF où sont les exercices. Choisis d'après ce que contient la cible (son début de texte), pas seulement d'après le nom : un lien « série 4 » qui mène à un chapitre de MOOC sans ces exercices n'est pas l'énoncé ; une page « énoncé/corrigé » ou « corrigé » qui contient aussi les énoncés peut l'être. solution : le corrigé s'il est à une autre adresse, sinon null. week : la semaine où la série se fait.
     - Les exercices et quiz d'un MOOC ne sont des séries que si le cours (consignes, plan) demande de les faire.
-    - mooc : si un MOOC est fourni, les chapitres dont le cours demande de regarder les vidéos, avec la semaine — d'après le plan, les consignes des sections ou les liens de chaque semaine. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 (préambules hors numérotation). La semaine est celle de la ligne du plan ou de la section : ne la décale jamais. Uniquement des id de la liste ; rien d'optionnel.
+    - mooc : si un MOOC est fourni, ce qu'il faut en regarder chaque semaine — d'après le plan, les consignes des sections ou les liens de chaque semaine. Une entrée par semaine : {"week":N,"lessons":["m1.3.2","m1.3.3"]} avec les références des LEÇONS (mX.Y.Z) demandées cette semaine-là, et seulement elles (un plan qui dit « vidéos 1.6 à 1.8 » → ces trois leçons ; un chapitre coupé sur deux semaines → ses leçons réparties). Quand le cours demande un chapitre entier (« MOOC 2 : vidéos Module 3 »), donne {"week":N,"id":"<id du chapitre>"} : « Module 3 » est l'entrée « module 3 » du MOOC 2 (préambules hors numérotation). La semaine est celle de la ligne du plan ou de la section : ne la décale jamais. Uniquement des références et des id de la liste ; rien d'optionnel.
     - weeks : pour CHAQUE semaine du semestre où le plan ou Moodle prévoit quelque chose, y compris les semaines à venir, la consigne en une phrase courte (160 caractères au plus), concrète, à l'infinitif : quoi regarder (enregistrement, chapitres du MOOC et leurs numéros), quoi lire, quelle série faire, ce qui est à rendre. Uniquement d'après ce que tu as reçu.
+    - Si d'AUTRES SOURCES du cours sont fournies (polycopié en ligne, site du cours), sers-t'en pour les consignes : chapitres à lire ou à regarder, séries à faire, semaine par semaine.
     - N'invente aucun id ni aucune référence.
     """
 
@@ -52,6 +53,8 @@ enum MoodleCourseAI {
     struct Answer: Equatable {
         var hints: [String: MoodleAIHint] = [:]
         var moocWeeks: [String: Int] = [:]
+        /// Les leçons du MOOC à regarder, par référence (« m1.3.2 ») : la semaine.
+        var moocLessons: [String: Int] = [:]
         var series: [SeriesPlan] = []
         var guide: [Int: String] = [:]
     }
@@ -119,8 +122,13 @@ enum MoodleCourseAI {
                         module += 1
                         label = "module \(module) — \(chapter.title)"
                     }
-                    let lessons = chapter.items.prefix(14).map(\.title).joined(separator: " ; ")
-                    return "- id=\(id) : \(label) (\(chapter.items.count) leçons, \(videos) vidéos : \(lessons))"
+                    let chapterIndex = mooc.sections.firstIndex(where: { $0.id == id }).map { $0 + 1 } ?? 0
+                    let lessons = chapter.items.enumerated().map { offset, lesson -> String in
+                        let count = lesson.videoCount ?? (lesson.links ?? []).filter { $0.kind == .video }.count
+                        let what = count > 0 ? " (\(count) vidéo\(count > 1 ? "s" : ""))" : (MoocMerger.isExercise(lesson) ? " [exercices]" : "")
+                        return "  · m\(index + 1).\(chapterIndex).\(offset + 1) \(lesson.title)\(what)"
+                    }
+                    return (["- id=\(id) : \(label) (\(videos) vidéos)"] + lessons).joined(separator: "\n")
                 }
             }.joined(separator: "\n")
         }
@@ -158,8 +166,15 @@ enum MoodleCourseAI {
             return text
         }
         for entry in json["mooc"] as? [[String: Any]] ?? [] {
-            guard let id = entry["id"] as? String, let week = int(entry["week"]), week > 0 else { continue }
-            result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
+            guard let week = int(entry["week"]), week > 0 else { continue }
+            if let id = entry["id"] as? String, !id.isEmpty {
+                result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
+            }
+            for lesson in entry["lessons"] as? [Any] ?? [] {
+                guard let ref = (lesson as? String)?.trimmingCharacters(in: .whitespaces).lowercased(),
+                      ref.range(of: #"^m\d+\.\d+\.\d+$"#, options: .regularExpression) != nil else { continue }
+                result.moocLessons[ref] = min(result.moocLessons[ref] ?? week, week)
+            }
         }
         for entry in json["series"] as? [[String: Any]] ?? [] {
             guard let number = int(entry["number"]), number > 0,
@@ -171,6 +186,25 @@ enum MoodleCourseAI {
             guard let week = int(entry["week"]), week > 0,
                   let todo = (entry["todo"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !todo.isEmpty else { continue }
             result.guide[week] = String(todo.prefix(400))
+        }
+        return result
+    }
+
+    /// Les leçons désignées par le modèle (« m1.3.2 » : MOOC 1, chapitre 3,
+    /// leçon 2), par identifiant de bloc (ou adresse) : leur semaine. Une
+    /// référence hors de la liste est ignorée.
+    static func lessonWeeks(_ answer: Answer, moocs: [ScrapedCourse]) -> [String: Int] {
+        var result: [String: Int] = [:]
+        for (ref, week) in answer.moocLessons {
+            let parts = ref.dropFirst().split(separator: ".").compactMap { Int($0) }
+            guard parts.count == 3, moocs.indices.contains(parts[0] - 1) else { continue }
+            let chapters = moocs[parts[0] - 1].sections
+            guard chapters.indices.contains(parts[1] - 1) else { continue }
+            let lessons = chapters[parts[1] - 1].items
+            guard lessons.indices.contains(parts[2] - 1) else { continue }
+            let lesson = lessons[parts[2] - 1]
+            guard let key = lesson.id ?? (lesson.url.isEmpty ? nil : lesson.url) else { continue }
+            result[key] = min(result[key] ?? week, week)
         }
         return result
     }
