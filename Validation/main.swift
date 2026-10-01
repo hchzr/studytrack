@@ -4901,6 +4901,99 @@ do {
     context.delete(course)
 }
 
+print("== Un cours jamais vu, compris en entier (énoncés, consignes, MOOC) ==")
+do {
+    func act(_ id: String, _ name: String, _ module: String, target: String? = nil) -> MoodleActivity {
+        MoodleActivity(id: id, name: name, module: module, url: "https://moodle.epfl.ch/mod/\(module)/view.php?id=\(id)", target: target)
+    }
+    // BIO-999 : la feuille d'exercices est sur le site du cours, citée dans la
+    // consigne de la section ; l'activité « Feuille 2 » mène à un MOOC.
+    var week2 = MoodleSection(number: 3, title: "Semaine 2 : Cellules", activities: [
+        act("10", "Feuille 2", "url", target: "https://courseware.epfl.ch/courses/course-v1:EPFL+Bio+2026/jump_to/block-v1:EPFL+Bio+2026+type@sequential+block@x"),
+        act("11", "Réponses feuille 2", "resource", target: "https://moodle.epfl.ch/pluginfile.php/1/rep2.pdf"),
+        act("12", "Diapos semaine 2", "resource", target: "https://moodle.epfl.ch/pluginfile.php/1/diapos2.pdf")])
+    week2.text = "Cette semaine : lisez le chapitre 2 et faites la feuille d'exercices sur le site du cours."
+    week2.links = [ContentLink(title: "feuille d'exercices", url: "https://bio.example.org/td/feuille2.html", kind: .page)]
+    week2.activities[0].destination = "mooc"
+    week2.activities[0].preview = "Chapitre 2 · vidéos"
+    let bio = MoodleCourseSnapshot(title: "Biologie (BIO-999)", url: "https://moodle.epfl.ch/course/view.php?id=9", sections: [week2])
+
+    let rules = MoodleCourseAnalyzer.draft(from: bio, termStart: nil)
+    let ruleSeries = rules.sections.flatMap(\.items).first { $0.kind == .series }
+    check(ruleSeries.map { MoocReference.courseKey(in: $0.url) == nil } ?? true,
+          "sans le modèle, un lien vers un MOOC n'est pas pris pour l'énoncé")
+
+    let payload = MoodleCourseAI.payload(for: bio, termStart: nil, totalWeeks: 14)
+    let outline = payload["outline"] as? String ?? ""
+    check(outline.contains("Texte : « Cette semaine : lisez") && outline.contains("Lien L1 : feuille d'exercices → bio.example.org/td/feuille2.html")
+          && outline.contains("{mooc}") && outline.contains("« Chapitre 2 · vidéos »") && payload["instructions"] != nil,
+          "le modèle reçoit consignes, liens cités, nature et début de chaque cible")
+
+    let answer = MoodleCourseAI.answer(#"{"activities":[{"id":"10","kind":"document","week":2},{"id":"11","kind":"solution","week":2,"series":2},{"id":"12","kind":"theory","week":2}],"series":[{"number":2,"week":2,"statement":"L1","solution":11},{"number":3,"week":3,"statement":"L99","solution":null}],"weeks":[{"week":2,"todo":"Lire le chapitre 2, faire la feuille 2 sur le site du cours."},{"week":40,"todo":"hors semestre"}]}"#)
+    check(answer.series.first == MoodleCourseAI.SeriesPlan(number: 2, week: 2, statement: "L1", solution: "a11"),
+          "réponse : série, énoncé cité dans la consigne, corrigé (id numérique toléré)")
+    let understood = MoodleCourseAnalyzer.apply(answer, to: MoodleCourseAnalyzer.draft(from: bio, termStart: nil, hints: answer.hints),
+                                                snapshot: bio, totalWeeks: 14)
+    let series2 = understood.sections.flatMap(\.items).filter { $0.kind == .series }
+    check(series2.count == 1 && series2.first?.url == "https://bio.example.org/td/feuille2.html"
+          && series2.first?.solutionURL == "https://moodle.epfl.ch/pluginfile.php/1/rep2.pdf"
+          && understood.sections.first { $0.items.contains { $0.kind == .series } }?.week == 2,
+          "la série 2 : énoncé sur le site du cours, corrigé en PDF, en semaine 2 (\(series2.map(\.url)))")
+    check(!series2.contains { $0.seriesNumber == 3 }, "une référence inconnue (L99) ne crée rien")
+    check(understood.weekGuide == [2: "Lire le chapitre 2, faire la feuille 2 sur le site du cours."],
+          "la consigne de la semaine, gardée dans les semaines du semestre")
+
+    // Un énoncé déjà trouvé par les règles est remplacé par celui que le modèle désigne.
+    let other = MoodleCourseSnapshot(title: "X", url: "u", sections: [MoodleSection(number: 1, title: "Semaine 1", activities: [
+        act("20", "Série 1", "url", target: "https://example.org/mauvais.html"),
+        act("21", "Série 1 : énoncé et corrigé", "url", target: "https://example.org/serie1.html")])])
+    let fixed = MoodleCourseAnalyzer.apply(MoodleCourseAI.answer(#"{"series":[{"number":1,"week":1,"statement":"a21"}]}"#),
+                                           to: MoodleCourseAnalyzer.draft(from: other, termStart: nil), snapshot: other, totalWeeks: 14)
+    check(fixed.sections.flatMap(\.items).first { $0.kind == .series }?.url == "https://example.org/serie1.html",
+          "l'énoncé que le modèle désigne remplace celui que les règles avaient choisi")
+}
+
+print("== Page web d'exercices, lue comme une mise en page ==")
+do {
+    let html = """
+    <html><head><style>.x{}</style></head><body><nav>Menu</nav>
+    <h1>Série 5 — Récursivité</h1>
+    <h2>Exercice 1 : Factorielle</h2><p>Écrire une fonction récursive.</p>
+    <ol><li>Version naïve</li><li>Version terminale</li></ol>
+    <p><strong>Exercice 2.</strong> Calculer les nombres de Fibonacci.</p>
+    <h2>Exercice 3 : Tours de Hanoï</h2><p>Résoudre pour n disques.</p>
+    </body></html>
+    """
+    let lines = HTMLLayout.lines(fromHTML: html)
+    check(lines.first?.text == "Série 5 — Récursivité" && lines.first?.isBold == true && !lines.contains { $0.text == "Menu" },
+          "titres en gras et plus grands, menus écartés")
+    let item = lines.first { $0.text == "Version naïve" }
+    let body = lines.first { $0.text == "Écrire une fonction récursive." }
+    check((item?.indent ?? 0) > (body?.indent ?? 0), "les questions d'une liste sont en retrait")
+    check(lines.contains { $0.text.hasPrefix("Exercice 2.") && $0.startsBold }, "« Exercice 2. » en gras en début de ligne")
+    let detected = SeriesLayoutParser.parse(lines, defaultSeries: 5)
+    let exercises = detected.first?.exercises ?? []
+    check(exercises.count == 3, "trois exercices reconnus sur une page jamais vue (\(exercises.map(\.number)))")
+}
+
+print("== Site d'un cours vide sur Moodle, trouvé sans table ==")
+do {
+    let home = URL(string: "https://botafogo.epfl.ch/")!
+    let catalog: [(title: String, url: URL)] = [
+        ("Mon cours d'analyse", home.appendingPathComponent("analyse-1/")),
+        ("Mon cours d'analyse pour GM", home.appendingPathComponent("analyse-1-GM/")),
+        ("Mon cours d'analyse classe inversée", home.appendingPathComponent("analyse-1-flipped/")),
+        ("Le polycopié d'ICS", home.appendingPathComponent("ics/"))]
+    check(BotafogoCatalog.match(courseName: "MATH-101(pi) Analyse I (classe inversée)", in: catalog)?.lastPathComponent == "analyse-1-flipped",
+          "classe inversée : le polycopié dont tous les mots se retrouvent")
+    check(BotafogoCatalog.match(courseName: "MATH-101(a) Analyse I", in: catalog)?.lastPathComponent == "analyse-1",
+          "le cours ordinaire : pas la version GM ni inversée")
+    check(BotafogoCatalog.match(courseName: "PHYS-101 Physique générale", in: catalog) == nil, "aucun site inventé")
+    let cited = MoodleCourseSnapshot(title: "Y", url: "u", sections: [MoodleSection(number: 0, title: "Infos", activities: [],
+        text: "", links: [ContentLink(title: "Polycopié", url: "https://botafogo.epfl.ch/analyse-b/chapitre1", kind: .page)])])
+    check(BotafogoCatalog.site(in: cited)?.absoluteString.contains("analyse-b") == true, "un lien Botafogo cité par le cours l'emporte")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

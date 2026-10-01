@@ -249,6 +249,7 @@ enum ContentDraftWriter {
         }
 
         if draft.source == .moodle { cleanUpMOOC(course: course, draft: draft, context: context) }
+        if !draft.weekGuide.isEmpty { course.weekGuide = draft.weekGuide }
 
         var sources = course.contentSources
         if !draft.url.isEmpty, !sources.contains(draft.url) {

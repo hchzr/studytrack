@@ -151,10 +151,17 @@ final class SeriesAutoReader {
                 // Une page qui porte le PDF de la série (site de cours, GitHub…).
                 if depth == 0, let next = MoodleLinks.statementLink(inHTML: html, baseURL: base).statement.flatMap(URL.init(string:)),
                    next != url {
-                    let count = try await read(series, from: next, course: course, context: context, settings: settings, depth: 1)
-                    if count > 0 { series.urlString = next.absoluteString }
-                    return count
+                    let count = (try? await read(series, from: next, course: course, context: context, settings: settings, depth: 1)) ?? 0
+                    if count > 0 {
+                        series.urlString = next.absoluteString
+                        return count
+                    }
                 }
+                // Une page qui contient les énoncés eux-mêmes, quel que soit le
+                // site : lue comme une mise en page (titres, gras, retraits).
+                let count = try await extract(lines: HTMLLayout.lines(fromHTML: html), pageImages: [],
+                                              into: series, course: course, context: context, settings: settings)
+                if count > 0 { return count }
                 throw HiddenSiteSession.SiteError.failed("Page web sans énoncé lisible (\(base.host ?? "site inconnu")) : ouvre-la depuis la série.")
             }
         }
@@ -166,12 +173,21 @@ final class SeriesAutoReader {
         guard lines.contains(where: { !$0.isEmpty }) else {
             throw HiddenSiteSession.SiteError.failed("Le PDF ne contient pas de texte (scan ?).")
         }
+        return try await extract(lines: lines, pageImages: PDFPageRenderer.jpegPages(of: document),
+                                 into: series, course: course, context: context, settings: settings)
+    }
+
+    /// Les exercices d'un énoncé mis en page (PDF ou page web) : règles, puis
+    /// le modèle de langage s'il est disponible, fusionnés.
+    private func extract(lines: [PDFLayoutLine], pageImages: [Data], into series: ExerciseSeries, course: Course,
+                         context: ModelContext, settings: SettingsStore) async throws -> Int {
+        guard lines.contains(where: { !$0.isEmpty }) else { return 0 }
         var detected = SeriesLayoutParser.parse(lines, defaultSeries: series.seriesNumber)
         if settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(settings) != nil {
             let language = SeriesDocumentInference.languageName(of: lines.map(\.text).joined(separator: "\n"))
             let prepared = SeriesAIParsing.prepareLayout(lines, seriesHint: series.seriesNumber, language: language)
             if let result = try? await SeriesAIExtractor.extract(prepared: prepared,
-                                                                 pageImages: PDFPageRenderer.jpegPages(of: document),
+                                                                 pageImages: pageImages,
                                                                  seriesHint: series.seriesNumber,
                                                                  language: language, settings: settings) {
                 detected = SeriesAIParsing.merge(heuristic: detected, ai: result.series,

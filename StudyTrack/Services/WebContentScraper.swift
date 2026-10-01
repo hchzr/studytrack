@@ -468,13 +468,30 @@ enum AuthenticatedDownloader {
     /// session des sites EPFL. `nil` si illisible.
     @MainActor
     static func text(at address: URL) async -> String? {
+        await document(at: address)?.body
+    }
+
+    /// Le texte d'une adresse et sa nature (PDF ou page). `pages` limite la
+    /// lecture d'un PDF à ses premières pages (un aperçu).
+    @MainActor
+    static func document(at address: URL, timeout: TimeInterval = 30, pages: Int? = nil) async -> (body: String, isPDF: Bool)? {
         let url = SiteLinks.normalize(address)
         let session = await authenticatedSession(for: url)
-        guard let (data, response) = try? await session.data(from: url) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+        guard let (data, response) = try? await session.data(for: request) else { return nil }
         if isPDF(response) || data.starts(with: Data("%PDF".utf8)) {
-            return PDFDocument(data: data)?.string
+            guard let pdf = PDFDocument(data: data) else { return nil }
+            let count = min(pdf.pageCount, pages ?? pdf.pageCount)
+            let body = (0..<count).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n")
+            return body.isEmpty ? nil : (body, true)
         }
-        let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
+        guard let body = Self.plainText(fromHTML: String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? "") else { return nil }
+        return (body, false)
+    }
+
+    /// Le texte lisible d'une page HTML, une ligne par bloc.
+    static func plainText(fromHTML html: String) -> String? {
         var text = html.replacingOccurrences(of: #"(?is)<(script|style)[^>]*>.*?</\1>"#, with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: #"(?i)<br\s*/?>|</(p|div|tr|li|h\d)>"#, with: "\n", options: .regularExpression)
         text = text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)

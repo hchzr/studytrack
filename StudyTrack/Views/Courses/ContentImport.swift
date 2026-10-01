@@ -372,11 +372,16 @@ final class MoodleImportModel {
             }
             var draft = outcome.draft
             var label = "Moodle · \(ref.shortname)"
+            var site: URL?
             let moocNote: String? = outcome.notes.isEmpty ? nil : outcome.notes.joined(separator: " · ")
-            // Un cours vide sur Moodle vit peut-être ailleurs : la classe
-            // inversée d'Analyse I est tout entière sur Botafogo.
-            if draft.theoryCount + draft.seriesCount == 0,
-               let site = BotafogoCatalog.site(code: ref.shortname, name: "\(ref.fullname) \(course.name)") {
+            // Un cours vide sur Moodle vit peut-être ailleurs : un site
+            // Botafogo cité par le cours, ou celui dont le titre lui correspond.
+            if draft.theoryCount + draft.seriesCount == 0 {
+                let catalog = (try? await BotafogoClient.catalog()) ?? []
+                site = BotafogoCatalog.site(in: snapshot)
+                    ?? BotafogoCatalog.match(courseName: "\(ref.shortname) \(ref.fullname) \(course.name)", in: catalog)
+            }
+            if let site {
                 status[course.id] = "vide sur Moodle — lecture de Botafogo…"
                 if let botafogo = try? await BotafogoClient.draft(at: site, termStart: termStart, totalWeeks: weeks),
                    !botafogo.isEmpty {

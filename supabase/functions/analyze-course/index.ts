@@ -7,10 +7,13 @@
 // activité : nature (théorie, série, corrigé, échéance, document), semaine,
 // numéro de série. Aucune donnée personnelle : uniquement le plan du cours.
 //
-// Même fournisseur et mêmes secrets que `extract-series` :
+// Le modèle lit tout ce que le cours montre (sections et consignes, cible et
+// début de texte de chaque lien, plan du cours, MOOC) et dit, pour n'importe
+// quel cours, où sont les énoncés et ce qu'il faut faire chaque semaine.
+// DeepSeek d'abord (contexte long, bon en lecture de plans), Groq en repli :
 //   supabase functions deploy analyze-course --project-ref aaigscutkuefhqftfszv
-//   LLM_API_KEY (Groq par défaut), LLM_BASE_URL / LLM_MODEL (facultatifs, ensemble),
-//   OPENROUTER_API_KEY / OPENROUTER_MODEL (repli facultatif).
+//   OPENROUTER_API_KEY, ANALYZE_MODEL (facultatif, « deepseek/deepseek-v4-pro » par défaut),
+//   LLM_API_KEY (Groq), LLM_BASE_URL / LLM_MODEL (facultatifs, ensemble).
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -26,11 +29,11 @@ Réponds UNIQUEMENT par un objet JSON : {"activities":[{"id":"123","kind":"theor
 Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée (« MOOC 1 : vidéos Module 2 » en semaine 3 → le chapitre « Module 2 » du MOOC 1, semaine 3). Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, et rien d'« optionnel ». La semaine est le numéro que le PLAN donne à la ligne (souvent en tête de ligne, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste du MOOC. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 de la liste (préambules et quiz sont hors numérotation).`;
 
 /** Un plan de cours dépasse rarement 12 000 caractères ; au-delà, on tronque. */
-const MAX_OUTLINE = 14000;
+const MAX_OUTLINE = 60000;
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string };
+  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; instructions?: string };
   try {
     body = await request.json();
   } catch {
@@ -39,25 +42,28 @@ Deno.serve(async (request) => {
   const outline = (body.outline ?? "").slice(0, MAX_OUTLINE);
   if (!outline.trim()) return json({ error: "plan vide" }, 400);
   let user = `Cours : ${body.course ?? "?"}\nNombre de semaines : ${body.weeks ?? 14}\n\nActivités Moodle :\n${outline}`;
-  if (body.plan) user += `\n\nPLAN DU COURS (texte) :\n${body.plan.slice(0, 9000)}`;
-  if (body.mooc) user += `\n\nMOOC (chapitres) :\n${body.mooc.slice(0, 5000)}`;
-  const messages = [{ role: "system", content: INSTRUCTIONS }, { role: "user", content: user }];
+  if (body.plan) user += `\n\nPLAN DU COURS (texte) :\n${body.plan.slice(0, 16000)}`;
+  if (body.mooc) user += `\n\nMOOC (chapitres) :\n${body.mooc.slice(0, 16000)}`;
+  // La consigne vient de l'app (une seule source, testée avec elle) ; celle
+  // d'ici sert aux versions qui ne l'envoient pas encore.
+  const system = body.instructions && body.instructions.length < 8000 ? body.instructions : INSTRUCTIONS;
+  const messages = [{ role: "system", content: system }, { role: "user", content: user }];
 
   const candidates: Array<{ baseURL: string; apiKey: string; model: string }> = [];
-  const key = Deno.env.get("LLM_API_KEY");
-  if (key) {
-    candidates.push({
-      baseURL: Deno.env.get("LLM_BASE_URL") ?? "https://api.groq.com/openai/v1",
-      apiKey: key,
-      model: Deno.env.get("LLM_MODEL") ?? "openai/gpt-oss-20b",
-    });
-  }
   const openRouter = Deno.env.get("OPENROUTER_API_KEY");
   if (openRouter) {
     candidates.push({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: openRouter,
-      model: Deno.env.get("OPENROUTER_MODEL") ?? "deepseek/deepseek-v4.1-flash",
+      model: Deno.env.get("ANALYZE_MODEL") ?? "deepseek/deepseek-v4-pro",
+    });
+  }
+  const key = Deno.env.get("LLM_API_KEY");
+  if (key) {
+    candidates.push({
+      baseURL: Deno.env.get("LLM_BASE_URL") ?? "https://api.groq.com/openai/v1",
+      apiKey: key,
+      model: Deno.env.get("LLM_MODEL") ?? "openai/gpt-oss-120b",
     });
   }
   if (!candidates.length) return json({ error: "aucune clé de modèle configurée" }, 503);
@@ -70,7 +76,13 @@ Deno.serve(async (request) => {
       if (start < 0 || end <= start) throw new Error("réponse sans JSON");
       const parsed = JSON.parse(content.slice(start, end + 1));
       if (!Array.isArray(parsed.activities)) throw new Error("champ « activities » absent");
-      return json({ activities: parsed.activities, mooc: Array.isArray(parsed.mooc) ? parsed.mooc : [], model: candidate.model });
+      return json({
+        activities: parsed.activities,
+        mooc: Array.isArray(parsed.mooc) ? parsed.mooc : [],
+        series: Array.isArray(parsed.series) ? parsed.series : [],
+        weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],
+        model: candidate.model,
+      });
     } catch (error) {
       errors.push(`${candidate.model} : ${(error as Error).message}`);
     }
@@ -85,7 +97,7 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
     temperature: 0,
     messages,
     response_format: { type: "json_object" },
-    max_completion_tokens: 6000,
+    max_completion_tokens: 16000,
   };
   if (candidate.model.includes("gpt-oss")) payload.reasoning_effort = "low";
   if (candidate.baseURL.includes("openrouter.ai")) payload.reasoning = { enabled: false };
@@ -93,7 +105,7 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${candidate.apiKey}` },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(40_000),
+    signal: AbortSignal.timeout(110_000),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`HTTP ${response.status} ${text.slice(0, 160)}`);

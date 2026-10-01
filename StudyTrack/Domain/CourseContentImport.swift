@@ -201,6 +201,9 @@ struct ContentDraft: Equatable {
     var courseTitle: String
     var url: String
     var sections: [ContentDraftSection]
+    /// Ce qu'il faut faire chaque semaine, en une phrase (« Regarder le
+    /// chapitre 3 du MOOC, lire les transparents, faire la série 3 »).
+    var weekGuide: [Int: String] = [:]
 
     var includedSections: [ContentDraftSection] { sections.filter(\.isIncluded) }
     var theoryCount: Int { includedSections.reduce(0) { $0 + $1.theoryCount } }

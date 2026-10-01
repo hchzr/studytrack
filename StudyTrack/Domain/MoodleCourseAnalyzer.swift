@@ -17,6 +17,12 @@ struct MoodleActivity: Equatable {
     /// Le corrigé posé à côté de l'énoncé, dans la même page ou le même dossier.
     var solutionTarget: String? = nil
     var isVisible = true
+    /// Ce que la cible est vraiment, vu en l'ouvrant : `pdf`, `page`, `video`,
+    /// `mooc`, `dossier`, `moodle`… `nil` tant que personne n'a regardé.
+    var destination: String? = nil
+    /// Le début de son texte (titre, premières lignes) : ce qu'un·e étudiant·e
+    /// verrait en l'ouvrant, pour comprendre ce qu'il faut en faire.
+    var preview: String? = nil
 
     /// L'adresse à ouvrir : la cible réelle quand on la connaît.
     var link: String { (target?.isEmpty == false ? target : nil) ?? url }
@@ -50,6 +56,12 @@ struct MoodleSection: Equatable {
     var number: Int
     var title: String
     var activities: [MoodleActivity]
+    /// Le texte de la section (résumé, étiquettes) : souvent la consigne de la
+    /// semaine (« regardez les vidéos du module 3, faites la série 3 »).
+    var text: String = ""
+    /// Les liens de ce texte : une série, une vidéo, un chapitre de MOOC
+    /// cités dans une étiquette plutôt que posés comme activités.
+    var links: [ContentLink] = []
 }
 
 struct MoodleCourseSnapshot: Equatable {
@@ -141,12 +153,15 @@ enum MoodleCourseAnalyzer {
         // nature, et sa semaine — l'activité rejoint alors cette semaine.
         let snapshot = relocate(original, hints: hints, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
         func classify(_ activity: MoodleActivity, inWeek: Bool) -> ActivityKind {
-            let kind = hints[activity.id]?.kind ?? Self.classify(activity, inWeek: inWeek)
-            // Un lien vers le MOOC (Courseware) n'est jamais une série du cours :
-            // les « Exercices » d'un module de MOOC ne sont pas à faire, et un tel
-            // lien prenait la place de l'énoncé proginsc de la série 4 de CS-107.
-            // Le MOOC est rangé à part (`MoocMerger`).
-            if [.series, .solution].contains(kind), activity.link.contains("courseware.epfl.ch") { return .document }
+            // Le modèle, qui a lu la cible et les consignes, tranche.
+            if let kind = hints[activity.id]?.kind { return kind }
+            let kind = Self.classify(activity, inWeek: inWeek)
+            // Sans lui, un lien vers un MOOC n'est pas une série du cours : ses
+            // exercices ne sont à faire que si le cours le demande, ce que les
+            // règles ne savent pas lire. Le MOOC est rangé à part (`MoocMerger`).
+            if [.series, .solution].contains(kind), activity.destination == "mooc" || MoocReference.courseKey(in: activity.link) != nil {
+                return .document
+            }
             return kind
         }
         var sections: [ContentDraftSection] = []
@@ -294,6 +309,68 @@ enum MoodleCourseAnalyzer {
         }
 
         return ContentDraft(source: .moodle, courseTitle: snapshot.title, url: snapshot.url, sections: sections)
+    }
+
+    // MARK: Ce que le modèle a compris
+
+    /// Applique au brouillon ce que le modèle a compris du cours entier : où
+    /// est l'énoncé de chaque série (une page de corrigé qui le contient, un
+    /// lien cité dans une consigne…), sa semaine, et la consigne de chaque
+    /// semaine. Seules les références reçues sont acceptées : une réponse qui
+    /// désigne un lien inconnu est ignorée.
+    static func apply(_ answer: MoodleCourseAI.Answer, to original: ContentDraft,
+                      snapshot: MoodleCourseSnapshot, totalWeeks: Int) -> ContentDraft {
+        var draft = original
+        let refs = MoodleCourseAI.references(in: snapshot)
+        let weeks = 1...max(totalWeeks, 1)
+        draft.weekGuide = answer.guide.filter { weeks.contains($0.key) }
+
+        for plan in answer.series {
+            let statement = plan.statement.flatMap { refs[$0] }?.url
+            let solution = plan.solution.flatMap { ref in refs[ref].map { $0.solution ?? $0.url } }
+                ?? plan.statement.flatMap { refs[$0]?.solution }
+            let week = plan.week.flatMap { weeks.contains($0) ? $0 : nil }
+            var item: ContentDraftItem
+            var from: (section: Int, item: Int)?
+            for (s, section) in draft.sections.enumerated() {
+                if let i = section.items.firstIndex(where: { $0.kind == .series && $0.seriesNumber == plan.number }) {
+                    from = (s, i)
+                    break
+                }
+            }
+            if let from {
+                item = draft.sections[from.section].items[from.item]
+            } else {
+                // Une série que les activités ne montraient pas (citée dans une
+                // consigne, posée sous un autre nom) : créée si son énoncé est connu.
+                guard let statement else { continue }
+                item = ContentDraftItem(kind: .series, number: String(plan.number), title: "Série \(plan.number)",
+                                        url: statement, videoCount: 0, seriesNumber: plan.number, theoryKind: .reading)
+            }
+            if let statement, statement != item.url, statement != item.pdfURL {
+                item.url = statement
+                item.pdfURL = MoodleLinks.isDocument(statement) || URL(string: statement)?.pathExtension.lowercased() == "pdf" ? statement : ""
+                if !item.links.contains(where: { $0.url == statement }) {
+                    item.links.insert(ContentLink(title: "Énoncé", url: statement, kind: .pdf), at: 0)
+                }
+            }
+            if let solution, !solution.isEmpty { item.solutionURL = solution }
+            let target = week ?? from.map { draft.sections[$0.section].items[$0.item].week ?? draft.sections[$0.section].week } ?? 0
+            if let from { draft.sections[from.section].items.remove(at: from.item) }
+            item.week = nil
+            if let index = draft.sections.firstIndex(where: { $0.week == target && !$0.title.hasPrefix("Échéances") && !$0.title.hasPrefix("Documents") && !$0.title.hasPrefix("Anciens") }) {
+                draft.sections[index].items.append(item)
+            } else {
+                draft.sections.append(ContentDraftSection(title: target > 0 ? "Semaine \(target)" : "Séries", week: target,
+                                                          weekIsInferred: false, isIncluded: true, items: [item]))
+            }
+        }
+        draft.sections.removeAll { $0.items.isEmpty }
+        draft.sections.sort { lhs, rhs in
+            if lhs.week == 0 || rhs.week == 0 { return lhs.week != 0 && rhs.week == 0 }
+            return lhs.week < rhs.week
+        }
+        return draft
     }
 
     // MARK: Rôle d'une section

@@ -73,6 +73,22 @@ final class Course {
         set { contentSourcesRaw = newValue.joined(separator: "\n") }
     }
 
+    /// Ce qu'il faut faire chaque semaine, compris en lisant tout le cours
+    /// (JSON `{"3": "Regarder…"}`) : la consigne en une phrase.
+    var weekGuideRaw: String = ""
+
+    var weekGuide: [Int: String] {
+        get {
+            guard let data = weekGuideRaw.data(using: .utf8),
+                  let raw = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+            return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in Int(key).map { ($0, value) } })
+        }
+        set {
+            let raw = Dictionary(uniqueKeysWithValues: newValue.map { (String($0.key), $0.value) })
+            weekGuideRaw = (try? JSONEncoder().encode(raw)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        }
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \TheoryItem.course)
     var theoryItems: [TheoryItem] = []
 

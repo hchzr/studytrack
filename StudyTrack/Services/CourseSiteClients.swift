@@ -192,16 +192,16 @@ final class MoodleClient {
         // quel que soit son module : une série publiée en page, en dossier ou en
         // fichier s'ouvrait sur la page Moodle qui porte le lien du PDF (AICC),
         // et l'app ne pouvait ni l'afficher ni en lire les exercices.
+        // **Chaque** lien, fichier, page et dossier est ouvert : ce qu'il y a
+        // derrière (un PDF d'exercices, une page qui les contient, un chapitre
+        // de MOOC) dit ce qu'il faut en faire mieux que son nom. Les règles et
+        // le modèle le lisent pour tous les cours, connus ou non.
         let wanted = snapshot.sections.flatMap(\.activities)
-            .filter { activity in
-                guard activity.isVisible else { return false }
-                if activity.module == "url" || activity.module == "assign" { return true }
-                guard ["resource", "page", "folder"].contains(activity.module) else { return false }
-                let kind = MoodleCourseAnalyzer.classify(activity, inWeek: true)
-                return kind == .series || kind == .solution
-            }
+            .filter { $0.isVisible && ["url", "assign", "resource", "page", "folder"].contains($0.module) }
+            .prefix(160)
             .map { ["id": $0.id, "module": $0.module] }
         snapshot.moocLinks = await moocLinks(courseID: course.id, snapshot: snapshot)
+        await addSectionTexts(courseID: course.id, to: &snapshot)
         guard !wanted.isEmpty else { return snapshot }
         let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: wanted), as: UTF8.self)
         let raw = try await session.run(#"""
@@ -215,9 +215,9 @@ final class MoodleClient {
             // sans la redirection qu'un `fetch` ne peut pas suivre hors de Moodle.
             const force = (item.module === 'url' || item.module === 'resource') ? '&forceview=1' : '';
             const r = await fetch('/mod/' + item.module + '/view.php?id=' + item.id + force, { credentials: 'include' });
-            if (item.module === 'resource' && /\/pluginfile\.php\//.test(r.url)) { out[item.id] = { target: r.url }; return; }
             const type = r.headers.get('content-type') || '';
-            if (!type.includes('html')) { out[item.id] = { target: r.redirected ? r.url : '' }; return; }
+            if (item.module === 'resource' && /\/pluginfile\.php\//.test(r.url)) { out[item.id] = { target: r.url, kind: type.includes('pdf') ? 'pdf' : 'fichier' }; return; }
+            if (!type.includes('html')) { out[item.id] = { target: r.redirected ? r.url : '', kind: type.includes('pdf') ? 'pdf' : 'fichier' }; return; }
             const html = await r.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
             if (item.module === 'assign') {
@@ -234,8 +234,11 @@ final class MoodleClient {
             const docs = links.filter(l => isDocument(l.href));
             const statement = docs.find(l => !isSolution(l.a));
             const solution = docs.find(l => isSolution(l.a));
+            const text = (main.querySelector('.box.generalbox, .no-overflow, [role="main"]') || main).innerText || '';
+            const preview = text.replace(/\s+/g, ' ').trim().slice(0, 500);
             if (statement || solution) {
-              out[item.id] = { target: (statement || solution).href, solution: statement && solution ? solution.href : '' };
+              out[item.id] = { target: (statement || solution).href, solution: statement && solution ? solution.href : '',
+                               kind: item.module === 'folder' ? 'dossier' : 'pdf', preview: item.module === 'page' ? preview : '' };
               return;
             }
             if (item.module === 'url') {
@@ -243,13 +246,13 @@ final class MoodleClient {
               out[item.id] = { target: external ? external.href : '' };
               return;
             }
-            out[item.id] = {};
+            out[item.id] = { kind: item.module === 'folder' ? 'dossier' : 'page moodle', preview };
           } catch (e) { out[item.id] = {}; }
         };
         for (let i = 0; i < items.length; i += 6) { await Promise.all(items.slice(i, i + 6).map(one)); }
         return JSON.stringify(out);
         """#, arguments: ["list": argsJSON])
-        struct Found: Decodable { var target: String?; var solution: String?; var dates: String? }
+        struct Found: Decodable { var target: String?; var solution: String?; var dates: String?; var kind: String?; var preview: String? }
         let found = (try? JSONDecoder().decode([String: Found].self, from: Data(raw.utf8))) ?? [:]
         for s in snapshot.sections.indices {
             for a in snapshot.sections[s].activities.indices {
@@ -260,9 +263,50 @@ final class MoodleClient {
                 if let dates = info.dates, let due = MoodleCourseAnalyzer.dueDate(fromActivityDates: dates) {
                     snapshot.sections[s].activities[a].dueDate = due
                 }
+                if let kind = info.kind, !kind.isEmpty { snapshot.sections[s].activities[a].destination = kind }
+                if let preview = info.preview, !preview.isEmpty { snapshot.sections[s].activities[a].preview = preview }
             }
         }
+        await CourseEvidence.peekTargets(in: &snapshot)
         return snapshot
+    }
+
+    /// Le texte de chaque section (résumé, étiquettes) et ses liens, lus sur
+    /// la page du cours : la consigne de la semaine y est souvent écrite
+    /// (« regardez les vidéos du module 2, la série est sur le site du cours »).
+    private func addSectionTexts(courseID: Int, to snapshot: inout MoodleCourseSnapshot) async {
+        let raw = (try? await session.run(#"""
+        const r = await fetch('/course/view.php?id=' + course, { credentials: 'include' });
+        const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+        const out = [];
+        doc.querySelectorAll('li.section[data-sectionnumber], li.section[data-number], [data-for="section"][data-number]').forEach(section => {
+          const n = Number(section.getAttribute('data-sectionnumber') ?? section.getAttribute('data-number'));
+          if (isNaN(n)) return;
+          const parts = [];
+          const links = [];
+          const holders = section.querySelectorAll('.summarytext, .course-description-item, .activity.modtype_label .activity-altcontent, .activity.label .contentwithoutlink, .activity.modtype_label .no-overflow');
+          holders.forEach(h => {
+            const t = (h.innerText || h.textContent || '').replace(/\s+/g, ' ').trim();
+            if (t && !parts.includes(t)) parts.push(t);
+            h.querySelectorAll('a[href^="http"]').forEach(a => {
+              const href = a.href;
+              if (/moodle\.epfl\.ch\/(user|course\/view|login)/.test(href) || links.some(l => l.url === href)) return;
+              links.push({ url: href, title: (a.innerText || a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) });
+            });
+          });
+          out.push({ number: n, text: parts.join(' · ').slice(0, 2000), links: links.slice(0, 25) });
+        });
+        return JSON.stringify(out);
+        """#, arguments: ["course": String(courseID)])) ?? "[]"
+        struct Row: Decodable { var number: Int; var text: String; var links: [Link]; struct Link: Decodable { var url: String; var title: String } }
+        let rows = (try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? []
+        for row in rows {
+            guard let index = snapshot.sections.firstIndex(where: { $0.number == row.number }) else { continue }
+            snapshot.sections[index].text = row.text
+            snapshot.sections[index].links = row.links.map { link in
+                ContentLink(title: link.title, url: link.url, kind: CourseEvidence.linkKind(link.url))
+            }
+        }
     }
 
     /// Les liens Courseware du cours : ceux de la page du cours (texte des
@@ -703,20 +747,34 @@ enum MediaSpaceSupplement {
 
 /// Le plan (ou calendrier) d'un cours, quand Moodle en cite un : le texte où
 /// l'enseignant·e dit, semaine par semaine, quoi regarder et quoi faire.
-/// CS-107 : « MOOC 1 : vidéos Module 2 » en semaine 3, sur proginsc.
+///
+/// Reconnu à son nom (« plan du cours », « syllabus », « schedule »…) **ou à
+/// son contenu** : un document qui parle de nombreuses semaines (« Semaine 3 »,
+/// « Week 5 », des dates) est un calendrier, quel que soit son nom.
 @MainActor
 enum CoursePlanReader {
     static func text(for snapshot: MoodleCourseSnapshot) async -> String? {
         let activities = snapshot.sections.flatMap(\.activities).filter(\.isVisible)
-        let candidates = activities.filter { activity in
+        func score(_ activity: MoodleActivity) -> Int {
             let name = ContentDraftBuilder.fold(activity.name)
-            return name.range(of: #"\b(plan du cours|planning|calendrier|programme|syllabus|schedule|course plan|deroulement|planification)\b"#,
-                              options: .regularExpression) != nil
+            var score = 0
+            if name.range(of: #"\b(plan du cours|planning|calendrier|programme|syllabus|schedule|course plan|deroulement|planification|outline|timetable|semesterplan|kursplan)\b"#,
+                          options: .regularExpression) != nil { score += 10 }
+            let preview = ContentDraftBuilder.fold(activity.preview ?? "")
+            score += min(preview.components(separatedBy: .whitespaces).filter { $0 == "semaine" || $0 == "week" || $0 == "woche" }.count, 6)
+            score += min(preview.matches(of: /\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/).count, 4)
+            return score
         }
-        for activity in candidates.prefix(2) {
-            guard let url = URL(string: activity.link), url.scheme?.hasPrefix("http") == true else { continue }
+        let candidates = activities.map { ($0, score($0)) }.filter { $0.1 >= 3 }.sorted { $0.1 > $1.1 }.map(\.0)
+        for activity in candidates.prefix(3) {
+            guard let url = URL(string: activity.link), url.scheme?.hasPrefix("http") == true,
+                  MoocReference.courseKey(in: activity.link) == nil else { continue }
             if let text = await AuthenticatedDownloader.text(at: url), text.count > 200 {
-                return String(text.prefix(12_000))
+                let folded = ContentDraftBuilder.fold(text)
+                // Un vrai calendrier cite plusieurs semaines.
+                let weeks = folded.matches(of: /\b(semaine|week|woche|sem\.)\s*\d{1,2}\b/).count
+                    + folded.matches(of: /(?m)^\s*\d{1,2}\s+\d{1,2}[.\/]\d{1,2}/).count
+                if weeks >= 3 || score(activity) >= 10 { return String(text.prefix(12_000)) }
             }
         }
         return nil
@@ -839,12 +897,17 @@ enum CourseImportPipeline {
                                                          plan: plan, moocs: moocs.map(\.course), settings: settings)
         }
         var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: totalWeeks, hints: answer.hints)
+        // Ce que le modèle a compris du cours entier : où sont les énoncés,
+        // et la consigne de chaque semaine.
+        draft = MoodleCourseAnalyzer.apply(answer, to: draft, snapshot: snapshot, totalWeeks: totalWeeks)
         if !moocs.isEmpty {
             // Le plan lu ligne par ligne l'emporte ; le modèle complète ce qu'il
             // n'a pas trouvé (un plan d'une autre forme).
             let parsed = plan.map { CoursePlanParser.chapterWeeks(CoursePlanParser.moocAssignments(in: $0, totalWeeks: totalWeeks),
                                                                   moocs: moocs.map(\.course)) } ?? [:]
-            let plannedWeeks = parsed.isEmpty ? answer.moocWeeks : parsed
+            // Le plan lu ligne par ligne (« 3 … MOOC 1 : vidéos Module 2 ») est
+            // une lecture littérale : il départage le modèle là où ils diffèrent.
+            let plannedWeeks = answer.moocWeeks.merging(parsed) { _, literal in literal }
             if !parsed.isEmpty {
                 AppLog.record(.info, "import", "Plan du cours lu", detail: "\(parsed.count) chapitres de MOOC rangés d'après le plan")
             }

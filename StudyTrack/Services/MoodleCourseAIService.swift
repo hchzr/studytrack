@@ -28,7 +28,7 @@ enum MoodleCourseAIService {
         let outline = payload["outline"] as? String ?? ""
         guard !outline.isEmpty else { return .init() }
         let fingerprint = outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "")
-        let key = "moodleAI2." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
+        let key = "moodleAI3." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
         if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.answer(cached) }
 
         var raw: String?
@@ -43,7 +43,7 @@ enum MoodleCourseAIService {
         if !answer.hints.isEmpty {
             UserDefaults.standard.set(raw, forKey: key)
             AppLog.record(.info, "import", "Cours rangé avec l'IA",
-                          detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.moocWeeks.count) chapitres de MOOC")
+                          detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.series.count) séries, \(answer.moocWeeks.count) chapitres de MOOC, \(answer.guide.count) semaines expliquées")
         }
         return answer
     }
@@ -55,7 +55,7 @@ enum MoodleCourseAIService {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 150
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")

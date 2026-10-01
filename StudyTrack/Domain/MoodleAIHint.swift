@@ -18,43 +18,96 @@ struct MoodleAIHint: Equatable {
 enum MoodleCourseAI {
 
     /// La consigne, partagée par la fonction serveur et le modèle embarqué.
+    ///
+    /// Le modèle lit **tout ce que le cours montre** — sections et leurs
+    /// consignes, activités et ce qu'il y a derrière chaque lien, plan du cours,
+    /// MOOC — et dit ce qu'il faut regarder et faire chaque semaine, et où sont
+    /// les exercices. Rien n'est propre à un cours : un cours jamais vu se lit
+    /// de la même façon. Ses réponses ne désignent que des éléments reçus
+    /// (identifiants, références de liens), vérifiés à l'arrivée.
     static let instructions = """
-    Tu ranges les activités d'un cours Moodle de l'EPFL pour une app de suivi d'études.
-    Réponds UNIQUEMENT par un objet JSON : {"activities":[{"id":"123","kind":"theory","week":3,"series":null}]}
-    - kind : "theory" (cours, vidéo, enregistrement, transparents, notes, polycopié, chapitre à lire), "series" (énoncé d'une série / feuille / TP d'exercices), "solution" (corrigé), "deadline" (rendu noté, devoir, projet, quiz noté), "document" (organisation, formulaire, ressource générale, ancien examen), "ignore" (forum, annonce, sondage, lien sans contenu).
-    - week : la semaine du semestre (1 à N) où l'activité se travaille, d'après la section (« Semaine 3 », une plage de dates), un numéro (« Lecture 7 » quand il y a deux cours par semaine → semaine 4), ou une date. null si inconnue.
-    - series : le numéro de la série d'exercices quand kind vaut "series" ou "solution", sinon null.
-    - Une entrée par activité reçue, avec son id exact. N'invente aucune activité.
-    Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée. Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, rien d'optionnel. La semaine est le numéro que le plan donne à la ligne (souvent en tête, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 de la liste (préambules et quiz sont hors numérotation).
+    Tu lis un cours de l'EPFL comme un·e étudiant·e attentif·ve, pour une app de suivi d'études. Tu reçois les sections Moodle (titre, semaine si connue, texte et consignes, liens cités « Lnn »), chaque activité (id, type Moodle, nom, où mène le lien, ce qu'est la cible et le début de son texte), et parfois le PLAN DU COURS et les MOOC cités (chapitres numérotés). Le cours peut avoir n'importe quelle forme : comprends-le d'après son contenu, pas d'après des habitudes.
+    Réponds UNIQUEMENT par un objet JSON :
+    {"activities":[{"id":"123","kind":"theory","week":3,"series":null}],"series":[{"number":3,"week":3,"statement":"a123","solution":"a124"}],"mooc":[{"id":"<id du chapitre>","week":3}],"weeks":[{"week":3,"todo":"…"}]}
+    - activities : une entrée par activité reçue, avec son id exact. kind : "theory" (cours, enregistrement, transparents, notes, polycopié, chapitre à lire), "series" (énoncé d'exercices à faire), "solution" (corrigé), "deadline" (rendu noté, devoir, projet, quiz noté), "document" (organisation, formulaire, ressource générale, ancien examen, matériel facultatif), "ignore" (forum, annonce, sondage, lien sans contenu). week : la semaine du semestre (1 à N) où l'activité se travaille — d'après la section, une date, un numéro (« Lecture 7 » avec deux cours par semaine → semaine 4) ou une consigne ; null si inconnue. series : son numéro de série pour "series" et "solution", sinon null.
+    - series : chaque série d'exercices du cours, une entrée par numéro. statement : la référence (« a » + id d'activité, ou « Lnn » pour un lien du texte d'une section) qui mène à l'ÉNONCÉ LUI-MÊME, la page ou le PDF où sont les exercices. Choisis d'après ce que contient la cible (son début de texte), pas seulement d'après le nom : un lien « série 4 » qui mène à un chapitre de MOOC sans ces exercices n'est pas l'énoncé ; une page « énoncé/corrigé » ou « corrigé » qui contient aussi les énoncés peut l'être. solution : le corrigé s'il est à une autre adresse, sinon null. week : la semaine où la série se fait.
+    - Les exercices et quiz d'un MOOC ne sont des séries que si le cours (consignes, plan) demande de les faire.
+    - mooc : si un MOOC est fourni, les chapitres dont le cours demande de regarder les vidéos, avec la semaine — d'après le plan, les consignes des sections ou les liens de chaque semaine. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 (préambules hors numérotation). La semaine est celle de la ligne du plan ou de la section : ne la décale jamais. Uniquement des id de la liste ; rien d'optionnel.
+    - weeks : pour chaque semaine où il y a du travail, la consigne en une phrase courte (160 caractères au plus), concrète, à l'infinitif : quoi regarder (enregistrement, chapitres du MOOC et leurs numéros), quoi lire, quelle série faire, ce qui est à rendre. Uniquement d'après ce que tu as reçu.
+    - N'invente aucun id ni aucune référence.
     """
 
-    /// Ce que le modèle répond : une étiquette par activité, et la semaine
-    /// des chapitres du MOOC que le plan du cours demande de regarder.
+    /// Une série comprise par le modèle : son numéro, sa semaine, et les
+    /// références (« a123 », « L4 ») de son énoncé et de son corrigé.
+    struct SeriesPlan: Equatable {
+        var number: Int
+        var week: Int?
+        var statement: String?
+        var solution: String?
+    }
+
+    /// Ce que le modèle répond : une étiquette par activité, les séries et
+    /// où sont leurs énoncés, la semaine des chapitres du MOOC à regarder, et
+    /// la consigne de chaque semaine.
     struct Answer: Equatable {
         var hints: [String: MoodleAIHint] = [:]
         var moocWeeks: [String: Int] = [:]
+        var series: [SeriesPlan] = []
+        var guide: [Int: String] = [:]
     }
 
-    /// Le plan du cours, compact : ce que le modèle lit.
+    /// Les références de liens données au modèle : « a<id> » pour une
+    /// activité, « L<n> » pour un lien du texte d'une section, dans l'ordre.
+    static func references(in snapshot: MoodleCourseSnapshot) -> [String: (url: String, solution: String?)] {
+        var result: [String: (url: String, solution: String?)] = [:]
+        var counter = 0
+        for section in snapshot.sections {
+            for activity in section.activities where activity.isVisible {
+                result["a" + activity.id] = (activity.link, activity.solutionTarget)
+            }
+            for link in section.links {
+                counter += 1
+                result["L\(counter)"] = (link.url, nil)
+            }
+        }
+        return result
+    }
+
+    /// Le cours, compact : ce que le modèle lit.
     static func payload(for snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
                         plan: String? = nil, moocs: [ScrapedCourse] = [],
                         calendar: Calendar = .current) -> [String: Any] {
         var lines: [String] = []
+        var counter = 0
         for section in snapshot.sections {
             let week = MoodleCourseAnalyzer.week(of: section, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
             lines.append("## Section \(section.number) : \(MoodleCourseAnalyzer.sectionTitle(section))" + (week.map { " [semaine \($0)]" } ?? ""))
+            let text = compact(section.text, limit: 700)
+            if !text.isEmpty { lines.append("Texte : « \(text) »") }
+            for link in section.links {
+                counter += 1
+                lines.append("Lien L\(counter) : \(link.title.isEmpty ? "(sans titre)" : link.title) → \(shortURL(link.url))")
+            }
             for activity in section.activities where activity.isVisible {
-                let host = URL(string: activity.link)?.host.map { " → \($0)" } ?? ""
-                lines.append("- id=\(activity.id) [\(activity.module)] \(activity.name)\(host)")
+                var line = "- id=\(activity.id) [\(activity.module)] \(activity.name)"
+                if let target = URL(string: activity.link), target.host != nil, !activity.link.contains("/mod/\(activity.module)/view.php") {
+                    line += " → \(shortURL(activity.link))"
+                } else if let host = URL(string: activity.link)?.host {
+                    line += " → \(host)"
+                }
+                if let solution = activity.solutionTarget, !solution.isEmpty { line += " (corrigé à côté : \(shortURL(solution)))" }
+                if let destination = activity.destination { line += " {\(destination)}" }
+                if let preview = activity.preview.map({ compact($0, limit: 260) }), !preview.isEmpty { line += " « \(preview) »" }
+                lines.append(line)
             }
         }
-        var payload: [String: Any] = ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n")]
-        if let plan, !plan.isEmpty { payload["plan"] = String(plan.prefix(9000)) }
+        var payload: [String: Any] = ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n"),
+                                      "instructions": instructions]
+        if let plan, !plan.isEmpty { payload["plan"] = String(plan.prefix(12_000)) }
         if !moocs.isEmpty {
             payload["mooc"] = moocs.enumerated().flatMap { index, mooc in
                 // Les chapitres numérotés comme les « Module N » des plans de cours
-                // (préambule, bienvenue et quiz hors numérotation) : sans ce
-                // numéro, le modèle décalait le second MOOC de CS-107 d'un module.
+                // (préambule, bienvenue et quiz hors numérotation).
                 var module = 0
                 return ["# MOOC \(index + 1) : \(mooc.title)"] + mooc.sections.compactMap { chapter -> String? in
                     guard let id = chapter.id else { return nil }
@@ -66,22 +119,58 @@ enum MoodleCourseAI {
                         module += 1
                         label = "module \(module) — \(chapter.title)"
                     }
-                    return "- id=\(id) : \(label) (\(chapter.items.count) leçons, \(videos) vidéos)"
+                    let lessons = chapter.items.prefix(14).map(\.title).joined(separator: " ; ")
+                    return "- id=\(id) : \(label) (\(chapter.items.count) leçons, \(videos) vidéos : \(lessons))"
                 }
             }.joined(separator: "\n")
         }
         return payload
     }
 
+    /// `proginsc.epfl.ch/wwwhiver/series/serie04/serie.html` : l'hôte et le
+    /// chemin disent souvent ce qu'est un lien.
+    static func shortURL(_ address: String) -> String {
+        guard let url = URL(string: address), let host = url.host else { return String(address.prefix(120)) }
+        let path = (url.path.removingPercentEncoding ?? url.path)
+        return String((host + path).prefix(120))
+    }
+
+    private static func compact(_ text: String, limit: Int) -> String {
+        let flat = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        return flat.count > limit ? String(flat.prefix(limit)) + "…" : flat
+    }
+
     static func answer(_ raw: String) -> Answer {
         var result = Answer(hints: parse(raw))
         guard let start = raw.firstIndex(of: "{"), let end = raw.lastIndex(of: "}"),
               let data = String(raw[start...end]).data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let mooc = json["mooc"] as? [[String: Any]] else { return result }
-        for entry in mooc {
-            guard let id = entry["id"] as? String, let week = (entry["week"] as? NSNumber)?.intValue, week > 0 else { continue }
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return result }
+        func int(_ value: Any?) -> Int? {
+            if let number = value as? NSNumber { return number.intValue }
+            if let text = value as? String { return Int(text.trimmingCharacters(in: .whitespaces)) }
+            return nil
+        }
+        func ref(_ value: Any?) -> String? {
+            let text = (value as? String) ?? (value as? NSNumber)?.stringValue
+            guard var text = text?.trimmingCharacters(in: .whitespaces), !text.isEmpty, text.lowercased() != "null" else { return nil }
+            if text.allSatisfy(\.isNumber) { text = "a" + text }
+            return text
+        }
+        for entry in json["mooc"] as? [[String: Any]] ?? [] {
+            guard let id = entry["id"] as? String, let week = int(entry["week"]), week > 0 else { continue }
             result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
+        }
+        for entry in json["series"] as? [[String: Any]] ?? [] {
+            guard let number = int(entry["number"]), number > 0,
+                  !result.series.contains(where: { $0.number == number }) else { continue }
+            result.series.append(SeriesPlan(number: number, week: int(entry["week"]).flatMap { $0 > 0 ? $0 : nil },
+                                            statement: ref(entry["statement"]), solution: ref(entry["solution"])))
+        }
+        for entry in json["weeks"] as? [[String: Any]] ?? [] {
+            guard let week = int(entry["week"]), week > 0,
+                  let todo = (entry["todo"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !todo.isEmpty else { continue }
+            result.guide[week] = String(todo.prefix(240))
         }
         return result
     }

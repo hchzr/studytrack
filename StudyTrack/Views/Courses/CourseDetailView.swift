@@ -387,6 +387,20 @@ struct CourseDetailView: View {
                                 .font(.footnote)
                                 .foregroundStyle(Carnet.inkSecondary)
                         }
+                        // La consigne de la semaine, comprise en lisant tout le cours.
+                        if let guide = course.weekGuide[week] {
+                            Label {
+                                Text(guide)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(Carnet.tint(course.colorHex))
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .padding(.top, 2)
+                            .accessibilityLabel("Cette semaine : \(guide)")
+                        }
                     }
                     .padding(.horizontal, 6)
                     // Ce qu'il faut regarder cette semaine : le cours (son

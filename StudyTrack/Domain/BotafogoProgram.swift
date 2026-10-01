@@ -569,33 +569,37 @@ enum BotafogoProgramBuilder {
 
 /// Le site Botafogo d'un cours EPFL, quand il en a un.
 ///
-/// Certains cours n'ont (presque) rien sur Moodle : la classe inversée
-/// d'Analyse I (MATH-101(pi)) vit entièrement sur Botafogo. Un cours Moodle
-/// vide n'est donc pas « rien à importer » : on va chercher son programme là
-/// où il est.
+/// Certains cours n'ont (presque) rien sur Moodle : leur programme vit sur
+/// Botafogo. Le site se trouve sans table écrite à la main : un lien Botafogo
+/// cité dans le cours, sinon le polycopié du catalogue dont le titre
+/// correspond au cours (« Mon cours d'analyse classe inversée » ↔ « Analyse I
+/// classe inversée »).
 enum BotafogoCatalog {
-    static func site(code: String, name: String) -> URL? {
-        let code = code.uppercased().replacingOccurrences(of: " ", with: "")
-        let name = ContentDraftBuilder.fold(name)
-        let path: String?
-        if code.hasPrefix("MATH-101") {
-            if code.contains("(PI)") || name.contains("inversee") || name.contains("flipped") {
-                path = "analyse-1-flipped/"
-            } else if code.contains("(C)") || name.contains("mecanique") || name.contains(" gm") {
-                path = "analyse-1-GM/"
-            } else {
-                path = "analyse-1/"
-            }
-        } else if name.contains("analyse b") {
-            path = "analyse-b/"
-        } else if name.contains("calcul scientifique") || code.hasPrefix("ICS") {
-            path = "ics/"
-        } else if name.contains("algebre lineaire et geometrie") {
-            path = "algebre-lineaire-geometrie/"
-        } else {
-            path = nil
+
+    /// Un lien Botafogo cité par le cours (activité, texte d'une section).
+    static func site(in snapshot: MoodleCourseSnapshot) -> URL? {
+        let links = snapshot.sections.flatMap { $0.activities.map(\.link) + $0.links.map(\.url) }
+        return links.lazy.compactMap(URL.init(string:)).first { $0.host?.contains("botafogo") == true }
+            .map(BotafogoParser.courseRoot(of:))
+    }
+
+    /// L'entrée du catalogue qui correspond au cours : tous ses mots
+    /// significatifs se retrouvent dans le nom du cours, et le plus possible.
+    static func match(courseName: String, in catalog: [(title: String, url: URL)]) -> URL? {
+        let stop: Set<String> = ["mon", "ma", "cours", "course", "de", "du", "d", "la", "le", "l", "les", "pour", "for",
+                                 "polycopie", "the", "my", "et", "and", "en", "a"]
+        func words(_ text: String) -> Set<String> {
+            Set(ContentDraftBuilder.fold(text).split { !$0.isLetter && !$0.isNumber }.map(String.init)
+                .filter { !stop.contains($0) && $0.count > 1 })
         }
-        return path.flatMap { URL(string: $0, relativeTo: BotafogoParser.home)?.absoluteURL }
+        let course = words(courseName)
+        var best: (url: URL, score: Int)?
+        for entry in catalog {
+            let wanted = words(entry.title)
+            guard !wanted.isEmpty, wanted.isSubset(of: course) else { continue }
+            if wanted.count > (best?.score ?? 0) { best = (entry.url, wanted.count) }
+        }
+        return best?.url
     }
 }
 
