@@ -432,6 +432,97 @@ final class CoursewareClient {
 
 /// Le MOOC qu'un cours Moodle cite, lu sur Courseware et rangé dans ses
 /// semaines (`MoocMerger`).
+// MARK: - Explique
+
+/// Explique (explique.epfl.ch), lu dans la session de l'étudiant·e : la page
+/// charge cours et exercices après connexion (Convex) ; on attend qu'elle les
+/// affiche, puis on lit ses titres « Week N » et ses liens.
+@MainActor
+final class ExpliqueClient {
+    static let home = URL(string: "https://explique.epfl.ch/")!
+
+    private let session = HiddenSiteSession()
+
+    enum Failure: Error { case notSignedIn }
+
+    func lectures(slug: String) async throws -> [ExpliqueImport.Lecture] {
+        let raw = try await read(URL(string: "https://explique.epfl.ch/\(slug)/lectures")!, script: #"""
+        return JSON.stringify(weeks.flatMap(({ h, week }) => {
+          let sec = h;
+          while (sec && !sec.querySelector('a[href*="/v/"]')) {
+            sec = sec.parentElement;
+            if (sec && [...sec.querySelectorAll('h2')].filter(x => /^Week \d+$/.test(x.textContent.trim())).length > 1) return [];
+          }
+          return sec ? [...sec.querySelectorAll('a[href*="/v/"]')].map(a => ({ week, title: a.innerText.trim().replace(/\s+/g, ' '), url: a.href })) : [];
+        }));
+        """#)
+        return (try? JSONDecoder().decode([ExpliqueImport.Lecture].self, from: Data(raw.utf8))) ?? []
+    }
+
+    func exercises(slug: String) async throws -> [ExpliqueImport.Exercise] {
+        let raw = try await read(URL(string: "https://explique.epfl.ch/\(slug)/exercises")!, script: #"""
+        return JSON.stringify(weeks.flatMap(({ h, week }) => {
+          const header = h.closest('header');
+          const sec = header ? header.parentElement : h.parentElement;
+          const due = sec.querySelector('strong');
+          const done = /completed|terminé/i.test((header || h).innerText);
+          return [...sec.querySelectorAll('a[href*="/e/"]')].map(a => ({ week, title: a.innerText.trim().replace(/\s+/g, ' '), url: a.href, due: due ? due.innerText.trim() : '', done }));
+        }));
+        """#)
+        return (try? JSONDecoder().decode([ExpliqueImport.Exercise].self, from: Data(raw.utf8))) ?? []
+    }
+
+    /// Charge la page, attend ses semaines (15 s au plus), puis exécute
+    /// `script` avec `weeks` = [{ h, week }].
+    private func read(_ url: URL, script: String) async throws -> String {
+        try await session.load(url)
+        let result = try await session.run(#"""
+        const until = Date.now() + 15000;
+        const find = () => [...document.querySelectorAll('h2')].filter(h => /^Week \d+$/.test(h.textContent.trim()));
+        while (Date.now() < until) {
+          if (location.pathname.startsWith('/login')) return '__login__';
+          if (find().length) break;
+          await new Promise(r => setTimeout(r, 400));
+        }
+        if (location.pathname.startsWith('/login')) return '__login__';
+        const weeks = find().map(h => ({ h, week: Number(h.textContent.trim().split(' ')[1]) }));
+        """# + script)
+        if result == "__login__" { throw Failure.notSignedIn }
+        return result
+    }
+}
+
+/// Explique, quand Moodle y renvoie (AICC) : ses cours en replay et ses
+/// exercices, ajoutés au brouillon dans leurs semaines.
+@MainActor
+enum ExpliqueSupplement {
+    struct Outcome {
+        var draft: ContentDraft
+        var note: String?
+        var needsLogin = false
+    }
+
+    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
+                         termStart: Date?, totalWeeks: Int) async -> Outcome {
+        let links = snapshot.sections.flatMap(\.activities).flatMap { [$0.url, $0.target ?? ""] }
+        guard let slug = ExpliqueImport.slug(in: links) else { return Outcome(draft: draft) }
+        let client = ExpliqueClient()
+        do {
+            let lectures = try await client.lectures(slug: slug)
+            let exercises = (try? await client.exercises(slug: slug)) ?? []
+            let merged = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: draft,
+                                              termStart: termStart, totalWeeks: totalWeeks)
+            let note = merged.added > 0 ? "+ Explique (\(lectures.count) vidéo\(lectures.count > 1 ? "s" : ""), \(exercises.count) exercice\(exercises.count > 1 ? "s" : ""))" : nil
+            return Outcome(draft: merged.draft, note: note)
+        } catch ExpliqueClient.Failure.notSignedIn {
+            return Outcome(draft: draft, note: "Explique cité sur Moodle — connecte-toi à Explique (Profil › Comptes) pour ses vidéos", needsLogin: true)
+        } catch {
+            AppLog.record(.warning, "import", "Explique illisible", detail: error.localizedDescription)
+            return Outcome(draft: draft, note: "Explique illisible")
+        }
+    }
+}
+
 @MainActor
 enum MoocImport {
     struct Outcome {

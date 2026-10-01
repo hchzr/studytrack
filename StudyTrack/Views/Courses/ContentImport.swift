@@ -375,6 +375,11 @@ final class MoodleImportModel {
                 draft = outcome.draft
                 moocNote = outcome.note
             }
+            // Les outils que Moodle cite : Explique (AICC), ses cours en replay
+            // et ses exercices, rangés dans les semaines.
+            let explique = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
+            draft = explique.draft
+            if let note = explique.note { moocNote = [moocNote, note].compactMap { $0 }.joined(separator: " · ") }
             // Un cours vide sur Moodle vit peut-être ailleurs : la classe
             // inversée d'Analyse I est tout entière sur Botafogo.
             if draft.theoryCount + draft.seriesCount == 0,
@@ -406,26 +411,102 @@ final class MoodleImportModel {
 // MARK: - Connexion
 
 /// La page de connexion du site, qui se **ferme seule** une fois connecté·e.
+/// Un site où l'app a besoin d'une session : où se connecter, et comment
+/// savoir que c'est fait.
+enum LoginSite: String, Identifiable {
+    case moodle, courseware, explique, mediaspace
+    var id: String { rawValue }
+
+    init(_ source: ContentSource) {
+        self = source == .moodle ? .moodle : .courseware
+    }
+
+    var label: String {
+        switch self {
+        case .moodle: return "Moodle"
+        case .courseware: return "Courseware"
+        case .explique: return "Explique"
+        case .mediaspace: return "MediaSpace"
+        }
+    }
+
+    var start: URL {
+        switch self {
+        case .moodle: return MoodleClient.login
+        case .courseware: return CoursewareClient.login
+        case .explique: return ExpliqueClient.home
+        case .mediaspace: return URL(string: "https://mediaspace.epfl.ch/user/login")!
+        }
+    }
+
+    var host: String {
+        switch self {
+        case .moodle: return "moodle.epfl.ch"
+        case .courseware: return "courseware.epfl.ch"
+        case .explique: return "explique.epfl.ch"
+        case .mediaspace: return "mediaspace.epfl.ch"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .mediaspace: return "Choisis « EPFL » puis connecte-toi avec Switch edu-ID. Cette fenêtre se ferme toute seule."
+        default: return "Connecte-toi avec ton compte EPFL. Cette fenêtre se ferme toute seule."
+        }
+    }
+
+    /// Exécuté dans la page, revenue sur le site : « true » si connecté·e.
+    var check: String {
+        switch self {
+        case .moodle:
+            return "return String(!!document.querySelector('#user-menu-toggle, .usermenu .userbutton'))"
+        case .courseware:
+            return "const r = await fetch('/api/user/v1/me', { credentials: 'include' }); return String(r.status === 200)"
+        case .explique:
+            // La page se remplit après connexion : on lui laisse quelques secondes.
+            return """
+            for (let i = 0; i < 12; i++) {
+              if (location.pathname.startsWith('/login')) return 'false';
+              if ([...document.querySelectorAll('h2')].some(h => /^Week \\d+$/.test(h.textContent.trim())) || /@epfl\\.ch/.test(document.body.innerText)) return 'true';
+              await new Promise(r => setTimeout(r, 500));
+            }
+            return 'false';
+            """
+        case .mediaspace:
+            return "return String(!!document.querySelector('a[href*=\"logout\"], [href*=\"/user/logout\"]') || /déconnexion|log ?out|sign ?out/i.test(document.body.innerText))"
+        }
+    }
+}
+
+/// La page de connexion du site, qui se **ferme seule** une fois connecté·e.
 struct SiteLoginSheet: View {
-    let source: ContentSource
+    let site: LoginSite
     var onSignedIn: () -> Void
+
+    init(source: ContentSource, onSignedIn: @escaping () -> Void) {
+        self.site = LoginSite(source)
+        self.onSignedIn = onSignedIn
+    }
+
+    init(site: LoginSite, onSignedIn: @escaping () -> Void) {
+        self.site = site
+        self.onSignedIn = onSignedIn
+    }
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var browser = BrowserModel()
     @State private var checking = false
 
-    private var start: URL { source == .moodle ? MoodleClient.login : CoursewareClient.login }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                WebView(model: browser, initialURL: start)
+                WebView(model: browser, initialURL: site.start)
                     .overlay(alignment: .top) {
                         if browser.isLoading {
                             ProgressView(value: browser.progress).progressViewStyle(.linear).tint(Theme.accent)
                         }
                     }
-                Label("Connecte-toi avec ton compte EPFL. Cette fenêtre se ferme toute seule.", systemImage: "lock.fill")
+                Label(site.hint, systemImage: "lock.fill")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(Layout.gutter)
@@ -433,11 +514,16 @@ struct SiteLoginSheet: View {
                     .background(.bar)
             }
             .carnetBackground()
-            .navigationTitle("Connexion à \(source.label)")
+            .navigationTitle("Connexion à \(site.label)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
+                }
+                // Si la page ne se ferme pas seule (un site qui change), on
+                // peut toujours finir à la main : la session est gardée.
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Terminé") { onSignedIn() }
                 }
             }
             .onChange(of: browser.isLoading) { _, loading in
@@ -449,18 +535,14 @@ struct SiteLoginSheet: View {
 
     /// Revenu·e sur le site, hors des pages de connexion : c'est gagné.
     private func check() async {
-        guard let url = browser.url, let host = url.host,
-              host.hasSuffix(source == .moodle ? "moodle.epfl.ch" : "courseware.epfl.ch"),
-              !url.path.hasPrefix("/login"), !url.path.hasPrefix("/auth") else { return }
+        guard let url = browser.url, let host = url.host, host.hasSuffix(site.host),
+              !url.path.hasPrefix("/login"), !url.path.hasPrefix("/auth"), !url.path.hasPrefix("/user/login") else { return }
         checking = true
         defer { checking = false }
-        let script = source == .moodle
-            ? "return String(!!document.querySelector('#user-menu-toggle, .usermenu .userbutton'))"
-            : "const r = await fetch('/api/user/v1/me', { credentials: 'include' }); return String(r.status === 200)"
-        let result = try? await browser.webView?.callAsyncJavaScript(script, contentWorld: .page) as? String
+        let result = try? await browser.webView?.callAsyncJavaScript(site.check, contentWorld: .page) as? String
         if result == "true" {
             Haptics.success()
-            if source == .moodle {
+            if site == .moodle {
                 ConnectionCenter.shared.report(.moodle, .connected)
                 // Ce qui avait échoué faute de session est retenté.
                 SeriesAutoReader.shared.retryAll()

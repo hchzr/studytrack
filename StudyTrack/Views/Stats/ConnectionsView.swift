@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Une connexion à faire : la feuille qui la fait.
 enum ConnectionSheet: String, Identifiable {
-    case moodle, courseware, groups, ankiweb
+    case moodle, courseware, explique, mediaspace, groups, ankiweb
     var id: String { rawValue }
 }
 
@@ -18,6 +18,10 @@ struct ConnectionSheetContent: View {
             SiteLoginSheet(source: .moodle) { dismiss() }
         case .courseware:
             SiteLoginSheet(source: .courseware) { dismiss() }
+        case .explique:
+            SiteLoginSheet(site: .explique) { dismiss() }
+        case .mediaspace:
+            SiteLoginSheet(site: .mediaspace) { dismiss() }
         case .groups:
             NavigationStack {
                 GroupsSignInView()
@@ -62,6 +66,16 @@ struct ConnectionsList: View {
                 purpose: "Vidéos des MOOC (classe inversée) — facultatif",
                 status: "Se connecter si un cours y renvoie", connected: false,
                 action: { sheet = .courseware })
+            CarnetRule()
+            row(icon: "sparkles.tv", title: "Explique",
+                purpose: "Cours en replay et exercices d'AICC (CS-101), semaine par semaine",
+                status: "Se connecter une fois, avec le compte EPFL", connected: false,
+                action: { sheet = .explique })
+            CarnetRule()
+            row(icon: "video", title: "MediaSpace",
+                purpose: "Enregistrements des cours, ouverts directement depuis la théorie",
+                status: "Se connecter une fois, avec Switch edu-ID", connected: false,
+                action: { sheet = .mediaspace })
             CarnetRule()
             row(icon: "person.2", title: "Compte StudyTrack",
                 purpose: "Groupes, entraide, progression partagée",

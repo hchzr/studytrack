@@ -52,6 +52,8 @@ enum ContentRefresher {
                         draft = await MoocImport.complete(draft, snapshot: snapshot, termStart: course.term?.startDate,
                                                           totalWeeks: course.term?.totalWeeks ?? 14).draft
                     }
+                    draft = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: course.term?.startDate,
+                                                              totalWeeks: course.term?.totalWeeks ?? 14).draft
                     if let line = apply(draft, to: course, context: context) { news.append(line) }
                 }
             } else {

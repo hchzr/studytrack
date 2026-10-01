@@ -4614,6 +4614,52 @@ do {
     check(AnkiTemplate.checksum(sha1Hex: "1a2b3c4d5e6f") == 0x1a2b3c4d, "somme de contrôle : 8 premiers chiffres hexadécimaux")
 }
 
+print("== Explique (AICC) : cours en replay et exercices ==")
+do {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let start = cal.date(from: DateComponents(year: 2026, month: 9, day: 7))!
+    check(ExpliqueImport.slug(in: ["https://moodle.epfl.ch/x", "https://explique.epfl.ch/cs101/exercises"]) == "cs101", "cours lu dans le lien Moodle")
+    check(ExpliqueImport.slug(courseCode: "CS-101") == "cs101", "cours déduit du code")
+    let due = ExpliqueImport.dueDate("Tuesday 29 September at 17:00", termStart: start, calendar: cal)
+    check(due.map { cal.dateComponents([.year, .month, .day, .hour], from: $0) } == DateComponents(year: 2026, month: 9, day: 29, hour: 17),
+          "échéance « Tuesday 29 September at 17:00 »")
+    check(ExpliqueImport.lectureNumber("Lecture 5: Proofs (view on speaker)") == 5 && ExpliqueImport.lectureNumber("Proofs - 1") == nil,
+          "numéro de cours")
+    check(ExpliqueImport.baseTitle("Lecture 3: Propositional/Predicate Logic (2026)") == "Lecture 3: Propositional/Predicate Logic",
+          "variantes retirées du titre")
+    // Relevé réel (semaine 3 de CS-101) : trois enregistrements du cours 5, un du 6, deux vidéos à part.
+    let lectures: [ExpliqueImport.Lecture] = [
+        .init(week: 3, title: "Lecture 5: Proofs (view on speaker)", url: "https://explique.epfl.ch/cs101/v/a"),
+        .init(week: 3, title: "Lecture 6: Proofs", url: "https://explique.epfl.ch/cs101/v/b"),
+        .init(week: 3, title: "Lecture 5: Proofs", url: "https://explique.epfl.ch/cs101/v/c"),
+        .init(week: 3, title: "Lecture 5: Proofs (2026)", url: "https://explique.epfl.ch/cs101/v/d"),
+        .init(week: 3, title: "Proofs - 1", url: "https://explique.epfl.ch/cs101/v/e"),
+        .init(week: 1, title: "Lecture 1: Introduction", url: "https://explique.epfl.ch/cs101/v/f"),
+    ]
+    let exercises: [ExpliqueImport.Exercise] = [
+        .init(week: 3, title: "Proofs Explanation exercise", url: "https://explique.epfl.ch/cs101/e/x", due: "Tuesday 29 September at 17:00", done: true)
+    ]
+    var moodleItem = ContentDraftItem(kind: .theory, number: "3", title: "Cours 6", url: "https://moodle.epfl.ch/slides6",
+                                      videoCount: 0, seriesNumber: nil, theoryKind: .slides)
+    moodleItem.links = [ContentLink(title: "Transparents", url: "https://moodle.epfl.ch/slides6", kind: .slides)]
+    let base = ContentDraft(source: .moodle, courseTitle: "CS-101", url: "",
+                            sections: [ContentDraftSection(title: "Semaine 3", week: 3, weekIsInferred: false, isIncluded: true, items: [moodleItem])])
+    let merged = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: base, termStart: start, calendar: cal)
+    let week3 = merged.draft.sections.first { $0.week == 3 }!
+    let lecture5 = week3.items.first { $0.number == "L5" }
+    check(lecture5?.links.count == 3 && lecture5?.links.first?.url.hasSuffix("/d") == true && lecture5?.title == "Lecture 5: Proofs",
+          "le cours 5 : un élément, trois vidéos, l'enregistrement de l'année d'abord")
+    check(week3.items.first { $0.title == "Cours 6" }?.links.contains { $0.url.hasSuffix("/b") } == true,
+          "le cours 6 de Moodle reçoit sa vidéo Explique")
+    check(week3.items.contains { $0.title == "Proofs - 1" }, "une vidéo sans numéro reste un élément à part")
+    check(merged.draft.sections.contains { $0.week == 1 && $0.items.contains { $0.number == "L1" } }, "une semaine absente de Moodle est créée")
+    let deadline = merged.draft.sections.flatMap(\.items).first { $0.kind == .deadline }
+    check(deadline?.title == "Explique · Proofs" && deadline?.date == due, "l'exercice d'explication devient une échéance datée")
+    let again = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: merged.draft, termStart: start, calendar: cal)
+    check(again.added == 0, "réimporter n'ajoute rien en double")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }
