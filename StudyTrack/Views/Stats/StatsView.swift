@@ -156,18 +156,158 @@ struct StatsView: View {
 
     var body: some View {
         CarnetScroll(spacing: 26) {
-            periodBar
-            totals
-            timeChart
-            courseChart
-            progressSection
-            correctionChart
-            hoursChart
+            ForEach(visibleSections, id: \.self) { index in
+                section(index)
+            }
         }
         .navigationTitle("Bilan")
         .navigationBarTitleDisplayMode(.large)
         .animation(Motion.snappy, value: period)
         .animation(Motion.snappy, value: weekOffset)
+    }
+
+    /// L'ordre de lecture : combien, réparti comment, quand, puis ce que ça a produit.
+    @ViewBuilder
+    private func section(_ index: Int) -> some View {
+        switch index {
+        case 0: periodBar
+        case 1: totals
+        case 2: SplitCard(slices: splitSlices)
+        case 3: CoursePieCard(slices: courseSlices)
+        case 4: timeChart
+        case 5: CourseCategoryCard(bars: courseCategoryBars, categories: categoryOrder, colors: categoryColors)
+        case 6: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
+        case 7: PaceCard(rows: paceRows)
+        case 8: progressSection
+        case 9: correctionChart
+        default: HeatmapCard(cells: heatCells)
+        }
+    }
+
+    private var visibleSections: [Int] {
+        #if DEBUG
+        // `-statsSkip 4` : les captures du simulateur ne défilent pas.
+        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...10) }
+        #endif
+        return Array(0...10)
+    }
+
+    // MARK: Données des graphiques
+
+    /// Amphi, puis chaque nature de travail : la répartition de la période.
+    private var splitSlices: [TimeSlice] {
+        var slices = [TimeSlice(name: "Amphi", detail: "cours magistraux suivis", seconds: lectureSeconds,
+                                color: Carnet.inkTertiary.opacity(0.55))]
+        for type in TaskType.reportCategories where type != .lecture {
+            let seconds = studySessions.filter { $0.taskType.canonical == type }.reduce(0) { $0 + $1.durationSeconds }
+            slices.append(TimeSlice(name: type.label, detail: "", seconds: seconds, color: StatsPalette.color(for: type)))
+        }
+        return slices.filter { $0.seconds > 0 }
+    }
+
+    /// Le temps de chaque matière, étude et amphi confondus.
+    private var courseSlices: [TimeSlice] {
+        var study: [String: Int] = [:]
+        var lecture: [String: Int] = [:]
+        var colors: [String: Color] = [:]
+        for session in studySessions {
+            let code = session.course?.displayCode ?? "Sans cours"
+            study[code, default: 0] += session.durationSeconds
+            colors[code] = session.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
+        }
+        for slot in lectures {
+            let code = slot.course?.displayCode ?? "Sans cours"
+            lecture[code, default: 0] += slot.seconds
+            colors[code] = slot.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
+        }
+        return Set(study.keys).union(lecture.keys)
+            .map { code in
+                TimeSlice(name: code,
+                          detail: "\(DateUtils.durationLabel(seconds: study[code] ?? 0)) d'étude, \(DateUtils.durationLabel(seconds: lecture[code] ?? 0)) d'amphi",
+                          seconds: (study[code] ?? 0) + (lecture[code] ?? 0),
+                          color: colors[code] ?? Carnet.ink)
+            }
+            .sorted { $0.seconds > $1.seconds }
+    }
+
+    private var courseCategoryBars: [CourseCategoryBar] {
+        var totals: [String: [String: Int]] = [:]
+        for session in studySessions {
+            totals[session.course?.displayCode ?? "Sans cours", default: [:]][session.taskType.canonical.label, default: 0] += session.durationSeconds
+        }
+        for slot in lectures {
+            totals[slot.course?.displayCode ?? "Sans cours", default: [:]][Self.lectureCategory, default: 0] += slot.seconds
+        }
+        return totals.flatMap { course, byCategory in
+            byCategory.map { CourseCategoryBar(course: course, category: $0.key, seconds: $0.value) }
+        }
+    }
+
+    /// Tout le semestre, quelle que soit la période choisie.
+    private var weeklyPoints: [WeekPoint] {
+        let start = term.map { DateUtils.startOfWeek($0.startDate) } ?? DateUtils.addWeeks(-13, to: DateUtils.startOfWeek(Date()))
+        var study: [Date: Int] = [:]
+        var lecture: [Date: Int] = [:]
+        for session in sessions where session.startedAt >= start {
+            if session.taskType.canonical == .lecture {
+                lecture[DateUtils.startOfWeek(session.startedAt), default: 0] += session.durationSeconds
+            } else {
+                study[DateUtils.startOfWeek(session.startedAt), default: 0] += session.durationSeconds
+            }
+        }
+        for event in events where event.countsAsAttendedLecture && event.startsAt >= start {
+            lecture[DateUtils.startOfWeek(event.startsAt), default: 0] += event.durationSeconds
+        }
+        var points: [WeekPoint] = []
+        var cursor = start
+        while cursor <= Date() {
+            points.append(WeekPoint(week: cursor, series: "Étude", hours: Double(study[cursor] ?? 0) / 3600))
+            points.append(WeekPoint(week: cursor, series: "Amphi", hours: Double(lecture[cursor] ?? 0) / 3600))
+            cursor = DateUtils.addWeeks(1, to: cursor)
+        }
+        return points
+    }
+
+    private func weekLabel(_ date: Date) -> String {
+        if let term { return "S\(DateUtils.clampedWeek(for: date.addingTimeInterval(43_200), term: term))" }
+        return DateUtils.shortDay.string(from: date)
+    }
+
+    /// Fait (théorie vue + exercices faits) contre prévu jusqu'à cette semaine.
+    private var paceRows: [PaceRow] {
+        tracked.compactMap { course in
+            let week = course.currentWeek
+            let theory = course.theoryItems
+            let exercises = course.series.flatMap(\.exercises).filter { !$0.isBonus }
+            let total = theory.count + exercises.count
+            guard total > 0 else { return nil }
+            let due = theory.filter { $0.plannedWeek > 0 && $0.plannedWeek <= week }.count
+                + course.series.filter { $0.plannedWeek > 0 && $0.plannedWeek <= week }
+                    .flatMap(\.exercises).filter { !$0.isBonus }.count
+            let done = theory.filter(\.isWatched).count + exercises.filter(\.isDone).count
+            return PaceRow(code: course.displayCode, color: Carnet.tint(course.colorHex),
+                           done: Double(done) / Double(total), expected: Double(due) / Double(total))
+        }
+    }
+
+    /// L'étude de la période, par jour de la semaine et par heure.
+    private var heatCells: [HeatCell] {
+        var grid = Array(repeating: Array(repeating: 0, count: 24), count: 7)
+        let calendar = Calendar.current
+        for session in studySessions {
+            var cursor = session.startedAt
+            var remaining = session.durationSeconds
+            while remaining > 0 {
+                let weekday = (calendar.component(.weekday, from: cursor) + 5) % 7
+                let hour = calendar.component(.hour, from: cursor)
+                let nextHour = calendar.date(bySetting: .minute, value: 0, of: cursor.addingTimeInterval(3600)) ?? cursor.addingTimeInterval(3600)
+                let chunk = min(remaining, max(60, Int(nextHour.timeIntervalSince(cursor))))
+                grid[weekday][hour] += chunk
+                remaining -= chunk
+                cursor = cursor.addingTimeInterval(TimeInterval(chunk))
+            }
+        }
+        return (0..<7).flatMap { day in (0..<24).map { HeatCell(weekday: day, hour: $0, seconds: grid[day][$0]) } }
     }
 
     // MARK: Période
@@ -353,113 +493,6 @@ struct StatsView: View {
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
-    }
-
-    // MARK: Par cours
-
-    private struct CourseTime: Identifiable {
-        let code: String
-        let color: Color
-        let kind: String
-        let seconds: Int
-        var id: String { code + kind }
-        var hours: Double { Double(seconds) / 3600 }
-    }
-
-    private var courseTimes: [CourseTime] {
-        var study: [String: Int] = [:]
-        var lecture: [String: Int] = [:]
-        var colors: [String: Color] = [:]
-        for session in studySessions {
-            let code = session.course?.displayCode ?? "Sans cours"
-            study[code, default: 0] += session.durationSeconds
-            colors[code] = session.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
-        }
-        for slot in lectures {
-            let code = slot.course?.displayCode ?? "Sans cours"
-            lecture[code, default: 0] += slot.seconds
-            colors[code] = slot.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
-        }
-        let codes = Set(study.keys).union(lecture.keys)
-            .sorted { (study[$0] ?? 0) + (lecture[$0] ?? 0) > (study[$1] ?? 0) + (lecture[$1] ?? 0) }
-        return codes.flatMap { code in
-            [CourseTime(code: code, color: colors[code] ?? Carnet.ink, kind: "Étude", seconds: study[code] ?? 0),
-             CourseTime(code: code, color: colors[code] ?? Carnet.ink, kind: "Amphi", seconds: lecture[code] ?? 0)]
-        }
-    }
-
-    @ViewBuilder
-    private var courseChart: some View {
-        let data = courseTimes
-        let codes = data.map(\.code).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
-        VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Par cours") {
-                HStack(spacing: 10) {
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 2).fill(Carnet.ink).frame(width: 10, height: 10)
-                        Text("étude")
-                    }
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 2).fill(Carnet.ink.opacity(0.25)).frame(width: 10, height: 10)
-                        Text("amphi")
-                    }
-                }
-                .font(.caption)
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                if codes.isEmpty {
-                    Text("Aucune session sur cette période.")
-                        .font(.subheadline)
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .frame(maxWidth: .infinity, minHeight: 60)
-                } else {
-                    if let selectedCourse,
-                       let study = data.first(where: { $0.code == selectedCourse && $0.kind == "Étude" }),
-                       let lecture = data.first(where: { $0.code == selectedCourse && $0.kind == "Amphi" }) {
-                        Text("\(selectedCourse) : \(DateUtils.durationLabel(seconds: study.seconds)) d'étude · \(DateUtils.durationLabel(seconds: lecture.seconds)) d'amphi")
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(Carnet.ink)
-                    }
-                    Chart(data) { item in
-                        BarMark(x: .value("Heures", item.hours),
-                                y: .value("Cours", item.code))
-                            .foregroundStyle(item.color.opacity(item.kind == "Amphi" ? 0.3 : 1))
-                            .cornerRadius(3)
-                            .opacity(selectedCourse == nil || selectedCourse == item.code ? 1 : 0.35)
-                            .annotation(position: .trailing, alignment: .leading) {
-                                if item.kind == "Amphi" {
-                                    let total = data.filter { $0.code == item.code }.reduce(0) { $0 + $1.seconds }
-                                    Text(DateUtils.hoursLabel(seconds: total))
-                                        .font(.caption2.monospacedDigit())
-                                        .foregroundStyle(Carnet.inkSecondary)
-                                }
-                            }
-                    }
-                    .chartYSelection(value: $selectedCourse)
-                    .chartXScale(domain: 0...courseScaleMax(data))
-                    .chartXAxis(.hidden)
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisValueLabel {
-                                if let code = value.as(String.self) {
-                                    Text(code).font(.caption.weight(.semibold)).foregroundStyle(Carnet.ink)
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: CGFloat(max(codes.count, 1)) * 34 + 10)
-                    .sensoryFeedback(.selection, trigger: selectedCourse)
-                }
-            }
-            .padding(16)
-            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
-        }
-    }
-
-    /// L'échelle laisse la place du total écrit au bout de la barre.
-    private func courseScaleMax(_ data: [CourseTime]) -> Double {
-        let totals = Dictionary(grouping: data, by: \.code).values.map { $0.reduce(0) { $0 + $1.hours } }
-        return max(totals.max() ?? 1, 0.5) * 1.25
     }
 
     // MARK: Avancement
@@ -669,68 +702,6 @@ struct StatsView: View {
             .padding(16)
             .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
             .sensoryFeedback(.selection, trigger: selected?.result)
-        }
-    }
-
-    // MARK: Heures de la journée
-
-    private struct HourBin: Identifiable {
-        let hour: Int
-        let seconds: Int
-        var id: Int { hour }
-    }
-
-    /// Quand je travaille : l'étude de la période, répartie par heure de la
-    /// journée (une session à cheval sur deux heures compte dans les deux).
-    private var hourBins: [HourBin] {
-        var totals = Array(repeating: 0, count: 24)
-        let calendar = Calendar.current
-        for session in studySessions {
-            var cursor = session.startedAt
-            var remaining = session.durationSeconds
-            while remaining > 0 {
-                let hour = calendar.component(.hour, from: cursor)
-                let nextHour = calendar.date(bySetting: .minute, value: 0, of: cursor.addingTimeInterval(3600)) ?? cursor.addingTimeInterval(3600)
-                let chunk = min(remaining, max(60, Int(nextHour.timeIntervalSince(cursor))))
-                totals[hour] += chunk
-                remaining -= chunk
-                cursor = cursor.addingTimeInterval(TimeInterval(chunk))
-            }
-        }
-        return totals.enumerated().map { HourBin(hour: $0.offset, seconds: $0.element) }
-    }
-
-    private var hoursChart: some View {
-        let data = hourBins
-        let peak = data.max { $0.seconds < $1.seconds }
-        return VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Heures de la journée") {
-                if let selectedHour, let bin = data.first(where: { $0.hour == selectedHour }) {
-                    Text("\(selectedHour) h : \(DateUtils.durationLabel(seconds: bin.seconds))")
-                } else if let peak, peak.seconds > 0 {
-                    Text("surtout vers \(peak.hour) h")
-                }
-            }
-            Chart(data) { bin in
-                BarMark(x: .value("Heure", bin.hour), y: .value("Temps", Double(bin.seconds) / 3600))
-                    .foregroundStyle(bin.hour == selectedHour ? Carnet.ink : Carnet.inkTertiary)
-                    .cornerRadius(2)
-            }
-            .chartXSelection(value: $selectedHour)
-            .chartXScale(domain: 0...23)
-            .chartXAxis {
-                AxisMarks(values: [0, 6, 12, 18, 23]) { value in
-                    AxisValueLabel {
-                        if let hour = value.as(Int.self) {
-                            Text("\(hour) h").font(.caption2).foregroundStyle(Carnet.inkSecondary)
-                        }
-                    }
-                }
-            }
-            .chartYAxis(.hidden)
-            .frame(height: 90)
-            .padding(16)
-            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
         }
     }
 }

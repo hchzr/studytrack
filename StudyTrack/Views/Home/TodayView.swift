@@ -173,6 +173,10 @@ struct TodayView: View {
             .toolbar {
                 // L'action de l'onglet, puis l'avatar — la même règle partout.
                 // La loupe vit dans « Cours », dont elle cherche le contenu.
+                // Moi — le bilan et les réglages — derrière l'avatar, en haut à gauche.
+                ToolbarItem(placement: .topBarLeading) {
+                    ProfileButton()
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         app.router.openAgenda()

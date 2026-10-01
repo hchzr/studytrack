@@ -23,6 +23,8 @@ struct RootTabView: View {
                         FocusView(onClose: { app.router.showingFocus = false })
                     case .agenda:
                         AgendaView()
+                    case .me:
+                        MeView(onClose: { app.router.showingProfile = false })
                     case .stats:
                         NavigationStack {
                             StatsView()
@@ -142,7 +144,7 @@ struct RootTabView: View {
     }
 
     enum RootSheet: String, Identifiable {
-        case focus, agenda, stats
+        case focus, agenda, stats, me
         var id: String { rawValue }
     }
 
@@ -153,12 +155,14 @@ struct RootTabView: View {
             if app.router.showingFocus { return .focus }
             if app.router.showingAgenda { return .agenda }
             if app.router.showingStats { return .stats }
+            if app.router.showingProfile { return .me }
             return nil
         }, set: { value in
             if value == nil {
                 app.router.showingFocus = false
                 app.router.showingAgenda = false
                 app.router.showingStats = false
+                app.router.showingProfile = false
             }
         })
     }
@@ -245,7 +249,6 @@ struct RootTabView: View {
             app.router.selectedTab = .today
             app.router.showingTasks = true
         case "stats":
-            app.router.selectedTab = .me
             app.router.showingStats = true
         case "today":
             app.router.selectedTab = .today

@@ -69,14 +69,9 @@ final class AppRouter {
     var showingFocus = false
     /// L'agenda complet, en feuille (depuis l'horaire du jour, une évaluation…).
     var showingAgenda = false
-    /// « Profil » est devenu l'onglet Moi : ce drapeau y mène.
-    var showingProfile = false {
-        didSet {
-            guard showingProfile else { return }
-            selectedTab = .me
-            showingProfile = false
-        }
-    }
+    /// « Moi » (bilan de la semaine, réglages) : une feuille ouverte depuis
+    /// l'avatar d'« Aujourd'hui », plus un onglet.
+    var showingProfile = false
     var showingTasks = false
     /// Statistiques et récapitulatif, ouverts depuis « Aujourd'hui ».
     var showingStats = false

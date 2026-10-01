@@ -15,7 +15,7 @@ struct CarnetTabBar: View {
     @Environment(AppContainer.self) private var app
     @Namespace private var glass
 
-    static let tabs: [AppRouter.Tab] = [.today, .courses, .groups, .me]
+    static let tabs: [AppRouter.Tab] = [.today, .courses, .groups]
 
     var body: some View {
         VStack(spacing: 8) {

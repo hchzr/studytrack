@@ -346,33 +346,48 @@ struct CourseDetailView: View {
         }
         weekSummary(week)
 
-        if !theory.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                let shared = CarnetTheoryLine.sharedDetail(theory)
-                CarnetSectionTitle("Théorie") {
-                    Text([shared, "\(theory.filter(\.isWatched).count)/\(theory.count)"]
-                            .compactMap { $0 }.joined(separator: " · "))
-                }
-                if let topic = weekTopic(theory: theory, series: series) {
-                    Text(topic)
-                        .font(.subheadline)
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .padding(.horizontal, 6)
-                }
-                CarnetSheet {
-                    ForEach(Array(theory.enumerated()), id: \.element.id) { index, item in
-                        CarnetTheoryLine(item: item,
-                                         hiddenDetail: shared,
-                                         onOpen: { openedVideo = item },
-                                         onBrowse: { browsing = $0 })
-                        if index < theory.count - 1 { CarnetRule(inset: 54) }
+        // Deux volets, comme « Tout le cours » : les séries, ou la théorie.
+        Picker("Volet", selection: $tab) {
+            Text("Séries · \(series.reduce(0) { $0 + $1.doneCount })/\(series.reduce(0) { $0 + $1.requiredExercises.count })")
+                .tag(Section.exercises)
+            Text("Théorie · \(theory.filter(\.isWatched).count)/\(theory.count)")
+                .tag(Section.theory)
+        }
+        .pickerStyle(.segmented)
+
+        if tab == .theory {
+            if theory.isEmpty {
+                CarnetEmpty(icon: "book", title: "Pas de théorie",
+                            message: "Aucune vidéo, lecture ni transparents rangés en semaine \(week).")
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    let shared = CarnetTheoryLine.sharedDetail(theory)
+                    if let topic = weekTopic(theory: theory, series: series) ?? shared {
+                        Text([weekTopic(theory: theory, series: series), shared].compactMap { $0 }.joined(separator: " · "))
+                            .font(.subheadline)
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .padding(.horizontal, 6)
+                            .id(topic)
+                    }
+                    CarnetSheet {
+                        ForEach(Array(theory.enumerated()), id: \.element.id) { index, item in
+                            CarnetTheoryLine(item: item,
+                                             hiddenDetail: shared,
+                                             onOpen: { openedVideo = item },
+                                             onBrowse: { browsing = $0 })
+                            if index < theory.count - 1 { CarnetRule(inset: 54) }
+                        }
                     }
                 }
             }
-        }
-
-        ForEach(series) { item in
-            seriesBlock(item)
+        } else {
+            if series.isEmpty {
+                CarnetEmpty(icon: "list.number", title: "Pas de série",
+                            message: "Aucune série n'est rangée en semaine \(week).")
+            }
+            ForEach(series) { item in
+                seriesBlock(item)
+            }
         }
 
         if !deadlines.isEmpty {

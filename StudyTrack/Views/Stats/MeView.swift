@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// L'onglet « Moi » : où j'en suis, à quoi l'app est reliée, et les réglages.
+/// « Moi » : qui, la semaine en trois chiffres, le bilan et les réglages.
+/// Une feuille ouverte par l'avatar d'« Aujourd'hui ».
 ///
 /// C'était une feuille « Profil & réglages » ouverte par l'avatar : un sommaire
 /// de réglages d'abord, le bilan à un toucher de plus. On ouvre surtout cet
@@ -9,6 +10,7 @@ import SwiftData
 /// liens (Moodle, calendrier, assistant) disent ensuite s'ils marchent ; les
 /// réglages, inchangés, sont au bout d'une ligne.
 struct MeView: View {
+    var onClose: (() -> Void)? = nil
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
@@ -21,12 +23,17 @@ struct MeView: View {
             CarnetScroll {
                 identity
                 weekStats
-                weekChart
-                perCourse
-                links
                 settingsLinks
             }
             .navigationTitle("Moi")
+            .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(action: onClose) { Image(systemName: "xmark") }
+                            .accessibilityLabel("Fermer")
+                    }
+                }
+            }
             .navigationDestination(isPresented: $debugSettings) { ProfileView(isEmbedded: true) }
             .onAppear {
                 #if DEBUG
@@ -98,151 +105,20 @@ struct MeView: View {
         }
     }
 
-    private var weekChart: some View {
-        let days = SessionStats.dailyTotals(sessions, days: 7)
-        let peak = max(days.map(\.seconds).max() ?? 0, 1)
-        let byType = Dictionary(grouping: weekSessions, by: { $0.taskType.canonical })
-            .mapValues { $0.reduce(0) { $0 + $1.durationSeconds } }
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom, spacing: 8) {
-                ForEach(days) { day in
-                    VStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Calendar.current.isDateInToday(day.day) ? Carnet.ink : Carnet.inkTertiary)
-                            .frame(height: max(4, 70 * CGFloat(day.seconds) / CGFloat(peak)))
-                        Text(DateUtils.weekdayInitial(day.day))
-                            .font(.caption2)
-                            .foregroundStyle(Carnet.inkTertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement()
-                    .accessibilityLabel("\(DateUtils.fullDayLabel(day.day)) : \(DateUtils.hoursLabel(seconds: day.seconds))")
-                }
-            }
-            .frame(height: 92, alignment: .bottom)
-            HStack(spacing: 14) {
-                ForEach([TaskType.theory, .exercise, .correction], id: \.self) { type in
-                    Text("\(type.label) \(DateUtils.hoursLabel(seconds: byType[type] ?? 0))")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(Carnet.inkSecondary)
-        }
-        .padding(14)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var perCourse: some View {
-        if !tracked.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                CarnetSectionTitle("Par cours")
-                CarnetSheet {
-                    ForEach(Array(tracked.enumerated()), id: \.element.id) { index, course in
-                        let seconds = weekSessions.filter { $0.course?.id == course.id }.reduce(0) { $0 + $1.durationSeconds }
-                        let completion = ProgressEngine.progress(for: course).completion
-                        Button {
-                            app.router.openCourse(course.id)
-                        } label: {
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 2).fill(Carnet.tint(course.colorHex)).frame(width: 4, height: 30)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(course.name).font(.body).foregroundStyle(Carnet.ink).lineLimit(1)
-                                    CarnetBar(value: completion, tint: Carnet.tint(course.colorHex))
-                                }
-                                Text(DateUtils.hoursLabel(seconds: seconds))
-                                    .font(Carnet.mono(.footnote))
-                                    .foregroundStyle(Carnet.inkSecondary)
-                                    .frame(minWidth: 52, alignment: .trailing)
-                            }
-                            .padding(.horizontal, Carnet.rowInset)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if index < tracked.count - 1 { CarnetRule(inset: 30) }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: Liens
-
-    private var links: some View {
-        let settings = app.settings
-        let moodle = courses.contains { MoodleCourseMatcher.linkedID(in: $0.contentSources) != nil }
-        let refreshed = settings.contentLastRefresh.map { "lu \(DateUtils.relativeLabel($0))" }
-        let tasksConnected = !settings.todoistToken.isEmpty || !settings.microsoftToken.isEmpty
-            || !settings.googleRefreshToken.isEmpty || !settings.tickTickToken.isEmpty
-            || !settings.notionToken.isEmpty || !settings.webhookURL.isEmpty || settings.thingsEnabled
-        return VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Relié à")
-            CarnetSheet {
-                linkRow(icon: "books.vertical", tint: Carnet.tint("#F97316"),
-                        title: "Moodle · Courseware · Botafogo",
-                        status: moodle ? (refreshed ?? "relié") : "à relier", ok: moodle) {
-                    app.router.openContentImport()
-                }
-                CarnetRule()
-                NavigationLink {
-                    ProfileView(isEmbedded: true)
-                } label: {
-                    linkLabel(icon: "calendar", tint: Carnet.tint("#0EA5E9"), title: "Horaire IS-Academia",
-                              status: settings.timetableURLString.isEmpty ? "à relier" : "relié",
-                              ok: !settings.timetableURLString.isEmpty)
-                }
-                .buttonStyle(.plain)
-                CarnetRule()
-                NavigationLink {
-                    TaskIntegrationsView()
-                } label: {
-                    linkLabel(icon: "checklist", tint: Carnet.tint("#10B981"), title: "Tâches et rappels",
-                              status: tasksConnected ? "relié" : "Rappels iOS", ok: true)
-                }
-                .buttonStyle(.plain)
-                CarnetRule()
-                NavigationLink {
-                    AssistantSettingsView()
-                } label: {
-                    linkLabel(icon: "sparkles", tint: Carnet.tint("#8B5CF6"), title: "Assistant IA (MCP)",
-                              status: settings.assistantToken.isEmpty ? "à relier" : "relié",
-                              ok: !settings.assistantToken.isEmpty)
-                }
-                .buttonStyle(.plain)
-                CarnetRule()
-                NavigationLink {
-                    AnkiSettingsView()
-                } label: {
-                    linkLabel(icon: "rectangle.stack", tint: Carnet.tint("#EC4899"), title: "Anki",
-                              status: settings.isAnkiConfigured ? "relié" : "facultatif", ok: settings.isAnkiConfigured)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func linkRow(icon: String, tint: Color, title: String, status: String, ok: Bool,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            linkLabel(icon: icon, tint: tint, title: title, status: status, ok: ok)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func linkLabel(icon: String, tint: Color, title: String, status: String, ok: Bool) -> some View {
-        CarnetRow(icon: icon, tint: tint, title: title) {
-            Text(status)
-                .font(.footnote)
-                .foregroundStyle(ok ? Carnet.correct : Carnet.inkTertiary)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
-        }
-    }
-
     // MARK: Réglages
 
     private var settingsLinks: some View {
         CarnetSheet {
+            NavigationLink {
+                StatsView()
+            } label: {
+                CarnetRow(icon: "chart.bar.xaxis", tint: Carnet.inkSecondary, title: "Bilan",
+                          subtitle: "Temps, matières, avancement, corrections") {
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            CarnetRule()
             NavigationLink {
                 ProfileView(isEmbedded: true)
             } label: {
