@@ -4772,8 +4772,10 @@ do {
     check(week2.contains { $0.links.contains { $0.url.contains("cours02") } }
           && week2.contains { $0.title == "MOOC · Module 1 : Variables" && $0.links.contains { $0.url == "https://courseware.epfl.ch/video1" } },
           "semaine 2 : le cours (transparents) et le Module 1 du MOOC demandé par le plan, chacun son élément")
-    check(!merged.sections.flatMap(\.items).flatMap(\.links).contains { $0.url.contains("/q1") || $0.url.contains("/v5") },
-          "ni le quiz, ni le module que le plan ne cite pas")
+    check(!merged.sections.flatMap(\.items).flatMap(\.links).contains { $0.url.contains("/v5") },
+          "pas le module que le plan ne cite pas")
+    check(week2.contains { $0.title.hasPrefix("MOOC") && $0.links.contains { $0.url.contains("/q1") && $0.kind == .page } },
+          "le quiz du module est une ligne de son chapitre, pas une vidéo")
 }
 
 print("== Série restée sur le MOOC : l'adresse du cours l'emporte ==")

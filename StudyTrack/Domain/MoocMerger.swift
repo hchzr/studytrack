@@ -75,7 +75,9 @@ enum MoocMerger {
             var firstURL: [Int: String] = [:]
             var videoCounts: [Int: Int] = [:]
             for lesson in chapter.items {
-                guard !lesson.url.isEmpty, !isExercise(lesson) else { continue }
+                // Les exercices du MOOC ne sont pas à faire, sauf ses quiz en
+                // ligne (« Exercices online (6 Questions) ») : une ligne du chapitre.
+                guard !lesson.url.isEmpty, !isExercise(lesson) || isQuiz(lesson) else { continue }
                 let ids = [lesson.id].compactMap { $0 } + (lesson.blockIDs ?? [])
                 guard let raw = ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek, raw > 0 else { continue }
                 let week = min(raw, max(totalWeeks, 1))
@@ -144,6 +146,11 @@ enum MoocMerger {
         let folded = ContentDraftBuilder.fold(lesson.title)
         return folded.range(of: #"\b(exercices?|exercises?|quiz+|quizzes|problemes?|problems?|series?|evaluation|assessment|test|devoir|homework|graded)\b"#,
                             options: .regularExpression) != nil
+    }
+
+    /// Un quiz en ligne du MOOC : « Exercices online (6 Questions) ».
+    static func isQuiz(_ lesson: ScrapedItem) -> Bool {
+        ContentDraftBuilder.fold(lesson.title).range(of: #"\(\d+ questions?\)|\bquiz"#, options: .regularExpression) != nil
     }
 
     /// « Semaine 3 — Les boucles » / « Week 3 » → 3.

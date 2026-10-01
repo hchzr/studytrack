@@ -279,7 +279,7 @@ enum ContentDraftWriter {
             // Une leçon sans semaine, ou un bloc d'un ancien import fait
             // seulement de liens vers le MOOC (« Bienvenue — Regardez » en
             // semaine 8) : les chapitres « MOOC · » les remplacent.
-            let onlyMOOC = isMOOC(item.urlString) && !item.links.isEmpty && item.links.allSatisfy { isMOOC($0.url) }
+            let onlyMOOC = isMOOC(item.urlString) && item.links.allSatisfy { isMOOC($0.url) }
             return (item.plannedWeek == 0 || onlyMOOC) && isMOOC(item.urlString) && !drafted.contains(item.urlString)
                 && !item.title.hasPrefix("MOOC · ")
         }

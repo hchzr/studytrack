@@ -395,6 +395,10 @@ struct CourseDetailView: View {
                     let ordered = theory.sorted { lhs, rhs in
                         let l = lhs.title.hasPrefix("MOOC"), r = rhs.title.hasPrefix("MOOC")
                         if l != r { return !l }
+                        // Les chapitres du MOOC dans l'ordre du MOOC (« M1-12 » avant « M1-13 »).
+                        if l, r, lhs.number != rhs.number {
+                            return lhs.number.localizedStandardCompare(rhs.number) == .orderedAscending
+                        }
                         return lhs.sortOrder < rhs.sortOrder
                     }
                     ForEach(ordered) { item in

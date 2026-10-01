@@ -67,12 +67,15 @@ struct WeekTheoryCard: View {
             let lesson = cleaned.components(separatedBy: " — ").first ?? cleaned
             let folded = ContentDraftBuilder.fold(lesson)
             if link.kind == .page, isMOOCLink(link) {
-                // « Contrôle des connaissances (10 Questions) » → « Quiz · 10 questions ».
-                if folded.contains("controle des connaissances") || folded.contains("quiz") {
-                    let count = lesson.range(of: #"\d+"#, options: .regularExpression).map { String(lesson[$0]) }
-                    result.append(Row(id: "q:" + folded, title: "Quiz du chapitre", kind: link.kind, links: [link],
+                // « Exercices online (6 Questions) » → « Exercices online · 6 questions ».
+                let count = lesson.range(of: #"(?i)\((\d+) questions?\)"#, options: .regularExpression)
+                if count != nil || folded.contains("controle des connaissances") || folded.contains("quiz") {
+                    let number = count.map { String(lesson[$0].filter(\.isNumber)) }
+                    let name = lesson.replacingOccurrences(of: #"(?i)\s*\(\d+ questions?\)"#, with: "", options: .regularExpression)
+                        .replacingOccurrences(of: #"^[\d.]+\s+"#, with: "", options: .regularExpression)
+                    result.append(Row(id: "q:" + folded, title: name.isEmpty ? "Quiz du chapitre" : name, kind: link.kind, links: [link],
                                       icon: "checklist",
-                                      detail: count.map { "\($0) questions · Courseware" } ?? "Courseware"))
+                                      detail: number.map { "Quiz · \($0) questions · Courseware" } ?? "Quiz · Courseware"))
                 } else {
                     extras.append(link)
                 }
