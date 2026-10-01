@@ -195,8 +195,12 @@ struct AnkiReviewView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if let rendered, card != nil {
-                    AnkiCardWebView(html: showingAnswer ? rendered.answer : rendered.question, css: rendered.css)
+                    // Comme AnkiMobile : toucher la carte montre la réponse,
+                    // la toucher encore répond « Bien ».
+                    AnkiCardWebView(html: showingAnswer ? rendered.answer : rendered.question, css: rendered.css,
+                                    onTap: tapCard)
                         .background(Carnet.sheet)
+                        .accessibilityAction(named: showingAnswer ? "Bien" : "Afficher la réponse") { tapCard() }
                     controls
                 } else {
                     finished
@@ -342,12 +346,23 @@ struct AnkiReviewView: View {
         shownAt = Date()
     }
 
+    private func tapCard() {
+        if showingAnswer {
+            answer(.good)
+        } else {
+            withAnimation(Motion.snappy) { showingAnswer = true }
+            Haptics.soft()
+        }
+    }
+
     private func answer(_ rating: AnkiRating) {
         guard let card, let collection = AnkiCollection(writable: true) else { return }
         let result = AnkiScheduler.answer(card.state, rating: rating, options: collection.options(forDeck: card.deckID),
                                           clock: collection.clock(), useFSRS: collection.usesFSRS)
         collection.record(result, for: card, millisecondsTaken: Int(Date().timeIntervalSince(shownAt) * 1000))
         reviewed += 1
+        // Chaque réponse part à AnkiWeb quelques secondes après la dernière.
+        AnkiWebSync.shared.syncSoon()
         rating == .again ? Haptics.soft() : Haptics.tap()
         withAnimation(Motion.snappy) { advance() }
     }
@@ -364,6 +379,8 @@ struct AnkiReviewView: View {
         let settings = app.settings
         let context = context
         Task { @MainActor in
+            await AnkiWebSync.shared.syncNow()
+            // Le temps de révision rangé dans le cours (relevé de l'historique).
             _ = try? await AnkiReviewSync.sync(context: context, settings: settings)
         }
     }
@@ -374,10 +391,23 @@ struct AnkiReviewView: View {
 struct AnkiCardWebView: UIViewRepresentable {
     let html: String
     let css: String
+    /// Un toucher sur la carte — pas sur un lien, un indice ou un champ.
+    var onTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     func makeUIView(context: Context) -> WKWebView {
-        let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        // Le toucher est lu dans la page : WebKit ne déclenche un « click »
+        // que pour un toucher franc (pas un défilement), et la page sait si
+        // l'on a touché un lien ou un indice, qui gardent leur rôle.
+        configuration.userContentController.add(context.coordinator, name: "card")
+        configuration.userContentController.addUserScript(WKUserScript(source: """
+            document.addEventListener('click', function (e) {
+              if (e.target.closest('a, summary, details, input, button, textarea, select')) return;
+              window.webkit.messageHandlers.card.postMessage('tap');
+            });
+            """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false
         view.backgroundColor = .clear
         view.scrollView.backgroundColor = .clear
@@ -385,6 +415,7 @@ struct AnkiCardWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
+        context.coordinator.onTap = onTap
         let page = document
         guard context.coordinator.last != page else { return }
         context.coordinator.last = page
@@ -392,7 +423,18 @@ struct AnkiCardWebView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
-    final class Coordinator { var last = "" }
+
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "card")
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        var last = ""
+        var onTap: (() -> Void)?
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "card" { onTap?() }
+        }
+    }
 
     private var document: String {
         let dark = colorScheme == .dark
@@ -401,7 +443,8 @@ struct AnkiCardWebView: UIViewRepresentable {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         :root { color-scheme: \(dark ? "dark" : "light"); }
-        html, body { margin: 0; background: transparent; }
+        html, body { margin: 0; background: transparent; min-height: 100%; box-sizing: border-box; }
+        html { height: 100%; }
         body { font: -apple-system-body; font-size: 20px; line-height: 1.45; padding: 24px 20px 40px;
                color: \(dark ? "#ece8df" : "#1d1b18"); text-align: center; -webkit-text-size-adjust: 100%; }
         img { max-width: 100%; height: auto; }

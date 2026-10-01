@@ -106,6 +106,15 @@ struct RootTabView: View {
             if phase == .background, !app.settings.assistantToken.isEmpty {
                 Task { await AssistantSync.sync(context: context, settings: app.settings, force: false) }
             }
+            if phase == .background, AnkiWebSync.shared.isSignedIn {
+                // Des révisions pas encore envoyées partent avant que l'app ne
+                // s'endorme : iOS laisse quelques secondes pour finir.
+                let task = UIApplication.shared.beginBackgroundTask(withName: "AnkiWeb")
+                Task { @MainActor in
+                    await AnkiWebSync.shared.syncNow()
+                    UIApplication.shared.endBackgroundTask(task)
+                }
+            }
             if phase == .background, app.settings.hasCompletedOnboarding {
                 Task { await app.notifications.rescheduleFromStore(context: context, settings: app.settings) }
             }

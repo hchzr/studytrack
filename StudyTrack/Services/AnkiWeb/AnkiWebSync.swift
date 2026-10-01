@@ -149,18 +149,60 @@ final class AnkiWebSync {
     /// automatique l'avalait, et l'écran restait sur « Lecture d'AnkiWeb… »
     /// indéfiniment, sans dire ce qui avait échoué.
     func refreshMirror(force: Bool = false) async throws {
+        // Une seule synchronisation à la fois : deux en parallèle enverraient
+        // les mêmes lignes et se marcheraient dessus. Une demande arrivée
+        // pendant qu'une autre tourne est **rejouée** juste après — c'est ce
+        // qui garantit qu'une carte révisée pendant l'envoi part aussi.
+        if syncing {
+            rerunRequested = true
+            return
+        }
+        syncing = true
         let ownsWork = !isWorking
         if ownsWork { isWorking = true }
-        defer { if ownsWork { isWorking = false } }
-        lastError = nil
-        do {
-            try await performRefresh(force: force)
-        } catch {
-            status = ""
-            lastError = error.localizedDescription
-            AppLog.record(.warning, "anki", "AnkiWeb : synchronisation impossible", detail: error.localizedDescription)
-            throw error
+        defer {
+            syncing = false
+            if ownsWork { isWorking = false }
         }
+        lastError = nil
+        var forceNext = force
+        repeat {
+            rerunRequested = false
+            do {
+                try await performRefresh(force: forceNext)
+            } catch {
+                status = ""
+                lastError = error.localizedDescription
+                AppLog.record(.warning, "anki", "AnkiWeb : synchronisation impossible", detail: error.localizedDescription)
+                throw error
+            }
+            forceNext = false
+        } while rerunRequested
+    }
+
+    @ObservationIgnored private var syncing = false
+    @ObservationIgnored private var rerunRequested = false
+    @ObservationIgnored private var scheduled: Task<Void, Never>?
+
+    /// Synchronise quelques secondes après la dernière modification : chaque
+    /// carte révisée part sans attendre la fin de la session, mais dix cartes
+    /// enchaînées ne font qu'un envoi.
+    func syncSoon(after seconds: Double = 5) {
+        guard isSignedIn else { return }
+        scheduled?.cancel()
+        scheduled = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            try? await refreshMirror()
+        }
+    }
+
+    /// Tout de suite (fin de session, passage en arrière-plan), s'il y a
+    /// quelque chose à envoyer.
+    func syncNow() async {
+        scheduled?.cancel()
+        guard isSignedIn, unsyncedCount > 0 else { return }
+        try? await refreshMirror()
     }
 
     private func performRefresh(force: Bool) async throws {
