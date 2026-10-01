@@ -19,7 +19,8 @@ struct WeekTheoryCard: View {
 
     /// « Cours » ou « MOOC » : d'où vient ce travail.
     private var kicker: String {
-        if item.title.hasPrefix("MOOC") { return "MOOC · à regarder" }
+        // Un élément fait seulement de liens vers le MOOC en vient, quel que soit son titre.
+        if item.title.hasPrefix("MOOC") || (!links.isEmpty && links.allSatisfy(isMOOCLink)) { return "MOOC · à regarder" }
         let videos = links.filter { $0.kind == .video }.count
         let supports = links.count - videos
         switch (videos > 0, supports > 0) {

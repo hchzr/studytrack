@@ -4875,6 +4875,30 @@ do {
     context.delete(course)
 }
 
+print("== Algèbre : leçons du MOOC rangées une à une par un ancien import ==")
+do {
+    let course = Course(code: "TEST-111", name: "Algèbre")
+    context.insert(course)
+    let lesson = TheoryItem(course: course, sectionNumber: 4, number: "M4.2", title: "3.2 L'espace des coordonnées", kind: .video, plannedWeek: 3,
+                            urlString: "https://courseware.epfl.ch/courses/a/jump_to/l32")
+    lesson.links = [ContentLink(title: "Leçon", url: "https://courseware.epfl.ch/xblock/v32", kind: .video)]
+    lesson.videoCount = 1
+    let weekPDF = TheoryItem(course: course, sectionNumber: 3, number: "3", title: "Cours de la semaine 3", kind: .reading, plannedWeek: 3,
+                             urlString: "https://moodle.epfl.ch/mod/resource/view.php?id=1")
+    context.insert(lesson); context.insert(weekPDF)
+    var chapterItem = ContentDraftItem(kind: .theory, number: "M1-4", title: "MOOC · Chapitre 3 : Espaces vectoriels", url: "https://courseware.epfl.ch/courses/a/jump_to/l31",
+                                       videoCount: 2, seriesNumber: nil, theoryKind: .video, week: 3)
+    chapterItem.links = [ContentLink(title: "3.1 Définition — Leçon", url: "https://courseware.epfl.ch/xblock/v31", kind: .video),
+                         ContentLink(title: "3.2 L'espace des coordonnées — Leçon", url: "https://courseware.epfl.ch/xblock/v32", kind: .video)]
+    let draft = ContentDraft(source: .moodle, courseTitle: "", url: "",
+                             sections: [ContentDraftSection(title: "Semaine 3", week: 3, weekIsInferred: false, isIncluded: true, items: [chapterItem])])
+    ContentDraftWriter.apply(draft, to: course, context: context)
+    try? context.save()
+    check(Set(course.theoryItems.map(\.number)) == ["3", "M1-4"],
+          "la leçon seule (semaine 3) disparaît derrière son chapitre, le cours de la semaine reste (\(course.theoryItems.map(\.number)))")
+    context.delete(course)
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }
