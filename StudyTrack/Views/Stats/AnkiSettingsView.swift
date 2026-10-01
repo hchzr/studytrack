@@ -18,6 +18,7 @@ struct AnkiSettingsView: View {
     @State private var collection: AnkiCollection?
     @State private var refreshToken = UUID()
     @State private var showingLocal = false
+    @State private var redownloading = false
 
     private var sync: AnkiWebSync { AnkiWebSync.shared }
     private var tracked: [Course] { courses.filter(\.isTracked) }
@@ -109,6 +110,20 @@ struct AnkiSettingsView: View {
                 Label("Synchroniser maintenant", systemImage: "arrow.triangle.2.circlepath")
             }
             .disabled(sync.isWorking)
+            Button {
+                redownloading = true
+            } label: {
+                Label("Retélécharger la collection", systemImage: "arrow.down.circle")
+            }
+            .disabled(sync.isWorking)
+            .confirmationDialog("Retélécharger la collection ?", isPresented: $redownloading, titleVisibility: .visible) {
+                Button(sync.unsyncedCount > 0 ? "Retélécharger et perdre \(sync.unsyncedCount) modification(s)" : "Retélécharger",
+                       role: sync.unsyncedCount > 0 ? .destructive : nil) {
+                    Task { try? await sync.refreshMirror(force: true); reload(); refreshToken = UUID() }
+                }
+            } message: {
+                Text("Repart de la version d'AnkiWeb. À n'utiliser que si la synchronisation le demande.")
+            }
             Button(role: .destructive) {
                 sync.signOut()
                 collection = nil
@@ -193,7 +208,9 @@ struct AnkiSettingsView: View {
 
     @ViewBuilder
     private var pendingSection: some View {
-        if !sync.pending.isEmpty {
+        let _ = refreshToken
+        let unsynced = sync.unsyncedCount
+        if unsynced > 0 || !sync.pending.isEmpty {
             Section {
                 ForEach(sync.pending) { note in
                     VStack(alignment: .leading, spacing: 2) {
@@ -207,6 +224,11 @@ struct AnkiSettingsView: View {
                         Button("Retirer", role: .destructive) { sync.discard(note) }
                     }
                 }
+                if unsynced > sync.pending.count {
+                    Label("\(unsynced - sync.pending.count) modification\(unsynced - sync.pending.count > 1 ? "s" : "") faite\(unsynced - sync.pending.count > 1 ? "s" : "") ici (révisions, cartes)",
+                          systemImage: "tray.and.arrow.up")
+                        .font(.subheadline)
+                }
                 Button {
                     Task { await sync.pushPending(); refreshToken = UUID() }
                 } label: {
@@ -215,9 +237,12 @@ struct AnkiSettingsView: View {
                 .disabled(sync.isWorking)
             } header: {
                 CarnetFormHeader("En attente d'envoi")
+            } footer: {
+                Text("Envoyé tout seul en quittant une révision et à l'ouverture de l'app.")
             }
         }
     }
+
 
     @ViewBuilder
     private var statusSection: some View {

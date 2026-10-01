@@ -8,7 +8,7 @@ import SQLite3
 /// révision — et à préparer les notes envoyées : identifiants libres, position
 /// des nouvelles cartes, comptes exacts pour le contrôle de cohérence du serveur.
 final class AnkiCollection {
-    private var db: OpaquePointer?
+    var db: OpaquePointer?
     let url: URL
 
     static var defaultURL: URL {
@@ -47,7 +47,7 @@ final class AnkiCollection {
 
     // MARK: SQL
 
-    private func rows(_ sql: String, _ bind: [Any] = [], _ read: (OpaquePointer) -> Void) {
+    func rows(_ sql: String, _ bind: [Any] = [], _ read: (OpaquePointer) -> Void) {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return }
         defer { sqlite3_finalize(statement) }
@@ -55,14 +55,14 @@ final class AnkiCollection {
         while sqlite3_step(statement) == SQLITE_ROW { read(statement) }
     }
 
-    private func scalar(_ sql: String, _ bind: [Any] = []) -> Int64 {
+    func scalar(_ sql: String, _ bind: [Any] = []) -> Int64 {
         var value: Int64 = 0
         rows(sql, bind) { value = sqlite3_column_int64($0, 0) }
         return value
     }
 
     @discardableResult
-    private func execute(_ sql: String, _ bind: [Any] = []) -> Bool {
+    func execute(_ sql: String, _ bind: [Any] = []) -> Bool {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return false }
         defer { sqlite3_finalize(statement) }
@@ -70,7 +70,7 @@ final class AnkiCollection {
         return sqlite3_step(statement) == SQLITE_DONE
     }
 
-    private func bindAll(_ statement: OpaquePointer, _ values: [Any]) {
+    func bindAll(_ statement: OpaquePointer, _ values: [Any]) {
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
         for (index, value) in values.enumerated() {
             let position = Int32(index + 1)
@@ -84,11 +84,11 @@ final class AnkiCollection {
         }
     }
 
-    private func text(_ statement: OpaquePointer, _ column: Int32) -> String {
+    func text(_ statement: OpaquePointer, _ column: Int32) -> String {
         sqlite3_column_text(statement, column).map { String(cString: $0) } ?? ""
     }
 
-    private func colJSON(_ column: String) -> [String: Any] {
+    func colJSON(_ column: String) -> [String: Any] {
         var json: [String: Any] = [:]
         rows("SELECT \(column) FROM col LIMIT 1") { statement in
             let raw = self.text(statement, 0)
@@ -168,37 +168,10 @@ final class AnkiCollection {
     var maxNoteID: Int64 { scalar("SELECT coalesce(max(id), 0) FROM notes") }
     var maxCardID: Int64 { scalar("SELECT coalesce(max(id), 0) FROM cards") }
 
-    /// Les notes et cartes envoyées, recopiées ici : la copie reste identique au
-    /// serveur, et le prochain envoi n'a pas besoin de tout retélécharger.
-    func record(notes: [[Any]], cards: [[Any]]) -> Bool {
-        execute("BEGIN")
-        for note in notes {
-            // [id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data]
-            let fields = note[6] as? String ?? ""
-            let sort = fields.components(separatedBy: "\u{1f}").first ?? ""
-            guard execute("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                          [note[0], note[1], note[2], note[3], note[4], note[5], fields, sort, 0, 0, ""]) else {
-                execute("ROLLBACK")
-                return false
-            }
-        }
-        for card in cards {
-            guard execute("INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                          Array(card.prefix(18))) else {
-                execute("ROLLBACK")
-                return false
-            }
-        }
-        return execute("COMMIT")
-    }
-
     // MARK: Statistiques
 
     /// Le jour d'Anki : les jours écoulés depuis la création, bascule à 4 h.
-    private var today: Int {
-        let rollover: TimeInterval = 4 * 3600
-        return Int((Date().timeIntervalSince1970 - creation.timeIntervalSince1970 - rollover) / 86_400)
-    }
+    private var today: Int { clock().today }
 
     struct DeckStats: Hashable {
         var due = 0
@@ -221,7 +194,7 @@ final class AnkiCollection {
         stats.learning = Int(scalar("SELECT count() FROM cards WHERE did IN (\(list)) AND queue = 1 AND due <= ?", [now + 1200]))
         stats.new = Int(scalar("SELECT count() FROM cards WHERE did IN (\(list)) AND queue = 0"))
         stats.total = Int(scalar("SELECT count() FROM cards WHERE did IN (\(list))"))
-        let dayStart = (Int64(creation.timeIntervalSince1970) + Int64(today) * 86_400 + 4 * 3600) * 1000
+        let dayStart = clock().todayStartMillis
         stats.reviewedToday = Int(scalar("SELECT count() FROM revlog r JOIN cards c ON c.id = r.cid WHERE c.did IN (\(list)) AND r.id >= ?", [dayStart]))
         let since = (now - 30 * 86_400) * 1000
         let reviewed = scalar("SELECT count() FROM revlog r JOIN cards c ON c.id = r.cid WHERE c.did IN (\(list)) AND r.type = 1 AND r.id >= ?", [since])

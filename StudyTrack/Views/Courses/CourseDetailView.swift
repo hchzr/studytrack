@@ -371,6 +371,7 @@ struct CourseDetailView: View {
         .pickerStyle(.segmented)
 
         if tab == .theory {
+            AnkiCourseRow(course: course)
             if theory.isEmpty {
                 CarnetEmpty(icon: "book", title: "Pas de théorie",
                             message: "Aucune vidéo, lecture ni transparents rangés en semaine \(week).")
@@ -524,6 +525,8 @@ struct CourseDetailView: View {
 
         switch tab {
         case .theory:
+            // La révision Anki du cours (si AnkiWeb est relié) : une ligne.
+            AnkiCourseRow(course: course)
             TheoryTabView(course: course)
         default:
             ExercisesTabView(course: course)

@@ -177,29 +177,132 @@ final class AnkiWebSync {
         }
         ConnectionCenter.shared.report(.ankiweb, .connected)
         remember(client)
-        let upToDate = AnkiCollection.exists
-            && defaults.object(forKey: Key.serverMod) as? Int64 == meta.modified
-            && AnkiCollection()?.schema == meta.schema
-        if upToDate && !force {
+
+        let local = AnkiCollection(writable: true)
+        let pendingLocal = local?.pendingChanges ?? 0
+        let structureChanged = local.map { $0.schema != meta.schema } ?? true
+        if force || local == nil || structureChanged {
+            if pendingLocal > 0, structureChanged, !force {
+                // Une synchronisation complète a été faite ailleurs : nos
+                // modifications ne peuvent pas être fusionnées. On ne jette rien
+                // sans le dire.
+                throw AnkiWebClient.Failure.unsupported("Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : \(pendingLocal) modification\(pendingLocal > 1 ? "s" : "") faite\(pendingLocal > 1 ? "s" : "") ici ne peu\(pendingLocal > 1 ? "vent" : "t") pas être fusionnée\(pendingLocal > 1 ? "s" : ""). « Retélécharger la collection » repart de la version d'AnkiWeb.")
+            }
+            try await download(with: client)
+            return
+        }
+        guard let local else { return }
+        if pendingLocal == 0, local.modified == meta.modified {
             status = "À jour"
             defaults.set(Date(), forKey: Key.lastRefresh)
             return
         }
+        try await normalSync(local, meta: meta, client: client)
+    }
+
+    /// Téléchargement complet : au premier lancement, ou quand la collection
+    /// d'AnkiWeb a été remplacée.
+    private func download(with client: AnkiWebClient) async throws {
         status = "Téléchargement de la collection…"
         let data = try await client.download()
         try AnkiCollection.install(data)
         // Le téléchargement incrémente le numéro de synchronisation du serveur :
         // on relit l'état pour que la copie corresponde exactement.
         let after = try await client.meta()
+        AnkiCollection(writable: true)?.adopt(serverUsn: after.usn, modified: after.modified)
         defaults.set(after.modified, forKey: Key.serverMod)
         defaults.set(after.usn, forKey: Key.serverUsn)
         defaults.set(Date(), forKey: Key.lastRefresh)
         status = "Collection à jour"
+        // Les cartes créées avant d'avoir une copie : écrites maintenant.
+        if !pending.isEmpty, let collection = AnkiCollection(writable: true) {
+            for draft in pending {
+                _ = try? collection.addNote(deckID: draft.deckID, notetypeID: draft.notetypeID, fields: draft.fields, tags: draft.tags)
+            }
+            pending = []
+            savePending()
+            if collection.pendingChanges > 0, let fresh = AnkiCollection(writable: true) {
+                try await normalSync(fresh, meta: after, client: client)
+            }
+        }
     }
 
-    // MARK: Ajouter des notes
+    /// La synchronisation normale d'Anki, dans les deux sens.
+    ///
+    /// 1. le serveur dit ce qui a été supprimé ailleurs ; on envoie nos suppressions ;
+    /// 2. types de notes, paquets, options, étiquettes : le plus récent l'emporte ;
+    /// 3. le serveur envoie ses lignes (historique, cartes, notes) modifiées
+    ///    depuis notre dernière synchronisation ; on envoie les nôtres (`usn = -1`) ;
+    /// 4. contrôle de cohérence : les deux collections doivent compter
+    ///    exactement les mêmes cartes, notes, révisions… Sinon le serveur
+    ///    **annule tout** — sa collection reste intacte.
+    private func normalSync(_ local: AnkiCollection, meta: AnkiWebClient.Meta, client: AnkiWebClient) async throws {
+        status = "Synchronisation…"
+        let sent = local.pendingChanges
+        // Une seconde de marge : ce qui est modifié à partir d'ici repartira.
+        let startedAt = Int64(Date().timeIntervalSince1970) - 1
+        do {
+            let graves = try await client.start(minUsn: local.usn, localIsNewer: false)
+            local.applyServerGraves(graves)
+            let mine = local.pendingGraves()
+            if !(mine.cards.isEmpty && mine.notes.isEmpty && mine.decks.isEmpty) {
+                try await client.applyGraves(cards: mine.cards, notes: mine.notes, decks: mine.decks)
+            }
+            let changes = try await client.applyChanges(tags: local.pendingTags())
+            local.applyServerChanges(changes)
+            while true {
+                let chunk = try await client.chunk()
+                local.applyServerChunk(chunk)
+                if chunk["done"] as? Bool ?? true { break }
+            }
+            // Nos lignes, par paquets de 250 comme Anki.
+            var revlog = local.pendingRows("revlog", usn: meta.usn)
+            var cards = local.pendingRows("cards", usn: meta.usn)
+            var notes = local.pendingRows("notes", usn: meta.usn)
+            repeat {
+                let r = Array(revlog.prefix(250)); revlog.removeFirst(r.count)
+                let c = Array(cards.prefix(250 - r.count)); cards.removeFirst(c.count)
+                let n = Array(notes.prefix(250 - r.count - c.count)); notes.removeFirst(n.count)
+                try await client.applyChunk(notes: n, cards: c, revlog: r,
+                                            done: revlog.isEmpty && cards.isEmpty && notes.isEmpty)
+            } while !(revlog.isEmpty && cards.isEmpty && notes.isEmpty)
 
+            let check = try await client.sanityCheck(local.sanityCounts())
+            guard (check["status"] as? String) == "ok" else {
+                AppLog.record(.warning, "anki", "AnkiWeb : contrôle de cohérence refusé",
+                              detail: "client \(check["c"] ?? "?") · serveur \(check["s"] ?? "?")")
+                throw AnkiWebClient.Failure.sanity("")
+            }
+            let modified = try await client.finish()
+            local.markSynced(serverUsn: meta.usn, modified: modified, startedAt: startedAt,
+                             graves: mine.cards + mine.notes + mine.decks)
+            defaults.set(modified, forKey: Key.serverMod)
+            defaults.set(meta.usn + 1, forKey: Key.serverUsn)
+            defaults.set(Date(), forKey: Key.lastRefresh)
+            status = sent > 0 ? "Synchronisé · \(sent) modification\(sent > 1 ? "s" : "") envoyée\(sent > 1 ? "s" : "")" : "Collection à jour"
+        } catch {
+            // Le serveur annule la transaction : sa collection reste intacte, et
+            // nos lignes gardent `usn = -1` pour la prochaine fois.
+            await client.abort()
+            throw error
+        }
+    }
+
+    // MARK: Créer
+
+    /// Une carte à ajouter : écrite tout de suite dans la copie (elle part à
+    /// la prochaine synchronisation) ; gardée en file s'il n'y a pas encore de copie.
     func enqueue(_ note: AnkiDraftNote) {
+        lastError = nil
+        if let collection = AnkiCollection(writable: true) {
+            do {
+                try collection.addNote(deckID: note.deckID, notetypeID: note.notetypeID, fields: note.fields, tags: note.tags)
+                return
+            } catch {
+                lastError = error.localizedDescription
+                return
+            }
+        }
         pending.append(note)
         savePending()
     }
@@ -213,136 +316,25 @@ final class AnkiWebSync {
         defaults.set(try? JSONEncoder().encode(pending), forKey: Key.pending)
     }
 
-    /// Envoie la file d'attente. Rien n'est retiré de la file tant qu'AnkiWeb
-    /// n'a pas confirmé.
+    /// Envoie ce qui attend ; rend le nombre de modifications envoyées.
     @discardableResult
     func pushPending() async -> Int {
-        guard isSignedIn, !pending.isEmpty, !isWorking else { return 0 }
-        isWorking = true
-        lastError = nil
-        defer { isWorking = false }
-        let batch = pending
+        guard isSignedIn, !isWorking else { return 0 }
+        let before = (AnkiCollection()?.pendingChanges ?? 0) + pending.count
+        guard before > 0 else { return 0 }
         do {
-            try await push(batch)
-            pending.removeAll { note in batch.contains { $0.id == note.id } }
-            savePending()
-            status = batch.count == 1 ? "1 carte ajoutée à Anki" : "\(batch.count) cartes ajoutées à Anki"
-            return batch.count
+            try await refreshMirror()
+            return before
         } catch {
-            lastError = error.localizedDescription
-            status = ""
             return 0
         }
     }
 
-    private func push(_ drafts: [AnkiDraftNote]) async throws {
-        let client = client()
-        var meta = try await client.meta()
-        if meta.modified != defaults.object(forKey: Key.serverMod) as? Int64 || AnkiCollection()?.schema != meta.schema {
-            try await refreshMirror(force: true)
-            meta = try await client.meta()
-        }
-        guard let collection = AnkiCollection(writable: true) else { throw AnkiWebClient.Failure.decoding("collection") }
-        let serverUsn = meta.usn
-        let (notes, cards) = try build(drafts, collection: collection, usn: serverUsn)
+    /// Les modifications faites ici et pas encore envoyées.
+    var unsyncedCount: Int { (AnkiCollection()?.pendingChanges ?? 0) + pending.count }
 
-        status = "Envoi à AnkiWeb…"
-        do {
-            // « Rien reçu depuis `serverUsn` » : la copie est le serveur.
-            let graves = try await client.start(minUsn: serverUsn, localIsNewer: false)
-            let removed = ["cards", "notes", "decks"].reduce(0) { $0 + ((graves[$1] as? [Any])?.count ?? 0) }
-            guard removed == 0 else { throw AnkiWebClient.Failure.fullSyncRequired }
-
-            let tags = Array(Set(drafts.flatMap(\.tags)))
-            let changes = try await client.applyChanges(tags: tags)
-            let changed = ((changes["models"] as? [Any])?.count ?? 0)
-                + (((changes["decks"] as? [Any])?.first as? [Any])?.count ?? 0)
-            guard changed == 0 else { throw AnkiWebClient.Failure.fullSyncRequired }
-
-            while true {
-                let chunk = try await client.chunk()
-                let rows = ["notes", "cards", "revlog"].reduce(0) { $0 + ((chunk[$1] as? [Any])?.count ?? 0) }
-                guard rows == 0 else { throw AnkiWebClient.Failure.fullSyncRequired }
-                if chunk["done"] as? Bool ?? true { break }
-            }
-
-            try await client.applyChunk(notes: notes, cards: cards, done: true)
-            let check = try await client.sanityCheck(collection.sanityCounts(addingNotes: notes.count, cards: cards.count))
-            guard (check["status"] as? String) == "ok" else {
-                throw AnkiWebClient.Failure.sanity("")
-            }
-            let modified = try await client.finish()
-            _ = collection.record(notes: notes, cards: cards)
-            defaults.set(modified, forKey: Key.serverMod)
-            defaults.set(serverUsn + 1, forKey: Key.serverUsn)
-        } catch {
-            // Le serveur annule la transaction : sa collection reste intacte.
-            await client.abort()
-            throw error
-        }
-    }
-
-    /// Les lignes `notes` et `cards` au format du protocole.
-    private func build(_ drafts: [AnkiDraftNote], collection: AnkiCollection, usn: Int) throws -> ([[Any]], [[Any]]) {
-        let types = Dictionary(uniqueKeysWithValues: collection.notetypes.map { ($0.id, $0) })
-        let decks = Set(collection.decks.map(\.id))
-        let now = Int64(Date().timeIntervalSince1970)
-        var noteID = max(collection.maxNoteID + 1, Int64(Date().timeIntervalSince1970 * 1000))
-        var cardID = max(collection.maxCardID + 1, noteID)
-        var position = collection.nextNewPosition
-        var notes: [[Any]] = []
-        var cards: [[Any]] = []
-        for draft in drafts {
-            guard let type = types[draft.notetypeID], decks.contains(draft.deckID) else {
-                throw AnkiWebClient.Failure.unsupported("Le paquet ou le type de note de « \(draft.origin) » n'existe plus dans Anki.")
-            }
-            var fields = Array(draft.fields.prefix(type.fields.count))
-            while fields.count < type.fields.count { fields.append("") }
-            let joined = fields.joined(separator: "\u{1f}")
-            let tags = draft.tags.isEmpty ? "" : " " + draft.tags.map { $0.replacingOccurrences(of: " ", with: "_") }.joined(separator: " ") + " "
-            notes.append([noteID, Self.guid(), type.id, now, usn, tags, joined, "", "", 0, ""])
-
-            let ords: [Int]
-            if type.isCloze {
-                ords = Self.clozeNumbers(in: joined).map { $0 - 1 }
-                guard !ords.isEmpty else {
-                    throw AnkiWebClient.Failure.unsupported("« \(draft.origin) » : une note à trous doit contenir {{c1::…}}.")
-                }
-            } else {
-                ords = Array(0..<max(1, min(type.templateCount, 1)))
-            }
-            for ord in ords {
-                // [id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data]
-                cards.append([cardID, noteID, draft.deckID, ord, now, usn, 0, 0, position, 0, 0, 0, 0, 0, 0, 0, 0, ""])
-                cardID += 1
-            }
-            position += 1
-            noteID += 1
-            cardID = max(cardID, noteID)
-        }
-        return (notes, cards)
-    }
-
-    static func clozeNumbers(in text: String) -> [Int] {
-        guard let regex = try? NSRegularExpression(pattern: #"\{\{c(\d+)::"#) else { return [] }
-        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-        let numbers = matches.compactMap { match in
-            Range(match.range(at: 1), in: text).flatMap { Int(text[$0]) }
-        }
-        return Array(Set(numbers)).filter { $0 > 0 }.sorted()
-    }
-
-    /// Un identifiant global de note, comme Anki (base 91, dix caractères).
-    static func guid() -> String {
-        let alphabet = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~")
-        var value = UInt64.random(in: 1...UInt64.max)
-        var result = ""
-        while value > 0 {
-            result.append(alphabet[Int(value % UInt64(alphabet.count))])
-            value /= UInt64(alphabet.count)
-        }
-        return result
-    }
+    nonisolated static func clozeNumbers(in text: String) -> [Int] { AnkiNoteTools.clozeNumbers(in: text) }
+    nonisolated static func guid() -> String { AnkiNoteTools.guid() }
 
     // MARK: Révisions
 

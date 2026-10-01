@@ -287,10 +287,11 @@ final class AnkiWebClient {
         try object(try await call("chunk"), "chunk")
     }
 
-    func applyChunk(notes: [[Any]], cards: [[Any]], done: Bool) async throws {
+    func applyChunk(notes: [[Any]], cards: [[Any]], revlog: [[Any]] = [], done: Bool) async throws {
         var chunk: [String: Any] = ["done": done]
         if !notes.isEmpty { chunk["notes"] = notes }
         if !cards.isEmpty { chunk["cards"] = cards }
+        if !revlog.isEmpty { chunk["revlog"] = revlog }
         try await call("applyChunk", json: ["chunk": chunk])
     }
 

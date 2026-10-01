@@ -4530,6 +4530,90 @@ do {
     }
 }
 
+print("== Anki : planification des révisions ==")
+do {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let creation = cal.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 5))!
+    let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 11, hour: 14))!
+    let clock = AnkiClock(now: now, creation: creation, rolloverHour: 4, calendar: cal)
+    check(clock.today == 10, "jour d'Anki : 10 jours après la création (\(clock.today))")
+    let earlyMorning = AnkiClock(now: cal.date(from: DateComponents(year: 2026, month: 9, day: 11, hour: 3))!,
+                                 creation: creation, rolloverHour: 4, calendar: cal)
+    check(earlyMorning.today == 9, "avant 4 h, c'est encore la veille")
+
+    let options = AnkiDeckOptions()
+    let new = AnkiCardState()
+    let step1 = AnkiScheduler.answer(new, rating: .good, options: options, clock: clock, useFSRS: false)
+    check(step1.card.type == 1 && step1.card.queue == 1 && step1.card.due == clock.seconds + 600 && step1.card.left == 1,
+          "nouvelle carte, « bien » : deuxième étape, 10 min")
+    check(step1.reviewType == 0 && step1.lastInterval == 0, "historique : apprentissage")
+    let graduated = AnkiScheduler.answer(step1.card, rating: .good, options: options, clock: clock, useFSRS: false)
+    check(graduated.card.type == 2 && graduated.card.ivl == 1 && graduated.card.due == 11 && graduated.card.factor == 2500,
+          "dernière étape, « bien » : révision dans 1 jour, facilité 250 %")
+    let easy = AnkiScheduler.answer(new, rating: .easy, options: options, clock: clock, useFSRS: false)
+    check(easy.card.ivl == 4 && easy.card.due == 14, "« facile » d'emblée : 4 jours")
+    let again = AnkiScheduler.answer(step1.card, rating: .again, options: options, clock: clock, useFSRS: false)
+    check(again.card.left == 2 && again.card.due == clock.seconds + 60, "« à revoir » : retour à la première étape")
+    let hardFirst = AnkiScheduler.answer(new, rating: .hard, options: options, clock: clock, useFSRS: false)
+    check(hardFirst.card.due == clock.seconds + 330, "« difficile » à la première étape : moyenne des deux étapes (5,5 min)")
+
+    let review = AnkiCardState(type: 2, queue: 2, due: 10, ivl: 10, factor: 2500, reps: 5)
+    let r = AnkiRating.allCases.map { AnkiScheduler.answer(review, rating: $0, options: options, clock: clock, useFSRS: false) }
+    check(r[1].card.ivl == 12 && r[1].card.factor == 2350, "révision « difficile » : 10 × 1,2 = 12 j, facilité −15 %")
+    check(r[2].card.ivl == 25 && r[2].card.factor == 2500, "révision « bien » : 10 × 2,5 = 25 j")
+    check(r[3].card.ivl == 33 && r[3].card.factor == 2650, "révision « facile » : 10 × 2,5 × 1,3 = 33 j, +15 %")
+    check(r[0].card.type == 3 && r[0].card.queue == 1 && r[0].card.lapses == 1 && r[0].card.factor == 2300 && r[0].card.ivl == 1,
+          "révision « à revoir » : réapprentissage, oubli compté, facilité −20 %")
+    check(r[0].reviewType == 1 && r[0].lastInterval == 10, "historique d'une révision")
+    let relearned = AnkiScheduler.answer(r[0].card, rating: .good, options: options, clock: clock, useFSRS: false)
+    check(relearned.card.type == 2 && relearned.card.ivl == 1 && relearned.card.due == 11 && relearned.reviewType == 2,
+          "réapprentissage terminé : de retour en révision")
+    let late = AnkiCardState(type: 2, queue: 2, due: 6, ivl: 10, factor: 2500)
+    check(AnkiScheduler.answer(late, rating: .good, options: options, clock: clock, useFSRS: false).card.ivl == 30,
+          "4 jours de retard comptent à moitié pour « bien » : (10 + 2) × 2,5 = 30 j")
+    var capped = options
+    capped.maximumInterval = 20
+    check(AnkiScheduler.answer(review, rating: .easy, options: capped, clock: clock, useFSRS: false).card.ivl == 20,
+          "intervalle maximum du paquet respecté")
+
+    let fsrsNew = AnkiScheduler.answer(new, rating: .good, options: options, clock: clock, useFSRS: true)
+    let memory = AnkiScheduler.memory(of: fsrsNew.card)
+    check(memory.map { abs($0.s - 3.173) < 0.001 } == true, "FSRS : stabilité initiale de « bien »")
+    let fsrsReview = AnkiCardState(type: 2, queue: 2, due: 10, ivl: 10, factor: 2500, data: #"{"s":10,"d":5}"#)
+    let f = AnkiRating.allCases.map { AnkiScheduler.answer(fsrsReview, rating: $0, options: options, clock: clock, useFSRS: true).card }
+    check(f[1].ivl < f[2].ivl && f[2].ivl < f[3].ivl, "FSRS : difficile < bien < facile (\(f[1].ivl), \(f[2].ivl), \(f[3].ivl))")
+    check((AnkiScheduler.memory(of: f[0])?.s ?? 99) < 10, "FSRS : un oubli fait baisser la stabilité")
+    let fsrs = FSRS(params: [])
+    check(abs(fsrs.interval(stability: 10, retention: 0.9) - 10) < 0.01, "FSRS : à 90 % de rétention, l'intervalle vaut la stabilité")
+    var json: [String: Any] = ["new": ["delays": [1, 10], "ints": [2, 5, 0], "initialFactor": 2300, "perDay": 15],
+                               "rev": ["ease4": 1.4, "maxIvl": 3650, "hardFactor": 1.1], "desiredRetention": 0.85]
+    let parsed = AnkiDeckOptions(json: json)
+    check(parsed.graduatingInterval == 2 && parsed.easyInterval == 5 && parsed.startingEase == 2300 && parsed.newPerDay == 15
+          && parsed.easyBonus == 1.4 && parsed.maximumInterval == 3650 && parsed.desiredRetention == 0.85,
+          "options du paquet lues dans le JSON")
+    json = [:]
+    check(AnkiScheduler.dayLabel(3) == "3 j" && AnkiScheduler.dayLabel(61) == "2,0 mois", "libellés des intervalles")
+}
+
+print("== Anki : rendu des cartes ==")
+do {
+    let basic = AnkiTemplate.Context(fields: ["Front": "Capitale <b>de la Suisse</b> ?", "Back": "Berne", "Extra": ""],
+                                     ordinal: 0, isCloze: false)
+    let front = AnkiTemplate.question("{{Front}}{{#Extra}}<i>{{Extra}}</i>{{/Extra}}", basic)
+    check(front == "Capitale <b>de la Suisse</b> ?", "recto : champ inséré, section vide retirée")
+    let back = AnkiTemplate.answer("{{FrontSide}}<hr id=answer>{{Back}}{{^Extra}} (sans note){{/Extra}}", front: front, basic)
+    check(back == "Capitale <b>de la Suisse</b> ?<hr id=answer>Berne (sans note)", "verso : FrontSide et section inverse")
+    check(AnkiTemplate.question("{{text:Front}}", basic) == "Capitale de la Suisse ?", "filtre text: retire le HTML")
+    let cloze = AnkiTemplate.Context(fields: ["Text": "La dérivée de {{c1::x²}} est {{c2::2x::linéaire}}."], ordinal: 1, isCloze: true)
+    check(AnkiTemplate.question("{{cloze:Text}}", cloze) == "La dérivée de x² est <span class=\"cloze\">[linéaire]</span>.",
+          "trou 2 au recto : masqué avec son indice, le trou 1 en clair")
+    check(AnkiTemplate.answer("{{cloze:Text}}", front: "", cloze) == "La dérivée de x² est <span class=\"cloze\">2x</span>.",
+          "trou 2 au verso : la réponse surlignée")
+    check(AnkiTemplate.stripHTML("a<br>b&nbsp;&amp;") == "a\nb &", "texte d'un champ HTML")
+    check(AnkiTemplate.checksum(sha1Hex: "1a2b3c4d5e6f") == 0x1a2b3c4d, "somme de contrôle : 8 premiers chiffres hexadécimaux")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }
