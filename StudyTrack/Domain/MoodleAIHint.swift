@@ -25,10 +25,19 @@ enum MoodleCourseAI {
     - week : la semaine du semestre (1 à N) où l'activité se travaille, d'après la section (« Semaine 3 », une plage de dates), un numéro (« Lecture 7 » quand il y a deux cours par semaine → semaine 4), ou une date. null si inconnue.
     - series : le numéro de la série d'exercices quand kind vaut "series" ou "solution", sinon null.
     - Une entrée par activité reçue, avec son id exact. N'invente aucune activité.
+    Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée. Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, rien d'optionnel. La semaine est le numéro que le plan donne à la ligne (souvent en tête, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste.
     """
+
+    /// Ce que le modèle répond : une étiquette par activité, et la semaine
+    /// des chapitres du MOOC que le plan du cours demande de regarder.
+    struct Answer: Equatable {
+        var hints: [String: MoodleAIHint] = [:]
+        var moocWeeks: [String: Int] = [:]
+    }
 
     /// Le plan du cours, compact : ce que le modèle lit.
     static func payload(for snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
+                        plan: String? = nil, moocs: [ScrapedCourse] = [],
                         calendar: Calendar = .current) -> [String: Any] {
         var lines: [String] = []
         for section in snapshot.sections {
@@ -39,7 +48,31 @@ enum MoodleCourseAI {
                 lines.append("- id=\(activity.id) [\(activity.module)] \(activity.name)\(host)")
             }
         }
-        return ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n")]
+        var payload: [String: Any] = ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n")]
+        if let plan, !plan.isEmpty { payload["plan"] = String(plan.prefix(9000)) }
+        if !moocs.isEmpty {
+            payload["mooc"] = moocs.enumerated().flatMap { index, mooc in
+                ["# MOOC \(index + 1) : \(mooc.title)"] + mooc.sections.compactMap { chapter -> String? in
+                    guard let id = chapter.id else { return nil }
+                    let videos = chapter.items.reduce(0) { $0 + ($1.videoCount ?? 0) }
+                    return "- id=\(id) : \(chapter.title) (\(chapter.items.count) leçons, \(videos) vidéos)"
+                }
+            }.joined(separator: "\n")
+        }
+        return payload
+    }
+
+    static func answer(_ raw: String) -> Answer {
+        var result = Answer(hints: parse(raw))
+        guard let start = raw.firstIndex(of: "{"), let end = raw.lastIndex(of: "}"),
+              let data = String(raw[start...end]).data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let mooc = json["mooc"] as? [[String: Any]] else { return result }
+        for entry in mooc {
+            guard let id = entry["id"] as? String, let week = (entry["week"] as? NSNumber)?.intValue, week > 0 else { continue }
+            result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
+        }
+        return result
     }
 
     /// La réponse du modèle, tolérante : texte autour, champs manquants.

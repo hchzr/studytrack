@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import PDFKit
 
 /// Lit la page d'un cours dans le navigateur intégré.
 ///
@@ -461,6 +462,28 @@ enum AuthenticatedDownloader {
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name)
         try FileManager.default.moveItem(at: temporary, to: destination)
         return (destination, response.url ?? url)
+    }
+
+    /// Le **texte** d'une page web ou d'un PDF (plan d'un cours), lu avec la
+    /// session des sites EPFL. `nil` si illisible.
+    @MainActor
+    static func text(at address: URL) async -> String? {
+        let url = SiteLinks.normalize(address)
+        let session = await authenticatedSession(for: url)
+        guard let (data, response) = try? await session.data(from: url) else { return nil }
+        if isPDF(response) || data.starts(with: Data("%PDF".utf8)) {
+            return PDFDocument(data: data)?.string
+        }
+        let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
+        var text = html.replacingOccurrences(of: #"(?is)<(script|style)[^>]*>.*?</\1>"#, with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"(?i)<br\s*/?>|</(p|div|tr|li|h\d)>"#, with: "\n", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+        text = MoodleLinks.decodeEntities(text).replacingOccurrences(of: "&eacute;", with: "é")
+            .replacingOccurrences(of: "&egrave;", with: "è").replacingOccurrences(of: "&agrave;", with: "à")
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            .filter { !$0.isEmpty }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     private static func isPDF(_ response: URLResponse) -> Bool {

@@ -22,14 +22,15 @@ Réponds UNIQUEMENT par un objet JSON : {"activities":[{"id":"123","kind":"theor
 - kind : "theory" (cours, vidéo, enregistrement, transparents, notes, polycopié, chapitre à lire), "series" (énoncé d'une série / feuille / TP d'exercices), "solution" (corrigé), "deadline" (rendu noté, devoir, projet, quiz noté), "document" (organisation, formulaire, ressource générale, ancien examen), "ignore" (forum, annonce, sondage, lien sans contenu).
 - week : la semaine du semestre (1 à N) où l'activité se travaille, d'après la section (« Semaine 3 », une plage de dates), un numéro (« Lecture 7 » quand il y a deux cours par semaine → semaine 4), ou une date. null si inconnue.
 - series : le numéro de la série d'exercices quand kind vaut "series" ou "solution", sinon null.
-- Une entrée par activité reçue, avec son id exact. N'invente aucune activité.`;
+- Une entrée par activité reçue, avec son id exact. N'invente aucune activité.
+Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée (« MOOC 1 : vidéos Module 2 » en semaine 3 → le chapitre « Module 2 » du MOOC 1, semaine 3). Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, et rien d'« optionnel ». La semaine est le numéro que le PLAN donne à la ligne (souvent en tête de ligne, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste du MOOC.`;
 
 /** Un plan de cours dépasse rarement 12 000 caractères ; au-delà, on tronque. */
 const MAX_OUTLINE = 14000;
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  let body: { outline?: string; weeks?: number; course?: string };
+  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string };
   try {
     body = await request.json();
   } catch {
@@ -37,7 +38,9 @@ Deno.serve(async (request) => {
   }
   const outline = (body.outline ?? "").slice(0, MAX_OUTLINE);
   if (!outline.trim()) return json({ error: "plan vide" }, 400);
-  const user = `Cours : ${body.course ?? "?"}\nNombre de semaines : ${body.weeks ?? 14}\n\nPlan :\n${outline}`;
+  let user = `Cours : ${body.course ?? "?"}\nNombre de semaines : ${body.weeks ?? 14}\n\nActivités Moodle :\n${outline}`;
+  if (body.plan) user += `\n\nPLAN DU COURS (texte) :\n${body.plan.slice(0, 9000)}`;
+  if (body.mooc) user += `\n\nMOOC (chapitres) :\n${body.mooc.slice(0, 5000)}`;
   const messages = [{ role: "system", content: INSTRUCTIONS }, { role: "user", content: user }];
 
   const candidates: Array<{ baseURL: string; apiKey: string; model: string }> = [];
@@ -67,7 +70,7 @@ Deno.serve(async (request) => {
       if (start < 0 || end <= start) throw new Error("réponse sans JSON");
       const parsed = JSON.parse(content.slice(start, end + 1));
       if (!Array.isArray(parsed.activities)) throw new Error("champ « activities » absent");
-      return json({ activities: parsed.activities, model: candidate.model });
+      return json({ activities: parsed.activities, mooc: Array.isArray(parsed.mooc) ? parsed.mooc : [], model: candidate.model });
     } catch (error) {
       errors.push(`${candidate.model} : ${(error as Error).message}`);
     }

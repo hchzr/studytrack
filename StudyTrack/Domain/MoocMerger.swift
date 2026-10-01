@@ -21,7 +21,8 @@ enum MoocMerger {
                       into draft: ContentDraft,
                       termStart: Date?,
                       totalWeeks: Int = 14,
-                      calendar: Calendar = .current) -> ContentDraft {
+                      calendar: Calendar = .current,
+                      plannedWeeks: [String: Int] = [:]) -> ContentDraft {
         var result = draft
         let sectionWeeks = Dictionary(snapshot.sections.compactMap { section -> (Int, Int)? in
             guard let week = MoodleCourseAnalyzer.week(of: section, termStart: termStart,
@@ -36,6 +37,10 @@ enum MoocMerger {
                   let week = sectionWeeks[number] else { continue }
             blockWeeks[block] = min(blockWeeks[block] ?? week, week)
         }
+
+        // Les chapitres que le **plan du cours** demande de regarder, lus par
+        // le modèle (CS-107 : « MOOC 1 : vidéos Module 2 » en semaine 3).
+        for (block, week) in plannedWeeks { blockWeeks[block] = min(blockWeeks[block] ?? week, week) }
 
         // La semaine où Moodle traite chaque chapitre (« 4 · Espaces vectoriels »).
         var chapterWeeks: [Int: Int] = [:]

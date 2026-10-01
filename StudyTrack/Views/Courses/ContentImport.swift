@@ -364,33 +364,15 @@ final class MoodleImportModel {
             let snapshot = try await client.snapshot(of: ref)
             let termStart = course.term?.startDate ?? term.start
             let weeks = course.term?.totalWeeks ?? term.weeks
-            // Les activités aux formats inconnus, rangées par le modèle (si l'IA
-            // est activée) ; les règles font le reste.
-            var hints: [String: MoodleAIHint] = [:]
-            if let settings = AppRuntime.container?.settings {
-                status[course.id] = "rangement du cours…"
-                hints = await MoodleCourseAIService.hints(for: snapshot, termStart: termStart, totalWeeks: weeks, settings: settings)
+            // Tout ce que le cours donne (Moodle, plan du cours, MOOC, Explique,
+            // MediaSpace), rangé avec l'IA si besoin.
+            let outcome = await CourseImportPipeline.draft(from: snapshot, termStart: termStart, totalWeeks: weeks,
+                                                           settings: AppRuntime.container?.settings) { [weak self] step in
+                self?.status[course.id] = step
             }
-            var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: weeks, hints: hints)
+            var draft = outcome.draft
             var label = "Moodle · \(ref.shortname)"
-            // Le MOOC que Moodle cite (vidéos de la semaine, classe inversée) :
-            // lu sur Courseware et rangé dans les semaines du cours.
-            var moocNote: String?
-            if !snapshot.moocLinks.isEmpty {
-                status[course.id] = "MOOC cité — lecture de Courseware…"
-                let outcome = await MoocImport.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
-                draft = outcome.draft
-                moocNote = outcome.note
-            }
-            // Les outils que Moodle cite : Explique (AICC), ses cours en replay
-            // et ses exercices, rangés dans les semaines.
-            let explique = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
-            draft = explique.draft
-            if let note = explique.note { moocNote = [moocNote, note].compactMap { $0 }.joined(separator: " · ") }
-            // Les listes de lecture MediaSpace citées (tous les enregistrements).
-            let media = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
-            draft = media.draft
-            if let note = media.note { moocNote = [moocNote, note].compactMap { $0 }.joined(separator: " · ") }
+            let moocNote: String? = outcome.notes.isEmpty ? nil : outcome.notes.joined(separator: " · ")
             // Un cours vide sur Moodle vit peut-être ailleurs : la classe
             // inversée d'Analyse I est tout entière sur Botafogo.
             if draft.theoryCount + draft.seriesCount == 0,

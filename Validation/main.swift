@@ -4734,6 +4734,37 @@ do {
     check((payload["outline"] as? String)?.contains("id=1 [resource] TP-trois") == true, "le plan envoyé : identifiants, types, noms")
 }
 
+print("== Plan du cours + MOOC : chapitres à regarder ==")
+do {
+    let answer = MoodleCourseAI.answer(#"{"activities":[{"id":"1","kind":"ignore"}],"mooc":[{"id":"block-v1:X+type@chapter+block@c1","week":2},{"id":"block-v1:X+type@chapter+block@c2","week":3}]}"#)
+    check(answer.moocWeeks["block-v1:X+type@chapter+block@c1"] == 2 && answer.hints["1"]?.kind == .ignore, "réponse : activités et chapitres du MOOC")
+    let mooc = ScrapedCourse(source: "courseware", title: "Initiation Java", url: "https://courseware.epfl.ch/c", sections: [
+        ScrapedSection(title: "Module 1 : Variables", items: [
+            ScrapedItem(title: "Variables", url: "https://courseware.epfl.ch/v1", type: "sequential", videoCount: 1,
+                        links: [ContentLink(title: "Vidéo", url: "https://courseware.epfl.ch/video1", kind: .video)]),
+            ScrapedItem(title: "Quiz du module 1", url: "https://courseware.epfl.ch/q1", type: "sequential")],
+                       id: "block-v1:X+type@chapter+block@c1"),
+        ScrapedSection(title: "Module 5 : Fonctions", items: [
+            ScrapedItem(title: "Fonctions", url: "https://courseware.epfl.ch/v5", type: "sequential", videoCount: 1)],
+                       id: "block-v1:X+type@chapter+block@c5")])
+    let payload = MoodleCourseAI.payload(for: MoodleCourseSnapshot(title: "CS-107", url: "u", sections: []), termStart: nil, totalWeeks: 14,
+                                         plan: "2 16/09 MOOC 1 : vidéos Module 1", moocs: [mooc])
+    check((payload["mooc"] as? String)?.contains("id=block-v1:X+type@chapter+block@c1 : Module 1 : Variables") == true && payload["plan"] != nil,
+          "le modèle reçoit le plan et les chapitres du MOOC")
+    let snapshot = MoodleCourseSnapshot(title: "CS-107", url: "u", sections: [
+        MoodleSection(number: 2, title: "Semaine 2 : Premiers pas", activities: [
+            MoodleActivity(id: "9", name: "Transparents (1 page sur 1)", module: "url", url: "https://moodle.epfl.ch/mod/url/view.php?id=9",
+                           target: "https://proginsc.epfl.ch/cours02.pdf")])])
+    let base = MoodleCourseAnalyzer.draft(from: snapshot, termStart: nil)
+    let merged = MoocMerger.merge(mooc: mooc, references: [], snapshot: snapshot, into: base, termStart: nil,
+                                  plannedWeeks: answer.moocWeeks)
+    let week2 = merged.sections.first { $0.week == 2 }?.items.first { $0.kind == .theory }
+    check(week2?.links.contains { $0.url == "https://courseware.epfl.ch/video1" } == true && week2?.links.contains { $0.url.contains("cours02") } == true,
+          "semaine 2 : les transparents de Moodle et la vidéo du Module 1 demandée par le plan")
+    check(!merged.sections.flatMap(\.items).flatMap(\.links).contains { $0.url.contains("/q1") || $0.url.contains("/v5") },
+          "ni le quiz, ni le module que le plan ne cite pas")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

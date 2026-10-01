@@ -699,6 +699,30 @@ enum MediaSpaceSupplement {
     }
 }
 
+// MARK: - Plan du cours
+
+/// Le plan (ou calendrier) d'un cours, quand Moodle en cite un : le texte où
+/// l'enseignant·e dit, semaine par semaine, quoi regarder et quoi faire.
+/// CS-107 : « MOOC 1 : vidéos Module 2 » en semaine 3, sur proginsc.
+@MainActor
+enum CoursePlanReader {
+    static func text(for snapshot: MoodleCourseSnapshot) async -> String? {
+        let activities = snapshot.sections.flatMap(\.activities).filter(\.isVisible)
+        let candidates = activities.filter { activity in
+            let name = ContentDraftBuilder.fold(activity.name)
+            return name.range(of: #"\b(plan du cours|planning|calendrier|programme|syllabus|schedule|course plan|deroulement|planification)\b"#,
+                              options: .regularExpression) != nil
+        }
+        for activity in candidates.prefix(2) {
+            guard let url = URL(string: activity.link), url.scheme?.hasPrefix("http") == true else { continue }
+            if let text = await AuthenticatedDownloader.text(at: url), text.count > 200 {
+                return String(text.prefix(12_000))
+            }
+        }
+        return nil
+    }
+}
+
 @MainActor
 enum MoocImport {
     struct Outcome {
@@ -707,6 +731,43 @@ enum MoocImport {
         var note: String?
         /// Courseware demande une connexion.
         var needsLogin = false
+    }
+
+    /// Les MOOC cités par Moodle, lus sur Courseware.
+    static func fetch(_ snapshot: MoodleCourseSnapshot, client: CoursewareClient? = nil)
+        async -> (moocs: [(key: String, course: ScrapedCourse)], note: String?, needsLogin: Bool) {
+        let client = client ?? CoursewareClient()
+        let keys = Array(Set(snapshot.moocLinks.compactMap(\.courseKey))).sorted()
+        guard !keys.isEmpty else { return ([], nil, false) }
+        guard await client.isSignedIn() else {
+            return ([], "MOOC cité sur Moodle — connecte-toi à Courseware pour l'ajouter", true)
+        }
+        var moocs: [(String, ScrapedCourse)] = []
+        for key in keys {
+            do {
+                moocs.append((key, try await client.content(of: key)))
+            } catch {
+                AppLog.record(.warning, "import", "MOOC illisible", detail: "\(key) — \(error.localizedDescription)")
+            }
+        }
+        return (moocs, nil, false)
+    }
+
+    /// Range les leçons demandées de chaque MOOC dans les semaines du cours.
+    static func merge(_ draft: ContentDraft, moocs: [(key: String, course: ScrapedCourse)], snapshot: MoodleCourseSnapshot,
+                      termStart: Date?, totalWeeks: Int, plannedWeeks: [String: Int]) -> (draft: ContentDraft, note: String?) {
+        var result = draft
+        var notes: [String] = []
+        for mooc in moocs {
+            let before = result.sections.flatMap(\.items).reduce(0) { $0 + $1.links.count }
+            result = MoocMerger.merge(mooc: mooc.course,
+                                      references: snapshot.moocLinks.filter { $0.courseKey == mooc.key },
+                                      snapshot: snapshot, into: result,
+                                      termStart: termStart, totalWeeks: totalWeeks, plannedWeeks: plannedWeeks)
+            let after = result.sections.flatMap(\.items).reduce(0) { $0 + $1.links.count }
+            notes.append("+ MOOC \(mooc.course.title) (\(max(0, after - before)) vidéo\(after - before > 1 ? "s" : "") demandée\(after - before > 1 ? "s" : ""))")
+        }
+        return (result, notes.isEmpty ? nil : notes.joined(separator: " · "))
     }
 
     static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
@@ -735,5 +796,60 @@ enum MoocImport {
             }
         }
         return Outcome(draft: result, note: notes.joined(separator: " · "))
+    }
+}
+
+
+// MARK: - L'import d'un cours, de bout en bout
+
+/// Tout ce qu'un cours Moodle donne, rangé : la même chaîne pour l'import
+/// manuel et pour la mise à jour automatique.
+///
+/// 1. Moodle (le plan du cours, les cibles des liens) ;
+/// 2. le **plan du cours** quand Moodle en cite un, et les MOOC cités ;
+/// 3. le modèle range ce que les règles ne savent pas lire — activités aux noms
+///    inattendus, chapitres du MOOC à regarder selon le plan ;
+/// 4. les règles construisent le brouillon (un élément de théorie par semaine) ;
+/// 5. MOOC, Explique et listes MediaSpace complètent chaque semaine.
+@MainActor
+enum CourseImportPipeline {
+    struct Outcome {
+        var draft: ContentDraft
+        var notes: [String]
+    }
+
+    static func draft(from snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
+                      settings: SettingsStore?, progress: (String) -> Void = { _ in }) async -> Outcome {
+        var notes: [String] = []
+        var moocs: [(key: String, course: ScrapedCourse)] = []
+        if !snapshot.moocLinks.isEmpty {
+            progress("MOOC cité — lecture de Courseware…")
+            let fetched = await MoocImport.fetch(snapshot)
+            moocs = fetched.moocs
+            if let note = fetched.note { notes.append(note) }
+        }
+        var answer = MoodleCourseAI.Answer()
+        if let settings {
+            progress("lecture du plan du cours…")
+            let plan = await CoursePlanReader.text(for: snapshot)
+            progress("rangement du cours…")
+            answer = await MoodleCourseAIService.analyze(snapshot, termStart: termStart, totalWeeks: totalWeeks,
+                                                         plan: plan, moocs: moocs.map(\.course), settings: settings)
+        }
+        var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: totalWeeks, hints: answer.hints)
+        if !moocs.isEmpty {
+            let merged = MoocImport.merge(draft, moocs: moocs, snapshot: snapshot, termStart: termStart,
+                                          totalWeeks: totalWeeks, plannedWeeks: answer.moocWeeks)
+            draft = merged.draft
+            if let note = merged.note { notes.append(note) }
+        }
+        progress("outils du cours…")
+        let explique = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: totalWeeks)
+        draft = explique.draft
+        if let note = explique.note { notes.append(note) }
+        let media = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: totalWeeks)
+        draft = media.draft
+        if let note = media.note { notes.append(note) }
+        return Outcome(draft: draft, notes: notes)
     }
 }

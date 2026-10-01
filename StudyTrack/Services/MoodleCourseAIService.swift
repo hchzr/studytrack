@@ -14,12 +14,22 @@ enum MoodleCourseAIService {
 
     static func hints(for snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
                       settings: SettingsStore) async -> [String: MoodleAIHint] {
-        guard settings.aiExtractionEnabled else { return [:] }
-        let payload = MoodleCourseAI.payload(for: snapshot, termStart: termStart, totalWeeks: totalWeeks)
+        await analyze(snapshot, termStart: termStart, totalWeeks: totalWeeks, settings: settings).hints
+    }
+
+    /// Le cours rangé par le modèle : ses activités, et — quand le plan du cours
+    /// et le MOOC sont fournis — les chapitres du MOOC à regarder chaque semaine.
+    static func analyze(_ snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
+                        plan: String? = nil, moocs: [ScrapedCourse] = [],
+                        settings: SettingsStore) async -> MoodleCourseAI.Answer {
+        guard settings.aiExtractionEnabled else { return .init() }
+        let payload = MoodleCourseAI.payload(for: snapshot, termStart: termStart, totalWeeks: totalWeeks,
+                                             plan: plan, moocs: moocs)
         let outline = payload["outline"] as? String ?? ""
-        guard !outline.isEmpty else { return [:] }
-        let key = "moodleAI." + Insecure.SHA1.hash(data: Data(outline.utf8)).map { String(format: "%02x", $0) }.joined()
-        if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.parse(cached) }
+        guard !outline.isEmpty else { return .init() }
+        let fingerprint = outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "")
+        let key = "moodleAI2." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
+        if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.answer(cached) }
 
         var raw: String?
         do {
@@ -28,13 +38,14 @@ enum MoodleCourseAIService {
             AppLog.record(.info, "import", "Rangement du cours par l'IA : service indisponible", detail: error.localizedDescription)
             raw = try? await askOnDevice(payload)
         }
-        guard let raw else { return [:] }
-        let hints = MoodleCourseAI.parse(raw)
-        if !hints.isEmpty {
+        guard let raw else { return .init() }
+        let answer = MoodleCourseAI.answer(raw)
+        if !answer.hints.isEmpty {
             UserDefaults.standard.set(raw, forKey: key)
-            AppLog.record(.info, "import", "Cours rangé avec l'IA", detail: "\(snapshot.title) — \(hints.count) activités")
+            AppLog.record(.info, "import", "Cours rangé avec l'IA",
+                          detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.moocWeeks.count) chapitres de MOOC")
         }
-        return hints
+        return answer
     }
 
     private static func askShared(_ payload: [String: Any]) async throws -> String {
@@ -61,7 +72,9 @@ enum MoodleCourseAIService {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), case .available = SystemLanguageModel.default.availability {
             let session = LanguageModelSession(instructions: MoodleCourseAI.instructions)
-            let prompt = "Cours : \(payload["course"] ?? "")\nSemaines : \(payload["weeks"] ?? 14)\n\nPlan :\n\(payload["outline"] ?? "")"
+            var prompt = "Cours : \(payload["course"] ?? "")\nSemaines : \(payload["weeks"] ?? 14)\n\nActivités Moodle :\n\(payload["outline"] ?? "")"
+            if let plan = payload["plan"] as? String { prompt += "\n\nPLAN DU COURS :\n" + String(plan.prefix(4000)) }
+            if let mooc = payload["mooc"] as? String { prompt += "\n\nMOOC :\n" + String(mooc.prefix(2500)) }
             return try await session.respond(to: prompt).content
         }
         #endif
