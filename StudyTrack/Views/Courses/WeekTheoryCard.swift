@@ -46,21 +46,38 @@ struct WeekTheoryCard: View {
     }
 
     /// Une ligne de ressource : une leçon de MOOC (ses vidéos réunies), un
-    /// enregistrement, un support. Les doublons (transparents « 4 pages » et
-    /// « 1 page ») n'en font qu'une.
+    /// enregistrement, un support, le quiz du chapitre. Les doublons
+    /// (transparents « 4 pages » et « 1 page ») n'en font qu'une ; l'aperçu et
+    /// la conclusion d'un chapitre de MOOC sont réunis en une ligne, après le reste.
     struct Row: Identifiable {
         let id: String
         let title: String
         let kind: ContentLink.Kind
         let links: [ContentLink]
+        var icon: String? = nil
+        var detail: String? = nil
     }
 
     var rows: [Row] {
         var result: [Row] = []
+        var extras: [ContentLink] = []
         for link in links {
             let cleaned = rowTitle(link)
             let lesson = cleaned.components(separatedBy: " — ").first ?? cleaned
-            let key = (link.kind == .video ? "v:" : "d:") + ContentDraftBuilder.fold(lesson)
+            let folded = ContentDraftBuilder.fold(lesson)
+            if link.kind == .page, isMOOCLink(link) {
+                // « Contrôle des connaissances (10 Questions) » → « Quiz · 10 questions ».
+                if folded.contains("controle des connaissances") || folded.contains("quiz") {
+                    let count = lesson.range(of: #"\d+"#, options: .regularExpression).map { String(lesson[$0]) }
+                    result.append(Row(id: "q:" + folded, title: "Quiz du chapitre", kind: link.kind, links: [link],
+                                      icon: "checklist",
+                                      detail: count.map { "\($0) questions · Courseware" } ?? "Courseware"))
+                } else {
+                    extras.append(link)
+                }
+                continue
+            }
+            let key = (link.kind == .video ? "v:" : "d:") + folded
             if let index = result.firstIndex(where: { $0.id == key }) {
                 let row = result[index]
                 // Un support en double garde la version complète (« 1 page sur 1 »).
@@ -70,7 +87,17 @@ struct WeekTheoryCard: View {
                 result.append(Row(id: key, title: lesson, kind: link.kind, links: [link]))
             }
         }
+        if !extras.isEmpty {
+            let names = extras.map { rowTitle($0) }
+            result.append(Row(id: "p:extras", title: extras.count == 1 ? names[0] : names.joined(separator: ", "),
+                              kind: .page, links: extras, icon: "doc.text",
+                              detail: extras.count == 1 ? "Page · Courseware" : "\(extras.count) pages · Courseware"))
+        }
         return result
+    }
+
+    private func isMOOCLink(_ link: ContentLink) -> Bool {
+        URL(string: link.url)?.host?.contains("courseware") == true
     }
 
     var body: some View {
@@ -140,9 +167,17 @@ struct WeekTheoryCard: View {
     private var summary: String {
         var parts: [String] = []
         let videos = links.filter { $0.kind == .video }.count
-        if videos > 0 { parts.append(videos == 1 ? "1 vidéo" : "\(videos) vidéos") }
-        let supports = Set(links.map(\.kind)).subtracting([.video]).map(\.shortLabel).sorted()
-        parts.append(contentsOf: supports)
+        if item.title.hasPrefix("MOOC") {
+            // « 7 leçons · 16 vidéos · quiz » : ce que le chapitre demande.
+            let lessons = rows.filter { $0.kind == .video }.count
+            if lessons > 1 { parts.append("\(lessons) leçons") }
+            if videos > 0 { parts.append(videos == 1 ? "1 vidéo" : "\(videos) vidéos") }
+            if rows.contains(where: { $0.id.hasPrefix("q:") }) { parts.append("quiz") }
+        } else {
+            if videos > 0 { parts.append(videos == 1 ? "1 vidéo" : "\(videos) vidéos") }
+            let supports = Set(links.map(\.kind)).subtracting([.video]).map(\.shortLabel).sorted()
+            parts.append(contentsOf: supports)
+        }
         if item.durationSeconds > 0 { parts.append(DateUtils.durationLabel(seconds: item.durationSeconds)) }
         if item.isWatched { parts.append("vu") }
         return parts.isEmpty ? item.kind.label : parts.joined(separator: " · ")
@@ -151,7 +186,7 @@ struct WeekTheoryCard: View {
     @ViewBuilder
     private func resourceRow(_ row: Row) -> some View {
         let label = HStack(spacing: 12) {
-            Image(systemName: row.kind == .video ? "play.circle.fill" : row.kind.icon)
+            Image(systemName: row.icon ?? (row.kind == .video ? "play.circle.fill" : row.kind.icon))
                 .font(.body)
                 .foregroundStyle(row.kind == .video ? tint : Carnet.inkSecondary)
                 .frame(width: 24)
@@ -177,15 +212,19 @@ struct WeekTheoryCard: View {
         .contentShape(Rectangle())
 
         if row.links.count > 1 {
-            // Plusieurs vidéos dans une leçon : un menu, chacune nommée.
+            // Plusieurs vidéos dans une leçon (ou plusieurs pages) : un menu, chacune nommée.
             Menu {
                 ForEach(Array(row.links.enumerated()), id: \.offset) { index, link in
                     Button { open(link) } label: {
-                        Label(videoName(link, index: index), systemImage: "play.circle")
+                        if link.kind == .video {
+                            Label(videoName(link, index: index), systemImage: "play.circle")
+                        } else {
+                            Label(rowTitle(link), systemImage: link.kind.icon)
+                        }
                     }
                 }
             } label: { label }
-            .accessibilityLabel("\(row.title), \(row.links.count) vidéos")
+            .accessibilityLabel(row.kind == .video ? "\(row.title), \(row.links.count) vidéos" : row.title)
         } else if let link = row.links.first {
             Button { open(link) } label: { label }
                 .buttonStyle(.plain)
@@ -199,17 +238,27 @@ struct WeekTheoryCard: View {
         }
     }
 
-    /// « Vidéo 2 », ou la fin du titre (« Variables — Déclaration » → « Déclaration »).
+    /// « Partie 2 », ou la fin du titre (« Variables — Déclaration » →
+    /// « Déclaration »). Les vidéos du MOOC s'appellent toutes « Regardez: » :
+    /// leur numéro vient de l'adresse (« …partie_2__ID-1275 »).
     private func videoName(_ link: ContentLink, index: Int) -> String {
         let parts = link.title.components(separatedBy: " — ")
-        return parts.count > 1 ? parts.dropFirst().joined(separator: " — ") : "Vidéo \(index + 1)"
+        let suffix = parts.dropFirst().joined(separator: " — ").trimmingCharacters(in: .whitespaces)
+        let generic = ContentDraftBuilder.fold(suffix).range(of: #"^(regardez|video|watch)?\s*:?$"#, options: .regularExpression) != nil
+        if !suffix.isEmpty, !generic { return suffix }
+        if let range = link.url.range(of: #"(?i)partie_?(\d+)"#, options: .regularExpression),
+           let number = link.url[range].split(whereSeparator: { !$0.isNumber }).last {
+            return "Partie \(number)"
+        }
+        return "Vidéo \(index + 1)"
     }
 
     /// « 2 vidéos · Courseware », « Transparents · proginsc ».
     private func rowDetail(_ row: Row) -> String {
+        if let detail = row.detail { return detail }
         let site = URL(string: row.links.first?.url ?? "")?.host.map(CarnetTheoryLine.siteName) ?? ""
         let what = row.kind == .video
-            ? (row.links.count > 1 ? "\(row.links.count) vidéos" : "Vidéo")
+            ? (row.links.count > 1 ? "\(row.links.count) parties" : "Vidéo")
             : row.kind.chipLabel
         return [what, site].filter { !$0.isEmpty }.joined(separator: " · ")
     }

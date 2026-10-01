@@ -597,6 +597,14 @@ enum MoodleCourseAnalyzer {
         } else if let paired = statement.lazy.compactMap(\.solutionTarget).first {
             item.solutionURL = paired
         }
+        // Pas d'énoncé à part, mais un corrigé qui est une page web : c'est la
+        // page de la série, énoncé compris (CS-107 : « serie04/serie.html »,
+        // dont le lien d'énoncé sur Moodle mène au MOOC).
+        if item.url.isEmpty, item.pdfURL.isEmpty, !item.solutionURL.isEmpty,
+           !MoodleLinks.isDocument(item.solutionURL),
+           URL(string: item.solutionURL)?.pathExtension.lowercased() != "pdf" {
+            item.url = item.solutionURL
+        }
         item.links = (statement + solution.filter { s in !statement.contains(s) }).map(link(for:))
         return item
     }

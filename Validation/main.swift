@@ -1278,6 +1278,15 @@ do {
           "rien du projet n'est rangé en théorie ou en série")
     check(d107.sections.first { $0.title.hasPrefix("Documents") }?.items.contains { $0.title == "Plan du cours" } == true,
           "le plan du cours est gardé comme document")
+    // Série dont l'énoncé, sur Moodle, mène au MOOC : la page du corrigé
+    // (proginsc, énoncé compris) devient l'énoncé.
+    let cs107b = MoodleCourseSnapshot(title: "Introduction à la programmation", url: "https://moodle.epfl.ch/course/view.php?id=14847", sections: [
+        MoodleSection(number: 19, title: "Semaine 4 : Types «avancés»", activities: [
+            act("Enoncé de la série 4", "url", target: "https://courseware.epfl.ch/courses/course-v1:EPFL+intro-prog-java+2024/jump_to/block-v1:EPFL+intro-prog-java+2024+type@sequential+block@Exercices_ID-1"),
+            act("Corrigé de la série 4", "url", target: "https://proginsc.epfl.ch/wwwhiver/series/serie04/serie.html")])])
+    let series4b = MoodleCourseAnalyzer.draft(from: cs107b, termStart: term).sections.flatMap(\.items).first { $0.kind == .series }
+    check(series4b?.url == "https://proginsc.epfl.ch/wwwhiver/series/serie04/serie.html",
+          "énoncé sur le MOOC, corrigé sur proginsc : la page proginsc est l'énoncé (\(series4b?.url ?? "aucune série"))")
 
     // PHYS-101(en) : notes vierges et annotées + enregistrement = un cours ;
     // « Problem Set » et ses solutions ; anciens examens.
