@@ -25,7 +25,7 @@ enum MoodleCourseAI {
     - week : la semaine du semestre (1 à N) où l'activité se travaille, d'après la section (« Semaine 3 », une plage de dates), un numéro (« Lecture 7 » quand il y a deux cours par semaine → semaine 4), ou une date. null si inconnue.
     - series : le numéro de la série d'exercices quand kind vaut "series" ou "solution", sinon null.
     - Une entrée par activité reçue, avec son id exact. N'invente aucune activité.
-    Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée. Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, rien d'optionnel. La semaine est le numéro que le plan donne à la ligne (souvent en tête, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste.
+    Si un PLAN DU COURS et un MOOC sont fournis, ajoute "mooc":[{"id":"<id du chapitre>","week":N}] : les chapitres du MOOC dont le plan demande de regarder les VIDÉOS une semaine donnée. Jamais les quiz ni les exercices du MOOC, jamais un chapitre que le plan ne cite pas, rien d'optionnel. La semaine est le numéro que le plan donne à la ligne (souvent en tête, avant les dates) : ne le décale jamais. N'utilise QUE des id de chapitres présents dans la liste. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 de la liste (préambules et quiz sont hors numérotation).
     """
 
     /// Ce que le modèle répond : une étiquette par activité, et la semaine
@@ -52,10 +52,21 @@ enum MoodleCourseAI {
         if let plan, !plan.isEmpty { payload["plan"] = String(plan.prefix(9000)) }
         if !moocs.isEmpty {
             payload["mooc"] = moocs.enumerated().flatMap { index, mooc in
-                ["# MOOC \(index + 1) : \(mooc.title)"] + mooc.sections.compactMap { chapter -> String? in
+                // Les chapitres numérotés comme les « Module N » des plans de cours
+                // (préambule, bienvenue et quiz hors numérotation) : sans ce
+                // numéro, le modèle décalait le second MOOC de CS-107 d'un module.
+                var module = 0
+                return ["# MOOC \(index + 1) : \(mooc.title)"] + mooc.sections.compactMap { chapter -> String? in
                     guard let id = chapter.id else { return nil }
                     let videos = chapter.items.reduce(0) { $0 + ($1.videoCount ?? 0) }
-                    return "- id=\(id) : \(chapter.title) (\(chapter.items.count) leçons, \(videos) vidéos)"
+                    let label: String
+                    if isFrontMatter(chapter.title) {
+                        label = "\(chapter.title) [hors module]"
+                    } else {
+                        module += 1
+                        label = "module \(module) — \(chapter.title)"
+                    }
+                    return "- id=\(id) : \(label) (\(chapter.items.count) leçons, \(videos) vidéos)"
                 }
             }.joined(separator: "\n")
         }
@@ -73,6 +84,13 @@ enum MoodleCourseAI {
             result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
         }
         return result
+    }
+
+    /// Un chapitre hors programme : accueil, préambule, quiz final, annexe.
+    static func isFrontMatter(_ title: String) -> Bool {
+        let folded = title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        return folded.range(of: #"\b(bienvenue|welcome|preambule|preamble|quiz|examen|exam|annexe|appendix|ressources)\b"#,
+                            options: .regularExpression) != nil
     }
 
     /// La réponse du modèle, tolérante : texte autour, champs manquants.

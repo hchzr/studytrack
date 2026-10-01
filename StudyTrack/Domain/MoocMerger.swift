@@ -22,7 +22,8 @@ enum MoocMerger {
                       termStart: Date?,
                       totalWeeks: Int = 14,
                       calendar: Calendar = .current,
-                      plannedWeeks: [String: Int] = [:]) -> ContentDraft {
+                      plannedWeeks: [String: Int] = [:],
+                      ordinal: Int = 1) -> ContentDraft {
         var result = draft
         let sectionWeeks = Dictionary(snapshot.sections.compactMap { section -> (Int, Int)? in
             guard let week = MoodleCourseAnalyzer.week(of: section, termStart: termStart,
@@ -59,37 +60,68 @@ enum MoocMerger {
         // semaine (« Semaine 3 »), ou si Moodle traite ce chapitre une semaine
         // donnée (« 04-Espaces-vectoriels » ↔ « 4. Espaces vectoriels », la
         // classe inversée où le MOOC **est** le cours).
-        var videos: [CourseVideos.Video] = []
-        var order = 0
-        for chapter in mooc.sections {
+        // Chaque chapitre demandé devient **son propre élément** de théorie, dans
+        // sa semaine : c'est du travail à faire (et à cocher), distinct du cours
+        // de la semaine. Fondus dans les vidéos du cours, les chapitres du MOOC
+        // de CS-107 ne se voyaient plus.
+        for (chapterIndex, chapter) in mooc.sections.enumerated() {
             let title = ContentDraftBuilder.cleanTitle(chapter.title)
             guard !title.isEmpty, !chapter.items.isEmpty else { continue }
             let chapterCited = chapter.id.flatMap { blockWeeks[$0] }
             let chapterWeek = chapterCited
                 ?? weekInTitle(title)
                 ?? ContentDraftBuilder.leadingNumber(in: title).flatMap { Int($0.number) }.flatMap { chapterWeeks[$0] }
+            var byWeek: [Int: [ContentLink]] = [:]
+            var firstURL: [Int: String] = [:]
+            var videoCounts: [Int: Int] = [:]
             for lesson in chapter.items {
                 guard !lesson.url.isEmpty, !isExercise(lesson) else { continue }
                 let ids = [lesson.id].compactMap { $0 } + (lesson.blockIDs ?? [])
-                guard let week = ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek, week > 0 else { continue }
+                guard let raw = ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek, raw > 0 else { continue }
+                let week = min(raw, max(totalWeeks, 1))
                 let lessonTitle = ContentDraftBuilder.cleanTitle(lesson.title)
                 let videoLinks = (lesson.links ?? []).filter { $0.kind == .video }
+                if firstURL[week] == nil { firstURL[week] = lesson.url }
                 if videoLinks.isEmpty {
-                    order += 1
-                    videos.append(CourseVideos.Video(title: lessonTitle.isEmpty ? title : lessonTitle, url: lesson.url,
-                                                     week: min(week, max(totalWeeks, 1)),
-                                                     kind: (lesson.videoCount ?? 0) > 0 ? .video : .page, order: order))
+                    let isVideo = (lesson.videoCount ?? 0) > 0
+                    byWeek[week, default: []].append(ContentLink(title: lessonTitle.isEmpty ? title : lessonTitle,
+                                                                 url: lesson.url, kind: isVideo ? .video : .page))
+                    videoCounts[week, default: 0] += lesson.videoCount ?? 0
                 } else {
                     for link in videoLinks {
-                        order += 1
                         let name = ContentDraftBuilder.cleanTitle(link.title)
-                        videos.append(CourseVideos.Video(title: name.isEmpty || name == lessonTitle ? lessonTitle : "\(lessonTitle) — \(name)",
-                                                         url: link.url, week: min(week, max(totalWeeks, 1)), order: order))
+                        byWeek[week, default: []].append(ContentLink(title: name.isEmpty || name == lessonTitle ? lessonTitle : "\(lessonTitle) — \(name)",
+                                                                     url: link.url, kind: .video))
                     }
+                    videoCounts[week, default: 0] += videoLinks.count
+                }
+            }
+            for week in byWeek.keys.sorted() {
+                let links = byWeek[week] ?? []
+                guard !links.isEmpty, let url = firstURL[week] else { continue }
+                var item = ContentDraftItem(kind: .theory,
+                                            number: "M\(ordinal)-\(chapterIndex + 1)",
+                                            title: "MOOC · \(title)",
+                                            url: url,
+                                            videoCount: videoCounts[week] ?? 0,
+                                            seriesNumber: nil,
+                                            theoryKind: (videoCounts[week] ?? 0) > 0 ? .video : .reading,
+                                            week: week)
+                item.links = links
+                if let index = result.sections.firstIndex(where: { $0.week == week && !$0.title.hasPrefix("Échéances") }) {
+                    if !result.sections[index].items.contains(where: { $0.url == url }) {
+                        result.sections[index].items.append(item)
+                    }
+                } else {
+                    result.sections.append(ContentDraftSection(title: "Semaine \(week) · MOOC", week: week,
+                                                               weekIsInferred: false, isIncluded: true, items: [item]))
                 }
             }
         }
-        result = CourseVideos.merge(videos, into: result, totalWeeks: totalWeeks, sourceLabel: "MOOC").draft
+        result.sections.sort { lhs, rhs in
+            if lhs.week == 0 || rhs.week == 0 { return lhs.week != 0 && rhs.week == 0 }
+            return lhs.week < rhs.week
+        }
         // Le MOOC lui-même reste à portée, pour le reste (facultatif).
         if !mooc.url.isEmpty {
             var item = ContentDraftItem(kind: .resource, number: "", title: "MOOC · \(mooc.title)", url: mooc.url,

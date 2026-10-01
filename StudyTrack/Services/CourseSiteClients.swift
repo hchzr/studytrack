@@ -758,14 +758,15 @@ enum MoocImport {
                       termStart: Date?, totalWeeks: Int, plannedWeeks: [String: Int]) -> (draft: ContentDraft, note: String?) {
         var result = draft
         var notes: [String] = []
-        for mooc in moocs {
-            let before = result.sections.flatMap(\.items).reduce(0) { $0 + $1.links.count }
+        for (index, mooc) in moocs.enumerated() {
+            let before = result.theoryCount
             result = MoocMerger.merge(mooc: mooc.course,
                                       references: snapshot.moocLinks.filter { $0.courseKey == mooc.key },
                                       snapshot: snapshot, into: result,
-                                      termStart: termStart, totalWeeks: totalWeeks, plannedWeeks: plannedWeeks)
-            let after = result.sections.flatMap(\.items).reduce(0) { $0 + $1.links.count }
-            notes.append("+ MOOC \(mooc.course.title) (\(max(0, after - before)) vidéo\(after - before > 1 ? "s" : "") demandée\(after - before > 1 ? "s" : ""))")
+                                      termStart: termStart, totalWeeks: totalWeeks, plannedWeeks: plannedWeeks,
+                                      ordinal: index + 1)
+            let chapters = result.theoryCount - before
+            notes.append("+ MOOC \(mooc.course.title) (\(chapters) chapitre\(chapters > 1 ? "s" : "") à travailler)")
         }
         return (result, notes.isEmpty ? nil : notes.joined(separator: " · "))
     }

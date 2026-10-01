@@ -1413,7 +1413,8 @@ do {
     check(moocWeek("https://courseware.epfl.ch/l3") == 4, "chapitre 4 → la semaine où Moodle traite le chapitre 4 (\(moocWeek("https://courseware.epfl.ch/l3") ?? -1))")
     check(moocWeek("https://courseware.epfl.ch/l4") == nil, "une leçon que le cours ne demande pas n'est pas importée")
     let week3Items = merged.sections.filter { $0.week == 3 }.flatMap(\.items).filter { $0.kind == .theory }
-    check(week3Items.count == 1, "un seul élément pour la semaine 3, Moodle et MOOC réunis (\(week3Items.map(\.title)))")
+    check(week3Items.count == 2 && week3Items.contains { $0.title == "MOOC · Matrices" && $0.number == "M1-1" },
+          "le chapitre du MOOC demandé est un élément à part de la semaine 3, à côté du cours (\(week3Items.map(\.title)))")
     let exerciseLesson = ScrapedItem(title: "Exercices de la semaine", url: "x", type: "sequential")
     check(MoocMerger.isExercise(exerciseLesson), "les exercices en ligne du MOOC ne sont pas à faire ici")
 
@@ -4749,7 +4750,7 @@ do {
                        id: "block-v1:X+type@chapter+block@c5")])
     let payload = MoodleCourseAI.payload(for: MoodleCourseSnapshot(title: "CS-107", url: "u", sections: []), termStart: nil, totalWeeks: 14,
                                          plan: "2 16/09 MOOC 1 : vidéos Module 1", moocs: [mooc])
-    check((payload["mooc"] as? String)?.contains("id=block-v1:X+type@chapter+block@c1 : Module 1 : Variables") == true && payload["plan"] != nil,
+    check((payload["mooc"] as? String)?.contains("id=block-v1:X+type@chapter+block@c1 : module 1 — Module 1 : Variables") == true && payload["plan"] != nil,
           "le modèle reçoit le plan et les chapitres du MOOC")
     let snapshot = MoodleCourseSnapshot(title: "CS-107", url: "u", sections: [
         MoodleSection(number: 2, title: "Semaine 2 : Premiers pas", activities: [
@@ -4758,9 +4759,10 @@ do {
     let base = MoodleCourseAnalyzer.draft(from: snapshot, termStart: nil)
     let merged = MoocMerger.merge(mooc: mooc, references: [], snapshot: snapshot, into: base, termStart: nil,
                                   plannedWeeks: answer.moocWeeks)
-    let week2 = merged.sections.first { $0.week == 2 }?.items.first { $0.kind == .theory }
-    check(week2?.links.contains { $0.url == "https://courseware.epfl.ch/video1" } == true && week2?.links.contains { $0.url.contains("cours02") } == true,
-          "semaine 2 : les transparents de Moodle et la vidéo du Module 1 demandée par le plan")
+    let week2 = merged.sections.filter { $0.week == 2 }.flatMap(\.items).filter { $0.kind == .theory }
+    check(week2.contains { $0.links.contains { $0.url.contains("cours02") } }
+          && week2.contains { $0.title == "MOOC · Module 1 : Variables" && $0.links.contains { $0.url == "https://courseware.epfl.ch/video1" } },
+          "semaine 2 : le cours (transparents) et le Module 1 du MOOC demandé par le plan, chacun son élément")
     check(!merged.sections.flatMap(\.items).flatMap(\.links).contains { $0.url.contains("/q1") || $0.url.contains("/v5") },
           "ni le quiz, ni le module que le plan ne cite pas")
 }
