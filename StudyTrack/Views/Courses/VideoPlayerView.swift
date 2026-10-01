@@ -76,7 +76,11 @@ struct VideoPlayerView: View {
                 }
             }
         }
-        .onDisappear { player?.pause() }
+        .onDisappear {
+            player?.pause()
+            // Une connexion faite dans le lecteur (Switch edu-ID) est gardée.
+            Task { await CookieKeeper.save() }
+        }
     }
 }
 

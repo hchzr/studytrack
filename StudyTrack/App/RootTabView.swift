@@ -48,6 +48,9 @@ struct RootTabView: View {
             })
         }
         .task {
+            // Les sessions des sites de cours (Moodle, MediaSpace, Switch
+            // edu-ID…) d'abord : tout ce qui suit peut en avoir besoin.
+            await CookieKeeper.restore()
             // Raccord au lancement : aucune activité d'îlot ne doit survivre à un
             // chrono éteint. Sans ça, une Live Activity laissée par une exécution
             // précédente restait affichée indéfiniment.
@@ -105,6 +108,9 @@ struct RootTabView: View {
             // sans passer par un bouton dans les réglages.
             if phase == .background, !app.settings.assistantToken.isEmpty {
                 Task { await AssistantSync.sync(context: context, settings: app.settings, force: false) }
+            }
+            if phase == .background {
+                Task { await CookieKeeper.save() }
             }
             if phase == .background, AnkiWebSync.shared.isSignedIn {
                 // Des révisions pas encore envoyées partent avant que l'app ne

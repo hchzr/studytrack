@@ -47,52 +47,66 @@ enum MoocMerger {
             }
         }
 
-        let known = Set(draft.sections.flatMap(\.items).map(\.url).filter { !$0.isEmpty })
-        var added: [ContentDraftSection] = []
-        for (chapterIndex, chapter) in mooc.sections.enumerated() {
+        // **Seulement ce que le cours demande.** Un MOOC entier n'est pas le
+        // travail de la semaine : CS-107 cite quelques vidéos par semaine, et
+        // ses exercices en ligne ne sont pas à faire. Une leçon est gardée si
+        // Moodle la cite (ou cite son chapitre), si son chapitre porte une
+        // semaine (« Semaine 3 »), ou si Moodle traite ce chapitre une semaine
+        // donnée (« 04-Espaces-vectoriels » ↔ « 4. Espaces vectoriels », la
+        // classe inversée où le MOOC **est** le cours).
+        var videos: [CourseVideos.Video] = []
+        var order = 0
+        for chapter in mooc.sections {
             let title = ContentDraftBuilder.cleanTitle(chapter.title)
             guard !title.isEmpty, !chapter.items.isEmpty else { continue }
-            let chapterWeek = chapter.id.flatMap { blockWeeks[$0] }
+            let chapterCited = chapter.id.flatMap { blockWeeks[$0] }
+            let chapterWeek = chapterCited
                 ?? weekInTitle(title)
                 ?? ContentDraftBuilder.leadingNumber(in: title).flatMap { Int($0.number) }.flatMap { chapterWeeks[$0] }
-
-            var byWeek: [(week: Int, items: [ContentDraftItem])] = []
-            for (index, lesson) in chapter.items.enumerated() {
-                guard !lesson.url.isEmpty, !known.contains(lesson.url) else { continue }
-                let lessonTitle = ContentDraftBuilder.cleanTitle(lesson.title)
+            for lesson in chapter.items {
+                guard !lesson.url.isEmpty, !isExercise(lesson) else { continue }
                 let ids = [lesson.id].compactMap { $0 } + (lesson.blockIDs ?? [])
-                let week = ids.compactMap { blockWeeks[$0] }.min() ?? chapterWeek ?? 0
-                let videos = lesson.videoCount ?? (lesson.links ?? []).filter { $0.kind == .video }.count
-                var item = ContentDraftItem(kind: .theory,
-                                            number: "M\(chapterIndex + 1).\(index + 1)",
-                                            title: lessonTitle.isEmpty ? title : lessonTitle,
-                                            url: lesson.url,
-                                            videoCount: videos,
-                                            seriesNumber: nil,
-                                            theoryKind: videos > 0 ? .video : .reading,
-                                            week: week > 0 ? min(week, max(totalWeeks, 1)) : nil)
-                item.links = (lesson.links ?? []).map { link in
-                    ContentLink(title: link.title.isEmpty ? item.title : ContentDraftBuilder.cleanTitle(link.title),
-                                url: link.url, kind: link.kind)
-                }
-                if let slot = byWeek.firstIndex(where: { $0.week == week }) {
-                    byWeek[slot].items.append(item)
+                guard let week = ids.compactMap({ blockWeeks[$0] }).min() ?? chapterWeek, week > 0 else { continue }
+                let lessonTitle = ContentDraftBuilder.cleanTitle(lesson.title)
+                let videoLinks = (lesson.links ?? []).filter { $0.kind == .video }
+                if videoLinks.isEmpty {
+                    order += 1
+                    videos.append(CourseVideos.Video(title: lessonTitle.isEmpty ? title : lessonTitle, url: lesson.url,
+                                                     week: min(week, max(totalWeeks, 1)),
+                                                     kind: (lesson.videoCount ?? 0) > 0 ? .video : .page, order: order))
                 } else {
-                    byWeek.append((week, [item]))
+                    for link in videoLinks {
+                        order += 1
+                        let name = ContentDraftBuilder.cleanTitle(link.title)
+                        videos.append(CourseVideos.Video(title: name.isEmpty || name == lessonTitle ? lessonTitle : "\(lessonTitle) — \(name)",
+                                                         url: link.url, week: min(week, max(totalWeeks, 1)), order: order))
+                    }
                 }
-            }
-            for group in byWeek {
-                added.append(ContentDraftSection(title: "MOOC · \(title)",
-                                                 week: group.week,
-                                                 weekIsInferred: group.week == 0,
-                                                 isIncluded: true,
-                                                 items: group.items))
             }
         }
-        result.sections.append(contentsOf: added.sorted { lhs, rhs in
-            (lhs.week == 0 ? Int.max : lhs.week) < (rhs.week == 0 ? Int.max : rhs.week)
-        })
+        result = CourseVideos.merge(videos, into: result, totalWeeks: totalWeeks, sourceLabel: "MOOC").draft
+        // Le MOOC lui-même reste à portée, pour le reste (facultatif).
+        if !mooc.url.isEmpty {
+            var item = ContentDraftItem(kind: .resource, number: "", title: "MOOC · \(mooc.title)", url: mooc.url,
+                                        videoCount: 0, seriesNumber: nil, theoryKind: .reading)
+            item.links = [ContentLink(title: mooc.title, url: mooc.url, kind: .page)]
+            item.group = "Cours en ligne"
+            if let index = result.sections.firstIndex(where: { $0.title.hasPrefix("Documents") }) {
+                if !result.sections[index].items.contains(where: { $0.url == mooc.url }) { result.sections[index].items.append(item) }
+            } else {
+                result.sections.append(ContentDraftSection(title: "Documents du cours (non suivis)", week: 0,
+                                                           weekIsInferred: false, isIncluded: true, items: [item]))
+            }
+        }
         return result
+    }
+
+    /// Une leçon d'exercices, de quiz ou d'évaluation du MOOC : pas à faire ici.
+    static func isExercise(_ lesson: ScrapedItem) -> Bool {
+        guard (lesson.videoCount ?? 0) == 0, !(lesson.links ?? []).contains(where: { $0.kind == .video }) else { return false }
+        let folded = ContentDraftBuilder.fold(lesson.title)
+        return folded.range(of: #"\b(exercices?|exercises?|quiz+|quizzes|problemes?|problems?|series?|evaluation|assessment|test|devoir|homework|graded)\b"#,
+                            options: .regularExpression) != nil
     }
 
     /// « Semaine 3 — Les boucles » / « Week 3 » → 3.

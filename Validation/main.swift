@@ -1400,18 +1400,22 @@ do {
         ScrapedSection(title: "Annexe", items: [ScrapedItem(title: "Rappels", url: "https://courseware.epfl.ch/l4", type: "sequential")])])
     let merged = MoocMerger.merge(mooc: mooc, references: moocRefs, snapshot: moocSnapshot, into: moocBase, termStart: term)
     func moocWeek(_ url: String) -> Int? {
-        merged.sections.first { $0.items.contains { $0.url == url } }.map { section in
-            section.items.first { $0.url == url }?.week ?? section.week
+        for section in merged.sections {
+            for item in section.items where item.url == url || item.links.contains(where: { $0.url == url }) {
+                return item.kind == .theory ? item.plannedWeek(in: section) : 0
+            }
         }
+        return nil
     }
-    check(moocWeek("https://courseware.epfl.ch/l1") == 3, "leçon citée depuis la section de la semaine 3 → semaine 3 (\(moocWeek("https://courseware.epfl.ch/l1") ?? -1))")
+    check(moocWeek("https://courseware.epfl.ch/xblock/v1") == 3 && moocWeek("https://courseware.epfl.ch/xblock/v2") == 3,
+          "leçon citée depuis la section de la semaine 3 : ses vidéos dans la semaine 3")
     check(moocWeek("https://courseware.epfl.ch/l2") == 6, "« Semaine 6 » dans le titre du chapitre")
     check(moocWeek("https://courseware.epfl.ch/l3") == 4, "chapitre 4 → la semaine où Moodle traite le chapitre 4 (\(moocWeek("https://courseware.epfl.ch/l3") ?? -1))")
-    check(moocWeek("https://courseware.epfl.ch/l4") == 0, "sans indice : à placer à la relecture")
-    let lesson = merged.sections.flatMap(\.items).first { $0.url == "https://courseware.epfl.ch/l1" }
-    check(lesson?.links.map(\.url) == ["https://courseware.epfl.ch/xblock/v1", "https://courseware.epfl.ch/xblock/v2"]
-          && lesson?.theoryKind == .video,
-          "chaque vidéo liée directement, pas le premier élément de la leçon")
+    check(moocWeek("https://courseware.epfl.ch/l4") == nil, "une leçon que le cours ne demande pas n'est pas importée")
+    let week3Items = merged.sections.filter { $0.week == 3 }.flatMap(\.items).filter { $0.kind == .theory }
+    check(week3Items.count == 1, "un seul élément pour la semaine 3, Moodle et MOOC réunis (\(week3Items.map(\.title)))")
+    let exerciseLesson = ScrapedItem(title: "Exercices de la semaine", url: "x", type: "sequential")
+    check(MoocMerger.isExercise(exerciseLesson), "les exercices en ligne du MOOC ne sont pas à faire ici")
 
     check(MoodleCourseAnalyzer.dueDate(fromActivityDates: "Opened: Monday, 31 August 2026, 12:00 PM Due: Friday, 2 October 2026, 11:59 PM")
           == Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: TimeZone(identifier: "Europe/Zurich"), year: 2026, month: 10, day: 2, hour: 23, minute: 59)),

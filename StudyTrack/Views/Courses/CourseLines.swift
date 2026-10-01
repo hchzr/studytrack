@@ -25,24 +25,40 @@ struct CarnetTheoryLine: View {
             }
             .padding(.leading, 4)
 
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(MathMarkup.plain(item.title.isEmpty ? item.number : item.title))
-                        .font(.body)
-                        .foregroundStyle(item.isWatched ? Carnet.inkSecondary : Carnet.ink)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    if detail != hiddenDetail {
-                        Text(detail)
-                            .font(.footnote)
-                            .foregroundStyle(Carnet.inkSecondary)
-                            .lineLimit(1)
+            VStack(alignment: .leading, spacing: 6) {
+                Button(action: onOpen) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(MathMarkup.plain(item.title.isEmpty ? item.number : item.title))
+                            .font(.body)
+                            .foregroundStyle(item.isWatched ? Carnet.inkSecondary : Carnet.ink)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        if detail != hiddenDetail, resourceGroups.count < 2 {
+                            Text(detail)
+                                .font(.footnote)
+                                .foregroundStyle(Carnet.inkSecondary)
+                                .lineLimit(1)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                // **Toutes** les ressources de la semaine, une pastille par
+                // nature : les vidéos, les transparents, les notes… Avant, seul
+                // le lien principal (la vidéo) était accessible d'ici.
+                if resourceGroups.count > 1 || (resourceGroups.first?.links.count ?? 0) > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(resourceGroups, id: \.kind) { group in
+                                resourceChip(group)
+                            }
+                        }
+                    }
+                    .scrollClipDisabled()
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, resourceGroups.count > 1 ? 6 : 0)
 
             if let link = primaryLink {
                 Button { onBrowse(link) } label: {
@@ -60,6 +76,56 @@ struct CarnetTheoryLine: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private struct ResourceGroup {
+        let kind: ContentLink.Kind
+        let links: [ContentLink]
+    }
+
+    /// Les liens rangés par nature, dans l'ordre où on les utilise.
+    private var resourceGroups: [ResourceGroup] {
+        let order: [ContentLink.Kind] = [.video, .slides, .notes, .pdf, .page, .solution]
+        return order.compactMap { kind in
+            let links = item.links.filter { $0.kind == kind && ExerciseLinks.web($0.url) != nil }
+            return links.isEmpty ? nil : ResourceGroup(kind: kind, links: links)
+        }
+    }
+
+    @ViewBuilder
+    private func resourceChip(_ group: ResourceGroup) -> some View {
+        let label = HStack(spacing: 4) {
+            Image(systemName: group.kind.icon).font(.caption2.weight(.semibold))
+            Text(group.links.count > 1 ? "\(group.links.count) \(group.kind.pluralLabel)" : group.kind.chipLabel)
+                .font(.caption.weight(.medium))
+            if group.links.count > 1 {
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+            }
+        }
+        .foregroundStyle(Carnet.ink)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 30)
+        .background(Carnet.sheetRaised, in: Capsule())
+        if group.links.count == 1, let link = group.links.first, let browsed = browsed(link) {
+            Button { onBrowse(browsed) } label: { label }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("Ouvrir \(link.title)")
+        } else {
+            Menu {
+                ForEach(Array(group.links.enumerated()), id: \.offset) { _, link in
+                    if let browsed = browsed(link) {
+                        Button { onBrowse(browsed) } label: {
+                            Label(link.title.isEmpty ? group.kind.chipLabel : link.title, systemImage: group.kind.icon)
+                        }
+                    }
+                }
+            } label: { label }
+            .accessibilityLabel("\(group.links.count) \(group.kind.pluralLabel)")
+        }
+    }
+
+    private func browsed(_ link: ContentLink) -> BrowsedLink? {
+        ExerciseLinks.web(link.url).map { BrowsedLink(title: link.title.isEmpty ? item.title : link.title, url: $0, icon: link.kind.icon) }
     }
 
     /// Le détail partagé par **toutes** les lignes, s'il y en a un.
@@ -114,6 +180,30 @@ struct CarnetTheoryLine: View {
 }
 
 extension ContentLink.Kind {
+    /// « Transparents », « Vidéo » : la pastille d'un seul lien.
+    var chipLabel: String {
+        switch self {
+        case .video: return "Vidéo"
+        case .slides: return "Transparents"
+        case .notes: return "Notes"
+        case .pdf: return "PDF"
+        case .page: return "Page"
+        case .solution: return "Corrigé"
+        }
+    }
+
+    /// « 5 vidéos », « 2 transparents ».
+    var pluralLabel: String {
+        switch self {
+        case .video: return "vidéos"
+        case .slides: return "transparents"
+        case .notes: return "notes"
+        case .pdf: return "PDF"
+        case .page: return "pages"
+        case .solution: return "corrigés"
+        }
+    }
+
     /// « transparents », « notes » : le mot d'une ligne de détail.
     var shortLabel: String {
         switch self {

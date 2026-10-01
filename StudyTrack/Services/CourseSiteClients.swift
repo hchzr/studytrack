@@ -445,6 +445,25 @@ final class ExpliqueClient {
 
     enum Failure: Error { case notSignedIn }
 
+    /// Connecté·e ? La page d'accueil affiche le compte (« …@epfl.ch ») ou
+    /// renvoie vers `/login`.
+    func isSignedIn() async -> Bool {
+        do {
+            try await session.load(Self.home)
+            let result = try await session.run(#"""
+            for (let i = 0; i < 20; i++) {
+              if (location.pathname.startsWith('/login')) return 'false';
+              if (/@epfl\.ch/.test(document.body.innerText) || document.querySelector('h2')) return 'true';
+              await new Promise(r => setTimeout(r, 400));
+            }
+            return 'false';
+            """#)
+            return result == "true"
+        } catch {
+            return false
+        }
+    }
+
     func lectures(slug: String) async throws -> [ExpliqueImport.Lecture] {
         let raw = try await read(URL(string: "https://explique.epfl.ch/\(slug)/lectures")!, script: #"""
         return JSON.stringify(weeks.flatMap(({ h, week }) => {
@@ -556,6 +575,25 @@ final class MediaSpaceClient {
         return false
     }
 
+    /// Connecté·e ? « Mes médias » montre « Logout » ; sinon MediaSpace renvoie
+    /// vers le choix de l'établissement (WAYF).
+    func isSignedIn() async -> Bool {
+        do {
+            try await session.load(URL(string: "https://mediaspace.epfl.ch/my-media")!)
+            let result = try await session.run(#"""
+            for (let i = 0; i < 15; i++) {
+              if (/wayf|eduid|login|saml/i.test(location.href)) return 'false';
+              if (document.querySelector('a[href*="/user/logout"]')) return 'true';
+              await new Promise(r => setTimeout(r, 400));
+            }
+            return 'false';
+            """#)
+            return result == "true"
+        } catch {
+            return false
+        }
+    }
+
     func entries(of collection: URL) async throws -> [CourseVideos.Video] {
         try await session.load(collection)
         let own = Self.entryID(in: collection.absoluteString) ?? ""
@@ -565,7 +603,10 @@ final class MediaSpaceClient {
         const until = Date.now() + 15000;
         while (Date.now() < until) {
           if (isLogin()) return '__login__';
-          if (document.querySelectorAll('a[href*="_"]').length > 5 && /[01]_[a-z0-9]{8}/.test(document.body.innerHTML)) break;
+          // Une liste de lecture (lecteur Kaltura : éléments « playlist-item ») ou
+          // une galerie (chaîne, catégorie : liens « /media/… »).
+          if (document.querySelector('[class*="playlistItemThumbnailWrap"]')) break;
+          if ([...document.querySelectorAll('a[href]')].filter(a => /[01]_[a-z0-9]{8}/.test(a.href) && !a.href.includes(own)).length > 2) break;
           await sleep(400);
         }
         if (isLogin()) return '__login__';
@@ -577,6 +618,20 @@ final class MediaSpaceClient {
         }
         const seen = new Set([own]);
         const out = [];
+        // Liste de lecture : l'identifiant est dans l'aperçu, le titre dans
+        // l'élément (« 1 02:12:56 PHYS-101(en) Lecture 01a: … »). Vérifié sur
+        // « Lecture recordings 2025 » de PHYS-101 : 25 vidéos.
+        const base = location.href.replace(/\/[01]_[a-z0-9]{8}\/?(\?.*)?$/, '').replace(/\?.*$/, '');
+        document.querySelectorAll('[class*="playlistItemThumbnailWrap"]').forEach(t => {
+          const id = ((t.getAttribute('style') || '').match(/[01]_[a-z0-9]{8}/) || [])[0];
+          let item = t.parentElement;
+          while (item && ![...item.classList].some(c => /^playlist-item__playlistItem___/.test(c))) item = item.parentElement;
+          item = item || t.parentElement;
+          const title = (item.innerText || '').trim().replace(/\s+/g, ' ').replace(/^\d+\s+(\d{1,2}:)?\d{1,2}:\d{2}\s+/, '');
+          if (!id || seen.has(id) || title.length < 3) return;
+          seen.add(id);
+          out.push({ title, url: base.includes('/playlist/') ? base + '/' + id : 'https://mediaspace.epfl.ch/media/t/' + id });
+        });
         document.querySelectorAll('a[href]').forEach(a => {
           const href = decodeURIComponent(a.href);
           const ids = href.match(/[01]_[a-z0-9]{8}/g);

@@ -93,7 +93,10 @@ enum ExpliqueImport {
         var added = 0
         let currentYear = String(calendar.component(.year, from: termStart ?? Date()))
 
-        let videos = CourseVideos.merge(lectures.map { CourseVideos.Video(title: $0.title, url: $0.url, week: $0.week > 0 ? $0.week : nil) },
+        let videos = CourseVideos.merge(lectures.enumerated().map { index, lecture in
+                                            CourseVideos.Video(title: lecture.title, url: lecture.url,
+                                                               week: lecture.week > 0 ? lecture.week : nil, order: index)
+                                        },
                                         into: result, totalWeeks: totalWeeks, sourceLabel: "Explique", preferredYear: currentYear)
         result = videos.draft
         added += videos.added

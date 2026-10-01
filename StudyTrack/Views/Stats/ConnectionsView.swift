@@ -50,32 +50,27 @@ struct ConnectionSheetContent: View {
 struct ConnectionsList: View {
     @Environment(AppContainer.self) private var app
     @State private var sheet: ConnectionSheet?
-    @State private var checkingMoodle = false
     @State private var calendarGranted = false
+    /// L'état **vérifié** de chaque site (nil : vérification en cours).
+    @State private var sites: [ConnectionSheet: Bool] = [:]
+    @State private var checking: Set<ConnectionSheet> = []
 
     private var center: ConnectionCenter { .shared }
+    private static let websites: [ConnectionSheet] = [.moodle, .courseware, .explique, .mediaspace]
 
     var body: some View {
         CarnetSheet {
-            row(icon: "graduationcap", title: "Moodle",
-                purpose: "Séries, énoncés et théorie des cours, mis à jour tout seuls",
-                status: moodleStatus, connected: center.state(of: .moodle) == .connected,
-                action: checkingMoodle ? nil : { sheet = .moodle })
+            siteRow(.moodle, icon: "graduationcap", title: "Moodle",
+                    purpose: "Séries, énoncés, théorie et échéances, mis à jour tout seuls")
             CarnetRule()
-            row(icon: "play.rectangle", title: "Courseware",
-                purpose: "Vidéos des MOOC (classe inversée) — facultatif",
-                status: "Se connecter si un cours y renvoie", connected: false,
-                action: { sheet = .courseware })
+            siteRow(.courseware, icon: "play.rectangle", title: "Courseware",
+                    purpose: "Vidéos des MOOC que les cours demandent de regarder")
             CarnetRule()
-            row(icon: "sparkles.tv", title: "Explique",
-                purpose: "Cours en replay et exercices d'AICC (CS-101), semaine par semaine",
-                status: "Se connecter une fois, avec le compte EPFL", connected: false,
-                action: { sheet = .explique })
+            siteRow(.explique, icon: "sparkles.tv", title: "Explique",
+                    purpose: "Cours en replay et exercices d'AICC (CS-101)")
             CarnetRule()
-            row(icon: "video", title: "MediaSpace",
-                purpose: "Enregistrements des cours, ouverts directement depuis la théorie",
-                status: "Se connecter une fois, avec Switch edu-ID", connected: false,
-                action: { sheet = .mediaspace })
+            siteRow(.mediaspace, icon: "video", title: "MediaSpace",
+                    purpose: "Enregistrements des cours, lus dans l'app")
             CarnetRule()
             row(icon: "person.2", title: "Compte StudyTrack",
                 purpose: "Groupes, entraide, progression partagée",
@@ -84,7 +79,7 @@ struct ConnectionsList: View {
                 action: app.social.isSignedIn ? nil : { sheet = .groups })
             CarnetRule()
             row(icon: "rectangle.stack", title: "AnkiWeb",
-                purpose: "Cartes créées depuis les exercices, temps de révision",
+                purpose: "Cartes, révisions et temps de révision",
                 status: ankiStatus,
                 connected: AnkiWebSync.shared.isSignedIn && center.state(of: .ankiweb) != .expired,
                 action: { sheet = .ankiweb })
@@ -97,23 +92,49 @@ struct ConnectionsList: View {
                     Task { calendarGranted = await app.calendar.requestAccess() }
                 })
         }
-        .sheet(item: $sheet) { ConnectionSheetContent(sheet: $0) }
+        .sheet(item: $sheet, onDismiss: {
+            // Après une connexion : on revérifie ce site-là.
+            for site in Self.websites { Task { await check(site) } }
+        }) { ConnectionSheetContent(sheet: $0) }
         .task {
             calendarGranted = app.calendar.hasAccess
-            await checkMoodle()
-        }
-        .onChange(of: sheet) { _, value in
-            if value == nil { Task { await checkMoodle() } }
+            await withTaskGroup(of: Void.self) { group in
+                for site in Self.websites { group.addTask { await check(site) } }
+            }
         }
     }
 
-    private var moodleStatus: String {
-        if checkingMoodle { return "Vérification…" }
-        switch center.state(of: .moodle) {
-        case .connected: return "Connecté·e"
-        case .expired: return "Reconnexion nécessaire"
-        case .unknown: return "Pas encore connecté·e"
+    private func siteRow(_ site: ConnectionSheet, icon: String, title: String, purpose: String) -> some View {
+        let connected = sites[site] == true
+        let status: String
+        if checking.contains(site) {
+            status = "Vérification…"
+        } else if connected {
+            status = "Connecté·e"
+        } else if site == .moodle, center.state(of: .moodle) == .expired {
+            status = "Reconnexion nécessaire"
+        } else {
+            status = sites[site] == false ? "Pas connecté·e" : "—"
         }
+        return row(icon: icon, title: title, purpose: purpose, status: status, connected: connected,
+                   action: checking.contains(site) ? nil : { sheet = site }, actionTitle: connected ? "Reconnecter" : "Connecter")
+    }
+
+    /// Vérifie un site dans le navigateur invisible (sa vraie session).
+    @MainActor
+    private func check(_ site: ConnectionSheet) async {
+        guard !checking.contains(site) else { return }
+        checking.insert(site)
+        defer { checking.remove(site) }
+        let result: Bool
+        switch site {
+        case .moodle: result = await MoodleClient().ensureSignedIn()
+        case .courseware: result = await CoursewareClient().isSignedIn()
+        case .explique: result = await ExpliqueClient().isSignedIn()
+        case .mediaspace: result = await MediaSpaceClient().isSignedIn()
+        default: return
+        }
+        withAnimation(Motion.snappy) { sites[site] = result }
     }
 
     private var ankiStatus: String {
@@ -121,17 +142,8 @@ struct ConnectionsList: View {
         return center.state(of: .ankiweb) == .expired ? "Reconnexion nécessaire" : "Connecté·e (\(AnkiWebSync.shared.username))"
     }
 
-    /// Une vérification réelle (et une reconnexion silencieuse si besoin) :
-    /// l'état retenu peut dater.
-    private func checkMoodle() async {
-        guard !checkingMoodle else { return }
-        checkingMoodle = true
-        _ = await MoodleClient().ensureSignedIn()
-        checkingMoodle = false
-    }
-
     private func row(icon: String, title: String, purpose: String, status: String,
-                     connected: Bool, action: (() -> Void)?) -> some View {
+                     connected: Bool, action: (() -> Void)?, actionTitle: String? = nil) -> some View {
         HStack(spacing: 12) {
             CarnetIconTile(systemName: icon, tint: connected ? Carnet.correct : Carnet.inkSecondary)
             VStack(alignment: .leading, spacing: 2) {
@@ -139,13 +151,24 @@ struct ConnectionsList: View {
                 Text(purpose).font(.footnote).foregroundStyle(Carnet.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Label(status, systemImage: connected ? "checkmark.circle.fill" : "circle.dashed")
-                    .font(.caption.weight(.medium))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(connected ? Carnet.correct : Carnet.inkTertiary)
             }
             Spacer(minLength: 8)
             if let action {
-                Button(connected ? "Gérer" : "Connecter", action: action)
-                    .buttonStyle(.carnetSecondary)
+                if connected, actionTitle == nil {
+                    Button("Gérer", action: action).buttonStyle(.carnetSecondary)
+                } else if connected {
+                    Menu {
+                        Button(actionTitle ?? "Reconnecter", action: action)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Carnet.inkSecondary)
+                    }
+                } else {
+                    Button(actionTitle ?? "Connecter", action: action).buttonStyle(.carnetSecondary)
+                }
+            } else if !connected, status == "Vérification…" {
+                ProgressView()
             }
         }
         .padding(.horizontal, Carnet.rowInset)

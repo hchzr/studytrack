@@ -553,6 +553,7 @@ struct SiteLoginSheet: View {
         let result = try? await browser.webView?.callAsyncJavaScript(site.check, contentWorld: .page) as? String
         if result == "true" {
             Haptics.success()
+            Task { await CookieKeeper.save() }
             if site == .moodle {
                 ConnectionCenter.shared.report(.moodle, .connected)
                 // Ce qui avait échoué faute de session est retenté.

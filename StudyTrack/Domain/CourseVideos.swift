@@ -10,6 +10,10 @@ enum CourseVideos {
         var url: String
         /// La semaine, quand la source la donne ; sinon déduite du titre.
         var week: Int?
+        /// Une leçon de MOOC sans vidéo est une page à lire.
+        var kind: ContentLink.Kind = .video
+        /// L'ordre de la source, gardé quand rien d'autre ne départage.
+        var order: Int = 0
     }
 
     /// La semaine d'une vidéo d'après son titre, quand la source ne la donne pas.
@@ -65,10 +69,10 @@ enum CourseVideos {
                     let l = lhs.title.contains(year), r = rhs.title.contains(year)
                     if l != r { return l }
                 }
-                return lhs.title.count < rhs.title.count
+                return lhs.order < rhs.order
             }.filter { known.insert($0.url).inserted }
             guard !ordered.isEmpty else { continue }
-            let links = ordered.map { ContentLink(title: $0.title, url: $0.url, kind: .video) }
+            let links = ordered.map { ContentLink(title: $0.title, url: $0.url, kind: $0.kind) }
             if let position = weekItem(week, in: result) {
                 var item = result.sections[position.section].items[position.item]
                 if item.links.isEmpty, !item.url.isEmpty {
@@ -76,7 +80,7 @@ enum CourseVideos {
                 }
                 item.links.append(contentsOf: links)
                 item.videoCount = item.links.filter { $0.kind == .video }.count
-                item.theoryKind = .video
+                if item.videoCount > 0 { item.theoryKind = .video }
                 result.sections[position.section].items[position.item] = item
             } else {
                 var topics: [String] = []
@@ -86,7 +90,8 @@ enum CourseVideos {
                 }
                 var item = ContentDraftItem(kind: .theory, number: "\(week)",
                                             title: topics.isEmpty ? "Cours de la semaine \(week)" : topics.prefix(3).joined(separator: " · "),
-                                            url: ordered[0].url, videoCount: links.count, seriesNumber: nil, theoryKind: .video)
+                                            url: ordered[0].url, videoCount: links.filter { $0.kind == .video }.count, seriesNumber: nil,
+                                            theoryKind: links.contains { $0.kind == .video } ? .video : .reading)
                 item.links = links
                 append(item, week: week, label: sourceLabel, to: &result)
             }
@@ -98,7 +103,7 @@ enum CourseVideos {
             let items = loose.map { video -> ContentDraftItem in
                 var item = ContentDraftItem(kind: .resource, number: "", title: video.title, url: video.url,
                                             videoCount: 1, seriesNumber: nil, theoryKind: .video)
-                item.links = [ContentLink(title: video.title, url: video.url, kind: .video)]
+                item.links = [ContentLink(title: video.title, url: video.url, kind: video.kind)]
                 item.group = "Vidéos du cours (\(sourceLabel))"
                 return item
             }
