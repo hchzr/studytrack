@@ -144,7 +144,26 @@ final class AnkiWebSync {
     // MARK: Copie de la collection
 
     /// Retélécharge la collection si le serveur a changé depuis la copie.
+    ///
+    /// Toute erreur est **montrée** (et journalisée) : la synchronisation
+    /// automatique l'avalait, et l'écran restait sur « Lecture d'AnkiWeb… »
+    /// indéfiniment, sans dire ce qui avait échoué.
     func refreshMirror(force: Bool = false) async throws {
+        let ownsWork = !isWorking
+        if ownsWork { isWorking = true }
+        defer { if ownsWork { isWorking = false } }
+        lastError = nil
+        do {
+            try await performRefresh(force: force)
+        } catch {
+            status = ""
+            lastError = error.localizedDescription
+            AppLog.record(.warning, "anki", "AnkiWeb : synchronisation impossible", detail: error.localizedDescription)
+            throw error
+        }
+    }
+
+    private func performRefresh(force: Bool) async throws {
         let client = client()
         status = "Lecture d'AnkiWeb…"
         let meta: AnkiWebClient.Meta

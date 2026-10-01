@@ -242,7 +242,8 @@ struct AnkiSettingsView: View {
 
     private func refresh() async {
         guard sync.isSignedIn else { return }
-        _ = await AnkiReviewSync.syncIfDue(context: context, settings: app.settings, force: true)
+        // L'erreur est montrée par `sync.lastError` (posée par `refreshMirror`).
+        _ = try? await AnkiReviewSync.sync(context: context, settings: app.settings)
         refreshToken = UUID()
     }
 }

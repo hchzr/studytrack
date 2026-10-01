@@ -96,8 +96,24 @@ final class AnkiWebClient {
         // du serveur (`https://sync12.ankiweb.net/`). URLSession, laissé faire,
         // y renvoyait le formulaire tel quel — sur la racine, pas sur
         // `/sync/<méthode>` — et AnkiWeb répondait 400.
-        let (payload, response) = try await session.data(for: request, delegate: RedirectBlocker.shared)
+        let payload: Data
+        let response: URLResponse
+        do {
+            (payload, response) = try await session.data(for: request, delegate: RedirectBlocker.shared)
+        } catch {
+            AppLog.record(.warning, "anki", "AnkiWeb « \(method) » : pas de réponse",
+                          detail: "\(request.url?.host ?? "?") — \(error.localizedDescription)")
+            throw error
+        }
         guard let http = response as? HTTPURLResponse else { throw Failure.server(0, "", method: method) }
+        if !(200..<300).contains(http.statusCode) {
+            // Ce que le serveur a vraiment répondu : la seule piste quand une
+            // étape échoue (on ne peut pas reproduire sans le compte).
+            let head = String(data: payload.prefix(160), encoding: .utf8)
+                ?? payload.prefix(24).map { String(format: "%02x", $0) }.joined()
+            AppLog.record(.warning, "anki", "AnkiWeb « \(method) » : HTTP \(http.statusCode)",
+                          detail: "\(request.url?.absoluteString ?? "?") · \(http.value(forHTTPHeaderField: "Content-Type") ?? "?") · \(payload.count) o · \(head)")
+        }
         switch http.statusCode {
         case 200..<300:
             return payload
@@ -147,6 +163,9 @@ final class AnkiWebClient {
 
     private func object(_ data: Data, _ what: String) throws -> [String: Any] {
         guard let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let head = String(data: data.prefix(120), encoding: .utf8)
+                ?? data.prefix(16).map { String(format: "%02x", $0) }.joined()
+            AppLog.record(.warning, "anki", "AnkiWeb « \(what) » : réponse illisible", detail: "\(data.count) o · \(head)")
             throw Failure.decoding(what)
         }
         return value
@@ -173,7 +192,7 @@ final class AnkiWebClient {
     }
 
     func meta() async throws -> Meta {
-        let reply = try object(try await call("meta", json: ["v": Self.syncVersion, "cv": Self.clientVersion]), "meta")
+        let reply = try object(try await call("meta", json: ["v": Self.syncVersion, "cv": Self.clientVersion], timeout: 30), "meta")
         let meta = Meta(modified: (reply["mod"] as? NSNumber)?.int64Value ?? 0,
                         schema: (reply["scm"] as? NSNumber)?.int64Value ?? 0,
                         usn: (reply["usn"] as? NSNumber)?.intValue ?? 0,
@@ -188,6 +207,7 @@ final class AnkiWebClient {
            let url = URL(string: "https://sync\(meta.hostNumber).ankiweb.net/") {
             endpoint = url
             if let moved = try? await self.meta() { return moved }
+            AppLog.record(.info, "anki", "AnkiWeb : le serveur sync\(meta.hostNumber) ne répond pas, on reste sur le serveur principal")
             endpoint = Self.defaultEndpoint
         }
         guard meta.shouldContinue else { throw Failure.unsupported(meta.message.isEmpty ? "AnkiWeb refuse la synchronisation." : meta.message) }
