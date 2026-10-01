@@ -4503,6 +4503,33 @@ do {
     check(!e2.isDone && !f1.isDone && e1.correctness == .wrong, "annuler retire aussi les corrections ajoutées")
 }
 
+print("== Trame zstd sans compression (AnkiWeb) ==")
+do {
+    let small = Data(#"{"v":11,"cv":"anki,25.02.7 (6ddc22e5),ios"}"#.utf8)
+    let large = Data((0..<300_000).map { UInt8($0 % 251) })
+    let frame = ZstdFrame.stored(small)
+    check(Array(frame.prefix(4)) == ZstdFrame.magic, "la trame commence par le nombre magique zstd")
+    check(frame.count == small.count + 4 + 1 + 4 + 3, "en-tête + un bloc brut (\(frame.count) o)")
+    // Le vrai décodeur, quand il est installé, relit exactement le contenu.
+    let tool = ["/opt/homebrew/bin/zstd", "/usr/local/bin/zstd"].first { FileManager.default.isExecutableFile(atPath: $0) }
+    if let tool {
+        for (label, payload) in [("petit", small), ("300 ko, plusieurs blocs", large)] {
+            let input = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zst")
+            try? ZstdFrame.stored(payload).write(to: input)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: tool)
+            process.arguments = ["-q", "-d", "-c", input.path]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            try? process.run()
+            let output = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            check(process.terminationStatus == 0 && output == payload, "zstd relit la trame (\(label))")
+            try? FileManager.default.removeItem(at: input)
+        }
+    }
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

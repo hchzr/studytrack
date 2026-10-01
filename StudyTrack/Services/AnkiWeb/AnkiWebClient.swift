@@ -18,7 +18,17 @@ import Foundation
 /// normale que le serveur annule entièrement si quoi que ce soit ne concorde.
 final class AnkiWebClient {
     static let syncVersion = 10
-    static let clientVersion = "studytrack,1.0,ios"
+    /// L'identifiant de client, **au format d'Anki** : `anki,<version>
+    /// (<build>),<plateforme>`.
+    ///
+    /// AnkiWeb lit la version dans cet identifiant et refuse (400, sans
+    /// message) tout ce qui n'en a pas la forme ou qui est trop ancien :
+    /// « studytrack,1.0,ios » faisait échouer la lecture du compte (`meta`)
+    /// juste après une connexion réussie. Vérifié sur sync20.ankiweb.net le
+    /// 1ᵉʳ octobre 2026 : cette forme répond 200, la nôtre 400.
+    static let clientVersion = "anki,25.02.7 (6ddc22e5),ios"
+    /// La forme courte, celle de l'en-tête `anki-sync` (« 25.02.7,6ddc22e5,ios »).
+    static let shortClientVersion = "25.02.7,6ddc22e5,ios"
     static let defaultEndpoint = URL(string: "https://sync.ankiweb.net/")!
 
     private(set) var endpoint: URL
@@ -192,7 +202,19 @@ final class AnkiWebClient {
     }
 
     func meta() async throws -> Meta {
-        let reply = try object(try await call("meta", json: ["v": Self.syncVersion, "cv": Self.clientVersion], timeout: 30), "meta")
+        let data: Data
+        do {
+            data = try await call("meta", json: ["v": Self.syncVersion, "cv": Self.clientVersion], timeout: 30)
+        } catch Failure.server(400, _, _) where endpoint == Self.defaultEndpoint {
+            // Le serveur principal répond 400 à l'ancien format quand le compte
+            // vit ailleurs, au lieu de rediriger. Le format récent, lui, reçoit
+            // la redirection (308 → `https://sync20.ankiweb.net/`) : on s'en
+            // sert pour trouver le serveur du compte, puis on rejoue.
+            guard let home = try await discoverServer() else { throw Failure.server(400, "", method: "meta") }
+            endpoint = home
+            data = try await call("meta", json: ["v": Self.syncVersion, "cv": Self.clientVersion], timeout: 30)
+        }
+        let reply = try object(data, "meta")
         let meta = Meta(modified: (reply["mod"] as? NSNumber)?.int64Value ?? 0,
                         schema: (reply["scm"] as? NSNumber)?.int64Value ?? 0,
                         usn: (reply["usn"] as? NSNumber)?.intValue ?? 0,
@@ -212,6 +234,28 @@ final class AnkiWebClient {
         }
         guard meta.shouldContinue else { throw Failure.unsupported(meta.message.isEmpty ? "AnkiWeb refuse la synchronisation." : meta.message) }
         return meta
+    }
+
+    /// Le serveur du compte, lu dans la redirection que le format récent du
+    /// protocole (en-tête `anki-sync`, corps zstd) reçoit du serveur principal.
+    /// Seul le code et l'en-tête `Location` servent : la réponse (zstd) n'est
+    /// pas lue.
+    func discoverServer() async throws -> URL? {
+        let body = try JSONSerialization.data(withJSONObject: ["v": 11, "cv": Self.clientVersion])
+        var request = URLRequest(url: Self.defaultEndpoint.appendingPathComponent("sync").appendingPathComponent("meta"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        let header: [String: Any] = ["v": 11, "k": hostKey, "c": Self.shortClientVersion, "s": sessionKey]
+        request.setValue(String(decoding: try JSONSerialization.data(withJSONObject: header), as: UTF8.self),
+                         forHTTPHeaderField: "anki-sync")
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.httpBody = ZstdFrame.stored(body)
+        let (_, response) = try await session.data(for: request, delegate: RedirectBlocker.shared)
+        guard let http = response as? HTTPURLResponse, [301, 302, 307, 308].contains(http.statusCode),
+              let location = http.value(forHTTPHeaderField: "Location") else { return nil }
+        let server = Self.endpoint(fromRedirect: location, relativeTo: request.url)
+        AppLog.record(.info, "anki", "AnkiWeb : compte sur \(server?.host ?? "?")")
+        return server
     }
 
     /// La collection entière, un fichier SQLite (schéma 11).
