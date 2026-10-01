@@ -33,7 +33,7 @@ struct CarnetTheoryLine: View {
                             .foregroundStyle(item.isWatched ? Carnet.inkSecondary : Carnet.ink)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        if detail != hiddenDetail, resourceGroups.count < 2 {
+                        if detail != hiddenDetail, resourceGroups.isEmpty {
                             Text(detail)
                                 .font(.footnote)
                                 .foregroundStyle(Carnet.inkSecondary)
@@ -47,7 +47,8 @@ struct CarnetTheoryLine: View {
                 // **Toutes** les ressources de la semaine, une pastille par
                 // nature : les vidéos, les transparents, les notes… Avant, seul
                 // le lien principal (la vidéo) était accessible d'ici.
-                if resourceGroups.count > 1 || (resourceGroups.first?.links.count ?? 0) > 1 {
+                // Une seule rangée d'accès : pas de bouton en double à droite.
+                if !resourceGroups.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(resourceGroups, id: \.kind) { group in
@@ -58,22 +59,9 @@ struct CarnetTheoryLine: View {
                     .scrollClipDisabled()
                 }
             }
-            .padding(.vertical, resourceGroups.count > 1 ? 6 : 0)
+            .padding(.vertical, resourceGroups.isEmpty ? 0 : 6)
+            .padding(.trailing, 8)
 
-            if let link = primaryLink {
-                Button { onBrowse(link) } label: {
-                    Image(systemName: link.icon)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Carnet.ink)
-                        .frame(width: 32, height: 32)
-                        .background(Carnet.sheetRaised, in: Circle())
-                        .frame(width: Layout.minTouch, height: Layout.minTouch)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel("Ouvrir \(link.title)")
-                .padding(.trailing, 4)
-            }
         }
         .padding(.vertical, 2)
     }
@@ -86,8 +74,12 @@ struct CarnetTheoryLine: View {
     /// Les liens rangés par nature, dans l'ordre où on les utilise.
     private var resourceGroups: [ResourceGroup] {
         let order: [ContentLink.Kind] = [.video, .slides, .notes, .pdf, .page, .solution]
+        // Un élément sans liens rangés n'a que son adresse : une pastille quand même.
+        let all = item.links.isEmpty && ExerciseLinks.web(item.urlString) != nil
+            ? [ContentLink(title: item.title, url: item.urlString, kind: item.kind == .video ? .video : .page)]
+            : item.links
         return order.compactMap { kind in
-            let links = item.links.filter { $0.kind == kind && ExerciseLinks.web($0.url) != nil }
+            let links = all.filter { $0.kind == kind && ExerciseLinks.web($0.url) != nil }
             return links.isEmpty ? nil : ResourceGroup(kind: kind, links: links)
         }
     }
@@ -154,16 +146,6 @@ struct CarnetTheoryLine: View {
             parts.append(siteName(host))
         }
         return parts.joined(separator: " · ")
-    }
-
-    /// Le support à ouvrir d'un toucher : la vidéo d'abord.
-    private var primaryLink: BrowsedLink? {
-        let links = item.links
-        let chosen = links.first { $0.kind == .video } ?? links.first
-        let address = chosen?.url ?? item.urlString
-        guard let url = ExerciseLinks.web(address) else { return nil }
-        return BrowsedLink(title: chosen?.title ?? item.title, url: url,
-                           icon: chosen?.kind.icon ?? item.kind.icon)
     }
 
     static func siteName(_ host: String) -> String {

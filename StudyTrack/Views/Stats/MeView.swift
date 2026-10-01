@@ -123,7 +123,7 @@ struct MeView: View {
                 ProfileView(isEmbedded: true)
             } label: {
                 CarnetRow(icon: "gearshape", tint: Carnet.inkSecondary, title: "Réglages",
-                          subtitle: "Semestre, notifications, chrono, compte, données") {
+                          subtitle: "Études, comptes, outils, rappels, données") {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
                 }
             }

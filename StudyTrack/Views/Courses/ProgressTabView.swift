@@ -1,91 +1,249 @@
 import SwiftUI
 import SwiftData
 
-/// Progression d'un cours : **semaine par semaine**, Théorie et Séries.
+/// La progression d'un cours, dans l'ordre des questions qu'on se pose :
+/// **où j'en suis**, **qu'est-ce qui traîne** (et le rattraper d'ici), puis le
+/// semestre semaine par semaine, et le temps passé cette semaine.
 ///
-/// L'ancienne page empilait trois anneaux, un histogramme à faire défiler de
-/// côté (trois barres par semaine, lisibles seulement avec la légende), la
-/// charge EPFL et des badges. On y cherchait « où j'en suis cette semaine, et
-/// qu'est-ce qui traîne des semaines passées » sans le trouver. La page est
-/// désormais un calendrier : une ligne par semaine, deux barres, et ce qui
-/// reste se déplie sous la semaine.
+/// L'ancienne page (cartes système, trois axes par semaine, « en retard sur
+/// S2, S3 » sans dire quoi) répondait mal à « à jour sur les semaines
+/// passées ? » : on y arrivait depuis cette phrase, et il fallait déplier les
+/// semaines une à une pour trouver ce qui manquait. Le retard est désormais une
+/// liste, cochable sur place.
 struct ProgressTabView: View {
     let course: Course
 
     @Environment(AppContainer.self) private var app
+    @Environment(\.modelContext) private var context
     @State private var expanded: Set<Int> = []
     @State private var openedVideo: TheoryItem?
     @State private var openedExercise: Exercise?
+    @State private var undo: WeekCompletion.Change?
 
     private var weeks: [WeeklyProgress] { ProgressEngine.semesterWeeks(for: course) }
     private var current: Int { course.isTermRunning ? course.currentWeek : 0 }
+    private var tint: Color { Carnet.tint(course.colorHex) }
+
+    /// Ce qui reste des semaines passées : théorie non vue, exercices non faits.
+    private var lateTheory: [TheoryItem] {
+        course.sortedTheoryItems.filter { $0.plannedWeek > 0 && $0.plannedWeek < current && !$0.isWatched }
+    }
+    private var lateExercises: [Exercise] {
+        course.sortedSeries.filter { $0.plannedWeek > 0 && $0.plannedWeek < current }
+            .flatMap(\.sortedExercises).filter { !$0.isBonus && !$0.isDone }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            semesterCard
+        VStack(alignment: .leading, spacing: 26) {
+            standing
+            if !lateTheory.isEmpty || !lateExercises.isEmpty { lateSection }
             weeksSection
-            unplannedCard
-            workloadCard
+            unplannedSection
+            timeSection
         }
         .onAppear { if current > 0 { expanded.insert(current) } }
         .sheet(item: $openedVideo) { VideoDetailSheet(video: $0) }
         .sheet(item: $openedExercise) { ExerciseSheet(exercise: $0) }
+        .animation(Motion.snappy, value: lateTheory.count + lateExercises.count)
     }
 
-    // MARK: Semestre
+    // MARK: Où tu en es
 
-    private var semesterCard: some View {
+    private var standing: some View {
         let progress = ProgressEngine.progress(for: course)
-        let behind = weeks.filter { $0.week < current && $0.remainingCount > 0 }
-        return Card(title: "Tout le semestre", icon: "chart.bar.fill") {
-            VStack(alignment: .leading, spacing: Layout.block) {
-                WeekAxisRow(title: "Théorie", done: progress.watchedCount, total: progress.videoCount,
-                            tint: TaskType.theory.tint)
-                WeekAxisRow(title: "Séries", done: progress.doneCount, total: progress.exerciseCount,
-                            tint: TaskType.exercise.tint)
-                WeekAxisRow(title: "Corrections", done: progress.correctedCount, total: progress.doneCount,
-                            tint: TaskType.correction.tint)
-                if !behind.isEmpty || progress.wrongOrRedoCount > 0 {
-                    Divider()
-                    VStack(alignment: .leading, spacing: Layout.tight) {
-                        if !behind.isEmpty {
-                            Label("En retard sur " + behind.map { "S\($0.week)" }.joined(separator: ", "),
-                                  systemImage: "clock.badge.exclamationmark")
-                                .foregroundStyle(Color.orange.accessibleInk)
-                        }
-                        if progress.wrongOrRedoCount > 0 {
-                            Label("\(progress.wrongOrRedoCount) exercice\(progress.wrongOrRedoCount > 1 ? "s" : "") faux ou à refaire",
-                                  systemImage: "arrow.counterclockwise")
-                                .foregroundStyle(Color.red.accessibleInk)
-                        }
-                    }
-                    .font(.footnote.weight(.medium))
+        let late = lateTheory.count + lateExercises.count
+        let ahead = ProgressEngine.aheadCount(for: course)
+        let sentence: String
+        if late > 0 {
+            sentence = late == 1 ? "1 élément à rattraper" : "\(late) éléments à rattraper"
+        } else if ahead > 0 {
+            sentence = "À jour, et \(ahead) d'avance"
+        } else {
+            sentence = "À jour"
+        }
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                CarnetKicker(current > 0 ? "Semaine \(current) sur \(course.term?.totalWeeks ?? 14)" : "Semestre", color: tint)
+                HStack(spacing: 8) {
+                    Image(systemName: late > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(late > 0 ? Carnet.review : Carnet.correct)
+                    Text(sentence)
+                        .font(Carnet.serif(.title2))
+                        .foregroundStyle(Carnet.ink)
                 }
+                if late > 0 {
+                    Text("Des semaines passées : \(lateDetail).")
+                        .font(.subheadline)
+                        .foregroundStyle(Carnet.inkSecondary)
+                }
+            }
+            HStack(spacing: 14) {
+                axis("Théorie", progress.watchedCount, progress.videoCount)
+                axis("Séries", progress.doneCount, progress.exerciseCount)
+                axis("Corrigés", progress.correctedCount, progress.doneCount)
+            }
+            if progress.wrongOrRedoCount > 0 {
+                Label("\(progress.wrongOrRedoCount) exercice\(progress.wrongOrRedoCount > 1 ? "s" : "") à refaire",
+                      systemImage: "arrow.counterclockwise")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Carnet.wrong)
+            }
+        }
+        .padding(16)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+    }
+
+    private var lateDetail: String {
+        var parts: [String] = []
+        if !lateTheory.isEmpty { parts.append("\(lateTheory.count) de théorie") }
+        if !lateExercises.isEmpty { parts.append("\(lateExercises.count) exercice\(lateExercises.count > 1 ? "s" : "")") }
+        return parts.joined(separator: " et ")
+    }
+
+    private func axis(_ title: String, _ done: Int, _ total: Int) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(total == 0 ? "—" : "\(done)")
+                    .font(Carnet.serif(.title3))
+                    .foregroundStyle(total > 0 && done == total ? Carnet.correct : Carnet.ink)
+                if total > 0 { Text("/\(total)").font(.caption).foregroundStyle(Carnet.inkSecondary) }
+            }
+            CarnetBar(value: CourseProgress.ratio(done, total), tint: tint, height: 4)
+                .opacity(total == 0 ? 0.3 : 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title) : \(done) sur \(total)")
+    }
+
+    // MARK: À rattraper
+
+    private var lateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("À rattraper") {
+                Menu {
+                    Button { completeLate(.all) } label: { Label("Tout marquer fait", systemImage: "checkmark.circle") }
+                    Button { completeLate(.allCorrected) } label: { Label("Fait et corrigé (juste)", systemImage: "checkmark.seal") }
+                    Button { completeLate(.theoryOnly) } label: { Label("Seulement la théorie vue", systemImage: TaskType.theory.icon) }
+                } label: {
+                    Label("Tout cocher", systemImage: "checklist.checked").font(.subheadline.weight(.medium))
+                }
+            }
+            CarnetSheet {
+                let rows = lateTheory.map { LateRow.theory($0) } + lateExercises.map { LateRow.exercise($0) }
+                ForEach(Array(rows.prefix(12).enumerated()), id: \.element.id) { index, row in
+                    lateRow(row)
+                    if index < min(rows.count, 12) - 1 { CarnetRule(inset: 52) }
+                }
+                if rows.count > 12 {
+                    CarnetRule(inset: 52)
+                    Text("+ \(rows.count - 12) autres, dans les semaines ci-dessous")
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .padding(.horizontal, Carnet.rowInset)
+                        .padding(.vertical, 12)
+                }
+            }
+            if let undo {
+                HStack {
+                    Text("Coché : \(undo.summary).").font(.footnote).foregroundStyle(Carnet.inkSecondary)
+                    Spacer()
+                    Button("Annuler") {
+                        WeekCompletion.undo(undo, in: course)
+                        try? context.save()
+                        self.undo = nil
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+                .padding(.horizontal, 6)
             }
         }
     }
 
-    // MARK: Semaines
+    private enum LateRow: Identifiable {
+        case theory(TheoryItem)
+        case exercise(Exercise)
+        var id: UUID {
+            switch self {
+            case .theory(let item): return item.id
+            case .exercise(let exercise): return exercise.id
+            }
+        }
+    }
 
+    @ViewBuilder
+    private func lateRow(_ row: LateRow) -> some View {
+        switch row {
+        case .theory(let item):
+            line(done: item.isWatched, week: item.plannedWeek, title: item.title.isEmpty ? item.number : item.title,
+                 detail: CarnetTheoryLine.detail(for: item), toggle: {
+                    item.watchedAt = item.isWatched ? nil : Date()
+                    try? context.save()
+                 }, open: { openedVideo = item })
+        case .exercise(let exercise):
+            line(done: exercise.isDone, week: exercise.series?.plannedWeek ?? 0,
+                 title: exercise.displayNumber + (exercise.title.isEmpty ? "" : " · \(exercise.title)"),
+                 detail: exercise.series.map { "Série \($0.seriesNumber)" } ?? "", toggle: {
+                    exercise.setDone(!exercise.isDone)
+                    try? context.save()
+                 }, open: { openedExercise = exercise })
+        }
+    }
+
+    private func line(done: Bool, week: Int, title: String, detail: String,
+                      toggle: @escaping () -> Void, open: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            CheckCircleButton(isOn: done, tint: tint, label: "Marquer \(title) fait", action: {
+                toggle()
+                Haptics.soft()
+            })
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 2) {
+                    MathText(title, font: .body)
+                        .foregroundStyle(done ? Carnet.inkSecondary : Carnet.ink)
+                        .lineLimit(1)
+                    Text(week > 0 ? "S\(week) · \(detail)" : detail)
+                        .font(.footnote)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, Carnet.rowInset)
+        .padding(.vertical, 6)
+    }
+
+    private func completeLate(_ scope: WeekCompletion.Scope) {
+        guard current > 1 else { return }
+        let change = WeekCompletion.mark(1...(current - 1), of: course, scope: scope)
+        try? context.save()
+        Haptics.success()
+        undo = change.isEmpty ? nil : change
+    }
+
+    // MARK: Semaine par semaine
+
+    @ViewBuilder
     private var weeksSection: some View {
-        VStack(alignment: .leading, spacing: Layout.control) {
-            SectionHeader(title: "Semaine par semaine", trailing: nil)
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Semaine par semaine")
             if weeks.allSatisfy({ !$0.hasItems }) {
-                EmptyCard(icon: "calendar",
-                          title: "Rien de planifié",
-                          message: "Importe la théorie et les séries du cours : chaque élément est rangé dans sa semaine.",
-                          actionTitle: "Importer du contenu") {
+                CarnetEmpty(icon: "calendar", title: "Rien de planifié",
+                            message: "Importe la théorie et les séries du cours : chaque élément est rangé dans sa semaine.",
+                            actionTitle: "Importer du contenu") {
                     app.router.openContentImport(courseID: course.id)
                 }
             } else {
-                Card {
-                    VStack(spacing: 0) {
-                        ForEach(weeks) { week in
-                            weekRow(week)
-                            if week.week != weeks.last?.week {
-                                Divider().padding(.leading, 52)
-                            }
-                        }
+                CarnetSheet {
+                    let shown = weeks.filter { $0.hasItems || $0.week == current }
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, week in
+                        weekRow(week)
+                        if index < shown.count - 1 { CarnetRule(inset: 64) }
                     }
                 }
             }
@@ -94,8 +252,10 @@ struct ProgressTabView: View {
 
     private func weekRow(_ week: WeeklyProgress) -> some View {
         let isCurrent = week.week == current
-        let isPast = current > 0 && week.week < current
+        let isLate = current > 0 && week.week < current && week.remainingCount > 0
         let isOpen = expanded.contains(week.week)
+        let total = week.videoCount + week.exerciseCount
+        let done = week.watchedCount + week.doneCount
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 guard week.hasItems else { return }
@@ -104,189 +264,156 @@ struct ProgressTabView: View {
                 }
                 Haptics.soft()
             } label: {
-                HStack(alignment: .center, spacing: Layout.block) {
-                    weekBadge(week, isCurrent: isCurrent, isPast: isPast)
-                    if week.hasItems {
-                        VStack(alignment: .leading, spacing: Layout.snug) {
-                            miniAxis("Théorie", week.watchedCount, week.videoCount, TaskType.theory.tint)
-                            miniAxis(week.seriesNumbers.isEmpty ? "Séries" : "Série " + week.seriesNumbers.map(String.init).joined(separator: ", "),
-                                     week.doneCount, week.exerciseCount, TaskType.exercise.tint)
-                        }
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(isOpen ? 90 : 0))
-                    } else {
-                        Text("Rien de prévu")
-                            .font(.footnote)
-                            .foregroundStyle(.tertiary)
-                        Spacer()
+                HStack(spacing: 12) {
+                    VStack(spacing: 0) {
+                        Text("S\(week.week)")
+                            .font(.subheadline.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(isCurrent ? Carnet.ground : Carnet.ink)
+                            .frame(width: 40, height: 40)
+                            .background(isCurrent ? tint : Carnet.sheetRaised, in: Circle())
                     }
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(weekSummary(week))
+                                .font(.subheadline)
+                                .foregroundStyle(Carnet.ink)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            if week.isComplete {
+                                Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(Carnet.correct)
+                            } else if isLate {
+                                Text("\(week.remainingCount) restant\(week.remainingCount > 1 ? "s" : "")")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Carnet.review)
+                            } else if isCurrent {
+                                Text("en cours").font(.caption.weight(.semibold)).foregroundStyle(tint.accessibleInk)
+                            }
+                        }
+                        CarnetBar(value: CourseProgress.ratio(done, total), tint: week.isComplete ? Carnet.correct : tint, height: 4)
+                            .opacity(total == 0 ? 0.3 : 1)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Carnet.inkTertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        .opacity(week.hasItems ? 1 : 0)
                 }
-                .padding(.vertical, Layout.control)
+                .padding(.horizontal, Carnet.rowInset)
+                .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(weekAccessibility(week, isCurrent: isCurrent))
+            .accessibilityLabel(accessibility(week, isCurrent: isCurrent))
 
             if isOpen {
                 weekDetail(week)
                     .padding(.leading, 52)
-                    .padding(.bottom, Layout.control)
+                    .padding(.bottom, 8)
                     .transition(.opacity)
             }
         }
     }
 
-    /// « S5 » dans une pastille : pleine pour la semaine en cours, verte quand
-    /// la semaine est bouclée, cerclée d'orange quand une semaine passée traîne.
-    private func weekBadge(_ week: WeeklyProgress, isCurrent: Bool, isPast: Bool) -> some View {
-        let late = isPast && week.remainingCount > 0
-        return ZStack {
-            if isCurrent {
-                Circle().fill(Theme.accent.accessibleMark)
-            } else if week.isComplete {
-                Circle().fill(Color.green.badgeFill)
-            } else if late {
-                Circle().strokeBorder(Color.orange.accessibleMark, lineWidth: 1.5)
-            } else {
-                Circle().fill(Color(.tertiarySystemFill))
-            }
-            Text("S\(week.week)")
-                .font(.caption.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(isCurrent ? Theme.knockedOutInk
-                                 : (week.isComplete ? Color.green.badgeInk
-                                    : (late ? Color.orange.accessibleInk : .primary)))
+    /// « Théorie 1/1 · Série 4 : 3/5 ».
+    private func weekSummary(_ week: WeeklyProgress) -> String {
+        guard week.hasItems else { return "Rien de prévu" }
+        var parts: [String] = []
+        if week.videoCount > 0 { parts.append("Théorie \(week.watchedCount)/\(week.videoCount)") }
+        if week.exerciseCount > 0 {
+            let name = week.seriesNumbers.isEmpty ? "Séries" : "Série " + week.seriesNumbers.map(String.init).joined(separator: ", ")
+            parts.append("\(name) : \(week.doneCount)/\(week.exerciseCount)")
         }
-        .frame(width: 40, height: 40)
-        .opacity(week.hasItems || isCurrent ? 1 : 0.5)
+        return parts.joined(separator: " · ")
     }
 
-    private func miniAxis(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
-        HStack(spacing: Layout.inline) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: 84, alignment: .leading)
-            ProgressBar(progress: CourseProgress.ratio(done, total), color: tint, height: 6)
-                .opacity(total == 0 ? 0.3 : 1)
-            Text(total == 0 ? "—" : "\(done)/\(total)")
-                .font(.caption.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(total > 0 && done == total ? Color.green.accessibleInk : .primary)
-                .frame(minWidth: 34, alignment: .trailing)
-        }
-    }
-
-    /// Ce que contient la semaine : la théorie, puis les exercices, cochés ou non.
     @ViewBuilder
     private func weekDetail(_ week: WeeklyProgress) -> some View {
         let theory = course.sortedTheoryItems.filter { $0.plannedWeek == week.week }
         let exercises = course.sortedSeries.filter { $0.plannedWeek == week.week }.flatMap(\.sortedExercises)
-        VStack(alignment: .leading, spacing: Layout.snug) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(theory) { item in
-                Button { openedVideo = item } label: {
-                    detailLine(done: item.isWatched, icon: item.kind.icon, tint: TaskType.theory.tint,
-                               text: item.numberAndTitle, trailing: item.videoCount > 1 ? "\(item.videoCount) vidéos" : nil)
-                }
-                .buttonStyle(.plain)
+                line(done: item.isWatched, week: 0, title: item.title.isEmpty ? item.number : item.title,
+                     detail: CarnetTheoryLine.detail(for: item), toggle: {
+                        item.watchedAt = item.isWatched ? nil : Date()
+                        try? context.save()
+                     }, open: { openedVideo = item })
             }
             ForEach(exercises) { exercise in
-                Button { openedExercise = exercise } label: {
-                    detailLine(done: exercise.isDone, icon: TaskType.exercise.icon, tint: TaskType.exercise.tint,
-                               text: exercise.displayNumber + (exercise.isBonus ? " (bonus)" : ""),
-                               trailing: exercise.isCorrected ? exercise.correctness?.shortLabel : nil)
-                }
-                .buttonStyle(.plain)
+                line(done: exercise.isDone, week: 0,
+                     title: exercise.displayNumber + (exercise.isBonus ? " (bonus)" : ""),
+                     detail: exercise.isCorrected ? (exercise.correctness?.shortLabel ?? "corrigé") : ExerciseStage(exercise).label,
+                     toggle: {
+                        exercise.setDone(!exercise.isDone)
+                        try? context.save()
+                     }, open: { openedExercise = exercise })
             }
         }
     }
 
-    private func detailLine(done: Bool, icon: String, tint: Color, text: String, trailing: String?) -> some View {
-        HStack(spacing: Layout.inline) {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.footnote)
-                .foregroundStyle(done ? tint.accessibleMark : Color.secondary)
-            MathText(text, font: .footnote)
-                .foregroundStyle(done ? .secondary : .primary)
-                .lineLimit(1)
-            Spacer(minLength: Layout.inline)
-            if let trailing {
-                Text(trailing).font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-        .contentShape(Rectangle())
-    }
-
-    private func weekAccessibility(_ week: WeeklyProgress, isCurrent: Bool) -> String {
+    private func accessibility(_ week: WeeklyProgress, isCurrent: Bool) -> String {
         guard week.hasItems else { return "Semaine \(week.week), rien de prévu" }
-        return "Semaine \(week.week)\(isCurrent ? ", en cours" : ""). Théorie \(week.watchedCount) sur \(week.videoCount). Séries \(week.doneCount) sur \(week.exerciseCount)."
+        return "Semaine \(week.week)\(isCurrent ? ", en cours" : ""). \(weekSummary(week))"
     }
 
-    // MARK: Non planifié
+    // MARK: Sans semaine
 
     @ViewBuilder
-    private var unplannedCard: some View {
+    private var unplannedSection: some View {
         let items = ProgressEngine.unplannedTheory(for: course)
         if !items.isEmpty {
-            Card(title: "Sans semaine", icon: "tray", trailing: "\(items.count)") {
-                VStack(alignment: .leading, spacing: Layout.inline) {
-                    Text("Ces éléments n'entrent dans aucune semaine. Ouvre-en un pour lui en donner une.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(items.prefix(8)) { item in
-                        Button { openedVideo = item } label: {
-                            detailLine(done: item.isWatched, icon: item.kind.icon, tint: TaskType.theory.tint,
-                                       text: item.numberAndTitle, trailing: nil)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if items.count > 8 {
-                        Text("+ \(items.count - 8) autres").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Sans semaine") { Text("\(items.count)") }
+                CarnetSheet {
+                    ForEach(Array(items.prefix(8).enumerated()), id: \.element.id) { index, item in
+                        line(done: item.isWatched, week: 0, title: item.title.isEmpty ? item.number : item.title,
+                             detail: "Ouvre-le pour lui donner une semaine", toggle: {
+                                item.watchedAt = item.isWatched ? nil : Date()
+                                try? context.save()
+                             }, open: { openedVideo = item })
+                        if index < min(items.count, 8) - 1 { CarnetRule(inset: 52) }
                     }
                 }
             }
         }
     }
 
-    // MARK: Temps de travail
+    // MARK: Temps
 
-    private var workloadCard: some View {
+    private var timeSection: some View {
         let weekStart = DateUtils.startOfWeek(Date())
-        let weekly = WorkloadEngine.weeklyDelta(for: course,
-                                                hoursPerCredit: app.settings.hoursPerCredit,
-                                                from: weekStart,
-                                                to: DateUtils.addWeeks(1, to: weekStart))
+        let weekly = WorkloadEngine.weeklyDelta(for: course, hoursPerCredit: app.settings.hoursPerCredit,
+                                                from: weekStart, to: DateUtils.addWeeks(1, to: weekStart))
         let byType = Dictionary(grouping: course.sessions.filter { $0.startedAt >= weekStart }) { $0.taskType.canonical }
             .mapValues { $0.reduce(0) { $0 + $1.durationSeconds } }
-        return Card(title: "Temps cette semaine", icon: "clock") {
-            VStack(alignment: .leading, spacing: Layout.block) {
-                LabeledProgress(title: "Objectif EPFL",
-                                progress: weekly.completion,
-                                color: weekly.isBehind ? .orange : (weekly.isOnTrack ? .green : Theme.accent),
-                                countLabel: "\(weekly.actualLabel) / \(weekly.expectedLabel)")
+        return VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Ton temps cette semaine")
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(weekly.actualLabel).font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
+                    Text("sur \(weekly.expectedLabel) attendues").font(.subheadline).foregroundStyle(Carnet.inkSecondary)
+                    Spacer()
+                }
+                CarnetBar(value: weekly.completion, tint: weekly.isBehind ? Carnet.review : tint, height: 5)
                 if !byType.isEmpty {
-                    HStack(spacing: Layout.block) {
+                    HStack(spacing: 16) {
                         ForEach(TaskType.reportCategories.filter { byType[$0] != nil }, id: \.self) { type in
-                            VStack(alignment: .leading, spacing: Layout.micro) {
-                                Label(type.shortLabel, systemImage: type.icon)
-                                    .font(.caption)
-                                    .foregroundStyle(type.tint.accessibleInk)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(type.shortLabel).font(.caption).foregroundStyle(Carnet.inkSecondary)
                                 Text(DateUtils.durationLabel(seconds: byType[type] ?? 0))
                                     .font(.subheadline.weight(.semibold))
                                     .monospacedDigit()
+                                    .foregroundStyle(Carnet.ink)
                             }
                         }
                     }
                 }
-                Text("Objectif : \(Int(app.settings.hoursPerCredit)) h par crédit ECTS, heures encadrées comprises. Le temps Anki est relevé tout seul quand Anki est connecté.")
+                Text("Attendu : \(Int(app.settings.hoursPerCredit)) h par crédit ECTS, amphi compris.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(Carnet.inkSecondary)
             }
+            .padding(16)
+            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
         }
     }
 }

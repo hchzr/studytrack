@@ -48,23 +48,18 @@ struct ProfileView: View {
 
     private var settingsForm: some View {
         Group {
-            // **Une seule page**, rangée par sujet. Les sous-pages d'avant
-            // cachaient un interrupteur derrière deux touchers ; ce qui se règle
-            // d'un geste (rappels, confidentialité, charge) est ici, et seules les
-            // intégrations — qui ont leur propre notice — gardent une page.
+            // Une page d'accueil **courte**, rangée par grands sujets : chaque
+            // ligne dit l'état en un mot et ouvre sa page. L'ancienne page
+            // alignait douze sections (horaire, rappels, compte, données…) :
+            // on cherchait longtemps, et l'on ne voyait rien d'un coup d'œil.
             Form {
                 Group {
                     storeSection
                     identitySection(app.settings)
-                    sectionPicker(app.settings)
-                    workloadSection(app.settings)
-                    calendarSection(app.settings)
-                    integrationsSection
-                    notificationsSection(app.settings)
-                    focusLinkSection
-                    privacySection(app.settings)
-                    accountSection(app.settings)
-                    dataSection
+                    studiesSection(app.settings)
+                    accountsHubSection
+                    toolsSection
+                    remindersAndDataSection(app.settings)
                     aboutSection
                 }
                 .listRowBackground(Carnet.sheet)
@@ -118,28 +113,73 @@ struct ProfileView: View {
         }
     }
 
-    /// Tâches, Anki, assistant IA, import des PDF : chaque intégration a sa page
-    /// (champs, notice), et son état se lit ici sans l'ouvrir.
-    private var integrationsSection: some View {
-        let tasks = TaskServiceFactory.shared.configuredServices(settings: app.settings)
-        return Section {
+    // MARK: Accueil des réglages
+
+    /// Études : la section et le semestre, l'horaire, la charge attendue.
+    private func studiesSection(_ settings: SettingsStore) -> some View {
+        Section {
+            NavigationLink {
+                SchoolSetupView()
+            } label: {
+                settingsRow("Semestre et cours", icon: "graduationcap",
+                            value: "\(courses.filter(\.isTracked).count) cours")
+            }
+            NavigationLink {
+                subpage("Horaire et calendrier") {
+                    calendarSection(settings)
+                    workloadSection(settings)
+                    Section(header: CarnetFormHeader("Présence")) {
+                        Toggle("Suivre la présence en amphi", isOn: Binding(get: { settings.trackAttendance },
+                                                                             set: { settings.trackAttendance = $0 }))
+                    }
+                }
+            } label: {
+                settingsRow("Horaire et calendrier", icon: "calendar",
+                            value: app.calendar.hasAccess ? "relié" : (settings.timetableURLString.isEmpty ? "à importer" : "flux .ics"))
+            }
+        } header: {
+            CarnetFormHeader("Études")
+        }
+    }
+
+    /// Les comptes : sites des cours (Moodle, MediaSpace…), compte StudyTrack.
+    private var accountsHubSection: some View {
+        Section {
             NavigationLink {
                 ConnectionsView()
             } label: {
-                settingsRow("Comptes et connexions", icon: "person.badge.key",
+                settingsRow("Connexions aux sites", icon: "person.badge.key",
                             value: ConnectionCenter.shared.needingAttention().isEmpty ? nil : "à reconnecter")
+            }
+            NavigationLink {
+                subpage("Compte et groupes") {
+                    accountSection(app.settings)
+                    privacySection(app.settings)
+                }
+            } label: {
+                settingsRow("Compte et groupes", icon: "person.2",
+                            value: app.social.isSignedIn ? (app.social.email ?? "connecté·e") : "aucun")
+            }
+        } header: {
+            CarnetFormHeader("Comptes")
+        }
+    }
+
+    /// Les outils reliés : Anki, tâches, assistant, IA de lecture, chrono.
+    private var toolsSection: some View {
+        let tasks = TaskServiceFactory.shared.configuredServices(settings: app.settings)
+        return Section {
+            NavigationLink {
+                AnkiSettingsView()
+            } label: {
+                settingsRow("Anki", icon: "rectangle.stack",
+                            value: AnkiWebSync.shared.isSignedIn ? "AnkiWeb" : (app.settings.isAnkiConfigured ? "Anki Desktop" : "non relié"))
             }
             NavigationLink {
                 TaskIntegrationsView()
             } label: {
                 settingsRow("Tâches", icon: "checklist",
                             value: tasks.isEmpty ? "aucune" : tasks.map(\.provider.label).joined(separator: ", "))
-            }
-            NavigationLink {
-                AnkiSettingsView()
-            } label: {
-                settingsRow("Anki", icon: "rectangle.stack",
-                            value: AnkiWebSync.shared.isSignedIn ? "AnkiWeb" : (app.settings.isAnkiConfigured ? "Anki Desktop" : "non relié"))
             }
             NavigationLink {
                 AssistantSettingsView()
@@ -150,31 +190,54 @@ struct ProfileView: View {
             NavigationLink {
                 AIImportSettingsView()
             } label: {
-                settingsRow("Lecture des PDF", icon: "sparkles",
+                settingsRow("IA de lecture", icon: "sparkles",
                             value: SeriesAIExtractor.plannedSource(app.settings)?.label ?? "désactivée")
             }
-        } header: {
-            CarnetFormHeader("Intégrations")
-        } footer: {
-            Text("Rappels, Todoist, Things, Notion… ; Anki pour la révision espacée ; Claude ou ChatGPT par le serveur MCP.")
-        }
-    }
-
-    /// Le Pomodoro a son formulaire, le même que depuis le chrono.
-    private var focusLinkSection: some View {
-        Section {
             NavigationLink {
-                Form { PomodoroSettingsForm(settings: app.settings) }
-                    .carnetForm()
-                    .navigationTitle("Chrono et Pomodoro")
-                    .navigationBarTitleDisplayMode(.inline)
+                subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
             } label: {
                 settingsRow("Chrono et Pomodoro", icon: "timer",
                             value: "\(app.settings.pomodoro.focusMinutes) / \(app.settings.pomodoro.shortBreakMinutes) min")
             }
         } header: {
-            CarnetFormHeader("Chrono")
+            CarnetFormHeader("Outils")
+        } footer: {
+            Text("L'IA de lecture range les séries des PDF et les cours Moodle aux formats inhabituels.")
         }
+    }
+
+    /// Rappels et données : deux pages, rarement ouvertes.
+    private func remindersAndDataSection(_ settings: SettingsStore) -> some View {
+        Section {
+            NavigationLink {
+                subpage("Rappels") { notificationsSection(settings) }
+            } label: {
+                settingsRow("Rappels", icon: "bell",
+                            value: settings.dailyReminderEnabled ? "chaque jour à \(settings.dailyReminderHour) h" : "désactivés")
+            }
+            NavigationLink {
+                subpage("Données") { dataSection }
+            } label: {
+                settingsRow("Données et sauvegarde", icon: "externaldrive",
+                            value: "\(sessions.count) session\(sessions.count > 1 ? "s" : "")")
+            }
+        }
+    }
+
+    /// Une page de réglages au même style que l'accueil, avec le message en cours.
+    private func subpage<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        Form {
+            Group {
+                content()
+                if let message {
+                    Section { Text(message).font(.footnote).foregroundStyle(Carnet.inkSecondary) }
+                }
+            }
+            .listRowBackground(Carnet.sheet)
+        }
+        .carnetForm()
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     /// Une ligne de réglage : icône d'encre, titre, et l'état à droite.
@@ -233,25 +296,6 @@ struct ProfileView: View {
         }
     }
 
-    /// Section, cours et dates : tout ce que l'onboarding a demandé reste
-    /// modifiable ici, y compris la date de début du semestre — qui commande le
-    /// numéro de semaine affiché partout.
-    private func sectionPicker(_ settings: SettingsStore) -> some View {
-        Section {
-            NavigationLink {
-                SchoolSetupView()
-            } label: {
-                settingsRow("Section et semestre", icon: "graduationcap",
-                            value: app.sectionDisplayName(settings.sectionCode))
-            }
-            settingsRow("Cours suivis", icon: "books.vertical", value: "\(courses.filter(\.isTracked).count)")
-        } header: {
-            CarnetFormHeader("Semestre")
-        } footer: {
-            Text("Tout est modifiable : section, cours suivis, heures d'amphi et dates du semestre.")
-        }
-    }
-
     // MARK: Calendrier
 
     private func calendarSection(_ settings: SettingsStore) -> some View {
@@ -299,83 +343,6 @@ struct ProfileView: View {
             : "\(result.imported) importé(s) · \(result.updated) mis à jour."
     }
 
-    // MARK: Tâches
-
-    /// Huit fournisseurs, chacun avec ses champs et sa notice : en ligne dans le
-    /// profil, ça faisait un écran de trois mètres. Un lien, et un compteur.
-    private func tasksSection(_ settings: SettingsStore) -> some View {
-        let active = TaskServiceFactory.shared.configuredServices(settings: settings)
-        return Section {
-            NavigationLink {
-                ConnectionsView()
-            } label: {
-                settingsRow("Comptes et connexions", icon: "person.badge.key",
-                            value: ConnectionCenter.shared.needingAttention().isEmpty ? nil : "à reconnecter")
-            }
-            NavigationLink {
-                TaskIntegrationsView()
-            } label: {
-                HStack(spacing: Layout.control) {
-                    Label("Fournisseurs de tâches", systemImage: "checklist")
-                    Spacer()
-                    Text(active.isEmpty
-                         ? "Aucun"
-                         : active.map(\.provider.label).joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        } header: {
-            Text("Tâches")
-        } footer: {
-            Text("Rappels, Todoist, Things, Notion, Microsoft To Do, Google Tasks, TickTick ou un webhook.")
-        }
-    }
-
-    // MARK: Intelligence artificielle
-
-    /// L'assistant (Claude, ChatGPT…) relié par le serveur MCP.
-    private var assistantSection: some View {
-        Section {
-            NavigationLink {
-                AssistantSettingsView()
-            } label: {
-                HStack(spacing: Layout.control) {
-                    Label("Assistant IA (MCP)", systemImage: "bubble.left.and.text.bubble.right")
-                    Spacer()
-                    Text(app.settings.assistantToken.isEmpty ? "non relié" : "relié")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } footer: {
-            Text("Claude ou ChatGPT lisent où tu en es et notent ce que tu leur dis.")
-        }
-    }
-
-
-    private var aiSection: some View {
-        Section {
-            NavigationLink {
-                AIImportSettingsView()
-            } label: {
-                HStack(spacing: Layout.control) {
-                    Label("Import intelligent des PDF", systemImage: "sparkles")
-                    Spacer()
-                    Text(SeriesAIExtractor.plannedSource(app.settings)?.label ?? "désactivé")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        } header: {
-            Text("Analyse des PDF")
-        } footer: {
-            Text("Un modèle de langage — sur l'appareil quand c'est possible — complète la détection des séries et des exercices.")
-        }
-    }
-
     // MARK: Charge EPFL
 
     private func workloadSection(_ settings: SettingsStore) -> some View {
@@ -390,14 +357,6 @@ struct ProfileView: View {
         } footer: {
             Text("Charge attendue = crédits × heures par crédit, dont les heures d'amphi déclarées des cours qui en ont.")
         }
-    }
-
-    // MARK: Focus
-
-    /// Le cycle Pomodoro : le même formulaire que depuis le chrono.
-    @ViewBuilder
-    private func focusSection(_ settings: SettingsStore) -> some View {
-        PomodoroSettingsForm(settings: settings)
     }
 
     // MARK: Notifications
@@ -459,10 +418,9 @@ struct ProfileView: View {
 
     private func privacySection(_ settings: SettingsStore) -> some View {
         @Bindable var settings = settings
-        return Section(header: CarnetFormHeader("Groupes et confidentialité")) {
+        return Section(header: CarnetFormHeader("Confidentialité dans les groupes")) {
             Toggle("Apparaître anonymement dans les groupes", isOn: $settings.anonymousInLeaderboards)
             Toggle("Partager mon avancement avec mes groupes", isOn: $settings.shareProgressWithGroups)
-            Toggle("Suivre la présence en amphi", isOn: $settings.trackAttendance)
         }
     }
 
