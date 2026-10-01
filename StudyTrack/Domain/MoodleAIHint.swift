@@ -33,7 +33,7 @@ enum MoodleCourseAI {
     - series : chaque série d'exercices du cours, une entrée par numéro. statement : la référence (« a » + id d'activité, ou « Lnn » pour un lien du texte d'une section) qui mène à l'ÉNONCÉ LUI-MÊME, la page ou le PDF où sont les exercices. Choisis d'après ce que contient la cible (son début de texte), pas seulement d'après le nom : un lien « série 4 » qui mène à un chapitre de MOOC sans ces exercices n'est pas l'énoncé ; une page « énoncé/corrigé » ou « corrigé » qui contient aussi les énoncés peut l'être. solution : le corrigé s'il est à une autre adresse, sinon null. week : la semaine où la série se fait.
     - Les exercices et quiz d'un MOOC ne sont des séries que si le cours (consignes, plan) demande de les faire.
     - mooc : si un MOOC est fourni, les chapitres dont le cours demande de regarder les vidéos, avec la semaine — d'après le plan, les consignes des sections ou les liens de chaque semaine. « MOOC 2 : vidéos Module 3 » désigne l'entrée « module 3 » du MOOC 2 (préambules hors numérotation). La semaine est celle de la ligne du plan ou de la section : ne la décale jamais. Uniquement des id de la liste ; rien d'optionnel.
-    - weeks : pour chaque semaine où il y a du travail, la consigne en une phrase courte (160 caractères au plus), concrète, à l'infinitif : quoi regarder (enregistrement, chapitres du MOOC et leurs numéros), quoi lire, quelle série faire, ce qui est à rendre. Uniquement d'après ce que tu as reçu.
+    - weeks : pour CHAQUE semaine du semestre où le plan ou Moodle prévoit quelque chose, y compris les semaines à venir, la consigne en une phrase courte (160 caractères au plus), concrète, à l'infinitif : quoi regarder (enregistrement, chapitres du MOOC et leurs numéros), quoi lire, quelle série faire, ce qui est à rendre. Uniquement d'après ce que tu as reçu.
     - N'invente aucun id ni aucune référence.
     """
 
@@ -170,7 +170,7 @@ enum MoodleCourseAI {
         for entry in json["weeks"] as? [[String: Any]] ?? [] {
             guard let week = int(entry["week"]), week > 0,
                   let todo = (entry["todo"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !todo.isEmpty else { continue }
-            result.guide[week] = String(todo.prefix(240))
+            result.guide[week] = String(todo.prefix(400))
         }
         return result
     }

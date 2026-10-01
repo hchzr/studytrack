@@ -27,7 +27,8 @@ enum MoodleCourseAIService {
                                              plan: plan, moocs: moocs)
         let outline = payload["outline"] as? String ?? ""
         guard !outline.isEmpty else { return .init() }
-        let fingerprint = outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "")
+        // La consigne fait partie de l'empreinte : la changer redemande au modèle.
+        let fingerprint = MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "")
         let key = "moodleAI3." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
         if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.answer(cached) }
 
