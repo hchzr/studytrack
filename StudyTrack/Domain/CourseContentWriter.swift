@@ -204,7 +204,18 @@ enum ContentDraftWriter {
                     let series: ExerciseSeries
                     if let existing = course.series.first(where: { $0.seriesNumber == number }) {
                         if updateWeeks || existing.plannedWeek == 0 { existing.plannedWeek = item.plannedWeek(in: section) }
-                        if existing.urlString.isEmpty { existing.urlString = item.pdfURL.isEmpty ? item.url : item.pdfURL }
+                        // L'adresse de l'énoncé est remplacée quand l'ancienne n'a rien
+                        // donné (aucun exercice lu) : une série de CS-107 créée par un
+                        // ancien import du MOOC gardait sa page Courseware, et la
+                        // vraie page de la série (proginsc) n'était jamais retenue.
+                        let fresh = item.pdfURL.isEmpty ? item.url : item.pdfURL
+                        if existing.urlString.isEmpty
+                            || (!fresh.isEmpty && fresh != existing.urlString && existing.exercises.isEmpty) {
+                            existing.urlString = fresh
+                        }
+                        if existing.solutionURLString.isEmpty, !item.solutionURL.isEmpty {
+                            existing.solutionURLString = item.solutionURL
+                        }
                         series = existing
                         result.seriesUpdated += 1
                     } else {

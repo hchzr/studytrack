@@ -35,7 +35,6 @@ enum AssistantSync {
     private(set) static var lastApplied: [AssistantCommandResult] = []
     private(set) static var lastError: String?
     private static var running = false
-    private static var pending: Task<Void, Never>?
 
     /// L'empreinte du dernier instantané accepté par le serveur, et quand.
     private static var lastFingerprint: Int?
@@ -46,13 +45,49 @@ enum AssistantSync {
     private static var nextAttempt = Date.distantPast
 
     /// Synchronisation groupée : dix questions cochées d'affilée ne font qu'un envoi.
+    ///
+    /// Seule l'**attente** est annulée par un nouvel enregistrement, jamais un
+    /// envoi en cours : l'annuler coupait la requête (« annulé » dans les
+    /// diagnostics) et comptait pour un échec. Un enregistrement pendant un envoi
+    /// en relance un juste après.
     static func scheduleSync(context: ModelContext, settings: SettingsStore) {
         guard !settings.assistantToken.isEmpty else { return }
-        pending?.cancel()
-        pending = Task { @MainActor in
+        if running {
+            rerunRequested = true
+            return
+        }
+        waiting?.cancel()
+        waiting = Task { @MainActor in
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
+            waiting = nil
             await sync(context: context, settings: settings, force: false)
+            if rerunRequested {
+                rerunRequested = false
+                scheduleSync(context: context, settings: settings)
+            }
+        }
+    }
+
+    private static var waiting: Task<Void, Never>?
+    private static var rerunRequested = false
+
+    /// Les commandes déjà appliquées (identifiant → résultat), gardées d'un
+    /// lancement à l'autre. Quand la confirmation au serveur échouait, il
+    /// renvoyait les mêmes commandes, et l'app les réappliquait — trois fois
+    /// « corrigé moyen » d'affilée, au risque d'écraser une correction faite
+    /// entre-temps. Une commande connue n'est plus réappliquée : son résultat est
+    /// seulement renvoyé.
+    private static let appliedKey = "assistant.appliedCommands"
+    private static var applied: [String: AssistantCommandResult] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: appliedKey) else { return [:] }
+            let list = (try? JSONDecoder().decode([AssistantCommandResult].self, from: data)) ?? []
+            return Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        }
+        set {
+            let list = Array(newValue.values.suffix(400))
+            UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: appliedKey)
         }
     }
 
@@ -77,9 +112,14 @@ enum AssistantSync {
             // Deux tours au plus : appliquer, confirmer. Une commande déposée
             // entre-temps attendra la prochaine synchronisation.
             if !commands.isEmpty {
-                let results = AssistantCommandApplier.apply(commands, context: context)
-                lastApplied = (results + lastApplied).prefix(20).map { $0 }
-                for result in results {
+                var known = applied
+                let fresh = commands.filter { known[$0.id] == nil }
+                let newResults = AssistantCommandApplier.apply(fresh, context: context)
+                for result in newResults { known[result.id] = result }
+                applied = known
+                let results = commands.compactMap { known[$0.id] }
+                lastApplied = (newResults + lastApplied).prefix(20).map { $0 }
+                for result in newResults {
                     AppLog.record(result.status == "applied" ? .info : .warning, "assistant", result.message)
                 }
                 commands = try await exchange(url, snapshot: snapshot(context: context, settings: settings), results: results)
@@ -98,6 +138,8 @@ enum AssistantSync {
             nextAttempt = .distantPast
             return true
         } catch {
+            // Une requête annulée (l'app part en arrière-plan) n'est pas une panne.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { return false }
             lastError = error.localizedDescription
             failureStreak += 1
             nextAttempt = Date().addingTimeInterval(min(1800, 30 * pow(2, Double(failureStreak - 1))))
