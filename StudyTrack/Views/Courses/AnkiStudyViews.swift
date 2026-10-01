@@ -22,27 +22,70 @@ struct AnkiCourseRow: View {
 
     private var sync: AnkiWebSync { AnkiWebSync.shared }
 
+    @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var app
+    @State private var preparing = false
+
+    /// Affichée dès qu'AnkiWeb est relié. Avant, la ligne attendait la copie
+    /// de la collection pour exister — mais cette copie n'était lue qu'au
+    /// moment où la ligne apparaissait : rien n'apparaissait jamais.
     var body: some View {
-        Group {
-            if sync.isSignedIn, let collection {
-                if let deck {
-                    linkedRow(collection, deck: deck)
+        if sync.isSignedIn {
+            Group {
+                if let collection {
+                    if let deck {
+                        linkedRow(collection, deck: deck)
+                    } else {
+                        unlinkedRow(collection)
+                    }
                 } else {
-                    unlinkedRow(collection)
+                    missingCollectionRow
                 }
             }
+            .task { reload() }
+            .sheet(isPresented: $studying, onDismiss: reload) {
+                if let deck { AnkiReviewView(course: course, deck: deck) }
+            }
+            .sheet(isPresented: $browsing, onDismiss: reload) {
+                if let deck { AnkiDeckBrowser(course: course, deck: deck) }
+            }
+            .sheet(isPresented: $composing, onDismiss: reload) {
+                AnkiCardComposer(course: course, origin: course.displayCode, front: "", back: "",
+                                 tags: [course.code.replacingOccurrences(of: " ", with: "_")])
+            }
         }
-        .task(id: sync.lastRefresh) { reload() }
-        .sheet(isPresented: $studying, onDismiss: reload) {
-            if let deck { AnkiReviewView(course: course, deck: deck) }
+    }
+
+    /// Relié, mais pas encore de copie sur l'appareil (ou elle a été effacée).
+    private var missingCollectionRow: some View {
+        HStack(spacing: 12) {
+            CarnetIconTile(systemName: "rectangle.stack", tint: Carnet.tint(course.colorHex))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Révision Anki").font(.body).foregroundStyle(Carnet.ink)
+                Text(preparing ? "Téléchargement de ta collection…" : (sync.lastError ?? "Ta collection n'est pas encore sur l'appareil"))
+                    .font(.footnote)
+                    .foregroundStyle(sync.lastError == nil ? Carnet.inkSecondary : Carnet.wrong)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            if preparing {
+                ProgressView()
+            } else {
+                Button("Préparer") {
+                    preparing = true
+                    let settings = app.settings, context = context
+                    Task { @MainActor in
+                        _ = try? await AnkiReviewSync.sync(context: context, settings: settings)
+                        preparing = false
+                        reload()
+                    }
+                }
+                .buttonStyle(.carnetSecondary)
+            }
         }
-        .sheet(isPresented: $browsing, onDismiss: reload) {
-            if let deck { AnkiDeckBrowser(course: course, deck: deck) }
-        }
-        .sheet(isPresented: $composing, onDismiss: reload) {
-            AnkiCardComposer(course: course, origin: course.displayCode, front: "", back: "",
-                             tags: [course.code.replacingOccurrences(of: " ", with: "_")])
-        }
+        .padding(.horizontal, Carnet.rowInset)
+        .padding(.vertical, 10)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
     }
 
     private func linkedRow(_ collection: AnkiCollection, deck: AnkiCollection.Deck) -> some View {
