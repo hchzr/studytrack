@@ -4465,6 +4465,44 @@ do {
     check(FocusContext.suggestion(now: now, slots: [late]) == nil, "rien d'imminent : pas de proposition")
 }
 
+print("== Marquer une semaine faite ==")
+do {
+    let course = Course(code: "TEST-888", name: "Semaines")
+    context.insert(course)
+    let t1 = TheoryItem(course: course, sectionNumber: 1, number: "1.1", plannedWeek: 1)
+    let t2 = TheoryItem(course: course, sectionNumber: 1, number: "1.2", plannedWeek: 1)
+    let t3 = TheoryItem(course: course, sectionNumber: 2, number: "2.1", plannedWeek: 2)
+    let s1 = ExerciseSeries(course: course, seriesNumber: 1, plannedWeek: 1)
+    let s2 = ExerciseSeries(course: course, seriesNumber: 2, plannedWeek: 2)
+    for item in [t1, t2, t3] { context.insert(item) }
+    context.insert(s1); context.insert(s2)
+    let e1 = Exercise(series: s1, exerciseNumber: "1.1", sortOrder: 0)
+    let e2 = Exercise(series: s1, exerciseNumber: "1.2", sortOrder: 1)
+    let eb = Exercise(series: s1, exerciseNumber: "1.3", isBonus: true, sortOrder: 2)
+    let f1 = Exercise(series: s2, exerciseNumber: "2.1", sortOrder: 0)
+    for exercise in [e1, e2, eb, f1] { context.insert(exercise) }
+    let earlier = Date(timeIntervalSince1970: 1_000_000)
+    t1.watchedAt = earlier
+    e1.correct(.wrong)
+
+    check(WeekCompletion.pending(in: 1...1, of: course) == (theory: 1, exercises: 1), "semaine 1 : 1 théorie et 1 exercice restants")
+    let change = WeekCompletion.mark(1...1, of: course, scope: .all)
+    check(t2.isWatched && e2.isDone && !eb.isDone, "tout est coché, sauf le bonus")
+    check(t1.watchedAt == earlier, "ce qui était déjà vu garde sa date")
+    check(!t3.isWatched && !f1.isDone, "la semaine 2 n'est pas touchée")
+    check(change.theory == [t2.id] && change.exercises == [e2.id], "le changement ne retient que ce qui a été coché")
+    check(e2.isDone && !e2.isCorrected, "« faits » : à corriger, pas corrigés")
+    WeekCompletion.undo(change, in: course)
+    check(!t2.isWatched && !e2.isDone && t1.isWatched && e1.redoRequired, "annuler rend exactement l'état d'avant")
+
+    let corrected = WeekCompletion.mark(1...2, of: course, scope: .allCorrected)
+    check(e2.correctness == .correct && f1.correctness == .correct, "« faits et corrigés » : vert")
+    check(e1.redoRequired && e1.correctness == .wrong, "un exercice à refaire n'est pas déclaré juste")
+    check(corrected.summary.contains("théorie"), "résumé lisible : \(corrected.summary)")
+    WeekCompletion.undo(corrected, in: course)
+    check(!e2.isDone && !f1.isDone && e1.correctness == .wrong, "annuler retire aussi les corrections ajoutées")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

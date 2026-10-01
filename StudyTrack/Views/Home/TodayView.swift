@@ -301,6 +301,8 @@ struct TodayView: View {
                 app.router.openContentImport()
             }
         } else {
+            // Un compte expiré que l'app n'a pas pu reconnecter seule.
+            ConnectionBanner()
             importNews
             WeekTimeCard(days: state.days, weekStart: state.weekStart,
                          theory: state.theory, series: state.series, late: state.late) {

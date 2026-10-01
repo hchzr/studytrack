@@ -104,7 +104,7 @@ struct RootTabView: View {
             // session planifiée a son rappel dès que l'app passe en arrière-plan,
             // sans passer par un bouton dans les réglages.
             if phase == .background, !app.settings.assistantToken.isEmpty {
-                Task { await AssistantSync.sync(context: context, settings: app.settings) }
+                Task { await AssistantSync.sync(context: context, settings: app.settings, force: false) }
             }
             if phase == .background, app.settings.hasCompletedOnboarding {
                 Task { await app.notifications.rescheduleFromStore(context: context, settings: app.settings) }

@@ -124,6 +124,12 @@ struct ProfileView: View {
         let tasks = TaskServiceFactory.shared.configuredServices(settings: app.settings)
         return Section {
             NavigationLink {
+                ConnectionsView()
+            } label: {
+                settingsRow("Comptes et connexions", icon: "person.badge.key",
+                            value: ConnectionCenter.shared.needingAttention().isEmpty ? nil : "à reconnecter")
+            }
+            NavigationLink {
                 TaskIntegrationsView()
             } label: {
                 settingsRow("Tâches", icon: "checklist",
@@ -300,6 +306,12 @@ struct ProfileView: View {
     private func tasksSection(_ settings: SettingsStore) -> some View {
         let active = TaskServiceFactory.shared.configuredServices(settings: settings)
         return Section {
+            NavigationLink {
+                ConnectionsView()
+            } label: {
+                settingsRow("Comptes et connexions", icon: "person.badge.key",
+                            value: ConnectionCenter.shared.needingAttention().isEmpty ? nil : "à reconnecter")
+            }
             NavigationLink {
                 TaskIntegrationsView()
             } label: {

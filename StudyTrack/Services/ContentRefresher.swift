@@ -40,7 +40,7 @@ enum ContentRefresher {
 
         if !moodleCourses.isEmpty {
             let client = MoodleClient()
-            if await client.isSignedIn() {
+            if await client.ensureSignedIn() {
                 let enrolled = (try? await client.enrolled()) ?? []
                 for course in moodleCourses {
                     guard case .unique(let ref)? = try? await client.resolve(course, enrolled: enrolled),
@@ -55,7 +55,7 @@ enum ContentRefresher {
                     if let line = apply(draft, to: course, context: context) { news.append(line) }
                 }
             } else {
-                AppLog.record(.info, "import", "Mise à jour Moodle sautée : session expirée")
+                AppLog.record(.info, "import", "Mise à jour Moodle sautée : reconnexion nécessaire")
             }
         }
 

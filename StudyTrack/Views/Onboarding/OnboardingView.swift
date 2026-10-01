@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// Accueil guidé en trois temps : **toi** (section, semestre) → **tes cours** →
-/// **ta première série**.
+/// Accueil guidé en quatre temps : **toi** (section, semestre) → **tes cours**
+/// → **tes comptes** (Moodle, StudyTrack, AnkiWeb, calendrier : tout se relie
+/// au même endroit, une fois) → **le contenu de tes cours**.
 ///
 /// Quatre écrans, dont un de présentation et un de dates que presque personne
 /// ne change (l'automne commence le même lundi pour tout le monde), retardaient
@@ -39,14 +40,14 @@ struct OnboardingView: View {
     @State private var resultMessage: String?
     @Query private var series: [ExerciseSeries]
 
-    private let lastStep = 2
+    private let lastStep = 3
 
     /// Étape de départ. En Release : toujours 0 ; en Debug, `-onboardingStep N`
     /// ouvre directement une étape (cf. `PreviewLaunch`).
     static var initialStep: Int {
         #if DEBUG
         if let value = PreviewLaunch.int(PreviewLaunch.onboardingStepFlag) {
-            return min(max(value, 0), 2)
+            return min(max(value, 0), 3)
         }
         #endif
         return 0
@@ -67,6 +68,7 @@ struct OnboardingView: View {
                         switch step {
                         case 0: aboutYouStep
                         case 1: coursesStep
+                        case 2: accountsStep
                         default: firstSeriesStep
                         }
                     }
@@ -135,12 +137,13 @@ struct OnboardingView: View {
     }
 
     private var titles: [String] {
-        ["Bienvenue sur StudyTrack", "Tes cours", "Le contenu de tes cours"]
+        ["Bienvenue sur StudyTrack", "Tes cours", "Tes comptes", "Le contenu de tes cours"]
     }
 
     private var subtitles: [String] {
         ["Ta théorie, tes exercices et ton temps de travail, semaine par semaine. Commence par ta section.",
          "Importe ton horaire EPFL ou ajoute tes classes à la main.",
+         "Relie ce dont l'app a besoin, une fois pour toutes : elle se reconnecte ensuite toute seule.",
          "Importe la théorie et les séries depuis Moodle, Courseware ou Botafogo : tout arrive rangé par semaine."]
     }
 
@@ -368,7 +371,19 @@ struct OnboardingView: View {
         }
     }
 
-    /// Étape 3 : le contenu des cours, depuis leurs sites — facultatif.
+    /// Étape 3 : les comptes. Chacun dit à quoi il sert ; aucun n'est
+    /// obligatoire, mais Moodle connecté ici rend l'étape suivante automatique.
+    private var accountsStep: some View {
+        VStack(alignment: .leading, spacing: Layout.cardSpacing) {
+            ConnectionsList()
+            Text("Ta connexion EPFL est mémorisée : quand Moodle expire, l'app rouvre la session sans rien te demander. Elle ne te sollicite que si ton compte doit vraiment être ressaisi.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Étape 4 : le contenu des cours, depuis leurs sites — facultatif.
     ///
     /// C'était « ta première série » en PDF. Mais une série ne dit rien de la
     /// théorie, ni des semaines : importer la page Moodle du cours remplit les

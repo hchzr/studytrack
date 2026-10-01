@@ -113,14 +113,7 @@ final class SupabaseClient {
                          useAuth: Bool,
                          allowsRefresh: Bool) async throws -> Data? {
         if useAuth, allowsRefresh, needsRefresh() {
-            do {
-                try await refreshSession()
-            } catch {
-                // Jeton de rafraîchissement refusé : la session est morte pour de
-                // bon. On l'efface au lieu de la garder et d'échouer en boucle.
-                clearSession()
-                throw error
-            }
+            try await refreshOrForget()
         }
 
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -152,12 +145,7 @@ final class SupabaseClient {
         // et on rejoue la requête. Sans cette seconde chance, une session expirée
         // faisait échouer chaque appel jusqu'au prochain redémarrage manuel.
         if http.statusCode == 401, useAuth, allowsRefresh, refreshToken != nil {
-            do {
-                try await refreshSession(force: true)
-            } catch {
-                clearSession()
-                throw error
-            }
+            try await refreshOrForget(force: true)
             return try await perform(path, method: method, query: query, body: body,
                                      prefer: prefer, useAuth: useAuth, allowsRefresh: false)
         }
@@ -176,10 +164,44 @@ final class SupabaseClient {
         return expiresAt <= Date().addingTimeInterval(StoredSession.leeway)
     }
 
+    /// Le rafraîchissement en cours, partagé : dix requêtes parties ensemble
+    /// avec un jeton expiré n'en font qu'**un**. Supabase fait tourner le jeton
+    /// de rafraîchissement à chaque usage ; le présenter deux fois de suite le
+    /// fait révoquer — et toute la session avec.
+    private var refreshing: Task<Void, Error>?
+
+    /// Rafraîchit ; n'efface la session que si le serveur **refuse** le jeton.
+    ///
+    /// Avant, n'importe quel échec — métro sans réseau, requête expirée — effaçait
+    /// la session : il fallait se reconnecter aux groupes après chaque coupure.
+    /// Une erreur réseau laisse la session intacte, réessayée à la requête
+    /// suivante.
+    private func refreshOrForget(force: Bool = false) async throws {
+        do {
+            try await refreshSession(force: force)
+        } catch let error as SupabaseError {
+            if case .server(let status, _) = error, [400, 401, 403].contains(status) {
+                clearSession()
+                Task { @MainActor in ConnectionCenter.shared.report(.groups, .expired) }
+                throw SupabaseError.notSignedIn
+            }
+            throw error
+        }
+    }
+
     /// Échange le jeton de rafraîchissement contre un jeton d'accès neuf.
     private func refreshSession(force: Bool = false) async throws {
-        guard let refreshToken else { return }
+        if let refreshing { return try await refreshing.value }
+        guard refreshToken != nil else { return }
         if !force, !needsRefresh() { return }
+        let task = Task { try await self.exchangeRefreshToken() }
+        refreshing = task
+        defer { refreshing = nil }
+        try await task.value
+    }
+
+    private func exchangeRefreshToken() async throws {
+        guard let refreshToken else { return }
 
         let payload: [String: Any] = ["refresh_token": refreshToken]
         let data = try await perform("/auth/v1/token",
@@ -239,6 +261,7 @@ final class SupabaseClient {
     }
 
     func signOut() async {
+        Task { @MainActor in ConnectionCenter.shared.report(.groups, .unknown) }
         if accessToken != nil {
             _ = try? await request("/auth/v1/logout", method: "POST")
         }
@@ -267,6 +290,7 @@ final class SupabaseClient {
                     host: host)
             }
             onSessionChange?()
+            Task { @MainActor in ConnectionCenter.shared.report(.groups, .connected) }
         } catch {
             throw SupabaseError.decoding(error.localizedDescription)
         }

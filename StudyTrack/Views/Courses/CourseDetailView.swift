@@ -58,6 +58,13 @@ struct CourseDetailView: View {
     /// La semaine affichée ; `nil` = « Tout le cours ».
     @State private var shownWeek: Int?
     @State private var hasChosenWeek = false
+    /// La dernière semaine cochée d'un geste, le temps de proposer « Annuler ».
+    @State private var completion: CompletionUndo?
+
+    struct CompletionUndo: Equatable {
+        var change: WeekCompletion.Change
+        var label: String
+    }
     @State private var openedExercise: Exercise?
     @State private var openedVideo: TheoryItem?
     @State private var browsing: BrowsedLink?
@@ -89,6 +96,8 @@ struct CourseDetailView: View {
             }
         }
         .background(Carnet.ground.ignoresSafeArea())
+        .overlay(alignment: .bottom) { completionBar }
+        .animation(Motion.snappy, value: completion)
         .navigationTitle(course.displayCode)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
@@ -207,6 +216,12 @@ struct CourseDetailView: View {
                     Label("faite", systemImage: "checkmark")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Carnet.correct)
+                } else if progress.hasItems {
+                    completionMenu(week...week, title: "Semaine \(week)") {
+                        Label("Tout cocher", systemImage: "checklist.checked")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Carnet.ink)
+                    }
                 }
             }
             if progress.hasItems {
@@ -518,6 +533,79 @@ struct CourseDetailView: View {
 
     // MARK: Barre du haut
 
+    // MARK: Cocher une semaine d'un geste
+
+    /// Les semaines terminées qui ont encore quelque chose à cocher.
+    private var pastWeeks: ClosedRange<Int>? {
+        guard course.isTermRunning, course.currentWeek > 1 else { return nil }
+        let range = 1...(course.currentWeek - 1)
+        let pending = WeekCompletion.pending(in: range, of: course)
+        return pending.theory + pending.exercises > 0 ? range : nil
+    }
+
+    /// Le menu « tout cocher » : faits, faits et corrigés, ou la théorie seule.
+    private func completionMenu<Label: View>(_ weeks: ClosedRange<Int>, title: String,
+                                             @ViewBuilder label: () -> Label) -> some View {
+        let pending = WeekCompletion.pending(in: weeks, of: course)
+        return Menu {
+            SwiftUI.Section("\(title) : \(pending.theory) théorie, \(pending.exercises) exercice\(pending.exercises > 1 ? "s" : "") à cocher") {
+                Button { complete(weeks, scope: .all, title: title) } label: {
+                    SwiftUI.Label("Tout marquer fait", systemImage: "checkmark.circle")
+                }
+                Button { complete(weeks, scope: .allCorrected, title: title) } label: {
+                    SwiftUI.Label("Fait et corrigé (juste)", systemImage: "checkmark.seal")
+                }
+                Button { complete(weeks, scope: .theoryOnly, title: title) } label: {
+                    SwiftUI.Label("Seulement la théorie vue", systemImage: TaskType.theory.icon)
+                }
+            }
+        } label: {
+            label()
+        }
+        .accessibilityLabel("Cocher tout le contenu : \(title)")
+    }
+
+    private func complete(_ weeks: ClosedRange<Int>, scope: WeekCompletion.Scope, title: String) {
+        let change = WeekCompletion.mark(weeks, of: course, scope: scope)
+        try? context.save()
+        Haptics.success()
+        guard !change.isEmpty else { return }
+        let undo = CompletionUndo(change: change, label: "\(title) : \(change.summary)")
+        completion = undo
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(8))
+            if completion == undo { completion = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var completionBar: some View {
+        if let completion {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Carnet.correct)
+                Text(completion.label)
+                    .font(.subheadline)
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button("Annuler") {
+                    WeekCompletion.undo(completion.change, in: course)
+                    try? context.save()
+                    self.completion = nil
+                    Haptics.removed()
+                }
+                .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Carnet.sheetRaised, in: Capsule())
+            .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+            .padding(.horizontal, Carnet.screenPadding)
+            .padding(.bottom, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     /// Deux boutons, deux rôles : « + » ajoute **du contenu** au cours, « ⋯ »
     /// agit **sur le cours** lui-même. Tout était auparavant dans un seul menu,
     /// et importer une série se cherchait dans l'onglet Séries.
@@ -560,6 +648,12 @@ struct CourseDetailView: View {
                 if let url = URL(string: course.moodleURLString), !course.moodleURLString.isEmpty {
                     Link(destination: url) {
                         Label("Ouvrir la page du cours", systemImage: "safari")
+                    }
+                }
+                if pastWeeks != nil {
+                    Divider()
+                    completionMenu(pastWeeks!, title: "Semaines \(pastWeeks!.lowerBound) à \(pastWeeks!.upperBound)") {
+                        Label("Marquer les semaines passées faites…", systemImage: "checklist.checked")
                     }
                 }
                 Divider()

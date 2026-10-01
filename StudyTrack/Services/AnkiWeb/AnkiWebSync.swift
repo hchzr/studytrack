@@ -132,6 +132,7 @@ final class AnkiWebSync {
     }
 
     func signOut() {
+        ConnectionCenter.shared.report(.ankiweb, .unknown)
         AnkiKeychain.hostKey = nil
         for key in [Key.username, Key.endpoint, Key.serverMod, Key.serverUsn, Key.lastRefresh] {
             defaults.removeObject(forKey: key)
@@ -146,7 +147,16 @@ final class AnkiWebSync {
     func refreshMirror(force: Bool = false) async throws {
         let client = client()
         status = "Lecture d'AnkiWeb…"
-        let meta = try await client.meta()
+        let meta: AnkiWebClient.Meta
+        do {
+            meta = try await client.meta()
+        } catch AnkiWebClient.Failure.badCredentials {
+            // La clé d'hôte n'est plus acceptée (mot de passe changé, compte
+            // déconnecté ailleurs) : c'est le seul cas où il faut redemander.
+            ConnectionCenter.shared.report(.ankiweb, .expired)
+            throw AnkiWebClient.Failure.badCredentials
+        }
+        ConnectionCenter.shared.report(.ankiweb, .connected)
         remember(client)
         let upToDate = AnkiCollection.exists
             && defaults.object(forKey: Key.serverMod) as? Int64 == meta.modified

@@ -301,7 +301,7 @@ final class MoodleImportModel {
         plans = []
         pendingQuestions = []
         progress = "Connexion à Moodle…"
-        guard await client.isSignedIn() else {
+        guard await client.ensureSignedIn() else {
             phase = .idle
             needsLogin = true
             return
@@ -460,6 +460,11 @@ struct SiteLoginSheet: View {
         let result = try? await browser.webView?.callAsyncJavaScript(script, contentWorld: .page) as? String
         if result == "true" {
             Haptics.success()
+            if source == .moodle {
+                ConnectionCenter.shared.report(.moodle, .connected)
+                // Ce qui avait échoué faute de session est retenté.
+                SeriesAutoReader.shared.retryAll()
+            }
             onSignedIn()
         }
     }

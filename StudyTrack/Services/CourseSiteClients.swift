@@ -124,6 +124,40 @@ final class MoodleClient {
         }
     }
 
+    /// Connecté·e, quitte à se **reconnecter sans rien demander**.
+    ///
+    /// La session Moodle expire au bout de quelques heures d'inactivité, mais
+    /// la connexion EPFL (le compte Microsoft mémorisé) dure des semaines :
+    /// rouvrir la page de connexion de Moodle dans le navigateur invisible
+    /// suffit, en général, à revenir connecté·e — sans un seul écran. On ne
+    /// demande de se reconnecter que si cette tentative échoue
+    /// (`ConnectionCenter`).
+    func ensureSignedIn() async -> Bool {
+        if await isSignedIn() {
+            ConnectionCenter.shared.report(.moodle, .connected)
+            return true
+        }
+        // Jamais connecté·e : il n'y a rien à rejouer, et rien n'a « expiré ».
+        guard ConnectionCenter.shared.state(of: .moodle) != .unknown else { return false }
+        do {
+            try await session.load(Self.login)
+            // La connexion EPFL passe par plusieurs redirections : on attend
+            // d'être revenu sur Moodle, hors de la page de connexion.
+            for _ in 0..<12 {
+                if let url = session.currentURL, url.host == "moodle.epfl.ch", !url.path.hasPrefix("/login") { break }
+                try await Task.sleep(for: .seconds(1))
+            }
+        } catch {
+            // Hors ligne : on ne sait pas. Rien n'est demandé.
+            return false
+        }
+        isReady = false
+        let signedIn = await isSignedIn()
+        ConnectionCenter.shared.report(.moodle, signedIn ? .connected : .expired)
+        if signedIn { AppLog.record(.info, "connexion", "Moodle : reconnecté·e sans intervention") }
+        return signedIn
+    }
+
     /// Les cours Moodle dont le nom contient `query` (« MATH-101 »).
     func search(_ query: String) async throws -> [MoodleCourseRef] {
         let json = try await call("core_course_search_courses",

@@ -51,10 +51,19 @@ final class SeriesAutoReader {
         running = true
         defer { running = false }
         var report: [String] = []
-        await repairLinks(courses: courses, context: context)
+        // Une session Moodle expirée faisait échouer chaque série l'une après
+        // l'autre (et les marquait en échec). On la rejoue d'abord en silence ;
+        // si elle ne revient pas, les séries Moodle attendent la reconnexion
+        // sans être marquées.
+        let needsMoodle = courses.contains { course in
+            course.series.contains { URL(string: $0.urlString)?.host?.contains("moodle") == true && ($0.exercises.isEmpty || MoodleLinks.activityModule(of: URL(string: $0.urlString)!) != nil) }
+        }
+        let moodleReady = needsMoodle ? await MoodleClient().ensureSignedIn() : false
+        if moodleReady { await repairLinks(courses: courses, context: context) }
         for course in courses {
             for series in course.sortedSeries where series.exercises.isEmpty && failures[series.id] == nil {
                 guard let url = URL(string: series.urlString), url.scheme?.hasPrefix("http") == true else { continue }
+                if url.host?.contains("moodle") == true, !moodleReady { continue }
                 reading.insert(series.id)
                 defer { reading.remove(series.id) }
                 do {
@@ -102,6 +111,12 @@ final class SeriesAutoReader {
         if changed { try? context.save() }
     }
 
+    /// Après une reconnexion : tout ce qui avait échoué est retenté.
+    func retryAll() {
+        failures = [:]
+        repaired = []
+    }
+
     func retry(_ series: ExerciseSeries) {
         failures[series.id] = nil
     }
@@ -109,18 +124,37 @@ final class SeriesAutoReader {
     // MARK: Lecture
 
     private func read(_ series: ExerciseSeries, from url: URL, course: Course,
-                      context: ModelContext, settings: SettingsStore) async throws -> Int {
-        let path = url.path.lowercased()
-        if path.hasSuffix(".html") || path.hasSuffix(".htm") || path.hasSuffix("/") {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let html = String(decoding: data, as: UTF8.self)
-            guard let page = SeriesPageParser.parseProginsc(html: html, baseURL: url) else { return 0 }
-            write(page.exercises, into: series, course: course, context: context)
-            if series.solutionURLString.isEmpty { series.solutionURLString = page.solutionURL }
-            return series.exercises.count
+                      context: ModelContext, settings: SettingsStore, depth: Int = 0) async throws -> Int {
+        let file: URL
+        if url.host?.contains("moodle") == true {
+            file = try await AuthenticatedDownloader.download(url)
+        } else {
+            // On regarde **ce que le serveur renvoie**, pas l'adresse : les
+            // séries de CS-107 (`proginsc.epfl.ch/…/serie07`) sont des pages
+            // HTML sans « .html », et partaient au lecteur de PDF — « Ce lien ne
+            // mène pas à un PDF ».
+            let (data, response) = try await URLSession.shared.data(from: Self.direct(url))
+            let base = response.url ?? url
+            if Self.isPDF(data: data, response: response) {
+                file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".pdf")
+                try data.write(to: file)
+            } else {
+                let html = String(decoding: data, as: UTF8.self)
+                if let page = SeriesPageParser.parseProginsc(html: html, baseURL: base) {
+                    write(page.exercises, into: series, course: course, context: context)
+                    if series.solutionURLString.isEmpty { series.solutionURLString = page.solutionURL }
+                    return series.exercises.count
+                }
+                // Une page qui porte le PDF de la série (site de cours, GitHub…).
+                if depth == 0, let next = MoodleLinks.statementLink(inHTML: html, baseURL: base).statement.flatMap(URL.init(string:)),
+                   next != url {
+                    let count = try await read(series, from: next, course: course, context: context, settings: settings, depth: 1)
+                    if count > 0 { series.urlString = next.absoluteString }
+                    return count
+                }
+                throw HiddenSiteSession.SiteError.failed("Page web sans énoncé lisible (\(base.host ?? "site inconnu")) : ouvre-la depuis la série.")
+            }
         }
-
-        let file = try await download(url)
         defer { try? FileManager.default.removeItem(at: file) }
         guard let document = PDFDocument(url: file) else {
             throw HiddenSiteSession.SiteError.failed("Ce lien ne mène pas à un PDF lisible.")
@@ -170,27 +204,20 @@ final class SeriesAutoReader {
         }
     }
 
-    /// Un PDF Moodle avec la session de l'app ; un PDF public directement.
-    private func download(_ url: URL) async throws -> URL {
-        if url.host?.contains("moodle") == true {
-            return try await AuthenticatedDownloader.download(url)
-        }
-        // Dropbox sert une page HTML sans `dl=1`.
-        var address = url
-        if url.host?.contains("dropbox.com") == true,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = (components.queryItems ?? []).filter { $0.name != "dl" }
-            items.append(URLQueryItem(name: "dl", value: "1"))
-            components.queryItems = items
-            address = components.url ?? url
-        }
-        let (temporary, response) = try await URLSession.shared.download(from: address)
+    /// Dropbox sert une page HTML sans `dl=1`.
+    private static func direct(_ url: URL) -> URL {
+        guard url.host?.contains("dropbox.com") == true,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = (components.queryItems ?? []).filter { $0.name != "dl" }
+        items.append(URLQueryItem(name: "dl", value: "1"))
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    /// Un PDF se reconnaît à sa signature, quel que soit l'en-tête.
+    private static func isPDF(data: Data, response: URLResponse) -> Bool {
+        if data.starts(with: Data("%PDF".utf8)) { return true }
         let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
-        guard type.contains("pdf") || address.pathExtension.lowercased() == "pdf" else {
-            throw HiddenSiteSession.SiteError.failed("Ce lien ne mène pas à un PDF.")
-        }
-        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".pdf")
-        try FileManager.default.moveItem(at: temporary, to: destination)
-        return destination
+        return type.contains("pdf") && !type.contains("html")
     }
 }
