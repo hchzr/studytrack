@@ -49,6 +49,8 @@ struct SeriesImportSheet: View {
     @State private var showingPaste = false
     @State private var pastedText = ""
     @State private var saveError: String?
+    /// Les PDF lus, pour garder celui de la série créée.
+    @State private var sourceFiles: [URL] = []
 
     private enum Phase: Equatable {
         case source
@@ -462,6 +464,7 @@ struct SeriesImportSheet: View {
     /// en page. Un polycopié de trente pages figeait l'écran le temps de la lecture.
     private func read(_ urls: [URL]) {
         analysisTask?.cancel()
+        sourceFiles = urls
         phase = .reading
         ai = .idle
         sourceName = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) documents"
@@ -670,7 +673,12 @@ struct SeriesImportSheet: View {
     private func create() {
         guard let course = selectedCourse else { return }
         for draft in drafts where !draft.exercises.isEmpty {
-            SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
+            let written = SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
+            // Le PDF d'une seule série est gardé : le chrono et la fiche en
+            // montrent l'énoncé exercice par exercice, même sans adresse.
+            if drafts.filter({ !$0.exercises.isEmpty }).count == 1, sourceFiles.count == 1 {
+                SeriesPDFStore.shared.keep(sourceFiles[0], for: written.series.id)
+            }
         }
         do {
             try context.save()

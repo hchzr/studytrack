@@ -57,14 +57,11 @@ struct RootTabView: View {
             // épreuve passée doit disparaître, et une épreuve qui arrive dans les
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
             ExamActivityController.reconcileFromStore(context: context)
-            // Les séances d'exercices étaient rangées comme cours magistraux
-            // (« série » comptait pour « cours ») : elles comptaient d'office dans
-            // les heures d'amphi. Reclassées une fois ici.
-            for event in (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
-            where event.kind == .lecture
-                && CalendarSync.classify(title: event.title, course: event.course) == .exerciseSession {
-                event.kind = .exerciseSession
-            }
+            // L'horaire lu deux fois (import `.ics` et calendrier de l'iPhone
+            // abonné au même flux) et les séances d'exercices rangées comme
+            // cours magistraux comptaient d'office dans les heures d'amphi :
+            // doublons retirés et séances reclassées, une fois ici.
+            CalendarSync.repair(context: context)
             try? context.save()
             #if DEBUG
             if let address = PreviewLaunch.string(PreviewLaunch.browseFlag), let url = URL(string: address) {

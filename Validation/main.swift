@@ -4237,6 +4237,234 @@ do {
     check(AnkiReviewImport.courseIndex(forDeck: "Japonais", courses: keys) == nil, "paquet sans cours : pas d'attribution au hasard")
 }
 
+print("== Horaire : amphi ou exercices ==")
+do {
+    check(TimetableClassifier.roomCount("CE1101, CE1105, CO010") == 3, "trois salles comptées")
+    check(TimetableClassifier.roomCount("RLC E1 240") == 1, "une salle avec espaces reste une salle")
+    check(TimetableClassifier.roomCount("") == 0, "lieu vide : aucune salle")
+    // Le calendrier de l'iPhone ne transmet pas CATEGORIES : seuls l'intitulé et les salles restent.
+    check(TimetableClassifier.kind(title: "Physique générale : mécanique (anglais)",
+                                   location: "CE1101, CE1105, CO010, CO011", hasCourse: true) == .exerciseSession,
+          "plusieurs salles : séance d'exercices, même sans mot-clé")
+    check(TimetableClassifier.kind(title: "Analyse I (classe inversée)", location: "CE16", hasCourse: true) == .lecture,
+          "une seule salle, rattachée à un cours : cours")
+    check(TimetableClassifier.kind(title: "Dîner", location: "", hasCourse: false) == .other,
+          "sans cours ni mot-clé : agenda personnel")
+    check(TimetableClassifier.kind(title: "Midterm Analyse", location: "CE1, CE2", hasCourse: true) == .midterm,
+          "un midterm dans plusieurs salles reste un midterm")
+    check(TimetableClassifier.kind(categories: "Horaires enseignés FBM,Exercices,", title: "Analyse I (classe inversée)",
+                                   location: "CE1106, CE1515", hasCourse: true) == .exerciseSession,
+          "CATEGORIES « Exercices » → exercices")
+    check(TimetableClassifier.kind(categories: "Horaires enseignés FBM,Cours,", title: "Analyse I (classe inversée)",
+                                   location: "CE16", hasCourse: true) == .lecture,
+          "CATEGORIES « Cours » → amphi")
+
+    var zurich = Calendar(identifier: .gregorian)
+    zurich.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let monday = zurich.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 8, minute: 15))!
+    let nextMonday = zurich.date(byAdding: .day, value: 7, to: monday)!
+    let wednesday = zurich.date(byAdding: .day, value: 2, to: monday)!
+    let a = TimetableClassifier.slot(owner: "X", start: monday, calendar: zurich)
+    check(a == TimetableClassifier.slot(owner: "X", start: nextMonday, calendar: zurich), "même créneau d'une semaine à l'autre")
+    check(a != TimetableClassifier.slot(owner: "X", start: wednesday, calendar: zurich), "un autre jour, un autre créneau")
+    let b = TimetableClassifier.slot(owner: "X", start: wednesday, calendar: zurich)
+    let learned = TimetableClassifier.learnedKinds([
+        .init(slot: a, kind: .lecture, isManual: false),
+        .init(slot: a, kind: .lecture, isManual: false),
+        .init(slot: a, kind: .exerciseSession, isManual: true),
+        .init(slot: b, kind: .lecture, isManual: false),
+        .init(slot: b, kind: .exerciseSession, isManual: false),
+    ])
+    check(learned[a] == .exerciseSession, "un choix manuel l'emporte sur l'horaire")
+    check(learned[b] == nil, "sources à égalité : créneau non tranché")
+
+    let course = UUID()
+    check(TimetableClassifier.isSameSession(courseA: course, startA: monday, courseB: course, startB: monday.addingTimeInterval(30)),
+          "même cours, même minute : la même séance lue deux fois")
+    check(!TimetableClassifier.isSameSession(courseA: course, startA: monday, courseB: UUID(), startB: monday),
+          "deux cours au même moment ne sont pas un doublon")
+
+    let hours = TimetableClassifier.weeklyHours([
+        (start: monday, seconds: 225 * 60, kind: .lecture),
+        (start: wednesday, seconds: 105 * 60, kind: .exerciseSession),
+        (start: nextMonday, seconds: 225 * 60, kind: .lecture),
+        (start: nextMonday.addingTimeInterval(2 * 86_400), seconds: 105 * 60, kind: .exerciseSession),
+    ], calendar: zurich)
+    check(hours.lecture == 3.75 && hours.exercise == 1.75,
+          "semaine type d'Analyse : 3 h 45 d'amphi, 1 h 45 d'exercices (\(hours.lecture), \(hours.exercise))")
+
+    // L'horaire EPFL réel : plusieurs lignes CATEGORIES, DURATION, salles multiples.
+    let epfl = """
+    BEGIN:VCALENDAR
+    BEGIN:VEVENT
+    UID:horaire_1@is-academia
+    SUMMARY:Analyse II test (classe inversée)
+    DTSTART;TZID=Europe/Berlin:20260928T081500
+    DURATION:PT225M
+    CATEGORIES:Horaires enseignés FBM
+    LOCATION:CE16
+    CATEGORIES:Cours
+    CATEGORIES:
+    END:VEVENT
+    BEGIN:VEVENT
+    UID:horaire_2@is-academia
+    SUMMARY:Analyse II test (classe inversée)
+    DTSTART;TZID=Europe/Berlin:20260930T101500
+    DURATION:PT105M
+    CATEGORIES:Horaires enseignés FBM
+    LOCATION:CE1106, CE1515
+    CATEGORIES:Exercices
+    CATEGORIES:
+    END:VEVENT
+    END:VCALENDAR
+    """
+    // Le même cours, déjà lu dans le calendrier de l'iPhone (sans CATEGORIES) : un doublon à retirer.
+    let parsedEPFL = ICSParser.parse(epfl, horizon: zurich.date(byAdding: .year, value: 2, to: monday)!)
+    check(parsedEPFL.count == 2, "deux séances lues (\(parsedEPFL.count))")
+    let epflResult = TimetableImport.import(epfl, into: context)
+    let importedAnalyse = ((try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? [])
+        .first { $0.title == "Analyse II test (classe inversée)" }?.course
+    let ghost = LinkedCalendarEvent(externalEventID: "ek-1", sourceCalendarID: "Horaire EPFL",
+                                    title: "Analyse II test (classe inversée)",
+                                    startsAt: parsedEPFL[1].start, endsAt: parsedEPFL[1].end,
+                                    location: "CE1106, CE1515", kind: .lecture)
+    ghost.course = importedAnalyse
+    ghost.isSkipped = true
+    context.insert(ghost)
+    let stray = LinkedCalendarEvent(externalEventID: "ek-2", sourceCalendarID: "Horaire EPFL",
+                                    title: "Analyse II test (classe inversée)",
+                                    startsAt: parsedEPFL[1].start.addingTimeInterval(86_400), endsAt: parsedEPFL[1].end.addingTimeInterval(86_400),
+                                    location: "CE1, CE2", kind: .lecture)
+    stray.course = importedAnalyse
+    context.insert(stray)
+    check(CalendarSync.repair(context: context) == 2, "réparation : un doublon retiré, une séance reclassée")
+    check(stray.kind == .exerciseSession, "plusieurs salles : la séance du calendrier passe en exercices")
+    context.delete(stray)
+    let epflEvents = ((try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? [])
+        .filter { $0.title == "Analyse II test (classe inversée)" }
+    check(epflResult.eventsCreated == 2, "deux séances importées (\(epflResult.eventsCreated))")
+    check(epflEvents.count == 2, "le doublon du calendrier de l'iPhone est retiré (\(epflEvents.count) séances)")
+    check(epflEvents.filter(\.isLecture).count == 1, "une seule séance comptée en amphi")
+    check(epflEvents.contains { !$0.isLecture && $0.isSkipped }, "le doublon transmet ce qu'on y avait noté (manqué)")
+    if let analyse = epflEvents.first?.course {
+        check(analyse.weeklyLectureHours == 3.75 && analyse.weeklyExerciseHours == 1.75,
+              "heures du cours lues dans l'horaire (\(analyse.weeklyLectureHours) + \(analyse.weeklyExerciseHours))")
+        // « C'est une séance d'exercices » sur le lundi : tout le créneau suit, et le choix tient au réimport.
+        if let lecture = epflEvents.first(where: \.isLecture) {
+            check(CalendarSync.setKind(.exerciseSession, forSlotOf: lecture, context: context) == 1, "le créneau du lundi est reclassé")
+            _ = TimetableImport.import(epfl, into: context)
+            check(lecture.kind == .exerciseSession && lecture.kindIsManual, "un réimport ne défait pas un choix manuel")
+        }
+    }
+}
+
+print("== Moodle : du lien d'activité au PDF ==")
+do {
+    let page = URL(string: "https://moodle.epfl.ch/mod/page/view.php?id=77")!
+    check(MoodleLinks.activityModule(of: page) == "page", "une page Moodle est reconnue")
+    check(MoodleLinks.activityModule(of: URL(string: "https://moodle.epfl.ch/course/view.php?id=1")!) == nil,
+          "la page d'un cours n'est pas une activité")
+    check(SiteLinks.normalize(URL(string: "https://moodle.epfl.ch/mod/url/view.php?id=9")!).absoluteString
+          == "https://moodle.epfl.ch/mod/url/view.php?id=9&redirect=1", "un lien Moodle s'ouvre sur sa cible")
+    check(SiteLinks.normalize(page) == page, "une page Moodle n'a pas de redirection à demander")
+    check(MoodleLinks.workaroundPage(URL(string: "https://moodle.epfl.ch/mod/resource/view.php?id=4&redirect=1")!).absoluteString
+          == "https://moodle.epfl.ch/mod/resource/view.php?id=4&forceview=1", "la page « cliquez ici » d'un fichier")
+
+    // Une série d'AICC publiée en page : énoncé et corrigé parmi d'autres liens.
+    let aicc = """
+    <div id="region-main"><h2>Série 3</h2>
+    <p>Voir le <a href="https://moodle.epfl.ch/course/view.php?id=1">cours</a>.</p>
+    <p><a href="https://moodle.epfl.ch/pluginfile.php/123/mod_page/content/4/serie3_sol.pdf">Corrigé</a></p>
+    <p><a href="/pluginfile.php/123/mod_page/content/4/serie3.pdf?time=1&amp;forcedownload=1"><span>Énoncé</span> de la série</a></p>
+    </div>
+    """
+    let found = MoodleLinks.statementLink(inHTML: aicc, baseURL: page)
+    check(found.statement == "https://moodle.epfl.ch/pluginfile.php/123/mod_page/content/4/serie3.pdf?time=1&forcedownload=1",
+          "l'énoncé est le PDF qui n'est pas le corrigé (\(found.statement ?? "nil"))")
+    check(found.solution?.hasSuffix("serie3_sol.pdf") == true, "le corrigé est rangé à part")
+
+    let workaround = """
+    <div class="urlworkaround">Cliquez sur le lien
+      <a href="https://ipg.epfl.ch/aicc/serie_04.pdf" onclick="this.target='_blank'">serie_04.pdf</a></div>
+    """
+    check(MoodleLinks.statementLink(inHTML: workaround, baseURL: page).statement == "https://ipg.epfl.ch/aicc/serie_04.pdf",
+          "le lien « cliquez ici » d'une activité lien")
+    check(MoodleLinks.statementLink(inHTML: "<p>Rien ici</p>", baseURL: page).statement == nil, "pas de document : rien d'inventé")
+
+    // L'analyse du cours : une série publiée en page, sa cible lue, devient un PDF.
+    var activity = MoodleActivity(id: "77", name: "Série 3", module: "page", url: page.absoluteString)
+    activity.target = found.statement
+    activity.solutionTarget = found.solution
+    let snapshot = MoodleCourseSnapshot(title: "AICC", url: "https://moodle.epfl.ch/course/view.php?id=1",
+                                        sections: [MoodleSection(number: 3, title: "Semaine 3", activities: [activity])])
+    let aiccDraft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: nil)
+    let aiccSeries = aiccDraft.sections.flatMap(\.items).first { $0.kind == .series }
+    check(aiccSeries?.pdfURL.hasSuffix("forcedownload=1") == true, "la série pointe sur le PDF, pas sur la page")
+    check(aiccSeries?.solutionURL.hasSuffix("serie3_sol.pdf") == true, "et son corrigé vient de la même page")
+}
+
+print("== Chrono : le prochain exercice d'abord ==")
+do {
+    let course = Course(code: "TEST-777", name: "Chrono")
+    context.insert(course)
+    let old = ExerciseSeries(course: course, seriesNumber: 1, plannedWeek: 1)
+    let current = ExerciseSeries(course: course, seriesNumber: 2, plannedWeek: 2)
+    context.insert(old); context.insert(current)
+    let o1 = Exercise(series: old, exerciseNumber: "1.1", sortOrder: 0)
+    let o2 = Exercise(series: old, exerciseNumber: "1.2", sortOrder: 1)
+    let c1 = Exercise(series: current, exerciseNumber: "2.1", sortOrder: 0)
+    let c2 = Exercise(series: current, exerciseNumber: "2.2", sortOrder: 1)
+    let cb = Exercise(series: current, exerciseNumber: "2.3", isBonus: true, sortOrder: 2)
+    for exercise in [o1, o2, c1, c2, cb] { context.insert(exercise) }
+    o1.setDone(true); o2.setDone(true); c1.setDone(true)
+    let ordered = FocusTargets.exercises(of: [old, current], for: .exercise)
+    check(ordered.upNext.map(\.exerciseNumber) == ["2.2", "2.3"],
+          "à faire : 2.2 puis le bonus (\(ordered.upNext.map(\.exerciseNumber)))")
+    check(ordered.done.map(\.exerciseNumber) == ["2.1", "1.1", "1.2"],
+          "déjà faits ensuite, série en cours d'abord (\(ordered.done.map(\.exerciseNumber)))")
+    o2.correct(.wrong)
+    let correction = FocusTargets.exercises(of: [old, current], for: .correction)
+    check(correction.upNext.first?.exerciseNumber != "1.2" && correction.upNext.last?.exerciseNumber == "1.2",
+          "correction : corriger avant de refaire (\(correction.upNext.map(\.exerciseNumber)))")
+
+    check(ExerciseRegions.shortNumber("4.3") == "3" && ExerciseRegions.shortNumber("Ex-02-03") == "3"
+          && ExerciseRegions.shortNumber("3b") == "3b", "numéro court d'un exercice")
+    let regions = ExerciseRegions.slices(for: [
+        .init(number: "3.1", page: 0, top: 0.2),
+        .init(number: "3.2", page: 0, top: 0.7),
+        .init(number: "3.3", page: 1, top: 0.5),
+    ], pageCount: 2)
+    check(regions["1"]?.count == 1 && abs((regions["1"]?.first?.top ?? 0) - 0.18) < 1e-9
+          && abs((regions["1"]?.first?.bottom ?? 0) - 0.689) < 1e-9, "l'exercice 1 va jusqu'au titre du 2")
+    check(regions["2"]?.count == 2 && regions["2"]?.last?.page == 1 && abs((regions["2"]?.last?.bottom ?? 0) - 0.489) < 1e-9,
+          "l'exercice 2 continue sur la page suivante")
+    check(regions["3"]?.first?.bottom == 1 && abs((regions["3"]?.first?.top ?? 0) - 0.48) < 1e-9, "le dernier va jusqu'en bas")
+    let paged = ExerciseRegions.slices(for: [.init(number: "1", page: 0, top: 0.15), .init(number: "2", page: 1, top: 0.11)], pageCount: 2)
+    check(paged["1"]?.count == 1, "la suite d'un énoncé réduite à l'en-tête de page n'est pas montrée")
+}
+
+print("== Chrono : ce que l'horaire dit du moment ==")
+do {
+    let now = Date()
+    let analyse = UUID(), physique = UUID()
+    let slots = [
+        FocusContext.Slot(courseID: analyse, courseCode: "MATH-101", kind: .exerciseSession,
+                          start: now.addingTimeInterval(-1800), end: now.addingTimeInterval(4500)),
+        FocusContext.Slot(courseID: physique, courseCode: "PHYS-101", kind: .lecture,
+                          start: now.addingTimeInterval(-7200), end: now.addingTimeInterval(-600)),
+    ]
+    let during = FocusContext.suggestion(now: now, slots: slots)
+    check(during?.courseID == analyse && during?.taskType == .exercise, "pendant une séance d'exercices : ce cours, des séries")
+    let after = FocusContext.suggestion(now: now, slots: [slots[1]])
+    check(after?.courseID == physique && after?.taskType == .theory, "juste après un amphi : sa théorie")
+    let soon = FocusContext.Slot(courseID: analyse, courseCode: "MATH-101", kind: .exerciseSession,
+                                 start: now.addingTimeInterval(1200), end: now.addingTimeInterval(7500))
+    check(FocusContext.suggestion(now: now, slots: [soon])?.taskType == .exercise, "une séance dans 20 min se prépare")
+    let late = FocusContext.Slot(courseID: analyse, courseCode: "MATH-101", kind: .exerciseSession,
+                                 start: now.addingTimeInterval(4 * 3600), end: now.addingTimeInterval(6 * 3600))
+    check(FocusContext.suggestion(now: now, slots: [late]) == nil, "rien d'imminent : pas de proposition")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

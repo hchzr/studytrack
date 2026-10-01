@@ -82,10 +82,15 @@ enum TimetableImport {
         guard !icsEvents.isEmpty else { return result }
 
         var courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        var existingEventIDs = Set(
-            ((try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? [])
-                .compactMap(\.externalEventID)
-        )
+        let storedEvents = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        var existingEventIDs = Set(storedEvents.compactMap(\.externalEventID))
+        /// Les événements venus du calendrier de l'iPhone, candidats au doublon.
+        var calendarEvents = storedEvents.filter { $0.sourceCalendarID != "ics" && $0.course != nil }
+        /// Les créneaux dont le type a été choisi à la main.
+        let manualSlots = Dictionary(storedEvents.filter(\.kindIsManual).map { event in
+            (TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: event.course?.id, title: event.title),
+                                      start: event.startsAt), event.kind)
+        }, uniquingKeysWith: { first, _ in first })
         // Le semestre auquel rattacher les cours créés ici.
         //
         // Les créer avec `term: nil` les affichait en « semaine 1 » à perpétuité :
@@ -164,26 +169,24 @@ enum TimetableImport {
 
             // 2. Créer la séance si elle n'existe pas déjà.
             let identifier = "ics:\(event.uid):\(Int(event.start.timeIntervalSince1970))"
-            if existingEventIDs.contains(identifier) {
-                result.eventsSkipped += 1
-                continue
-            }
 
             // `CATEGORIES` tranche quand il se prononce : un événement marqué
-            // « Cours » est un cours magistral, quoi que dise son intitulé. Sinon on
-            // retombe sur l'analyse du titre.
-            let kind: CalendarEventKind = {
-                switch ICSParser.isLectureCategory(event.categories) {
-                case true?: return .lecture
-                case false?: return .exerciseSession
-                case nil: return CalendarSync.classify(title: event.summary, course: course)
+            // « Cours » est un cours magistral, quoi que dise son intitulé. Sinon
+            // l'intitulé, puis le nombre de salles. Un type choisi à la main pour
+            // ce créneau (« c'est une séance d'exercices ») l'emporte sur tout.
+            let slot = TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: course.id, title: event.summary),
+                                                start: event.start)
+            let manualKind = manualSlots[slot]
+            let kind = manualKind ?? TimetableClassifier.kind(categories: event.categories, title: event.summary,
+                                                              location: event.location, hasCourse: true)
+            if existingEventIDs.contains(identifier) {
+                // Déjà là : seul son type peut avoir été mal lu par une version
+                // précédente. On le remet d'aplomb, sauf choix manuel.
+                if let stored = storedEvents.first(where: { $0.externalEventID == identifier }), !stored.kindIsManual {
+                    stored.kind = kind
                 }
-            }()
-            if kind == .lecture, !course.hasLectures {
-                // Le cours a des heures d'amphi : c'est exactement ce que la question
-                // « cette classe a-t-elle cours ? » cherche à savoir.
-                course.hasLectures = true
-                result.lecturesDetected += 1
+                result.eventsSkipped += 1
+                continue
             }
             let linked = LinkedCalendarEvent(externalEventID: identifier,
                                              sourceCalendarID: "ics",
@@ -194,7 +197,17 @@ enum TimetableImport {
                                              kind: kind)
             linked.course = course
             linked.lastSyncedAt = Date()
+            linked.kindIsManual = manualKind != nil
             context.insert(linked)
+            // La même séance, déjà lue dans le calendrier de l'iPhone abonné au
+            // même flux : l'horaire importé la remplace — il sait si c'est un
+            // cours ou des exercices.
+            for twin in calendarEvents where TimetableClassifier.isSameSession(courseA: twin.course?.id, startA: twin.startsAt,
+                                                                                courseB: course.id, startB: event.start) {
+                if twin.isSkipped { linked.isSkipped = true }
+                context.delete(twin)
+                calendarEvents.removeAll { $0 === twin }
+            }
             existingEventIDs.insert(identifier)
             result.eventsCreated += 1
 
@@ -209,6 +222,22 @@ enum TimetableImport {
 
         result.coursesCreated = createdCourses.count
         result.coursesMatched = matchedCourses.count
+
+        // Les heures de la semaine type, lues dans l'horaire, pour les cours
+        // créés ici ou restés aux valeurs par défaut (2 h + 1 h) : une saisie
+        // faite à la main n'est jamais écrasée.
+        let allEvents = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        for course in courses where createdCourses.contains(course.id)
+            || (matchedCourses.contains(course.id) && course.weeklyLectureHours == 2 && course.weeklyExerciseHours == 1) {
+            let sessions = allEvents
+                .filter { $0.course?.id == course.id && $0.sourceCalendarID == "ics" }
+                .map { (start: $0.startsAt, seconds: $0.durationSeconds, kind: $0.kind) }
+            guard !sessions.isEmpty else { continue }
+            let hours = TimetableClassifier.weeklyHours(sessions)
+            course.weeklyLectureHours = hours.lecture
+            course.weeklyExerciseHours = hours.exercise
+            course.hasLectures = hours.lecture > 0
+        }
 
         try? context.save()
         return result

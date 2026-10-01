@@ -154,8 +154,18 @@ final class MoodleClient {
                                                         url: course.url.absoluteString) else {
             throw WebContentScraper.ScrapeError.empty
         }
+        // Les liens et devoirs, comme avant ; et **chaque série ou corrigé**,
+        // quel que soit son module : une série publiée en page, en dossier ou en
+        // fichier s'ouvrait sur la page Moodle qui porte le lien du PDF (AICC),
+        // et l'app ne pouvait ni l'afficher ni en lire les exercices.
         let wanted = snapshot.sections.flatMap(\.activities)
-            .filter { $0.isVisible && ($0.module == "url" || $0.module == "assign") }
+            .filter { activity in
+                guard activity.isVisible else { return false }
+                if activity.module == "url" || activity.module == "assign" { return true }
+                guard ["resource", "page", "folder"].contains(activity.module) else { return false }
+                let kind = MoodleCourseAnalyzer.classify(activity, inWeek: true)
+                return kind == .series || kind == .solution
+            }
             .map { ["id": $0.id, "module": $0.module] }
         snapshot.moocLinks = await moocLinks(courseID: course.id, snapshot: snapshot)
         guard !wanted.isEmpty else { return snapshot }
@@ -163,30 +173,56 @@ final class MoodleClient {
         let raw = try await session.run(#"""
         const items = JSON.parse(list);
         const out = {};
+        const isSolution = (a) => /(corrig|solution|\bsol\b|_sol\b|-sol\b|loesung|answers?\b|reponses|réponses)/i.test((a.innerText || '') + ' ' + a.href);
+        const isDocument = (href) => /\/pluginfile\.php\//.test(href) || /\.pdf($|[?#])/i.test(href);
         const one = async (item) => {
           try {
-            const r = await fetch('/mod/' + item.module + '/view.php?id=' + item.id, { credentials: 'include' });
+            // `forceview=1` : la page « cliquez ici » d'un lien ou d'un fichier,
+            // sans la redirection qu'un `fetch` ne peut pas suivre hors de Moodle.
+            const force = (item.module === 'url' || item.module === 'resource') ? '&forceview=1' : '';
+            const r = await fetch('/mod/' + item.module + '/view.php?id=' + item.id + force, { credentials: 'include' });
+            if (item.module === 'resource' && /\/pluginfile\.php\//.test(r.url)) { out[item.id] = { target: r.url }; return; }
+            const type = r.headers.get('content-type') || '';
+            if (!type.includes('html')) { out[item.id] = { target: r.redirected ? r.url : '' }; return; }
             const html = await r.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            if (item.module === 'url') {
-              const a = doc.querySelector('.urlworkaround a, .resourceworkaround a, #region-main a[href^="http"]:not([href*="moodle.epfl.ch"])');
-              out[item.id] = { target: a ? a.href : (r.redirected ? r.url : '') };
-            } else {
+            if (item.module === 'assign') {
               const dates = doc.querySelector('[data-region="activity-dates"], .activity-dates');
               out[item.id] = { dates: dates ? dates.innerText : '' };
+              return;
             }
+            const main = doc.querySelector('#region-main') || doc;
+            const work = main.querySelector('.urlworkaround a, .resourceworkaround a');
+            if (work) { out[item.id] = { target: new URL(work.getAttribute('href'), r.url).href }; return; }
+            const embedded = main.querySelector('.resourcecontent iframe[src], .resourcecontent object[data], .resourcecontent embed[src], iframe[src*="pluginfile"], object[data*="pluginfile"]');
+            if (embedded) { out[item.id] = { target: new URL(embedded.getAttribute('src') || embedded.getAttribute('data'), r.url).href }; return; }
+            const links = Array.from(main.querySelectorAll('a[href]')).map(a => ({ a, href: new URL(a.getAttribute('href'), r.url).href }));
+            const docs = links.filter(l => isDocument(l.href));
+            const statement = docs.find(l => !isSolution(l.a));
+            const solution = docs.find(l => isSolution(l.a));
+            if (statement || solution) {
+              out[item.id] = { target: (statement || solution).href, solution: statement && solution ? solution.href : '' };
+              return;
+            }
+            if (item.module === 'url') {
+              const external = main.querySelector('a[href^="http"]:not([href*="moodle.epfl.ch"])');
+              out[item.id] = { target: external ? external.href : '' };
+              return;
+            }
+            out[item.id] = {};
           } catch (e) { out[item.id] = {}; }
         };
         for (let i = 0; i < items.length; i += 6) { await Promise.all(items.slice(i, i + 6).map(one)); }
         return JSON.stringify(out);
         """#, arguments: ["list": argsJSON])
-        struct Found: Decodable { var target: String?; var dates: String? }
+        struct Found: Decodable { var target: String?; var solution: String?; var dates: String? }
         let found = (try? JSONDecoder().decode([String: Found].self, from: Data(raw.utf8))) ?? [:]
         for s in snapshot.sections.indices {
             for a in snapshot.sections[s].activities.indices {
                 let id = snapshot.sections[s].activities[a].id
                 guard let info = found[id] else { continue }
                 if let target = info.target, target.hasPrefix("http") { snapshot.sections[s].activities[a].target = target }
+                if let solution = info.solution, solution.hasPrefix("http") { snapshot.sections[s].activities[a].solutionTarget = solution }
                 if let dates = info.dates, let due = MoodleCourseAnalyzer.dueDate(fromActivityDates: dates) {
                     snapshot.sections[s].activities[a].dueDate = due
                 }

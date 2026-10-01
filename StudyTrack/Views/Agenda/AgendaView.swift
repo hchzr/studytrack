@@ -799,9 +799,50 @@ struct AgendaView: View {
                     Label("Terminer la tâche", systemImage: "checkmark")
                 }
             }
+        } else if let event = entry.event, event.course != nil || [.lecture, .exerciseSession].contains(event.kind) {
+            // Le type d'une séance se corrige ici, pour **tout son créneau** :
+            // une séance d'exercices comptée en amphi gonflait le bilan.
+            base.contextMenu {
+                if let course = event.course {
+                    Button {
+                        app.router.startFocus(courseID: course.id,
+                                              courseCode: course.code,
+                                              taskType: event.kind == .lecture ? .lecture : .exercise,
+                                              label: "")
+                    } label: {
+                        Label("Démarrer le chrono", systemImage: "timer")
+                    }
+                }
+                Section("Ce créneau, chaque semaine") {
+                    Button {
+                        retype(event, as: .lecture)
+                    } label: {
+                        Label(event.kind == .lecture ? "Cours en amphi ✓" : "C'est un cours en amphi",
+                              systemImage: CalendarEventKind.lecture.icon)
+                    }
+                    Button {
+                        retype(event, as: .exerciseSession)
+                    } label: {
+                        Label(event.kind == .exerciseSession ? "Séance d'exercices ✓" : "C'est une séance d'exercices",
+                              systemImage: CalendarEventKind.exerciseSession.icon)
+                    }
+                    Button {
+                        retype(event, as: .other)
+                    } label: {
+                        Label("Ni l'un ni l'autre", systemImage: CalendarEventKind.other.icon)
+                    }
+                }
+            }
         } else {
             base
         }
+    }
+
+    /// Change le type de toutes les séances du créneau, et le dit.
+    private func retype(_ event: LinkedCalendarEvent, as kind: CalendarEventKind) {
+        let count = CalendarSync.setKind(kind, forSlotOf: event, context: context)
+        syncMessage = "\(count) séance\(count > 1 ? "s" : "") du même créneau : \(kind.label.lowercased())."
+        Haptics.success()
     }
 
     private func complete(_ task: LinkedTask) {

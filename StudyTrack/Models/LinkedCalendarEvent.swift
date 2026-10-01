@@ -17,6 +17,10 @@ final class LinkedCalendarEvent {
     /// Cours magistral **manqué**, signalé à la main. Un cours de l'horaire
     /// compte dès qu'il est fini, sauf s'il est marqué ici.
     var isSkipped: Bool = false
+    /// Le type a été choisi **à la main** (« c'est une séance d'exercices ») :
+    /// aucune synchronisation ne le recalcule, et les autres semaines du même
+    /// créneau le reprennent.
+    var kindIsManual: Bool = false
     var notes: String
     var lastSyncedAt: Date?
 

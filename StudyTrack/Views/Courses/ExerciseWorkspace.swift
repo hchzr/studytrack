@@ -513,6 +513,10 @@ private struct ExerciseDetailContent: View {
         ExerciseLinks.web(exercise.statementURLString) ?? exercise.series.flatMap { ExerciseLinks.web($0.urlString) }
     }
 
+    private var hasSeriesPDF: Bool {
+        exercise.series.map { SeriesPDFStore.shared.hasDocument(for: $0) } ?? false
+    }
+
     private var currentQuestion: SubQuestion? {
         exercise.leafSubQuestions.first { !$0.isDone }
     }
@@ -523,7 +527,10 @@ private struct ExerciseDetailContent: View {
 
     var body: some View {
         Group {
-            if hasText || documentURL == nil {
+            // Un PDF de série : l'énoncé découpé dedans, en haut de la fiche, au
+            // lieu du document entier. Une page web (Botafogo) s'affiche telle
+            // quelle, au-dessus des questions.
+            if hasText || documentURL == nil || hasSeriesPDF {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) {
                         statementPage
@@ -540,7 +547,7 @@ private struct ExerciseDetailContent: View {
                 .scrollDismissesKeyboard(.interactively)
             } else if let documentURL {
                 VStack(spacing: 0) {
-                    WebView(model: document, initialURL: documentURL)
+                    WebView(model: document, initialURL: documentURL, followsDocumentLinks: true)
                         .overlay(alignment: .top) {
                             if document.isLoading {
                                 ProgressView(value: document.progress).progressViewStyle(.linear).tint(Carnet.ink)
@@ -586,7 +593,11 @@ private struct ExerciseDetailContent: View {
                     .foregroundStyle(Carnet.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !exercise.statement.isEmpty {
+            if hasSeriesPDF {
+                // La bande du PDF : formules et figures telles qu'imprimées ;
+                // le texte lu en repli.
+                ExerciseStatementView(exercise: exercise, onOpenLink: onOpenLink)
+            } else if !exercise.statement.isEmpty {
                 MathText(exercise.statement, font: .system(.body, design: .serif))
                     .foregroundStyle(Carnet.ink)
                     .lineSpacing(4)
@@ -1120,7 +1131,7 @@ struct InAppBrowser: View {
 
     var body: some View {
         NavigationStack {
-            WebView(model: model, initialURL: link.url)
+            WebView(model: model, initialURL: link.url, followsDocumentLinks: true)
                 .overlay(alignment: .top) {
                     if model.isLoading {
                         ProgressView(value: model.progress).progressViewStyle(.linear).tint(Theme.accent)

@@ -658,20 +658,123 @@ enum SiteLinks {
     }
 }
 
-/// Un fichier Moodle s'ouvre sur le fichier, pas sur la page d'activité.
+/// Un document Moodle s'ouvre sur le document, pas sur la page d'activité.
 ///
 /// `mod/resource/view.php?id=…` est la page « Cliquer sur … pour ouvrir la
 /// ressource » ; avec `redirect=1`, Moodle redirige vers `pluginfile.php`,
-/// que le navigateur de l'app affiche directement. Les imports lisent
-/// désormais l'adresse finale ; ceci répare les liens enregistrés avant.
+/// que le navigateur de l'app affiche directement. Même chose pour une
+/// activité « lien » (`mod/url`), qui redirige alors vers sa cible. Les imports
+/// lisent désormais l'adresse finale ; ceci répare les liens enregistrés avant.
+///
+/// Une **page** ou un **dossier** Moodle (`mod/page`, `mod/folder`) n'a pas de
+/// redirection : le PDF de la série y est un lien parmi d'autres. C'est le cas
+/// d'AICC, dont les séries s'ouvraient sur la page Moodle qui porte le lien.
+/// `statementLink(inHTML:)` le retrouve dans la page.
 enum MoodleLinks {
+    /// Les activités dont la page n'est qu'un intermédiaire vers un document.
+    static let activityModules = ["resource", "url", "page", "folder"]
+
+    /// `mod/page/view.php?id=…` → `page` ; `nil` hors d'une activité Moodle.
+    static func activityModule(of url: URL) -> String? {
+        guard url.host?.contains("moodle") == true else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard parts.count >= 3, parts[parts.count - 3] == "mod", parts.last == "view.php",
+              activityModules.contains(parts[parts.count - 2]) else { return nil }
+        return parts[parts.count - 2]
+    }
+
     static func normalize(_ url: URL) -> URL {
-        guard url.host?.contains("moodle") == true, url.path.hasSuffix("/mod/resource/view.php"),
+        guard let module = activityModule(of: url), module == "resource" || module == "url",
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         var items = components.queryItems ?? []
-        guard !items.contains(where: { $0.name == "redirect" }) else { return url }
+        guard !items.contains(where: { $0.name == "redirect" || $0.name == "forceview" }) else { return url }
         items.append(URLQueryItem(name: "redirect", value: "1"))
         components.queryItems = items
         return components.url ?? url
+    }
+
+    /// La page « intermédiaire » d'une activité, celle qui porte le lien :
+    /// `forceview=1` empêche la redirection d'un fichier ou d'un lien.
+    static func workaroundPage(_ url: URL) -> URL {
+        guard let module = activityModule(of: url),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = (components.queryItems ?? []).filter { $0.name != "redirect" && $0.name != "forceview" }
+        if module == "resource" || module == "url" { items.append(URLQueryItem(name: "forceview", value: "1")) }
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    /// Un lien d'une page HTML : son adresse (absolue) et son texte.
+    struct Anchor: Equatable {
+        var href: String
+        var text: String
+    }
+
+    /// Les liens et documents intégrés d'une page HTML, dans l'ordre.
+    ///
+    /// Une analyse par motifs suffit ici : on ne cherche que des `href`/`src`,
+    /// sur des pages produites par Moodle.
+    static func anchors(inHTML html: String, baseURL: URL?) -> [Anchor] {
+        var result: [Anchor] = []
+        let anchor = #"<a\b[^>]*?\bhref\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>"#
+        let embedded = #"<(?:iframe|embed|object)\b[^>]*?\b(?:src|data)\s*=\s*["']([^"']+)["']"#
+        for (pattern, hasText) in [(anchor, true), (embedded, false)] {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { continue }
+            for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+                guard let range = Range(match.range(at: 1), in: html) else { continue }
+                let raw = decodeEntities(String(html[range]))
+                guard let absolute = URL(string: raw, relativeTo: baseURL)?.absoluteURL, absolute.scheme?.hasPrefix("http") == true else { continue }
+                var text = ""
+                if hasText, let textRange = Range(match.range(at: 2), in: html) {
+                    text = decodeEntities(String(html[textRange])
+                        .replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression))
+                        .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                }
+                result.append(Anchor(href: absolute.absoluteString, text: text))
+            }
+        }
+        return result
+    }
+
+    /// Le document qu'une page d'activité Moodle désigne.
+    ///
+    /// Dans l'ordre : le lien « cliquez ici » d'un fichier ou d'un lien
+    /// (`urlworkaround`, `resourceworkaround`) ; un PDF déposé sur Moodle
+    /// (`pluginfile.php`) ou ailleurs, **énoncé** de préférence au corrigé ; un
+    /// document intégré. `nil` si la page ne désigne rien de tel.
+    static func statementLink(inHTML html: String, baseURL: URL?) -> (statement: String?, solution: String?) {
+        if let range = html.range(of: #"class\s*=\s*["'][^"']*\b(url|resource)workaround\b[^"']*["'][^>]*>[\s\S]{0,400}?href\s*=\s*["']([^"']+)["']"#,
+                                  options: [.regularExpression, .caseInsensitive]),
+           let href = html[range].range(of: #"href\s*=\s*["']([^"']+)["']"#, options: .regularExpression) {
+            let raw = html[href].replacingOccurrences(of: #"^href\s*=\s*["']|["']$"#, with: "", options: .regularExpression)
+            if let url = URL(string: decodeEntities(raw), relativeTo: baseURL)?.absoluteURL {
+                return (url.absoluteString, nil)
+            }
+        }
+        let documents = anchors(inHTML: html, baseURL: baseURL).filter { isDocument($0.href) }
+        let solution = documents.first { isSolution($0) }
+        let statement = documents.first { !isSolution($0) }
+        return (statement?.href, solution?.href)
+    }
+
+    /// Un PDF, ou un fichier déposé sur Moodle.
+    static func isDocument(_ href: String) -> Bool {
+        guard let url = URL(string: href) else { return false }
+        return url.path.contains("/pluginfile.php/") || url.pathExtension.lowercased() == "pdf"
+    }
+
+    private static func isSolution(_ anchor: Anchor) -> Bool {
+        let haystack = ContentDraftBuilder.fold(anchor.text + " " + (URL(string: anchor.href)?.lastPathComponent ?? ""))
+        return haystack.range(of: #"(corrig|solution|\bsol\b|_sol\b|-sol\b|loesung|answers?\b|reponses)"#,
+                              options: .regularExpression) != nil
+    }
+
+    static func decodeEntities(_ text: String) -> String {
+        text.replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
     }
 }

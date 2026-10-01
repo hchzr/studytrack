@@ -51,6 +51,7 @@ final class SeriesAutoReader {
         running = true
         defer { running = false }
         var report: [String] = []
+        await repairLinks(courses: courses, context: context)
         for course in courses {
             for series in course.sortedSeries where series.exercises.isEmpty && failures[series.id] == nil {
                 guard let url = URL(string: series.urlString), url.scheme?.hasPrefix("http") == true else { continue }
@@ -70,6 +71,35 @@ final class SeriesAutoReader {
             }
         }
         return report
+    }
+
+    /// Les séries déjà tentées par `repairLinks`, pour ne pas relire Moodle à
+    /// chaque lancement.
+    @ObservationIgnored private var repaired: Set<UUID> = []
+
+    /// Remplace l'adresse d'une page Moodle (page, dossier, lien) par celle du
+    /// PDF qu'elle porte.
+    ///
+    /// Les séries importées avant que l'import ne suive ces pages gardaient
+    /// l'adresse de la page : « Énoncé de la série » ouvrait Moodle, et la
+    /// lecture des exercices échouait (« ce lien ne mène pas à un PDF »).
+    func repairLinks(courses: [Course], context: ModelContext) async {
+        var changed = false
+        for course in courses {
+            for series in course.sortedSeries where !repaired.contains(series.id) {
+                guard let url = URL(string: series.urlString),
+                      let module = MoodleLinks.activityModule(of: url), module != "resource" else { continue }
+                repaired.insert(series.id)
+                guard let found = await AuthenticatedDownloader.resolve(url) else { continue }
+                series.urlString = found.statement.absoluteString
+                if series.solutionURLString.isEmpty, let solution = found.solution {
+                    series.solutionURLString = solution.absoluteString
+                }
+                failures[series.id] = nil
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
     }
 
     func retry(_ series: ExerciseSeries) {

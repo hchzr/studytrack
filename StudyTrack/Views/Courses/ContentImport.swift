@@ -829,6 +829,12 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate {
     @Published var canGoBack = false
     private(set) weak var webView: WKWebView?
     private var observations: [NSKeyValueObservation] = []
+    /// Une page d'activité Moodle (page, dossier, « cliquez ici ») ouverte
+    /// pour lire un document saute au PDF qu'elle porte — une fois : revenir en
+    /// arrière montre la page. Désactivé dans le navigateur de l'import, où
+    /// l'on parcourt Moodle.
+    var followsDocumentLinks = false
+    private var hasFollowed = false
 
     func attach(_ view: WKWebView) {
         webView = view
@@ -840,13 +846,38 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate {
             view.observe(\.canGoBack) { [weak self] view, _ in Task { @MainActor in self?.canGoBack = view.canGoBack } }
         ]
     }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard followsDocumentLinks, !hasFollowed, let url = webView.url,
+              MoodleLinks.activityModule(of: url) != nil else { return }
+        hasFollowed = true
+        let script = #"""
+        (function () {
+          const main = document.querySelector('#region-main') || document;
+          const isSolution = (a) => /(corrig|solution|\bsol\b|_sol\b|-sol\b|loesung|answers?\b|reponses|réponses)/i.test((a.innerText || '') + ' ' + a.href);
+          const work = main.querySelector('.urlworkaround a, .resourceworkaround a');
+          if (work) return work.href;
+          const embedded = main.querySelector('.resourcecontent iframe[src], .resourcecontent object[data], .resourcecontent embed[src]');
+          if (embedded) return embedded.src || embedded.data || '';
+          const docs = Array.from(main.querySelectorAll('a[href]')).filter(a => /\/pluginfile\.php\//.test(a.href) || /\.pdf($|[?#])/i.test(a.href));
+          const statement = docs.find(a => !isSolution(a)) || docs[0];
+          return statement ? statement.href : '';
+        })();
+        """#
+        webView.evaluateJavaScript(script) { value, _ in
+            guard let href = value as? String, let target = URL(string: href), target.scheme?.hasPrefix("http") == true else { return }
+            webView.load(URLRequest(url: target))
+        }
+    }
 }
 
 struct WebView: UIViewRepresentable {
     let model: BrowserModel
     let initialURL: URL
+    var followsDocumentLinks = false
 
     func makeUIView(context: Context) -> WKWebView {
+        model.followsDocumentLinks = followsDocumentLinks
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: configuration)

@@ -134,15 +134,25 @@ enum CalendarSync {
         result.total = external.count
 
         var existing = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        // Les séances de l'horaire importé (`.ics`) : la même séance lue dans le
+        // calendrier de l'iPhone abonné au même flux n'est **pas** ajoutée une
+        // seconde fois. C'était la moitié des 35 h d'amphi.
+        let imported = existing.filter { $0.sourceCalendarID == "ics" }
+        let learned = learnedKinds(existing)
+
+        func importedTwin(course: Course?, start: Date) -> Bool {
+            imported.contains { TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
+                                                                  courseB: course?.id, startB: start) }
+        }
 
         for item in external {
             // L'agenda n'est pas le calendrier personnel : on ne garde que ce qui
             // se rattache à un cours, ou qui est une évaluation ou une révision.
             // Les journées entières (anniversaires, congés) n'y entrent jamais.
             let course = matchCourse(for: item.title, in: courses)
-            let kind = classify(title: item.title, course: course)
+            let kind = classify(title: item.title, location: item.location, course: course, start: item.startsAt, learned: learned)
             let academic = course != nil || [.midterm, .exam, .study].contains(kind)
-            guard !item.isAllDay, academic else {
+            guard !item.isAllDay, academic, !importedTwin(course: course, start: item.startsAt) else {
                 if let stale = existing.first(where: { $0.externalEventID == item.identifier }) {
                     context.delete(stale)
                     existing.removeAll { $0 === stale }
@@ -156,9 +166,13 @@ enum CalendarSync {
                 match.location = item.location
                 match.lastSyncedAt = Date()
                 if match.course == nil {
-                    match.course = matchCourse(for: item.title, in: courses)
+                    match.course = course
                 }
-                match.kind = classify(title: item.title, course: match.course)
+                // Un type choisi à la main n'est jamais recalculé.
+                if !match.kindIsManual {
+                    match.kind = classify(title: item.title, location: item.location, course: match.course,
+                                          start: item.startsAt, learned: learned)
+                }
                 result.updated += 1
                 continue
             }
@@ -170,10 +184,9 @@ enum CalendarSync {
                 startsAt: item.startsAt,
                 endsAt: item.endsAt,
                 location: item.location,
-                kind: classify(title: item.title, course: nil)
+                kind: kind
             )
-            linked.course = matchCourse(for: item.title, in: courses)
-            linked.kind = classify(title: item.title, course: linked.course)
+            linked.course = course
             linked.lastSyncedAt = Date()
             context.insert(linked)
             existing.append(linked)
@@ -182,6 +195,91 @@ enum CalendarSync {
 
         try? context.save()
         return result
+    }
+
+    /// Le type d'un événement du calendrier : ce que l'on sait de son créneau,
+    /// sinon son intitulé et ses salles (`TimetableClassifier`).
+    static func classify(title: String, location: String, course: Course?, start: Date,
+                         learned: [TimetableClassifier.Slot: CalendarEventKind]) -> CalendarEventKind {
+        let base = TimetableClassifier.kind(title: title, location: location, hasCourse: course != nil)
+        // Une évaluation se lit dans l'intitulé : un créneau d'exercices peut
+        // accueillir un midterm, qui reste un midterm.
+        if base == .midterm || base == .exam { return base }
+        let slot = TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: course?.id, title: title), start: start)
+        return learned[slot] ?? base
+    }
+
+    /// Ce que les séances au type sûr (horaire `.ics`, choix manuel) disent de
+    /// chaque créneau.
+    static func learnedKinds(_ events: [LinkedCalendarEvent]) -> [TimetableClassifier.Slot: CalendarEventKind] {
+        TimetableClassifier.learnedKinds(events
+            .filter { $0.sourceCalendarID == "ics" || $0.kindIsManual }
+            .filter { [.lecture, .exerciseSession].contains($0.kind) }
+            .map { event in
+                TimetableClassifier.KnownSession(
+                    slot: TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: event.course?.id, title: event.title),
+                                                   start: event.startsAt),
+                    kind: event.kind,
+                    isManual: event.kindIsManual)
+            })
+    }
+
+    /// Remet l'horaire d'aplomb : retire les doublons (même séance lue par
+    /// l'`.ics` et par le calendrier de l'iPhone) et reclasse ce qui n'a pas de
+    /// type sûr. Idempotent ; appelé au lancement.
+    ///
+    /// - Returns: le nombre d'événements retirés ou reclassés.
+    @discardableResult
+    static func repair(context: ModelContext) -> Int {
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        let imported = events.filter { $0.sourceCalendarID == "ics" }
+        let learned = learnedKinds(events)
+        var changes = 0
+        for event in events where event.sourceCalendarID != "ics" {
+            if imported.contains(where: { TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
+                                                                          courseB: event.course?.id, startB: event.startsAt) }) {
+                // Le doublon garde ce qu'on y avait noté : un amphi marqué
+                // manqué le reste.
+                if let twin = imported.first(where: { TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
+                                                                                       courseB: event.course?.id, startB: event.startsAt) }) {
+                    if event.isSkipped { twin.isSkipped = true }
+                    if event.kindIsManual, !twin.kindIsManual { twin.kind = event.kind; twin.kindIsManual = true }
+                }
+                context.delete(event)
+                changes += 1
+                continue
+            }
+            guard !event.kindIsManual, [.lecture, .exerciseSession, .other].contains(event.kind) else { continue }
+            let kind = classify(title: event.title, location: event.location, course: event.course,
+                                start: event.startsAt, learned: learned)
+            if kind != event.kind {
+                event.kind = kind
+                changes += 1
+            }
+        }
+        if changes > 0 { try? context.save() }
+        return changes
+    }
+
+    /// « C'est une séance d'exercices » : le type choisi pour **tout le
+    /// créneau** (même cours, même jour, même heure), semaines passées et à venir.
+    ///
+    /// - Returns: le nombre de séances changées.
+    @discardableResult
+    static func setKind(_ kind: CalendarEventKind, forSlotOf event: LinkedCalendarEvent, context: ModelContext) -> Int {
+        let owner = TimetableClassifier.owner(courseID: event.course?.id, title: event.title)
+        let slot = TimetableClassifier.slot(owner: owner, start: event.startsAt)
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        var count = 0
+        for other in events where TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: other.course?.id, title: other.title),
+                                                           start: other.startsAt) == slot {
+            other.kind = kind
+            other.kindIsManual = true
+            count += 1
+        }
+        if kind == .lecture, let course = event.course, !course.hasLectures { course.hasLectures = true }
+        try? context.save()
+        return count
     }
 
     /// Un événement lié a-t-il sa place dans l'agenda ?
@@ -202,25 +300,8 @@ enum CalendarSync {
         return nil
     }
 
-    /// Devine le type d'événement à partir de son titre.
+    /// Devine le type d'événement à partir de son titre (sans lieu ni créneau).
     static func classify(title: String, course: Course?) -> CalendarEventKind {
-        let haystack = title.lowercased()
-        if haystack.contains("midterm") || haystack.contains("mid-term") || haystack.contains("contrôle") {
-            return .midterm
-        }
-        if haystack.contains("examen") || haystack.contains("exam") || haystack.contains("final") {
-            return .exam
-        }
-        if haystack.contains("exercice") || haystack.contains("exercise") || haystack.contains("série")
-            || haystack.contains("serie") || haystack.contains(" tp") || haystack.contains("labo") {
-            return .exerciseSession
-        }
-        if haystack.contains("cours") || haystack.contains("lecture") || haystack.contains("amphi") {
-            return .lecture
-        }
-        if haystack.contains("révision") || haystack.contains("revision") || haystack.contains("étude") {
-            return .study
-        }
-        return course != nil ? .lecture : .other
+        TimetableClassifier.kind(title: title, location: "", hasCourse: course != nil)
     }
 }

@@ -14,6 +14,8 @@ struct MoodleActivity: Equatable {
     var target: String? = nil
     /// L'échéance d'un devoir, lue sur sa page.
     var dueDate: Date? = nil
+    /// Le corrigé posé à côté de l'énoncé, dans la même page ou le même dossier.
+    var solutionTarget: String? = nil
     var isVisible = true
 
     /// L'adresse à ouvrir : la cible réelle quand on la connaît.
@@ -507,9 +509,15 @@ enum MoodleCourseAnalyzer {
                                     seriesNumber: number,
                                     theoryKind: .reading)
         if let main {
-            if main.module == "resource" || URL(string: main.link)?.pathExtension.lowercased() == "pdf" { item.pdfURL = main.link }
+            // Un PDF : un fichier Moodle, ou la cible lue dans une page, un
+            // dossier ou un lien.
+            if main.module == "resource" || MoodleLinks.isDocument(main.link) { item.pdfURL = main.link }
         }
-        if let solution = solution.first { item.solutionURL = solution.link }
+        if let solution = solution.first {
+            item.solutionURL = solution.link
+        } else if let paired = statement.lazy.compactMap(\.solutionTarget).first {
+            item.solutionURL = paired
+        }
         item.links = (statement + solution.filter { s in !statement.contains(s) }).map(link(for:))
         return item
     }

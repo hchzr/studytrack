@@ -21,6 +21,7 @@ struct FocusTimerPanel: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
 
     // Brouillon d'une session pas encore démarrée.
     @State private var draftCourseID: UUID?
@@ -33,6 +34,12 @@ struct FocusTimerPanel: View {
     /// « Session enregistrée · 42 min », affiché quelques secondes après « Terminer ».
     @State private var savedMessage: String?
     @State private var openedExercise: Exercise?
+    @State private var browsing: BrowsedLink?
+    /// Pourquoi le chrono s'est ouvert sur ce cours (« Séance d'exercices de
+    /// MATH-101 en cours »), tant qu'on n'a rien changé.
+    @State private var contextReason: String?
+    /// L'énoncé de l'exercice suivi, affiché sous sa carte.
+    @AppStorage("focus.showsStatement") private var showsStatement = true
 
     private var focus: FocusController { app.focus }
     private var pomodoroSettings: PomodoroSettings { app.settings.pomodoro }
@@ -54,6 +61,7 @@ struct FocusTimerPanel: View {
             } else {
                 draftCourseID = value
                 draftTargetID = nil
+                contextReason = nil
             }
         })
     }
@@ -144,6 +152,7 @@ struct FocusTimerPanel: View {
                 draftTaskType = .exercise
             }
             applyRequest()
+            applyContext()
             #if DEBUG
             applyDebugLaunch()
             #endif
@@ -227,12 +236,21 @@ struct FocusTimerPanel: View {
                 .accessibilityLabel("Type de travail")
                 .accessibilityValue(taskType.label)
                 if let course, !targetOptions(for: course).isEmpty {
+                    let options = targetOptions(for: course)
                     CarnetRule(inset: Carnet.rowInset)
                     Menu {
                         Picker("Sur quoi ?", selection: targetBinding) {
                             Text("Tout le cours").tag(UUID?.none)
-                            ForEach(targetOptions(for: course)) { option in
-                                Text(option.label).tag(UUID?.some(option.id))
+                            // Le prochain à faire en tête ; le reste derrière.
+                            Section(taskType.canonical == .correction ? "À corriger" : "À faire") {
+                                ForEach(options.filter { !$0.isDone }) { option in
+                                    Text(option.label).tag(UUID?.some(option.id))
+                                }
+                            }
+                            Section(taskType.canonical == .correction ? "Le reste" : "Déjà faits") {
+                                ForEach(options.filter(\.isDone)) { option in
+                                    Text(option.label).tag(UUID?.some(option.id))
+                                }
                             }
                         }
                     } label: {
@@ -241,6 +259,14 @@ struct FocusTimerPanel: View {
                     .accessibilityLabel("Cible")
                     .accessibilityValue(targetLabel ?? "tout le cours")
                 }
+            }
+
+            if let contextReason, !focus.hasSession, draftCourseID != nil {
+                Label(contextReason, systemImage: "calendar.badge.clock")
+                    .font(.footnote)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .padding(.horizontal, 6)
+                    .transition(.opacity)
             }
 
             HStack(spacing: 8) {
@@ -310,20 +336,52 @@ struct FocusTimerPanel: View {
         if let exercise = target.exercise {
             let leaves = exercise.leafSubQuestions
             let current = leaves.first { !$0.isDone }
+            let siblings = exercise.series?.sortedExercises ?? []
+            let position = siblings.firstIndex { $0.id == exercise.id }
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center, spacing: 4) {
+                    stepButton(systemImage: "chevron.left", label: "Exercice précédent",
+                               target: position.flatMap { siblings.indices.contains($0 - 1) ? siblings[$0 - 1] : nil })
                     VStack(alignment: .leading, spacing: 2) {
                         Text(exercise.displayNumber)
                             .font(Carnet.serif(.title3))
                             .foregroundStyle(Carnet.ink)
-                        Text(ExerciseStage(exercise).label.capitalizedFirst)
+                        Text([ExerciseStage(exercise).label.capitalizedFirst,
+                              position.map { "\($0 + 1) sur \(siblings.count)" }]
+                                .compactMap { $0 }.joined(separator: " · "))
                             .font(.footnote)
                             .foregroundStyle(Carnet.inkSecondary)
                     }
+                    stepButton(systemImage: "chevron.right", label: "Exercice suivant",
+                               target: position.flatMap { siblings.indices.contains($0 + 1) ? siblings[$0 + 1] : nil })
                     Spacer()
                     Button("Ouvrir") { openedExercise = exercise }
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Carnet.ink)
+                }
+                // L'énoncé, exercice par exercice : replié d'un toucher, et
+                // l'état est gardé d'une session à l'autre.
+                Button {
+                    withAnimation(Motion.snappy) { showsStatement.toggle() }
+                    Haptics.soft()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.text")
+                        Text(showsStatement ? "Masquer l'énoncé" : "Afficher l'énoncé")
+                        Spacer(minLength: 0)
+                        Image(systemName: showsStatement ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .frame(minHeight: 32)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if showsStatement {
+                    ExerciseStatementView(exercise: exercise, onOpenLink: { browsing = $0 })
+                        .id(exercise.id)
+                        .transition(.opacity)
                 }
                 if !leaves.isEmpty {
                     FlowLayout(spacing: 6) {
@@ -373,6 +431,7 @@ struct FocusTimerPanel: View {
             .padding(16)
             .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
             .sheet(item: $openedExercise) { ExerciseSheet(exercise: $0) }
+            .sheet(item: $browsing) { InAppBrowser(link: $0) }
         } else if let item = target.theoryItem {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -395,6 +454,24 @@ struct FocusTimerPanel: View {
             .padding(16)
             .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
         }
+    }
+
+    /// ‹ et › : l'exercice voisin dans la série. Le chrono le suit.
+    private func stepButton(systemImage: String, label: String, target: Exercise?) -> some View {
+        Button {
+            guard let target else { return }
+            withAnimation(Motion.snappy) { targetBinding.wrappedValue = target.id }
+            Haptics.soft()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 32, height: Layout.minTouch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(target == nil ? Carnet.inkTertiary : Carnet.ink)
+        .disabled(target == nil)
+        .accessibilityLabel(label)
     }
 
     private func nextExercise(after exercise: Exercise) -> Exercise? {
@@ -711,6 +788,30 @@ struct FocusTimerPanel: View {
     /// Une demande qui ne démarre pas (la bulle) ne fait que **préremplir** le
     /// brouillon — et ne touche à rien si une session tourne déjà : ouvrir
     /// Focus ne doit jamais déplacer le temps d'une session en cours.
+    /// Sans demande explicite, le chrono s'ouvre sur ce que l'horaire dit du
+    /// moment (`FocusContext`) : la séance d'exercices en cours et son
+    /// prochain exercice, la théorie du cours qui vient de finir.
+    private func applyContext() {
+        guard !focus.hasSession, draftCourseID == nil else { return }
+        let now = Date()
+        let tracked = Set(trackedCourses.map(\.id))
+        let slots = events
+            .filter { $0.startsAt < now.addingTimeInterval(FocusContext.leadTime) && $0.endsAt > now.addingTimeInterval(-FocusContext.afterLecture) }
+            .compactMap { event -> FocusContext.Slot? in
+                guard let course = event.course, tracked.contains(course.id) else { return nil }
+                return FocusContext.Slot(courseID: course.id, courseCode: course.displayCode, kind: event.kind,
+                                         start: event.startsAt, end: event.endsAt)
+            }
+        guard let suggestion = FocusContext.suggestion(now: now, slots: slots),
+              let course = courses.first(where: { $0.id == suggestion.courseID }) else { return }
+        draftCourseID = course.id
+        draftTaskType = suggestion.taskType
+        draftTargetID = suggestion.taskType == .exercise
+            ? FocusTargets.exercises(of: course.series, for: .exercise).upNext.first?.id
+            : FocusTargets.theory(course.sortedTheoryItems).upNext.first?.id
+        contextReason = suggestion.reason
+    }
+
     private func applyRequest() {
         guard let pending = app.router.consumeFocusRequest() else { return }
         guard pending.autoStart else {
@@ -783,23 +884,39 @@ struct FocusTimerPanel: View {
     private struct TargetOption: Identifiable {
         let id: UUID
         let label: String
+        /// Fait (ou vu) : proposé après ce qui reste à faire.
+        var isDone = false
     }
 
     /// Ce qu'on peut préciser pour ce cours et ce type de travail : les
     /// exercices pour un travail d'exercice ou de correction, la théorie pour le
-    /// reste — et rien pour un type qui ne s'y prête pas.
+    /// reste — et rien pour un type qui ne s'y prête pas. **Le prochain à
+    /// faire d'abord** (`FocusTargets`) : l'ordre alphabétique mettait en tête
+    /// des exercices faits depuis des semaines.
     private func targetOptions(for course: Course) -> [TargetOption] {
         switch taskType {
         case .exercise, .correction:
-            return course.allExercises
-                .sorted { $0.displayNumber.localizedStandardCompare($1.displayNumber) == .orderedAscending }
-                .map { TargetOption(id: $0.id, label: $0.displayNumber) }
+            let ordered = FocusTargets.exercises(of: course.series, for: taskType)
+            return ordered.upNext.map { TargetOption(id: $0.id, label: Self.label(for: $0)) }
+                + ordered.done.map { TargetOption(id: $0.id, label: Self.label(for: $0), isDone: true) }
         case .video, .theory, .summary:
-            return course.sortedTheoryItems
-                .map { TargetOption(id: $0.id, label: $0.displayNumber) }
+            let ordered = FocusTargets.theory(course.sortedTheoryItems)
+            return ordered.upNext.map { TargetOption(id: $0.id, label: $0.displayNumber) }
+                + ordered.done.map { TargetOption(id: $0.id, label: $0.displayNumber, isDone: true) }
         default:
             return []
         }
+    }
+
+    /// « Ex. 3.2 · Suites bornées · 1/3 » : de quoi le reconnaître.
+    private static func label(for exercise: Exercise) -> String {
+        var parts = ["Ex. \(exercise.exerciseNumber)"]
+        let title = MathMarkup.plain(exercise.title)
+        if !title.isEmpty { parts.append(String(title.prefix(32))) }
+        if exercise.isBonus { parts.append("bonus") }
+        if case .inProgress(let done, let total) = ExerciseStage(exercise) { parts.append("\(done)/\(total)") }
+        if ExerciseStage(exercise) == .redo { parts.append("à refaire") }
+        return parts.joined(separator: " · ")
     }
 
     private var targetLabel: String? {

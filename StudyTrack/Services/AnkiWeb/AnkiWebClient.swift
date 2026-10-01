@@ -36,7 +36,7 @@ final class AnkiWebClient {
 
     enum Failure: LocalizedError {
         case badCredentials
-        case server(Int, String)
+        case server(Int, String, method: String = "")
         case decoding(String)
         case unsupported(String)
         case sanity(String)
@@ -45,7 +45,10 @@ final class AnkiWebClient {
         var errorDescription: String? {
             switch self {
             case .badCredentials: return "Identifiant ou mot de passe AnkiWeb incorrect."
-            case .server(let code, let body): return "AnkiWeb a répondu \(code)\(body.isEmpty ? "" : " : \(body.prefix(120))")."
+            case .server(let code, let body, let method):
+                let step = method.isEmpty ? "" : " (étape « \(method) »)"
+                let detail = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                return "AnkiWeb a répondu \(code)\(step)\(detail.isEmpty || detail == String(code) ? "" : " : \(detail.prefix(160))")."
             case .decoding(let what): return "Réponse d'AnkiWeb illisible (\(what))."
             case .unsupported(let message): return message
             case .sanity(let detail): return "AnkiWeb a refusé l'envoi (contrôle de cohérence) — rien n'a été modifié. \(detail)"
@@ -63,7 +66,7 @@ final class AnkiWebClient {
         return try await post(method, data: body, timeout: timeout)
     }
 
-    private func post(_ method: String, data: Data, timeout: TimeInterval) async throws -> Data {
+    private func post(_ method: String, data: Data, timeout: TimeInterval, redirects: Int = 0) async throws -> Data {
         let boundary = "StudyTrack-\(Self.randomKey(16))"
         var request = URLRequest(url: endpoint.appendingPathComponent("sync").appendingPathComponent(method))
         request.httpMethod = "POST"
@@ -88,25 +91,57 @@ final class AnkiWebClient {
         form.append("--\(boundary)--\r\n".data(using: .utf8)!)
         request.httpBody = form
 
-        let (payload, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw Failure.server(0, "") }
+        // Les redirections sont suivies **à la main** : AnkiWeb renvoie un
+        // compte vers son serveur par un 308 dont l'adresse est la **racine**
+        // du serveur (`https://sync12.ankiweb.net/`). URLSession, laissé faire,
+        // y renvoyait le formulaire tel quel — sur la racine, pas sur
+        // `/sync/<méthode>` — et AnkiWeb répondait 400.
+        let (payload, response) = try await session.data(for: request, delegate: RedirectBlocker.shared)
+        guard let http = response as? HTTPURLResponse else { throw Failure.server(0, "", method: method) }
         switch http.statusCode {
         case 200..<300:
             return payload
-        case 308, 301, 302:
-            // Le compte vit sur un autre serveur : on y passe, et on rejoue.
-            if let location = http.value(forHTTPHeaderField: "Location") ?? String(data: payload, encoding: .utf8),
-               let url = URL(string: location.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                endpoint = url
-                return try await post(method, data: data, timeout: timeout)
+        case 301, 302, 303, 307, 308:
+            guard redirects < 3,
+                  let location = http.value(forHTTPHeaderField: "Location") ?? String(data: payload, encoding: .utf8),
+                  let target = Self.endpoint(fromRedirect: location, relativeTo: request.url) else {
+                throw Failure.server(http.statusCode, "redirection sans adresse", method: method)
             }
-            throw Failure.server(http.statusCode, "redirection sans adresse")
+            // Le compte vit sur un autre serveur : on y passe, et on rejoue.
+            endpoint = target
+            return try await post(method, data: data, timeout: timeout, redirects: redirects + 1)
         case 403:
             throw Failure.badCredentials
         case 501:
             throw Failure.unsupported("AnkiWeb n'accepte plus ce protocole de synchronisation.")
         default:
-            throw Failure.server(http.statusCode, String(data: payload, encoding: .utf8) ?? "")
+            throw Failure.server(http.statusCode, String(data: payload, encoding: .utf8) ?? "", method: method)
+        }
+    }
+
+    /// La racine d'un serveur, lue dans une redirection : `Location` peut
+    /// être la racine (`https://sync3.ankiweb.net/`) ou l'adresse complète de
+    /// la méthode (`…/sync/meta`) ; on garde ce qui précède `/sync/`.
+    static func endpoint(fromRedirect location: String, relativeTo base: URL?) -> URL? {
+        let trimmed = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed, relativeTo: base)?.absoluteURL,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              url.scheme?.hasPrefix("http") == true else { return nil }
+        var path = components.path
+        if let range = path.range(of: "/sync/") { path = String(path[..<range.lowerBound]) }
+        if !path.hasSuffix("/") { path += "/" }
+        components.path = path
+        components.query = nil
+        return components.url
+    }
+
+    /// Refuse les redirections automatiques d'URLSession.
+    private final class RedirectBlocker: NSObject, URLSessionTaskDelegate {
+        static let shared = RedirectBlocker()
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? {
+            nil
         }
     }
 
@@ -147,10 +182,13 @@ final class AnkiWebClient {
                         shouldContinue: reply["cont"] as? Bool ?? true,
                         empty: reply["empty"] as? Bool ?? false)
         // Anciens clients : le numéro d'hôte désigne le serveur du compte.
+        // Les serveurs actuels redirigent eux-mêmes (308) : si celui-ci refuse
+        // la clé, on reste sur le serveur qui a répondu.
         if meta.hostNumber > 0, endpoint == Self.defaultEndpoint,
            let url = URL(string: "https://sync\(meta.hostNumber).ankiweb.net/") {
             endpoint = url
-            return try await self.meta()
+            if let moved = try? await self.meta() { return moved }
+            endpoint = Self.defaultEndpoint
         }
         guard meta.shouldContinue else { throw Failure.unsupported(meta.message.isEmpty ? "AnkiWeb refuse la synchronisation." : meta.message) }
         return meta

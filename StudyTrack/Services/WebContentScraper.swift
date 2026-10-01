@@ -413,11 +413,67 @@ enum AuthenticatedDownloader {
 
     @MainActor
     static func download(_ address: URL) async throws -> URL {
+        try await fetch(address, depth: 0).file
+    }
+
+    /// L'adresse du **document** derrière un lien Moodle (page, dossier, lien,
+    /// fichier) : ce que l'app enregistre à la place de la page d'activité.
+    /// `nil` si la page ne désigne aucun document lisible.
+    @MainActor
+    static func resolve(_ address: URL) async -> (statement: URL, solution: URL?)? {
+        guard MoodleLinks.activityModule(of: address) != nil else { return nil }
+        let session = await authenticatedSession(for: address)
+        guard let (data, response) = try? await session.data(from: MoodleLinks.workaroundPage(address)) else { return nil }
+        let final = response.url ?? address
+        if isPDF(response) || final.path.contains("/pluginfile.php/") { return (final, nil) }
+        let html = String(decoding: data, as: UTF8.self)
+        let found = MoodleLinks.statementLink(inHTML: html, baseURL: final)
+        guard let statement = found.statement.flatMap(URL.init(string:)) else { return nil }
+        return (statement, found.solution.flatMap(URL.init(string:)))
+    }
+
+    /// Télécharge ; une page d'activité Moodle (page, dossier, « cliquez
+    /// ici ») est suivie jusqu'au PDF qu'elle désigne, deux sauts au plus.
+    @MainActor
+    private static func fetch(_ address: URL, depth: Int) async throws -> (file: URL, url: URL) {
         // `mod/resource/view.php` → `…&redirect=1` : le fichier, pas la page.
         let url = SiteLinks.normalize(address)
+        let session = await authenticatedSession(for: url)
+        let (temporary, response) = try await session.download(from: url)
+        guard isPDF(response) else {
+            // Une page HTML : celle d'une activité Moodle qui porte le lien du
+            // PDF (AICC), ou une page de connexion.
+            let html = (try? String(contentsOf: temporary, encoding: .utf8)) ?? ""
+            try? FileManager.default.removeItem(at: temporary)
+            let base = response.url ?? url
+            if depth < 2, let next = MoodleLinks.statementLink(inHTML: html, baseURL: base).statement.flatMap(URL.init(string:)),
+               next != url {
+                return try await fetch(next, depth: depth + 1)
+            }
+            if depth == 0, MoodleLinks.activityModule(of: url) != nil, MoodleLinks.workaroundPage(url) != url {
+                return try await fetch(MoodleLinks.workaroundPage(url), depth: depth + 1)
+            }
+            throw WebContentScraper.ScrapeError.unreadable(base.path.contains("/login")
+                ? "la connexion Moodle a expiré : reconnecte-toi dans l'onglet Moodle de l'import"
+                : "ce lien ne mène pas à un PDF")
+        }
+        let name = response.suggestedFilename ?? "serie.pdf"
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name)
+        try FileManager.default.moveItem(at: temporary, to: destination)
+        return (destination, response.url ?? url)
+    }
+
+    private static func isPDF(_ response: URLResponse) -> Bool {
+        let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
+        return type.contains("pdf") || response.suggestedFilename?.lowercased().hasSuffix(".pdf") == true
+    }
+
+    /// Une session avec tous les cookies EPFL du navigateur intégré : une
+    /// ressource Moodle redirige vers `pluginfile.php`, parfois via la page de
+    /// connexion.
+    @MainActor
+    private static func authenticatedSession(for url: URL) async -> URLSession {
         let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
-        // Tous les cookies EPFL : une ressource Moodle redirige vers
-        // `pluginfile.php`, parfois via la page de connexion.
         let relevant = cookies.filter { cookie in
             let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
             return domain.hasSuffix("epfl.ch") || url.host?.hasSuffix(domain) == true
@@ -425,15 +481,6 @@ enum AuthenticatedDownloader {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage?.setCookies(relevant, for: url, mainDocumentURL: url)
         for cookie in relevant { configuration.httpCookieStorage?.setCookie(cookie) }
-        let session = URLSession(configuration: configuration)
-        let (temporary, response) = try await session.download(from: url)
-        let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
-        guard type.contains("pdf") || response.suggestedFilename?.lowercased().hasSuffix(".pdf") == true else {
-            throw WebContentScraper.ScrapeError.unreadable("ce lien ne mène pas à un PDF (connexion expirée ?)")
-        }
-        let name = response.suggestedFilename ?? "serie.pdf"
-        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name)
-        try FileManager.default.moveItem(at: temporary, to: destination)
-        return destination
+        return URLSession(configuration: configuration)
     }
 }
