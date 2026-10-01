@@ -123,7 +123,7 @@ struct ContentImportView: View {
                 guard path.isEmpty, let raw = PreviewLaunch.string(PreviewLaunch.contentImportFlag) else { return }
                 // `-contentImport auto` : lance l'import Moodle automatique,
                 // que `simctl` ne peut pas toucher.
-                if raw == "auto" { Task { await model.run(courses: targets, term: termInfo) } }
+                if raw == "auto" || raw == "autoapply" { Task { await model.run(courses: targets, term: termInfo) } }
                 switch ContentSource(rawValue: raw) {
                 case .botafogo: path.append(.botafogo)
                 case .courseware: path.append(.courseware)
@@ -596,6 +596,20 @@ struct BatchReviewView: View {
     @State private var result: String?
 
     var body: some View {
+        list
+            #if DEBUG
+            // `-contentImport autoapply` : applique l'import sans toucher l'écran
+            // (vérification sur l'appareil).
+            .task {
+                if PreviewLaunch.string(PreviewLaunch.contentImportFlag) == "autoapply" {
+                    try? await Task.sleep(for: .seconds(1))
+                    apply()
+                }
+            }
+            #endif
+    }
+
+    private var list: some View {
         List {
             Section {
                 ForEach($model.plans) { $plan in

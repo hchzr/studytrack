@@ -378,12 +378,17 @@ struct CourseDetailView: View {
                             message: "Aucune vidéo, lecture ni transparents rangés en semaine \(week).")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let topic = weekTopic(theory: theory, series: series) {
-                        Text(topic)
-                            .font(.subheadline)
-                            .foregroundStyle(Carnet.inkSecondary)
-                            .padding(.horizontal, 6)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(watchSummary(theory))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Carnet.ink)
+                        if let topic = weekTopic(theory: theory, series: series) {
+                            Text(topic)
+                                .font(.footnote)
+                                .foregroundStyle(Carnet.inkSecondary)
+                        }
                     }
+                    .padding(.horizontal, 6)
                     // Ce qu'il faut regarder cette semaine : le cours (son
                     // enregistrement, ses supports), puis les chapitres du MOOC
                     // demandés — chacun avec ses vidéos, nommées une à une.
@@ -426,6 +431,24 @@ struct CourseDetailView: View {
         }
 
         besideLinks
+    }
+
+    /// « À regarder : l'enregistrement du cours et 2 chapitres du MOOC (14 vidéos) ».
+    private func watchSummary(_ theory: [TheoryItem]) -> String {
+        let remaining = theory.filter { !$0.isWatched }
+        guard !remaining.isEmpty else { return "Tout est vu cette semaine" }
+        let mooc = remaining.filter { $0.title.hasPrefix("MOOC") }
+        let lectures = remaining.filter { !$0.title.hasPrefix("MOOC") }
+        var parts: [String] = []
+        if !lectures.isEmpty {
+            let recorded = lectures.contains { $0.links.contains { $0.kind == .video } }
+            parts.append(recorded ? "l'enregistrement du cours" : (lectures.count > 1 ? "\(lectures.count) cours" : "le cours"))
+        }
+        if !mooc.isEmpty {
+            let videos = mooc.reduce(0) { $0 + $1.links.filter { $0.kind == .video }.count }
+            parts.append("\(mooc.count) chapitre\(mooc.count > 1 ? "s" : "") du MOOC" + (videos > 0 ? " (\(videos) vidéos)" : ""))
+        }
+        return "À regarder : " + parts.joined(separator: " et ")
     }
 
     private func weekTopic(theory: [TheoryItem], series: [ExerciseSeries]) -> String? {

@@ -45,22 +45,51 @@ struct WeekTheoryCard: View {
             .sorted { (order.firstIndex(of: $0.kind) ?? 9) < (order.firstIndex(of: $1.kind) ?? 9) }
     }
 
+    /// Une ligne de ressource : une leçon de MOOC (ses vidéos réunies), un
+    /// enregistrement, un support. Les doublons (transparents « 4 pages » et
+    /// « 1 page ») n'en font qu'une.
+    struct Row: Identifiable {
+        let id: String
+        let title: String
+        let kind: ContentLink.Kind
+        let links: [ContentLink]
+    }
+
+    var rows: [Row] {
+        var result: [Row] = []
+        for link in links {
+            let cleaned = rowTitle(link)
+            let lesson = cleaned.components(separatedBy: " — ").first ?? cleaned
+            let key = (link.kind == .video ? "v:" : "d:") + ContentDraftBuilder.fold(lesson)
+            if let index = result.firstIndex(where: { $0.id == key }) {
+                let row = result[index]
+                // Un support en double garde la version complète (« 1 page sur 1 »).
+                if link.kind != .video { continue }
+                result[index] = Row(id: key, title: row.title, kind: row.kind, links: row.links + [link])
+            } else {
+                result.append(Row(id: key, title: lesson, kind: link.kind, links: [link]))
+            }
+        }
+        return result
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if !links.isEmpty {
+            if !rows.isEmpty {
                 CarnetRule(inset: 16)
-                let shown = showsAll ? links : Array(links.prefix(5))
-                ForEach(Array(shown.enumerated()), id: \.offset) { index, link in
-                    resourceRow(link)
+                let all = rows
+                let shown = showsAll ? all : Array(all.prefix(5))
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, row in
+                    resourceRow(row)
                     if index < shown.count - 1 { CarnetRule(inset: 52) }
                 }
-                if links.count > 5 {
+                if all.count > 5 {
                     CarnetRule(inset: 16)
                     Button {
                         withAnimation(Motion.snappy) { showsAll.toggle() }
                     } label: {
-                        Text(showsAll ? "Moins" : "Voir les \(links.count) ressources")
+                        Text(showsAll ? "Moins" : "Voir les \(rows.count) lignes")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Carnet.inkSecondary)
                             .frame(maxWidth: .infinity, minHeight: 40)
@@ -119,51 +148,75 @@ struct WeekTheoryCard: View {
         return parts.isEmpty ? item.kind.label : parts.joined(separator: " · ")
     }
 
-    private func resourceRow(_ link: ContentLink) -> some View {
-        Button {
-            if let url = ExerciseLinks.web(link.url) {
-                onBrowse(BrowsedLink(title: link.title.isEmpty ? title : link.title, url: url, icon: link.kind.icon))
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: link.kind == .video ? "play.circle.fill" : link.kind.icon)
-                    .font(.body)
-                    .foregroundStyle(link.kind == .video ? tint : Carnet.inkSecondary)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(rowTitle(link))
-                        .font(.subheadline)
-                        .foregroundStyle(Carnet.ink)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(rowDetail(link))
-                        .font(.caption)
-                        .foregroundStyle(Carnet.inkTertiary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
+    @ViewBuilder
+    private func resourceRow(_ row: Row) -> some View {
+        let label = HStack(spacing: 12) {
+            Image(systemName: row.kind == .video ? "play.circle.fill" : row.kind.icon)
+                .font(.body)
+                .foregroundStyle(row.kind == .video ? tint : Carnet.inkSecondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.title)
+                    .font(.subheadline)
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text(rowDetail(row))
+                    .font(.caption)
                     .foregroundStyle(Carnet.inkTertiary)
+                    .lineLimit(1)
             }
-            .padding(.leading, 18)
-            .padding(.trailing, 14)
-            .frame(minHeight: 48)
-            .contentShape(Rectangle())
+            Spacer(minLength: 4)
+            Image(systemName: row.links.count > 1 ? "chevron.up.chevron.down" : "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Carnet.inkTertiary)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(link.kind.chipLabel) : \(rowTitle(link))")
+        .padding(.leading, 18)
+        .padding(.trailing, 14)
+        .frame(minHeight: 48)
+        .contentShape(Rectangle())
+
+        if row.links.count > 1 {
+            // Plusieurs vidéos dans une leçon : un menu, chacune nommée.
+            Menu {
+                ForEach(Array(row.links.enumerated()), id: \.offset) { index, link in
+                    Button { open(link) } label: {
+                        Label(videoName(link, index: index), systemImage: "play.circle")
+                    }
+                }
+            } label: { label }
+            .accessibilityLabel("\(row.title), \(row.links.count) vidéos")
+        } else if let link = row.links.first {
+            Button { open(link) } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(row.kind.chipLabel) : \(row.title)")
+        }
+    }
+
+    private func open(_ link: ContentLink) {
+        if let url = ExerciseLinks.web(link.url) {
+            onBrowse(BrowsedLink(title: link.title.isEmpty ? title : link.title, url: url, icon: link.kind.icon))
+        }
+    }
+
+    /// « Vidéo 2 », ou la fin du titre (« Variables — Déclaration » → « Déclaration »).
+    private func videoName(_ link: ContentLink, index: Int) -> String {
+        let parts = link.title.components(separatedBy: " — ")
+        return parts.count > 1 ? parts.dropFirst().joined(separator: " — ") : "Vidéo \(index + 1)"
+    }
+
+    /// « 2 vidéos · Courseware », « Transparents · proginsc ».
+    private func rowDetail(_ row: Row) -> String {
+        let site = URL(string: row.links.first?.url ?? "")?.host.map(CarnetTheoryLine.siteName) ?? ""
+        let what = row.kind == .video
+            ? (row.links.count > 1 ? "\(row.links.count) vidéos" : "Vidéo")
+            : row.kind.chipLabel
+        return [what, site].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func rowTitle(_ link: ContentLink) -> String {
         let text = link.title.isEmpty ? link.kind.chipLabel : link.title
         return text.replacingOccurrences(of: #"\s*\((?:\d+ pages? sur \d+|1 page sur 1)\)"#, with: "",
                                          options: [.regularExpression, .caseInsensitive])
-    }
-
-    /// « Vidéo · MediaSpace », « Transparents · proginsc.epfl.ch ».
-    private func rowDetail(_ link: ContentLink) -> String {
-        let site = URL(string: link.url)?.host.map(CarnetTheoryLine.siteName) ?? ""
-        return [link.kind.chipLabel, site].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

@@ -4787,6 +4787,85 @@ do {
     context.delete(course)
 }
 
+print("== Plan du cours lu sans modèle (CS-107) ==")
+do {
+    // Extrait réel du plan de CS-107, tel que l'app le lit (une cellule par ligne).
+    let plan = """
+    COURS
+    14h15 - 15h00
+    1
+    09/09/2026
+    11/09/2026
+    14:15 Présentation du cours | Environnement | Algorithmes
+    Série 1
+    2
+    16/09/2026
+    18/09/2026
+    14:15 MOOC 1 : vidéos Module 1 (Bases de programmation)
+    Premiers pas en programmation
+    MOOC 1 : quiz Module 1
+    Série 2
+    3
+    23/09/2026
+    25/09/2026
+    14:15 MOOC 1 : vidéos Module 2
+    MOOC 1 : vidéos Module 3
+    Structures de contrôle
+    MOOC 1 : quiz Module 2
+    8
+    28/10/2026
+    30/10/2026
+    14:15 [optionnel] MOOC 2 : vidéos Module 1
+    MOOC 2 : vidéos Module 2
+    9 02/11/2026
+    Mini-projet 1: objectif de date pour atteindre 60% des points
+    9
+    04/11/2026
+    06/11/2026
+    14:15 MOOC 2 : vidéos Module 3
+    """
+    let found = CoursePlanParser.moocAssignments(in: plan, totalWeeks: 14)
+    check(found == [.init(mooc: 1, module: 1, week: 2), .init(mooc: 1, module: 2, week: 3), .init(mooc: 1, module: 3, week: 3),
+                    .init(mooc: 2, module: 1, week: 8), .init(mooc: 2, module: 2, week: 8), .init(mooc: 2, module: 3, week: 9)],
+          "semaine de chaque module, lue ligne par ligne (\(found.map { "\($0.mooc).\($0.module)→S\($0.week)" }))")
+    check(!found.contains { $0.week == 1 }, "les quiz ne sont pas des vidéos à regarder")
+    func chapter(_ id: String, _ title: String) -> ScrapedSection {
+        ScrapedSection(title: title, items: [ScrapedItem(title: "x", url: "u-\(id)")], id: id)
+    }
+    // Le chapitre d'accueil, au titre muet, reconnu à ses leçons.
+    let welcome = ScrapedSection(title: "Introduction", items: [ScrapedItem(title: "Bienvenue", url: "w1"),
+                                                                  ScrapedItem(title: "Informations pratiques", url: "w2")], id: "w")
+    let mooc1 = ScrapedCourse(source: "courseware", title: "Java", url: "", sections: [
+        welcome, chapter("b", "Bases de programmation"), chapter("c", "Branchements"), chapter("d", "Boucles")])
+    let mooc2 = ScrapedCourse(source: "courseware", title: "POO", url: "", sections: [
+        chapter("p", "Préambule"), chapter("i", "Introduction à la POO"), chapter("k", "Constructeurs"), chapter("h", "Héritage")])
+    let weeks = CoursePlanParser.chapterWeeks(found, moocs: [mooc1, mooc2])
+    check(weeks == ["b": 2, "c": 3, "d": 3, "i": 8, "k": 8, "h": 9], "module N → N-ième chapitre, préambule non compté (\(weeks))")
+}
+
+print("== Restes d'anciens imports du MOOC ==")
+do {
+    let course = Course(code: "TEST-108", name: "Prog")
+    context.insert(course)
+    let moocSeries = ExerciseSeries(course: course, seriesNumber: 6, plannedWeek: 5, urlString: "https://courseware.epfl.ch/courses/x/jump_to/block@Exercices_ID-1313")
+    context.insert(moocSeries)
+    let old1 = TheoryItem(course: course, sectionNumber: 2, number: "2.3", title: "Variables", kind: .video, plannedWeek: 0, urlString: "https://courseware.epfl.ch/l23")
+    let old2 = TheoryItem(course: course, sectionNumber: 2, number: "2.6", title: "Contrôle des connaissances (5 Questions)", kind: .reading, plannedWeek: 0, urlString: "https://courseware.epfl.ch/l26")
+    old1.videoCount = 1; old1.watchedAt = Date()
+    context.insert(old1); context.insert(old2)
+    var chapterItem = ContentDraftItem(kind: .theory, number: "M1-2", title: "MOOC · Bases de programmation", url: "https://courseware.epfl.ch/l22",
+                                       videoCount: 1, seriesNumber: nil, theoryKind: .video, week: 2)
+    chapterItem.links = [ContentLink(title: "Variables — Vidéo", url: "https://courseware.epfl.ch/xblock/v", kind: .video)]
+    let draft = ContentDraft(source: .moodle, courseTitle: "", url: "",
+                             sections: [ContentDraftSection(title: "Semaine 2", week: 2, weekIsInferred: false, isIncluded: true, items: [chapterItem])])
+    ContentDraftWriter.apply(draft, to: course, context: context)
+    try? context.save()
+    check(!course.series.contains { $0.seriesNumber == 6 }, "la « série » du MOOC, pas commencée, est retirée")
+    check(course.theoryItems.count == 1 && course.theoryItems.first?.isWatched == true,
+          "les anciennes leçons rejoignent leur chapitre, vu puisque ses vidéos l'étaient (\(course.theoryItems.map(\.title)))")
+    context.delete(course)
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

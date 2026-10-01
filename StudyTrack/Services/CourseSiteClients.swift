@@ -830,17 +830,26 @@ enum CourseImportPipeline {
             if let note = fetched.note { notes.append(note) }
         }
         var answer = MoodleCourseAI.Answer()
+        var plan: String?
         if let settings {
             progress("lecture du plan du cours…")
-            let plan = await CoursePlanReader.text(for: snapshot)
+            plan = await CoursePlanReader.text(for: snapshot)
             progress("rangement du cours…")
             answer = await MoodleCourseAIService.analyze(snapshot, termStart: termStart, totalWeeks: totalWeeks,
                                                          plan: plan, moocs: moocs.map(\.course), settings: settings)
         }
         var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: totalWeeks, hints: answer.hints)
         if !moocs.isEmpty {
+            // Le plan lu ligne par ligne l'emporte ; le modèle complète ce qu'il
+            // n'a pas trouvé (un plan d'une autre forme).
+            let parsed = plan.map { CoursePlanParser.chapterWeeks(CoursePlanParser.moocAssignments(in: $0, totalWeeks: totalWeeks),
+                                                                  moocs: moocs.map(\.course)) } ?? [:]
+            let plannedWeeks = parsed.isEmpty ? answer.moocWeeks : parsed
+            if !parsed.isEmpty {
+                AppLog.record(.info, "import", "Plan du cours lu", detail: "\(parsed.count) chapitres de MOOC rangés d'après le plan")
+            }
             let merged = MoocImport.merge(draft, moocs: moocs, snapshot: snapshot, termStart: termStart,
-                                          totalWeeks: totalWeeks, plannedWeeks: answer.moocWeeks)
+                                          totalWeeks: totalWeeks, plannedWeeks: plannedWeeks)
             draft = merged.draft
             if let note = merged.note { notes.append(note) }
         }

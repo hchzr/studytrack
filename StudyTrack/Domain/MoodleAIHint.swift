@@ -60,7 +60,7 @@ enum MoodleCourseAI {
                     guard let id = chapter.id else { return nil }
                     let videos = chapter.items.reduce(0) { $0 + ($1.videoCount ?? 0) }
                     let label: String
-                    if isFrontMatter(chapter.title) {
+                    if isFrontMatter(chapter) {
                         label = "\(chapter.title) [hors module]"
                     } else {
                         module += 1
@@ -84,6 +84,18 @@ enum MoodleCourseAI {
             result.moocWeeks[id] = min(result.moocWeeks[id] ?? week, week)
         }
         return result
+    }
+
+    /// Un chapitre hors programme, reconnu à son titre **ou à ses leçons** :
+    /// l'accueil d'un MOOC (« Bienvenue », « Informations pratiques »,
+    /// « Installation »…) ne porte pas toujours un titre parlant, et le compter
+    /// comme « module 1 » décalait tous les modules d'une semaine.
+    static func isFrontMatter(_ chapter: ScrapedSection) -> Bool {
+        if isFrontMatter(chapter.title) { return true }
+        let lessons = chapter.items.map { $0.title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
+        let welcome = lessons.contains { $0.range(of: #"\b(bienvenue|welcome|informations pratiques|installation|preambule|prise en main)\b"#, options: .regularExpression) != nil }
+        let assessed = lessons.contains { $0.range(of: #"\b(controle des connaissances|quiz|exercices?)\b"#, options: .regularExpression) != nil }
+        return welcome && !assessed
     }
 
     /// Un chapitre hors programme : accueil, préambule, quiz final, annexe.

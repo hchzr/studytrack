@@ -141,7 +141,13 @@ enum MoodleCourseAnalyzer {
         // nature, et sa semaine — l'activité rejoint alors cette semaine.
         let snapshot = relocate(original, hints: hints, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
         func classify(_ activity: MoodleActivity, inWeek: Bool) -> ActivityKind {
-            hints[activity.id]?.kind ?? Self.classify(activity, inWeek: inWeek)
+            let kind = hints[activity.id]?.kind ?? Self.classify(activity, inWeek: inWeek)
+            // Un lien vers le MOOC (Courseware) n'est jamais une série du cours :
+            // les « Exercices » d'un module de MOOC ne sont pas à faire, et un tel
+            // lien prenait la place de l'énoncé proginsc de la série 4 de CS-107.
+            // Le MOOC est rangé à part (`MoocMerger`).
+            if [.series, .solution].contains(kind), activity.link.contains("courseware.epfl.ch") { return .document }
+            return kind
         }
         var sections: [ContentDraftSection] = []
         var documents: [ContentDraftItem] = []

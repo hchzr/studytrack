@@ -174,7 +174,11 @@ enum ContentDraftWriter {
                     }
                     if let existing {
                         existing.title = item.title
-                        if updateWeeks || existing.plannedWeek == 0 { existing.plannedWeek = item.plannedWeek(in: section) }
+                        // La semaine d'un chapitre de MOOC vient du plan du cours :
+                        // elle suit chaque mise à jour (une semaine fausse se corrige).
+                        let derived = item.title.hasPrefix("MOOC · ")
+                        if updateWeeks || existing.plannedWeek == 0 || derived { existing.plannedWeek = item.plannedWeek(in: section) }
+                        if derived { existing.number = item.number }
                         existing.videoCount = item.videoCount
                         existing.sectionTitle = section.title
                         existing.kind = item.theoryKind
@@ -244,11 +248,46 @@ enum ContentDraftWriter {
             }
         }
 
+        if draft.source == .moodle { cleanUpMOOC(course: course, draft: draft, context: context) }
+
         var sources = course.contentSources
         if !draft.url.isEmpty, !sources.contains(draft.url) {
             sources.append(draft.url)
             course.contentSources = sources
         }
         return result
+    }
+
+    /// Ce que d'anciens imports du MOOC ont laissé, une fois le cours rangé par
+    /// Moodle (et son plan) :
+    ///   • les « séries » qui ne sont que des chapitres d'exercices du MOOC
+    ///     (Courseware), pas commencées — elles ne sont pas à faire ;
+    ///   • les leçons du MOOC sans semaine : elles rejoignent leur chapitre
+    ///     (vu si toutes ses vidéos l'étaient), puis disparaissent.
+    static func cleanUpMOOC(course: Course, draft: ContentDraft, context: ModelContext) {
+        func isMOOC(_ address: String) -> Bool { address.contains("courseware.epfl.ch") }
+
+        for series in course.series where isMOOC(series.urlString) {
+            let started = series.exercises.contains { $0.isDone || $0.subQuestionDoneCount > 0 }
+            if !started { context.delete(series) }
+        }
+
+        let chapters = course.theoryItems.filter { $0.title.hasPrefix("MOOC · ") && $0.plannedWeek > 0 }
+        guard !chapters.isEmpty else { return }
+        let drafted = Set(draft.sections.flatMap(\.items).map(\.url))
+        let leftovers = course.theoryItems.filter { item in
+            item.plannedWeek == 0 && isMOOC(item.urlString) && !drafted.contains(item.urlString)
+                && !item.title.hasPrefix("MOOC · ")
+        }
+        guard !leftovers.isEmpty else { return }
+        for chapter in chapters where !chapter.isWatched {
+            // Les leçons d'un chapitre : leur titre commence ses liens (« Variables — Vidéo 1 »).
+            let lessonTitles = Set(chapter.links.map { $0.title.components(separatedBy: " — ").first ?? $0.title })
+            let lessons = leftovers.filter { lessonTitles.contains($0.title) && $0.videoCount > 0 }
+            if !lessons.isEmpty, lessons.allSatisfy(\.isWatched) {
+                chapter.watchedAt = lessons.compactMap(\.watchedAt).max()
+            }
+        }
+        for item in leftovers { context.delete(item) }
     }
 }
