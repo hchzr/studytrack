@@ -23,3 +23,8 @@ verify_jwt = false
 # unique contre un jeton, avec le secret du fournisseur, et rouvre l'app.
 [functions.oauth]
 verify_jwt = false
+
+# Rangement d'un cours Moodle par le modèle : appelé comme `extract-series`, avec
+# la clé `anon` de l'app.
+[functions.analyze-course]
+verify_jwt = true

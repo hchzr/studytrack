@@ -523,6 +523,127 @@ enum ExpliqueSupplement {
     }
 }
 
+// MARK: - MediaSpace
+
+/// MediaSpace (Kaltura), lu dans la session : les listes de lecture, chaînes et
+/// catégories qu'un cours cite sur Moodle (« Lecture recordings 2025 »),
+/// déroulées jusqu'au bout, vidéo par vidéo.
+@MainActor
+final class MediaSpaceClient {
+    private let session = HiddenSiteSession()
+
+    enum Failure: Error { case notSignedIn }
+
+    /// L'identifiant Kaltura d'une vidéo (« 0_6y8w1d2s ») : le dernier d'une adresse.
+    nonisolated static func entryID(in link: String) -> String? {
+        let decoded = link.removingPercentEncoding ?? link
+        guard let regex = try? NSRegularExpression(pattern: #"[/=]([01]_[a-z0-9]{8})(?=[/?#&]|$)"#) else { return nil }
+        let matches = regex.matches(in: decoded, range: NSRange(decoded.startIndex..., in: decoded))
+        return matches.last.flatMap { Range($0.range(at: 1), in: decoded).map { String(decoded[$0]) } }
+    }
+
+    /// Une page qui regroupe des vidéos (et non une vidéo seule).
+    nonisolated static func isCollection(_ link: String) -> Bool {
+        guard let url = URL(string: link), url.host?.hasSuffix("mediaspace.epfl.ch") == true else { return false }
+        let path = url.path
+        if path.contains("/channel/") || path.contains("/category/") || path.contains("/channels/") { return true }
+        // `/playlist/dedicated/<cat>/<liste>` : la liste ; avec un dernier
+        // identifiant en plus, c'est une vidéo de la liste.
+        if path.contains("/playlist/") {
+            let ids = path.split(separator: "/").filter { $0.range(of: #"^[01]_[a-z0-9]{8}$"#, options: .regularExpression) != nil }
+            return ids.count == 1
+        }
+        return false
+    }
+
+    func entries(of collection: URL) async throws -> [CourseVideos.Video] {
+        try await session.load(collection)
+        let own = Self.entryID(in: collection.absoluteString) ?? ""
+        let raw = try await session.run(#"""
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        const isLogin = () => /wayf|eduid|login|shibboleth|saml/i.test(location.href);
+        const until = Date.now() + 15000;
+        while (Date.now() < until) {
+          if (isLogin()) return '__login__';
+          if (document.querySelectorAll('a[href*="_"]').length > 5 && /[01]_[a-z0-9]{8}/.test(document.body.innerHTML)) break;
+          await sleep(400);
+        }
+        if (isLogin()) return '__login__';
+        // « Charger plus » et défilement : les chaînes ne montrent qu'une page.
+        for (let i = 0; i < 10; i++) {
+          window.scrollTo(0, document.body.scrollHeight);
+          const more = [...document.querySelectorAll('button, a')].find(b => /load more|charger plus|afficher plus|voir plus|more media|show more/i.test(b.innerText || ''));
+          if (more) { more.click(); await sleep(1200); } else { await sleep(500); }
+        }
+        const seen = new Set([own]);
+        const out = [];
+        document.querySelectorAll('a[href]').forEach(a => {
+          const href = decodeURIComponent(a.href);
+          const ids = href.match(/[01]_[a-z0-9]{8}/g);
+          if (!ids) return;
+          const id = ids[ids.length - 1];
+          if (seen.has(id)) return;
+          const img = a.querySelector('img');
+          const title = (a.getAttribute('title') || a.getAttribute('aria-label') || a.innerText || (img && img.alt) || '').trim().replace(/\s+/g, ' ');
+          if (!title || title.length < 3) return;
+          seen.add(id);
+          out.push({ title, url: a.href });
+        });
+        return JSON.stringify(out);
+        """#, arguments: ["own": own])
+        if raw == "__login__" { throw Failure.notSignedIn }
+        struct Row: Decodable { var title: String; var url: String }
+        let rows = (try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? []
+        return rows.map { CourseVideos.Video(title: $0.title, url: $0.url, week: nil) }
+    }
+}
+
+/// Les listes de lecture MediaSpace qu'un cours cite sur Moodle : chacune de
+/// leurs vidéos rejoint l'élément de théorie de sa semaine.
+@MainActor
+enum MediaSpaceSupplement {
+    struct Outcome {
+        var draft: ContentDraft
+        var note: String?
+        var needsLogin = false
+    }
+
+    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
+                         termStart: Date?, totalWeeks: Int) async -> Outcome {
+        let links = snapshot.sections.flatMap(\.activities).flatMap { [$0.url, $0.target ?? ""] }
+        let collections = Array(Set(links.filter(MediaSpaceClient.isCollection))).sorted().compactMap(URL.init(string:))
+        guard !collections.isEmpty else { return Outcome(draft: draft) }
+        // Les vidéos que Moodle donne déjà, par leur identifiant.
+        let known = Set(draft.sections.flatMap(\.items).flatMap { [$0.url] + $0.links.map(\.url) }
+            .compactMap(MediaSpaceClient.entryID(in:)))
+        let client = MediaSpaceClient()
+        var videos: [CourseVideos.Video] = []
+        do {
+            for collection in collections.prefix(4) {
+                videos += try await client.entries(of: collection)
+            }
+        } catch MediaSpaceClient.Failure.notSignedIn {
+            return Outcome(draft: draft, note: "Liste de vidéos MediaSpace citée — connecte-toi à MediaSpace (Profil › Comptes)", needsLogin: true)
+        } catch {
+            AppLog.record(.warning, "import", "MediaSpace illisible", detail: error.localizedDescription)
+            return Outcome(draft: draft, note: "MediaSpace illisible")
+        }
+        var seen = known
+        let fresh = videos.filter { video in
+            guard let id = MediaSpaceClient.entryID(in: video.url) else { return false }
+            return seen.insert(id).inserted
+        }
+        guard !fresh.isEmpty else { return Outcome(draft: draft) }
+        let perWeek = CourseVideos.lecturesPerWeek(fresh.map(\.title), totalWeeks: totalWeeks)
+        let placed = fresh.map { video in
+            CourseVideos.Video(title: video.title, url: video.url,
+                               week: CourseVideos.week(of: video.title, termStart: termStart, totalWeeks: totalWeeks, lecturesPerWeek: perWeek))
+        }
+        let merged = CourseVideos.merge(placed, into: draft, totalWeeks: totalWeeks, sourceLabel: "MediaSpace")
+        return Outcome(draft: merged.draft, note: "+ MediaSpace (\(fresh.count) vidéo\(fresh.count > 1 ? "s" : ""))")
+    }
+}
+
 @MainActor
 enum MoocImport {
     struct Outcome {

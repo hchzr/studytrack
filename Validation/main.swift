@@ -1265,8 +1265,10 @@ do {
           "…nommé par le sujet de la semaine, vidéo et transparents liés (\(lecture4?.title ?? ""))")
     let series4 = week4.first { $0.kind == .series }
     check(series4?.seriesNumber == 4 && series4?.solutionURL == series4?.url, "« Enoncé/Corrigé de la série 4 » : énoncé et corrigé")
-    check(weeks107.first?.items.filter { $0.kind == .theory }.map(\.title) == ["Introduction", "Algorithmes"],
-          "deux transparents à sujets différents restent deux cours")
+    let week1Theory = weeks107.first?.items.filter { $0.kind == .theory } ?? []
+    check(week1Theory.count == 1 && week1Theory.first?.links.count == 2
+          && week1Theory.first?.title == "Introduction & Mise en place de l'environnement",
+          "un élément par semaine : les deux transparents réunis, nommés par le sujet (\(week1Theory.map(\.title)))")
     let deadlines107 = d107.sections.first { $0.title.hasPrefix("Échéances") }?.items ?? []
     check(deadlines107.contains { $0.examKind == .exam && $0.title == "Examen Final" && $0.date != nil },
           "l'examen final est une échéance, daté par le titre de sa section")
@@ -1292,9 +1294,11 @@ do {
             act("Problem Set 1 Solutions: Motion in 1D", "resource")])])
     let dphys = MoodleCourseAnalyzer.draft(from: phys, termStart: term)
     let physWeek = dphys.sections.first { $0.week == 1 }?.items ?? []
-    check(physWeek.filter { $0.kind == .theory }.map(\.number) == ["1a", "1b"], "deux cours, 1a et 1b")
-    check(physWeek.first?.links.count == 3 && physWeek.first?.links.contains { $0.kind == .video } == true,
-          "chaque cours : ses deux notes et son enregistrement")
+    let physTheory = physWeek.filter { $0.kind == .theory }
+    check(physTheory.map(\.number) == ["1"] && physTheory.first?.title == "Cours de la semaine 1",
+          "les cours 1a et 1b : **un** élément de la semaine (\(physTheory.map(\.title)))")
+    check(physTheory.first?.links.count == 6 && physTheory.first?.links.filter { $0.kind == .video }.count == 2,
+          "…avec les quatre notes et les deux enregistrements")
     let ps1 = physWeek.first { $0.kind == .series }
     check(ps1?.seriesNumber == 1 && ps1?.title == "Motion in 1D" && !(ps1?.solutionURL.isEmpty ?? true) && !(ps1?.pdfURL.isEmpty ?? true),
           "Problem Set 1 : thème, PDF à lire, solutions rattachées")
@@ -1317,7 +1321,7 @@ do {
     let dalg = MoodleCourseAnalyzer.draft(from: alg, termStart: term)
     let algWeek1 = dalg.sections.first { $0.week == 1 }?.items ?? []
     check(algWeek1.contains { $0.kind == .series && $0.seriesNumber == 1 && !$0.solutionURL.isEmpty }, "Série 1 et son corrigé")
-    check(algWeek1.contains { $0.kind == .theory && $0.title == "Systemes lineaires" }, "le chapitre 01 devient de la théorie lisible")
+    check(algWeek1.contains { $0.kind == .theory && $0.title.contains("Systemes lineaires") }, "le chapitre 01 devient de la théorie lisible")
     check(!algWeek1.contains { $0.title.contains("Contrat") || $0.title.contains("Equipe") }, "les documents d'équipe ne sont pas de la théorie")
     let algWeek4 = dalg.sections.first { $0.week == 4 }?.items ?? []
     check(algWeek4.contains { $0.kind == .series && $0.seriesNumber == 4 && $0.solutionURL.isEmpty },
@@ -1341,8 +1345,8 @@ do {
     let d101 = MoodleCourseAnalyzer.draft(from: cs101, termStart: term)
     let w2 = d101.sections.first?.items ?? []
     check(d101.sections.first?.week == 2, "« Week 2 » est la semaine 2")
-    check(w2.filter { $0.kind == .theory }.map(\.title) == ["Cours du mardi", "Cours du mercredi"], "un cours par jour")
-    check(w2.first?.links.count == 2, "transparents et notes annotées du mardi réunis")
+    check(w2.filter { $0.kind == .theory }.map(\.title) == ["Cours de la semaine 2"], "cours du mardi et du mercredi : un élément de la semaine")
+    check(w2.first?.links.count == 3, "transparents du mardi et du mercredi, notes annotées : tous liés")
     let dropboxPDF = w2.first?.links.first { $0.url.contains("dropbox") }
     check(dropboxPDF?.kind == .slides || dropboxPDF?.kind == .pdf, "un PDF Dropbox (« .pdf?rlkey=… ») est un PDF, pas une page")
 
@@ -1438,7 +1442,7 @@ do {
     let wphys = Course(code: "TEST-602", name: "Liens")
     context.insert(wphys)
     ContentDraftWriter.apply(dphys, to: wphys, context: context)
-    check(wphys.theoryItems.first { $0.number == "1a" }?.links.count == 3, "les liens d'un cours sont écrits")
+    check(wphys.theoryItems.first { $0.number == "1" }?.links.count == 6, "les liens d'un cours sont écrits")
     check(wphys.pastExams.count == 1, "l'annale est écrite")
     context.delete(written); context.delete(wphys)
     try? context.save()
@@ -4647,17 +4651,83 @@ do {
                             sections: [ContentDraftSection(title: "Semaine 3", week: 3, weekIsInferred: false, isIncluded: true, items: [moodleItem])])
     let merged = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: base, termStart: start, calendar: cal)
     let week3 = merged.draft.sections.first { $0.week == 3 }!
-    let lecture5 = week3.items.first { $0.number == "L5" }
-    check(lecture5?.links.count == 3 && lecture5?.links.first?.url.hasSuffix("/d") == true && lecture5?.title == "Lecture 5: Proofs",
-          "le cours 5 : un élément, trois vidéos, l'enregistrement de l'année d'abord")
-    check(week3.items.first { $0.title == "Cours 6" }?.links.contains { $0.url.hasSuffix("/b") } == true,
-          "le cours 6 de Moodle reçoit sa vidéo Explique")
-    check(week3.items.contains { $0.title == "Proofs - 1" }, "une vidéo sans numéro reste un élément à part")
-    check(merged.draft.sections.contains { $0.week == 1 && $0.items.contains { $0.number == "L1" } }, "une semaine absente de Moodle est créée")
+    let week3Theory = week3.items.filter { $0.kind == .theory }
+    check(week3Theory.count == 1 && week3Theory.first?.title == "Cours 6",
+          "semaine 3 : un seul élément, celui de Moodle (\(week3Theory.map(\.title)))")
+    let videos = week3Theory.first?.links.filter { $0.kind == .video } ?? []
+    check(videos.count == 5 && videos.first?.url.hasSuffix("/d") == true,
+          "…avec les cinq vidéos de la semaine, l'enregistrement de l'année du cours 5 d'abord")
+    check(merged.draft.sections.contains { $0.week == 1 && $0.items.contains { $0.number == "1" && $0.title == "Introduction" } },
+          "une semaine absente de Moodle reçoit son élément, nommé par son sujet")
     let deadline = merged.draft.sections.flatMap(\.items).first { $0.kind == .deadline }
     check(deadline?.title == "Explique · Proofs" && deadline?.date == due, "l'exercice d'explication devient une échéance datée")
     let again = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: merged.draft, termStart: start, calendar: cal)
     check(again.added == 0, "réimporter n'ajoute rien en double")
+}
+
+print("== Réimport : les cours d'une semaine fusionnés ==")
+do {
+    let course = Course(code: "TEST-909", name: "Fusion")
+    context.insert(course)
+    let a = TheoryItem(course: course, sectionNumber: 4, number: "4.1", title: "Cours du mardi", kind: .slides, plannedWeek: 4, sortOrder: 0, urlString: "https://x/tue.pdf")
+    let b = TheoryItem(course: course, sectionNumber: 4, number: "4.2", title: "Cours du mercredi", kind: .slides, plannedWeek: 4, sortOrder: 1, urlString: "https://x/wed.pdf")
+    a.watchedAt = Date(); b.watchedAt = Date()
+    context.insert(a); context.insert(b)
+    var item = ContentDraftItem(kind: .theory, number: "4", title: "Cours de la semaine 4", url: "https://x/tue.pdf",
+                                videoCount: 0, seriesNumber: nil, theoryKind: .slides)
+    item.links = [ContentLink(title: "mardi", url: "https://x/tue.pdf", kind: .slides), ContentLink(title: "mercredi", url: "https://x/wed.pdf", kind: .slides)]
+    let draft = ContentDraft(source: .moodle, courseTitle: "", url: "",
+                             sections: [ContentDraftSection(title: "Semaine 4", week: 4, weekIsInferred: false, isIncluded: true, items: [item])])
+    ContentDraftWriter.apply(draft, to: course, context: context)
+    try? context.save()
+    let week4 = course.theoryItems.filter { $0.plannedWeek == 4 }
+    check(week4.count == 1 && week4.first?.number == "4" && week4.first?.links.count == 2, "un seul élément pour la semaine, avec les deux cours")
+    check(week4.first?.isWatched == true, "la semaine reste vue : ses deux cours l'étaient")
+    context.delete(course)
+}
+
+print("== Vidéos d'un cours rangées par semaine ==")
+do {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let start = cal.date(from: DateComponents(year: 2026, month: 9, day: 7))!
+    check(CourseVideos.week(of: "Semaine 3 : boucles", termStart: start, totalWeeks: 14, lecturesPerWeek: 1, calendar: cal) == 3, "« Semaine 3 »")
+    check(CourseVideos.lecturesPerWeek(["Lecture 27: Advanced Probability", "Lecture 1"], totalWeeks: 14) == 2, "28 cours sur 14 semaines : deux par semaine")
+    check(CourseVideos.week(of: "Lecture 7: Sets", termStart: start, totalWeeks: 14, lecturesPerWeek: 2, calendar: cal) == 4, "deux cours par semaine : le cours 7 est en semaine 4")
+    check(CourseVideos.week(of: "PHYS-101(en) Lecture 3a: Forces", termStart: start, totalWeeks: 14, lecturesPerWeek: 1, calendar: cal) == 3, "« Lecture 3a » : semaine 3")
+    check(CourseVideos.week(of: "CS-107 compléments du cours 4 (live-streaming du 1.10.2025)", termStart: start, totalWeeks: 14, lecturesPerWeek: 1, calendar: cal) == 4,
+          "un enregistrement daté de l'an passé tombe dans la même semaine du semestre")
+    check(CourseVideos.week(of: "Bienvenue", termStart: start, totalWeeks: 14, lecturesPerWeek: 1, calendar: cal) == nil, "sans indice : pas de semaine inventée")
+    let draft = ContentDraft(source: .moodle, courseTitle: "", url: "", sections: [])
+    let merged = CourseVideos.merge([.init(title: "Lecture 3: Forces", url: "https://m/3", week: 3),
+                                     .init(title: "Intro", url: "https://m/0", week: nil)],
+                                    into: draft, totalWeeks: 14, sourceLabel: "MediaSpace")
+    check(merged.added == 2 && merged.draft.sections.contains { $0.week == 3 && $0.items.first?.title == "Forces" },
+          "une vidéo rangée en semaine 3, l'autre gardée dans les documents")
+}
+
+print("== Moodle : formats inconnus rangés par le modèle ==")
+do {
+    let raw = #"Voici : {"activities":[{"id":"1","kind":"series","week":3,"series":3},{"id":"2","kind":"theory","week":3},{"id":"3","kind":"ignore","week":null},{"id":4,"kind":"solution","week":3,"series":3}]}"#
+    let hints = MoodleCourseAI.parse(raw)
+    check(hints["1"] == MoodleAIHint(kind: .series, week: 3, seriesNumber: 3) && hints["3"]?.kind == .ignore && hints["4"]?.kind == .solution,
+          "réponse du modèle lue (texte autour, id numérique toléré)")
+    func act(_ id: String, _ name: String, _ module: String = "resource") -> MoodleActivity {
+        MoodleActivity(id: id, name: name, module: module, url: "https://moodle.epfl.ch/mod/\(module)/view.php?id=\(id)")
+    }
+    // Un cours rangé « par thème », aux noms que les règles ne comprennent pas.
+    let odd = MoodleCourseSnapshot(title: "Cours bizarre", url: "u", sections: [
+        MoodleSection(number: 0, title: "Général", activities: [act("2", "Séance du 21 septembre (vidéo)", "url"), act("3", "Café virtuel", "url")]),
+        MoodleSection(number: 1, title: "Semaine 3", activities: [act("1", "TP-trois : récursivité"), act("4", "TP-trois : ce qu'il fallait trouver")])])
+    let plain = MoodleCourseAnalyzer.draft(from: odd, termStart: nil)
+    check(!plain.sections.flatMap(\.items).contains { $0.kind == .series }, "sans le modèle, « TP-trois » n'est pas reconnu comme série")
+    let guided = MoodleCourseAnalyzer.draft(from: odd, termStart: nil, hints: hints)
+    let week3 = guided.sections.first { $0.week == 3 }?.items ?? []
+    check(week3.contains { $0.kind == .series && $0.seriesNumber == 3 && !$0.solutionURL.isEmpty }, "avec le modèle : la série 3 et son corrigé")
+    check(week3.contains { $0.kind == .theory }, "la vidéo posée dans « Général » rejoint la semaine 3")
+    check(!guided.sections.flatMap(\.items).contains { $0.title.contains("Café") }, "ce que le modèle écarte disparaît")
+    let payload = MoodleCourseAI.payload(for: odd, termStart: nil, totalWeeks: 14)
+    check((payload["outline"] as? String)?.contains("id=1 [resource] TP-trois") == true, "le plan envoyé : identifiants, types, noms")
 }
 
 if CommandLine.arguments.contains("--bench") {

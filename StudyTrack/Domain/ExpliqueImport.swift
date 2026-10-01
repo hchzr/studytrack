@@ -83,61 +83,20 @@ enum ExpliqueImport {
     /// Ajoute les cours (en replay) et les exercices d'Explique au brouillon
     /// Moodle, dans leurs semaines.
     ///
-    /// Un cours enregistré plusieurs fois (l'an passé, cette année, vue sur
-    /// l'orateur) devient **un** élément de théorie avec une vidéo par
-    /// variante, la plus récente d'abord. S'il existe déjà dans la semaine (un
-    /// « Cours 5 » venu de Moodle), ses vidéos y sont ajoutées.
+    /// **Un élément par semaine** : ses deux cours (mardi, mercredi) et leurs
+    /// enregistrements successifs (l'an passé, cette année, vue sur l'orateur)
+    /// deviennent les vidéos de l'élément de la semaine — celui venu de Moodle
+    /// s'il existe, sinon un nouveau.
     static func merge(lectures: [Lecture], exercises: [Exercise], into draft: ContentDraft,
                       termStart: Date?, totalWeeks: Int = 14, calendar: Calendar = .current) -> (draft: ContentDraft, added: Int) {
         var result = draft
         var added = 0
         let currentYear = String(calendar.component(.year, from: termStart ?? Date()))
 
-        for week in Set(lectures.map(\.week)).sorted() where week > 0 {
-            let clamped = min(week, max(totalWeeks, 1))
-            var groups: [(key: String, number: Int?, items: [Lecture])] = []
-            for lecture in lectures where lecture.week == week {
-                let number = lectureNumber(lecture.title)
-                let key = number.map { "n\($0)" } ?? baseTitle(lecture.title).lowercased()
-                if let index = groups.firstIndex(where: { $0.key == key }) {
-                    groups[index].items.append(lecture)
-                } else {
-                    groups.append((key, number, [lecture]))
-                }
-            }
-            for (index, group) in groups.enumerated() {
-                let ordered = group.items.sorted { lhs, rhs in
-                    let l = lhs.title.contains(currentYear), r = rhs.title.contains(currentYear)
-                    if l != r { return l }
-                    return lhs.title.count < rhs.title.count
-                }
-                let links = ordered.map { ContentLink(title: $0.title, url: $0.url, kind: .video) }
-                // Déjà là (un « Cours 5 » de Moodle, ou un import précédent) :
-                // on ajoute les vidéos manquantes.
-                if let position = locate(group, week: clamped, in: result) {
-                    var item = result.sections[position.section].items[position.item]
-                    let known = Set(item.links.map(\.url))
-                    let fresh = links.filter { !known.contains($0.url) }
-                    if !fresh.isEmpty {
-                        item.links.append(contentsOf: fresh)
-                        item.videoCount = item.links.filter { $0.kind == .video }.count
-                        item.theoryKind = .video
-                        result.sections[position.section].items[position.item] = item
-                    }
-                    continue
-                }
-                var item = ContentDraftItem(kind: .theory,
-                                            number: group.number.map { "L\($0)" } ?? "E\(clamped).\(index + 1)",
-                                            title: baseTitle(ordered[0].title),
-                                            url: ordered[0].url,
-                                            videoCount: links.count,
-                                            seriesNumber: nil,
-                                            theoryKind: .video)
-                item.links = links
-                append(item, week: clamped, to: &result)
-                added += 1
-            }
-        }
+        let videos = CourseVideos.merge(lectures.map { CourseVideos.Video(title: $0.title, url: $0.url, week: $0.week > 0 ? $0.week : nil) },
+                                        into: result, totalWeeks: totalWeeks, sourceLabel: "Explique", preferredYear: currentYear)
+        result = videos.draft
+        added += videos.added
 
         let known = Set(result.sections.flatMap(\.items).map(\.url))
         for exercise in exercises where !known.contains(exercise.url) {
@@ -153,34 +112,6 @@ enum ExpliqueImport {
             added += 1
         }
         return (result, added)
-    }
-
-    private static func locate(_ group: (key: String, number: Int?, items: [Lecture]), week: Int,
-                               in draft: ContentDraft) -> (section: Int, item: Int)? {
-        let urls = Set(group.items.map(\.url))
-        for (s, section) in draft.sections.enumerated() {
-            for (i, item) in section.items.enumerated() where item.kind == .theory {
-                if item.links.contains(where: { urls.contains($0.url) }) || urls.contains(item.url) { return (s, i) }
-                if let number = group.number, item.plannedWeek(in: section) == week,
-                   MoodleCourseAnalyzer.lectureKey(item.title) == "n\(number)" || item.number == "L\(number)" {
-                    return (s, i)
-                }
-            }
-        }
-        return nil
-    }
-
-    private static func append(_ item: ContentDraftItem, week: Int, to draft: inout ContentDraft) {
-        if let index = draft.sections.firstIndex(where: { $0.week == week && $0.title != deadlinesTitle }) {
-            draft.sections[index].items.append(item)
-        } else {
-            draft.sections.append(ContentDraftSection(title: "Semaine \(week) · Explique", week: week,
-                                                      weekIsInferred: false, isIncluded: true, items: [item]))
-            draft.sections.sort { lhs, rhs in
-                if lhs.week == 0 || rhs.week == 0 { return lhs.week != 0 && rhs.week == 0 }
-                return lhs.week < rhs.week
-            }
-        }
     }
 
     static let deadlinesTitle = "Échéances : rendus, projet, examen"

@@ -132,10 +132,17 @@ enum MoodleCourseAnalyzer {
             .map { min($0, max(totalWeeks, 1)) }
     }
 
-    static func draft(from snapshot: MoodleCourseSnapshot,
+    static func draft(from original: MoodleCourseSnapshot,
                       termStart: Date?,
                       totalWeeks: Int = 14,
-                      calendar: Calendar = .current) -> ContentDraft {
+                      calendar: Calendar = .current,
+                      hints: [String: MoodleAIHint] = [:]) -> ContentDraft {
+        // Ce que le modèle a compris d'activités aux noms inattendus : sa
+        // nature, et sa semaine — l'activité rejoint alors cette semaine.
+        let snapshot = relocate(original, hints: hints, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
+        func classify(_ activity: MoodleActivity, inWeek: Bool) -> ActivityKind {
+            hints[activity.id]?.kind ?? Self.classify(activity, inWeek: inWeek)
+        }
         var sections: [ContentDraftSection] = []
         var documents: [ContentDraftItem] = []
         var pastExams: [ContentDraftItem] = []
@@ -198,14 +205,18 @@ enum MoodleCourseAnalyzer {
             for activity in visible {
                 switch classify(activity, inWeek: true) {
                 case .series:
-                    let number = seriesNumber(activity.name) ?? week ?? section.number
+                    let number = seriesNumber(activity.name) ?? hints[activity.id]?.seriesNumber ?? week ?? section.number
                     // « Enoncé/Corrigé de la série 4 » : l'énoncé et le corrigé à la même adresse.
                     let both = fold(activity.name).contains("corrig") && fold(activity.name).contains("enonc")
                     addToSeries(number, statement: activity, solution: both ? activity : nil)
                 case .solution:
                     pendingSolutions.append(activity)
                 case .lecture:
-                    let key = lectureKey(activity.name)
+                    // **Un élément par semaine** : le cours du mardi, celui du
+                    // mercredi, leurs enregistrements et leurs transparents sont
+                    // le travail de la semaine, à cocher une fois. Sans semaine
+                    // lisible, on regroupe par cours (« Lecture 3 », un jour…).
+                    let key = week.map { "w\($0)" } ?? lectureKey(activity.name)
                     if let index = lectureGroups.firstIndex(where: { $0.key == key }) {
                         lectureGroups[index].activities.append(activity)
                     } else {
@@ -405,6 +416,8 @@ enum MoodleCourseAnalyzer {
             } else {
                 title = "Cours \(number)"
             }
+        } else if key.hasPrefix("w") {
+            title = weekTitle(activities, sectionTitle: sectionTitle, week: week)
         } else if key.hasPrefix("d") {
             title = "Cours du \(key.dropFirst())"
         } else if key.hasPrefix("t") {
@@ -443,6 +456,66 @@ enum MoodleCourseAnalyzer {
                                     theoryKind: hasVideo ? .video : (links.contains { $0.kind == .slides } ? .slides : .reading))
         item.links = links
         return item
+    }
+
+    /// Le titre de la semaine : le sujet de la section (« Semaine 4 : Types
+    /// avancés »), sinon les sujets des enregistrements (« Motion in one
+    /// dimension · Using vectors »), sinon le nom des supports, sans « blank »,
+    /// « recording »…
+    static func weekTitle(_ activities: [MoodleActivity], sectionTitle: String, week: Int = 0) -> String {
+        let topic = sectionTitle.split(separator: ":", maxSplits: 1).dropFirst().first
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        let topicIsDate = topic.isEmpty || ContentDraftBuilder.week(fromTitle: topic, termStart: Date()) != nil
+            || matches(fold(topic), #"\b\d{1,2}\s+[a-z]+\b"#)
+        if !topicIsDate { return topic }
+        var topics: [String] = []
+        for activity in activities {
+            if let video = videoTopic(activity.link), !topics.contains(video) { topics.append(video) }
+        }
+        if !topics.isEmpty { return topics.prefix(3).joined(separator: " · ") }
+        // Des supports aux noms génériques (« Lecture — Tuesday », « Lecture
+        // notes 1a ») ne disent rien du sujet : « Cours de la semaine 2 ».
+        let generic = activities.allSatisfy { isLecture(fold($0.name)) }
+        if generic { return week > 0 ? "Cours de la semaine \(week)" : "Cours" }
+        var names: [String] = []
+        for activity in activities {
+            let name = prettifyFileName(activity.name)
+                .replacingOccurrences(of: #"\s*\((?:blank|annotated|annot[ée]e?s?|vierges?|\d+ pages? (?:sur|per) \d+)\)"#,
+                                      with: "", options: [.regularExpression, .caseInsensitive])
+                .replacingOccurrences(of: #"\s*(?:recording|enregistrement)s?\b"#, with: "", options: [.regularExpression, .caseInsensitive])
+                .trimmingCharacters(in: .whitespaces)
+            let key = fold(name)
+            if !name.isEmpty, !names.contains(where: { fold($0) == key }) { names.append(name) }
+        }
+        return names.isEmpty ? (activities.first?.name ?? "Cours") : names.prefix(3).joined(separator: " · ")
+    }
+
+    /// Déplace dans leur semaine les activités que le modèle y range (une
+    /// vidéo posée dans « Général », une série dans la mauvaise section).
+    static func relocate(_ snapshot: MoodleCourseSnapshot, hints: [String: MoodleAIHint], termStart: Date?,
+                         totalWeeks: Int, calendar: Calendar) -> MoodleCourseSnapshot {
+        guard !hints.isEmpty else { return snapshot }
+        var result = snapshot
+        var moved: [(week: Int, activity: MoodleActivity)] = []
+        for s in result.sections.indices {
+            let current = week(of: result.sections[s], termStart: termStart, totalWeeks: totalWeeks, calendar: calendar)
+            result.sections[s].activities.removeAll { activity in
+                guard let hint = hints[activity.id], let target = hint.week, target > 0, target != current,
+                      [.lecture, .series, .solution].contains(hint.kind) else { return false }
+                moved.append((min(target, max(totalWeeks, 1)), activity))
+                return true
+            }
+        }
+        for (target, activity) in moved {
+            if let index = result.sections.firstIndex(where: {
+                week(of: $0, termStart: termStart, totalWeeks: totalWeeks, calendar: calendar) == target
+            }) {
+                result.sections[index].activities.append(activity)
+            } else {
+                result.sections.append(MoodleSection(number: 1000 + target, title: "Semaine \(target)", activities: [activity]))
+            }
+        }
+        return result
     }
 
     /// Le sujet d'un enregistrement MediaSpace, lu dans son adresse :

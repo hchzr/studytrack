@@ -1130,6 +1130,15 @@ struct InAppBrowser: View {
     @StateObject private var model = BrowserModel()
 
     var body: some View {
+        // Une vidéo de cours se lit dans le lecteur de l'app.
+        if VideoLinks.isVideo(link.url) {
+            VideoPlayerView(link: link)
+        } else {
+            page
+        }
+    }
+
+    private var page: some View {
         NavigationStack {
             WebView(model: model, initialURL: link.url, followsDocumentLinks: true)
                 .overlay(alignment: .top) {

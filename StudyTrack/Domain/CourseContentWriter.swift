@@ -151,6 +151,27 @@ enum ContentDraftWriter {
                         (!item.url.isEmpty && existing.urlString == item.url) || existing.number == item.number
                     }
                     let sectionNumber = Int(item.number.split(separator: ".").first ?? "") ?? chapter ?? (sectionIndex + 1)
+                    defer {
+                        // L'élément d'une semaine (numéro « 4 ») absorbe les
+                        // éléments qu'un import précédent avait créés pour chacun de
+                        // ses cours (« 4.1 », « 4.2 ») : leurs liens sont désormais
+                        // les siens. La semaine reste vue si tout l'était.
+                        if !item.number.isEmpty, item.number.allSatisfy(\.isNumber),
+                           let target = course.theoryItems.first(where: { $0.number == item.number || (!item.url.isEmpty && $0.urlString == item.url) }) {
+                            target.number = item.number
+                            let urls = Set(item.links.map(\.url) + [item.url])
+                            let absorbed = course.theoryItems.filter { other in
+                                other !== target && other.plannedWeek == target.plannedWeek
+                                    && !other.urlString.isEmpty && urls.contains(other.urlString)
+                            }
+                            if !absorbed.isEmpty {
+                                let all = [target] + absorbed
+                                target.watchedAt = all.allSatisfy(\.isWatched) ? all.compactMap(\.watchedAt).max() : nil
+                                for other in absorbed { context.delete(other) }
+                                result.theoryUpdated += absorbed.count
+                            }
+                        }
+                    }
                     if let existing {
                         existing.title = item.title
                         if updateWeeks || existing.plannedWeek == 0 { existing.plannedWeek = item.plannedWeek(in: section) }

@@ -364,7 +364,14 @@ final class MoodleImportModel {
             let snapshot = try await client.snapshot(of: ref)
             let termStart = course.term?.startDate ?? term.start
             let weeks = course.term?.totalWeeks ?? term.weeks
-            var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: weeks)
+            // Les activités aux formats inconnus, rangées par le modèle (si l'IA
+            // est activée) ; les règles font le reste.
+            var hints: [String: MoodleAIHint] = [:]
+            if let settings = AppRuntime.container?.settings {
+                status[course.id] = "rangement du cours…"
+                hints = await MoodleCourseAIService.hints(for: snapshot, termStart: termStart, totalWeeks: weeks, settings: settings)
+            }
+            var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: termStart, totalWeeks: weeks, hints: hints)
             var label = "Moodle · \(ref.shortname)"
             // Le MOOC que Moodle cite (vidéos de la semaine, classe inversée) :
             // lu sur Courseware et rangé dans les semaines du cours.
@@ -380,6 +387,10 @@ final class MoodleImportModel {
             let explique = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
             draft = explique.draft
             if let note = explique.note { moocNote = [moocNote, note].compactMap { $0 }.joined(separator: " · ") }
+            // Les listes de lecture MediaSpace citées (tous les enregistrements).
+            let media = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: weeks)
+            draft = media.draft
+            if let note = media.note { moocNote = [moocNote, note].compactMap { $0 }.joined(separator: " · ") }
             // Un cours vide sur Moodle vit peut-être ailleurs : la classe
             // inversée d'Analyse I est tout entière sur Botafogo.
             if draft.theoryCount + draft.seriesCount == 0,

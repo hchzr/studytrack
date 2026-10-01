@@ -45,8 +45,10 @@ enum ContentRefresher {
                 for course in moodleCourses {
                     guard case .unique(let ref)? = try? await client.resolve(course, enrolled: enrolled),
                           let snapshot = try? await client.snapshot(of: ref) else { continue }
+                    let hints = await MoodleCourseAIService.hints(for: snapshot, termStart: course.term?.startDate,
+                                                                 totalWeeks: course.term?.totalWeeks ?? 14, settings: settings)
                     var draft = MoodleCourseAnalyzer.draft(from: snapshot, termStart: course.term?.startDate,
-                                                           totalWeeks: course.term?.totalWeeks ?? 14)
+                                                           totalWeeks: course.term?.totalWeeks ?? 14, hints: hints)
                     // Les leçons du MOOC cité, quand Courseware est connecté.
                     if !snapshot.moocLinks.isEmpty {
                         draft = await MoocImport.complete(draft, snapshot: snapshot, termStart: course.term?.startDate,
@@ -54,6 +56,8 @@ enum ContentRefresher {
                     }
                     draft = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: course.term?.startDate,
                                                               totalWeeks: course.term?.totalWeeks ?? 14).draft
+                    draft = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: course.term?.startDate,
+                                                                totalWeeks: course.term?.totalWeeks ?? 14).draft
                     if let line = apply(draft, to: course, context: context) { news.append(line) }
                 }
             } else {
