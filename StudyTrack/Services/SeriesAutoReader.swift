@@ -61,13 +61,14 @@ final class SeriesAutoReader {
         let moodleReady = needsMoodle ? await MoodleClient().ensureSignedIn() : false
         if moodleReady { await repairLinks(courses: courses, context: context) }
         for course in courses {
-            for series in course.sortedSeries where series.exercises.isEmpty && failures[series.id] == nil {
+            for series in course.sortedSeries where (series.exercises.isEmpty || series.needsReread) && failures[series.id] == nil {
                 guard let url = URL(string: series.urlString), url.scheme?.hasPrefix("http") == true else { continue }
                 if url.host?.contains("moodle") == true, !moodleReady { continue }
                 reading.insert(series.id)
                 defer { reading.remove(series.id) }
                 do {
                     let count = try await read(series, from: url, course: course, context: context, settings: settings)
+                    series.needsReread = false
                     if count > 0 {
                         try? context.save()
                         report.append("\(course.displayCode) série \(series.seriesNumber) : \(count) exercice\(count > 1 ? "s" : "")")
@@ -142,7 +143,9 @@ final class SeriesAutoReader {
                 let html = String(decoding: data, as: UTF8.self)
                 if let page = SeriesPageParser.parseProginsc(html: html, baseURL: base) {
                     write(page.exercises, into: series, course: course, context: context)
-                    if series.solutionURLString.isEmpty { series.solutionURLString = page.solutionURL }
+                    if series.solutionURLString.isEmpty || URL(string: series.solutionURLString)?.host?.contains("courseware") == true {
+                series.solutionURLString = page.solutionURL
+            }
                     return series.exercises.count
                 }
                 // Une page qui porte le PDF de la série (site de cours, GitHub…).

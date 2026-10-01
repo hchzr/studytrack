@@ -19,6 +19,9 @@ final class ExerciseSeries {
     /// Où lire le corrigé (le PDF « Corrigé série 3 » de Moodle, la page de
     /// la série sur Botafogo).
     var solutionURLString: String = ""
+    /// L'énoncé est à relire (son adresse a changé) : la lecture automatique
+    /// repasse, en gardant l'avancement.
+    var needsReread: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \Exercise.series)
     var exercises: [Exercise] = []

@@ -208,10 +208,23 @@ enum ContentDraftWriter {
                         // donné (aucun exercice lu) : une série de CS-107 créée par un
                         // ancien import du MOOC gardait sa page Courseware, et la
                         // vraie page de la série (proginsc) n'était jamais retenue.
+                        // Une adresse sur Courseware (le MOOC) est aussi remplacée par
+                        // celle du cours : les séries de CS-107 sont sur proginsc, et
+                        // le MOOC n'en a que d'autres exercices, pas à faire.
                         let fresh = item.pdfURL.isEmpty ? item.url : item.pdfURL
+                        let staleMOOC = URL(string: existing.urlString)?.host?.contains("courseware") == true
+                            && URL(string: fresh)?.host?.contains("courseware") != true
                         if existing.urlString.isEmpty
-                            || (!fresh.isEmpty && fresh != existing.urlString && existing.exercises.isEmpty) {
+                            || (!fresh.isEmpty && fresh != existing.urlString && (existing.exercises.isEmpty || staleMOOC)) {
                             existing.urlString = fresh
+                            if staleMOOC {
+                                // Les exercices pointaient eux aussi vers le MOOC.
+                                for exercise in existing.exercises
+                                where URL(string: exercise.statementURLString)?.host?.contains("courseware") == true {
+                                    exercise.statementURLString = ""
+                                }
+                                existing.needsReread = true
+                            }
                         }
                         if existing.solutionURLString.isEmpty, !item.solutionURL.isEmpty {
                             existing.solutionURLString = item.solutionURL

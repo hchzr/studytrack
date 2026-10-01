@@ -4767,6 +4767,26 @@ do {
           "ni le quiz, ni le module que le plan ne cite pas")
 }
 
+print("== Série restée sur le MOOC : l'adresse du cours l'emporte ==")
+do {
+    let course = Course(code: "TEST-107", name: "Prog")
+    context.insert(course)
+    let series = ExerciseSeries(course: course, seriesNumber: 3, plannedWeek: 3, urlString: "https://courseware.epfl.ch/courses/x/serie3")
+    context.insert(series)
+    let ex = Exercise(series: series, exerciseNumber: "3.1", statementURLString: "https://courseware.epfl.ch/courses/x/ex31")
+    context.insert(ex)
+    ex.setDone(true)
+    var item = ContentDraftItem(kind: .series, number: "3", title: "Série 3", url: "https://proginsc.epfl.ch/wwwhiver/series/serie03/serie.html",
+                                videoCount: 0, seriesNumber: 3, theoryKind: .reading)
+    item.solutionURL = item.url
+    let draft = ContentDraft(source: .moodle, courseTitle: "", url: "",
+                             sections: [ContentDraftSection(title: "Semaine 3", week: 3, weekIsInferred: false, isIncluded: true, items: [item])])
+    ContentDraftWriter.apply(draft, to: course, context: context)
+    check(series.urlString.contains("proginsc") && series.needsReread, "la page de la série (proginsc) remplace le MOOC, et la série sera relue")
+    check(ex.statementURLString.isEmpty && ex.isDone, "l'exercice ne pointe plus vers le MOOC, et reste fait")
+    context.delete(course)
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

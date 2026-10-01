@@ -142,6 +142,7 @@ struct CourseDetailView: View {
             #if DEBUG
             if let raw = PreviewLaunch.string(PreviewLaunch.courseTabFlag) {
                 if raw == "all" { shownWeek = nil }
+                if raw == "weekTheory" { tab = .theory }
                 if let section = Section(rawValue: raw) {
                     switch section {
                     case .progress: showingProgress = true
@@ -376,23 +377,23 @@ struct CourseDetailView: View {
                 CarnetEmpty(icon: "book", title: "Pas de théorie",
                             message: "Aucune vidéo, lecture ni transparents rangés en semaine \(week).")
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    let shared = CarnetTheoryLine.sharedDetail(theory)
-                    if let topic = weekTopic(theory: theory, series: series) ?? shared {
-                        Text([weekTopic(theory: theory, series: series), shared].compactMap { $0 }.joined(separator: " · "))
+                VStack(alignment: .leading, spacing: 12) {
+                    if let topic = weekTopic(theory: theory, series: series) {
+                        Text(topic)
                             .font(.subheadline)
                             .foregroundStyle(Carnet.inkSecondary)
                             .padding(.horizontal, 6)
-                            .id(topic)
                     }
-                    CarnetSheet {
-                        ForEach(Array(theory.enumerated()), id: \.element.id) { index, item in
-                            CarnetTheoryLine(item: item,
-                                             hiddenDetail: shared,
-                                             onOpen: { openedVideo = item },
-                                             onBrowse: { browsing = $0 })
-                            if index < theory.count - 1 { CarnetRule(inset: 54) }
-                        }
+                    // Ce qu'il faut regarder cette semaine : le cours (son
+                    // enregistrement, ses supports), puis les chapitres du MOOC
+                    // demandés — chacun avec ses vidéos, nommées une à une.
+                    let ordered = theory.sorted { lhs, rhs in
+                        let l = lhs.title.hasPrefix("MOOC"), r = rhs.title.hasPrefix("MOOC")
+                        if l != r { return !l }
+                        return lhs.sortOrder < rhs.sortOrder
+                    }
+                    ForEach(ordered) { item in
+                        WeekTheoryCard(item: item, onOpen: { openedVideo = item }, onBrowse: { browsing = $0 })
                     }
                 }
             }
