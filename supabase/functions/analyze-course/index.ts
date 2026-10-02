@@ -111,7 +111,8 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
   };
   if (candidate.model.includes("gpt-oss")) payload.reasoning_effort = "low";
   if (candidate.baseURL.includes("openrouter.ai")) {
-    payload.reasoning = { enabled: false };
+    // Certains modèles n'existent qu'avec raisonnement (gpt-oss) : le plus court.
+    payload.reasoning = candidate.model.includes("gpt-oss") ? { effort: "low" } : { enabled: false };
     payload.usage = { include: true };
   }
   const response = await fetch(`${candidate.baseURL}/chat/completions`, {
