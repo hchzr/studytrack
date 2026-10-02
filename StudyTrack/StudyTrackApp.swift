@@ -25,7 +25,7 @@ enum PreviewLaunch {
     static let botafogoCourseFlag = "-botafogoCourse"
     static let onboardingStepFlag = "-onboardingStep"
     /// `-onboardingDemo N` : l'accueil EPFL, écran N (0 bienvenue, 1 import
-    /// simulé, 2 connexions, 3 fin), sans Moodle — pour les captures.
+    /// simulé, 2 semestre, 3 to-do, 4 chrono), sans Moodle — pour les captures.
     static let onboardingDemoFlag = "-onboardingDemo"
     /// `-onboardingDeck N` : le réglage N de l'import (1 objectif, 2 rappel, 3 fini).
     static let onboardingDeckFlag = "-onboardingDeck"
