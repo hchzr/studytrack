@@ -12,7 +12,9 @@
 // quel cours, où sont les énoncés et ce qu'il faut faire chaque semaine.
 // DeepSeek d'abord (contexte long, bon en lecture de plans), Groq en repli :
 //   supabase functions deploy analyze-course --project-ref aaigscutkuefhqftfszv
-//   OPENROUTER_API_KEY, ANALYZE_MODEL (facultatif, « deepseek/deepseek-v4.1-flash » par défaut),
+//   OPENROUTER_API_KEY, ANALYZE_MODEL (facultatif, « deepseek/deepseek-v4.1-flash » par défaut ;
+//   « openai/gpt-6-luna » en production depuis le banc d'essai du 3 octobre 2026),
+//   ANALYZE_PROVIDER_ORDER (facultatif, « openai,azure »),
 //   LLM_API_KEY (Groq), LLM_BASE_URL / LLM_MODEL (facultatifs, ensemble).
 
 import { allowed, isEvaluation } from "../_shared/limits.ts";
@@ -101,7 +103,8 @@ Deno.serve(async (request) => {
 });
 
 async function ask(candidate: { baseURL: string; apiKey: string; model: string },
-                   messages: Array<{ role: string; content: string }>, provider?: unknown): Promise<{ content: string; usage: unknown }> {
+                   messages: Array<{ role: string; content: string }>, provider?: unknown,
+                   reasoning?: Record<string, unknown>): Promise<{ content: string; usage: unknown }> {
   const payload: Record<string, unknown> = {
     model: candidate.model,
     temperature: 0,
@@ -112,9 +115,13 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
   if (candidate.model.includes("gpt-oss")) payload.reasoning_effort = "low";
   if (candidate.baseURL.includes("openrouter.ai")) {
     // Certains modèles n'existent qu'avec raisonnement (gpt-oss) : le plus court.
-    payload.reasoning = candidate.model.includes("gpt-oss") ? { effort: "low" } : { enabled: false };
+    payload.reasoning = reasoning ?? (candidate.model.includes("gpt-oss") ? { effort: "low" } : { enabled: false });
     payload.usage = { include: true };
-    const routing = provider ?? (Deno.env.get("ANALYZE_PROVIDER_SORT") ? { sort: Deno.env.get("ANALYZE_PROVIDER_SORT") } : undefined);
+    // Les fournisseurs retenus au banc d'essai (ANALYZE_PROVIDER_ORDER, « openai,azure »),
+    // les autres en secours ; ou un tri (ANALYZE_PROVIDER_SORT).
+    const order = (Deno.env.get("ANALYZE_PROVIDER_ORDER") ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+    const sort = Deno.env.get("ANALYZE_PROVIDER_SORT");
+    const routing = provider ?? (order.length ? { order, allow_fallbacks: true } : sort ? { sort } : undefined);
     if (routing) payload.provider = routing;
   }
   const response = await fetch(`${candidate.baseURL}/chat/completions`, {
@@ -124,6 +131,10 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
     signal: AbortSignal.timeout(110_000),
   });
   const text = await response.text();
+  // Un modèle qui n'existe qu'avec raisonnement : le plus court, une fois.
+  if (!response.ok && /Reasoning is mandatory/i.test(text) && (payload.reasoning as { enabled?: boolean })?.enabled === false) {
+    return ask(candidate, messages, provider, { effort: "low" });
+  }
   if (!response.ok) throw new Error(`HTTP ${response.status} ${text.slice(0, 160)}`);
   const data = JSON.parse(text);
   return { content: data.choices?.[0]?.message?.content ?? "", usage: data.usage ?? null };

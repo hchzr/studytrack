@@ -30,7 +30,7 @@ enum MoodleCourseAIService {
         if outline.isEmpty, let sources { outline = "(cours vide sur Moodle)"; payload["outline"] = outline + "\n" + sources.prefix(200) }
         guard !outline.isEmpty else { return .init() }
         // La consigne fait partie de l'empreinte : la changer redemande au modèle.
-        let fingerprint = MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "") + "|" + (payload["sources"] as? String ?? "")
+        let fingerprint = analysisVersion + "|" + MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "") + "|" + (payload["sources"] as? String ?? "")
         // **Une** réponse gardée par cours (la dernière) : une clé par empreinte
         // en gardait une nouvelle à chaque changement du cours, sans fin.
         dropLegacyCache()
@@ -63,6 +63,11 @@ enum MoodleCourseAIService {
         }
         return answer
     }
+
+    /// Change quand le modèle du serveur change : les réponses gardées sont
+    /// redemandées une fois (passage à GPT-6 Luna après le banc d'essai du
+    /// 3 octobre 2026 : MOOC, leçons et séries nettement mieux rangés).
+    static let analysisVersion = "gpt-6-luna.2026-10-03"
 
     private static var debugBypassCache: Bool {
         #if DEBUG
