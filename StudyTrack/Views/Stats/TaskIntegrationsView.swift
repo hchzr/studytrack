@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 /// Les fournisseurs de tâches : un toucher pour se connecter.
 ///
@@ -145,17 +146,7 @@ struct TaskIntegrationsView: View {
     }
 
     private func oauth(for provider: TaskProvider) -> OAuthProvider? {
-        let mapped: OAuthProvider? = {
-            switch provider {
-            case .todoist: return .todoist
-            case .googleTasks: return .google
-            case .microsoftToDo: return .microsoft
-            case .tickTick: return .tickTick
-            case .notion: return .notion
-            default: return nil
-            }
-        }()
-        return mapped.flatMap { OAuthConfig.isAvailable($0) ? $0 : nil }
+        TaskConnector.oauth(for: provider)
     }
 
     private func needsManual(_ provider: TaskProvider) -> Bool {
@@ -167,43 +158,15 @@ struct TaskIntegrationsView: View {
     private func connect(_ provider: TaskProvider, via oauth: OAuthProvider) async {
         working = provider
         defer { working = nil }
-        do {
-            let tokens = try await OAuthSignIn.shared.signIn(oauth)
-            let settings = app.settings
-            switch provider {
-            case .todoist: settings.todoistToken = tokens.accessToken
-            case .tickTick: settings.tickTickToken = tokens.accessToken
-            case .googleTasks:
-                settings.googleClientID = OAuthConfig.googleClientID
-                settings.googleClientSecret = ""
-                settings.googleRefreshToken = tokens.refreshToken ?? ""
-            case .microsoftToDo:
-                settings.microsoftToken = tokens.accessToken
-                settings.microsoftRefreshToken = tokens.refreshToken ?? ""
-            case .notion:
-                settings.notionToken = tokens.accessToken
-                notionDatabases = await NotionDatabase.list(token: tokens.accessToken)
-                if notionDatabases.count == 1, let only = notionDatabases.first {
-                    settings.notionDatabaseID = only.id
-                    notionDatabases = []
-                }
-            default: break
-            }
-            Haptics.success()
-            message = "\(provider.label) connecté."
-        } catch OAuthError.cancelled {
-            message = nil
-        } catch {
-            message = "\(provider.label) : \(error.localizedDescription)"
-        }
+        let outcome = await TaskConnector.connect(provider, via: oauth, settings: app.settings)
+        message = outcome.message
+        notionDatabases = outcome.notionDatabases
     }
 
     private func authorizeReminders() async {
         working = .reminders
         defer { working = nil }
-        let service = TaskServiceFactory.shared.service(for: .reminders, settings: app.settings)
-        let granted = await service?.requestAccess() ?? false
-        message = granted ? "Rappels autorisé." : "Accès refusé : autorise StudyTrack dans Réglages › Rappels."
+        message = await TaskConnector.authorizeReminders(settings: app.settings)
     }
 
     private func disconnect(_ provider: TaskProvider) {
@@ -291,5 +254,82 @@ private struct ManualProviderForm: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } }
         }
+    }
+}
+
+
+/// Relier un fournisseur de tâches, d'où qu'on le fasse : l'écran Tâches et
+/// l'accueil passent par ici, pour qu'une connexion faite à l'accueil soit
+/// exactement celle des réglages.
+@MainActor
+enum TaskConnector {
+
+    struct Outcome {
+        var message: String?
+        var notionDatabases: [NotionDatabase] = []
+        var connected = false
+    }
+
+    /// Le fournisseur OAuth d'un service de tâches, s'il est disponible dans
+    /// cette build (identifiant client compilé).
+    static func oauth(for provider: TaskProvider) -> OAuthProvider? {
+        let mapped: OAuthProvider? = {
+            switch provider {
+            case .todoist: return .todoist
+            case .googleTasks: return .google
+            case .microsoftToDo: return .microsoft
+            case .tickTick: return .tickTick
+            case .notion: return .notion
+            default: return nil
+            }
+        }()
+        return mapped.flatMap { OAuthConfig.isAvailable($0) ? $0 : nil }
+    }
+
+    static func isConnected(_ provider: TaskProvider, settings: SettingsStore) -> Bool {
+        // Rappels existe toujours ; il n'est relié qu'une fois l'accès accordé.
+        if provider == .reminders { return EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
+        return TaskServiceFactory.shared.service(for: provider, settings: settings) != nil
+    }
+
+    static func connect(_ provider: TaskProvider, via oauth: OAuthProvider, settings: SettingsStore) async -> Outcome {
+        do {
+            let tokens = try await OAuthSignIn.shared.signIn(oauth)
+            var outcome = Outcome(connected: true)
+            switch provider {
+            case .todoist: settings.todoistToken = tokens.accessToken
+            case .tickTick: settings.tickTickToken = tokens.accessToken
+            case .googleTasks:
+                settings.googleClientID = OAuthConfig.googleClientID
+                settings.googleClientSecret = ""
+                settings.googleRefreshToken = tokens.refreshToken ?? ""
+            case .microsoftToDo:
+                settings.microsoftToken = tokens.accessToken
+                settings.microsoftRefreshToken = tokens.refreshToken ?? ""
+            case .notion:
+                settings.notionToken = tokens.accessToken
+                let databases = await NotionDatabase.list(token: tokens.accessToken)
+                if databases.count == 1, let only = databases.first {
+                    settings.notionDatabaseID = only.id
+                } else {
+                    outcome.notionDatabases = databases
+                }
+            default: break
+            }
+            Haptics.success()
+            outcome.message = "\(provider.label) connecté."
+            return outcome
+        } catch OAuthError.cancelled {
+            return Outcome()
+        } catch {
+            return Outcome(message: "\(provider.label) : \(error.localizedDescription)")
+        }
+    }
+
+    static func authorizeReminders(settings: SettingsStore) async -> String {
+        let service = TaskServiceFactory.shared.service(for: .reminders, settings: settings)
+        let granted = await service?.requestAccess() ?? false
+        if granted { Haptics.success() }
+        return granted ? "Rappels autorisé." : "Accès refusé : autorise StudyTrack dans Réglages › Rappels."
     }
 }

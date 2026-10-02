@@ -45,10 +45,9 @@ struct OnboardingView: View {
     @Query private var series: [ExerciseSeries]
     /// Le parcours automatique par Moodle (par défaut), ou le parcours à la main.
     @State private var usesMoodle = true
-    @State private var showingMoodleLogin = false
     @State private var setup = OnboardingAutoSetup()
 
-    private var lastStep: Int { usesMoodle ? 2 : 3 }
+    private let lastStep = 3
 
     /// Étape de départ. En Release : toujours 0 ; en Debug, `-onboardingStep N`
     /// ouvre directement une étape (cf. `PreviewLaunch`).
@@ -65,6 +64,20 @@ struct OnboardingView: View {
     private var lectureCourses: [Course] { courses.filter { $0.hasLectures } }
 
     var body: some View {
+        if usesMoodle {
+            OnboardingFlow(setup: setup, start: startAutoSetup, goManual: {
+                withAnimation(Motion.step) {
+                    usesMoodle = false
+                    step = 0
+                }
+            }, finish: finish)
+        } else {
+            manualFlow
+        }
+    }
+
+    /// Le parcours sans Moodle : section, cours, comptes, contenu.
+    private var manualFlow: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
@@ -73,25 +86,17 @@ struct OnboardingView: View {
                     // (chacune un bouton avec fond et bordure). Les cinq écrans
                     // principaux étaient déjà paresseux, pas celui-ci.
                     LazyVStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                        if usesMoodle {
-                            switch step {
-                            case 0: connectStep
-                            case 1: moodleCoursesStep
-                            default: accountsStep
-                            }
-                        } else {
-                            switch step {
-                            case 0: aboutYouStep
-                            case 1: coursesStep
-                            case 2: accountsStep
-                            default: firstSeriesStep
-                            }
+                        switch step {
+                        case 0: aboutYouStep
+                        case 1: coursesStep
+                        case 2: accountsStep
+                        default: firstSeriesStep
                         }
                     }
                     .padding(Layout.screenPadding)
                     // L'étape « section » est une grille et gagne à occuper la
                     // largeur ; les étapes de texte restent à une mesure lisible.
-                    .adaptiveColumn(maxWidth: step == 0 && !usesMoodle ? Layout.wideWidth : Layout.readableWidth)
+                    .adaptiveColumn(maxWidth: step == 0 ? Layout.wideWidth : Layout.readableWidth)
                     .id(step)
                     .transition(reduceMotion
                                 ? .opacity
@@ -108,9 +113,6 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingSeriesImport) {
                 SeriesImportSheet(course: nil)
-            }
-            .sheet(isPresented: $showingMoodleLogin, onDismiss: startAutoSetup) {
-                ConnectionSheetContent(sheet: .moodle)
             }
         }
     }
@@ -156,204 +158,22 @@ struct OnboardingView: View {
     }
 
     private var titles: [String] {
-        usesMoodle
-            ? ["Bienvenue sur StudyTrack", "Tes cours", "Et aussi"]
-            : ["Bienvenue sur StudyTrack", "Tes cours", "Tes comptes", "Le contenu de tes cours"]
+        ["Bienvenue sur StudyTrack", "Tes cours", "Tes comptes", "Le contenu de tes cours"]
     }
 
     private var subtitles: [String] {
-        usesMoodle
-            ? ["Connecte-toi avec ton compte EPFL : tes cours, leur théorie et leurs séries arrivent tout seuls, rangés par semaine.",
-               "Lus sur Moodle et déjà importés. Décoche un cours que tu ne suis pas.",
-               "Facultatif : travailler en groupe, tes cartes Anki, ton calendrier. Tout se règle aussi plus tard dans le profil."]
-            : ["Ta théorie, tes exercices et ton temps de travail, semaine par semaine. Commence par ta section.",
+        ["Ta théorie, tes exercices et ton temps de travail, semaine par semaine. Commence par ta section.",
                "Importe ton horaire EPFL ou ajoute tes classes à la main.",
                "Relie ce dont l'app a besoin, une fois pour toutes : elle se reconnecte ensuite toute seule.",
-               "Importe la théorie et les séries depuis Moodle, Courseware ou Botafogo : tout arrive rangé par semaine."]
-    }
-
-    // MARK: Parcours Moodle
-
-    /// Étape 1 (Moodle) : un seul bouton, puis l'avancement en direct.
-    private var connectStep: some View {
-        VStack(alignment: .leading, spacing: Layout.cardSpacing) {
-            switch setup.phase {
-            case .idle, .failed:
-                CarnetSheet {
-                    connectBenefit("person.badge.key", "Une seule connexion",
-                                   "Ton compte EPFL, sur la vraie page de l'EPFL. Courseware, MediaSpace et Explique suivent tout seuls.")
-                    CarnetRule()
-                    connectBenefit("books.vertical", "Tes cours du semestre",
-                                   "Lus dans tes inscriptions Moodle : pas d'horaire à importer, rien à saisir.")
-                    CarnetRule()
-                    connectBenefit("square.stack.3d.up", "Théorie, séries, échéances",
-                                   "Rangées semaine par semaine, avec la consigne de chaque semaine. Les nouvelles séries arrivent ensuite d'elles-mêmes.")
-                }
-                if case .failed(let message) = setup.phase {
-                    Label(message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(Carnet.wrong)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Button {
-                    goingForward = true
-                    withAnimation(Motion.step) {
-                        usesMoodle = false
-                        step = 0
-                    }
-                } label: {
-                    Text("Je n'utilise pas Moodle : choisir ma section et mes cours à la main")
-                        .font(.subheadline)
-                        .multilineTextAlignment(.leading)
-                }
-                .buttonStyle(.borderless)
-            case .working, .done:
-                progressCard(message: setupMessage)
-            }
-        }
-    }
-
-    private var setupMessage: String {
-        switch setup.phase {
-        case .working(let message): return message
-        case .done: return "C'est prêt."
-        default: return ""
-        }
-    }
-
-    private func connectBenefit(_ icon: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(Carnet.ink)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Carnet.ink)
-                Text(detail).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14)
-    }
-
-    /// Cours par cours, ce que l'import est en train de faire.
-    private func progressCard(message: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                if setup.isWorking { ProgressView() } else {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Carnet.correct)
-                }
-                Text(message).font(.subheadline.weight(.semibold)).foregroundStyle(Carnet.ink)
-            }
-            if !setup.lines.isEmpty {
-                CarnetSheet {
-                    ForEach(Array(setup.lines.enumerated()), id: \.element.id) { index, line in
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: line.finished ? (line.failed ? "exclamationmark.circle" : "checkmark.circle.fill") : "circle.dotted")
-                                .foregroundStyle(line.failed ? Carnet.review : (line.finished ? Carnet.correct : Carnet.inkTertiary))
-                                .symbolEffect(.pulse, isActive: !line.finished && setup.isWorking)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(line.code) · \(line.name)").font(.subheadline.weight(.semibold)).lineLimit(1)
-                                Text(line.status).font(.caption).foregroundStyle(Carnet.inkSecondary).lineLimit(2)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(12)
-                        if index < setup.lines.count - 1 { CarnetRule() }
-                    }
-                }
-            }
-            Text("Tu peux laisser l'app faire : chaque cours est lu comme tu le lirais, page par page.")
-                .font(.caption)
-                .foregroundStyle(Carnet.inkTertiary)
-                .opacity(setup.isWorking ? 1 : 0)
-        }
-    }
-
-    /// Étape 2 (Moodle) : les cours créés, à garder ou décocher.
-    private var moodleCoursesStep: some View {
-        VStack(alignment: .leading, spacing: Layout.cardSpacing) {
-            if !setup.extraSites.isEmpty {
-                Label("Connecté·e aussi à \(setup.extraSites.joined(separator: ", ")).", systemImage: "link")
-                    .font(.footnote)
-                    .foregroundStyle(Carnet.correct.accessibleInk)
-            }
-            if courses.isEmpty {
-                EmptyCard(icon: "books.vertical",
-                          title: "Aucun cours pour l'instant",
-                          message: "Ajoute tes cours depuis ton horaire EPFL ou à la main.",
-                          actionTitle: "Importer mon horaire") {
-                    showingImport = true
-                }
-            } else {
-                Card(title: "Mes cours", icon: "books.vertical.fill", trailing: "\(trackedCourses.count) suivis") {
-                    VStack(spacing: 0) {
-                        ForEach(courses) { course in
-                            VStack(alignment: .leading, spacing: 2) {
-                                courseToggleRow(course)
-                                if let line = setup.lines.first(where: { $0.id == course.id.uuidString }) {
-                                    Text(line.status)
-                                        .font(.caption2)
-                                        .foregroundStyle(line.failed ? Carnet.review.accessibleInk : Carnet.inkTertiary)
-                                        .padding(.leading, 16)
-                                        .lineLimit(2)
-                                }
-                            }
-                            if course.id != courses.last?.id { Divider().padding(.vertical, 4) }
-                        }
-                    }
-                }
-                Text("Le second interrupteur : le cours a-t-il des heures d'amphi ? Ça règle la charge attendue chaque semaine.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            NavigationLink {
-                ScrollView {
-                    sectionStep
-                        .padding(Layout.screenPadding)
-                        .adaptiveColumn(maxWidth: Layout.wideWidth)
-                }
-                .background(Carnet.ground.ignoresSafeArea())
-                .navigationTitle("Ta section")
-                .navigationBarTitleDisplayMode(.inline)
-            } label: {
-                HStack {
-                    Label("Section", systemImage: "graduationcap")
-                    Spacer()
-                    Text(sectionCode.isEmpty ? "Facultatif" : app.sectionDisplayName(sectionCode))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                }
-                .font(.subheadline)
-                .padding(14)
-                .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            Button {
-                showingCourseForm = true
-            } label: {
-                Label("Ajouter un cours absent de Moodle", systemImage: "plus")
-                    .font(.subheadline)
-            }
-            .buttonStyle(.borderless)
-        }
+         "Importe la théorie et les séries depuis Moodle, Courseware ou Botafogo : tout arrive rangé par semaine."]
     }
 
     /// Connexion Moodle faite (ou abandonnée) : on lance tout.
     private func startAutoSetup() {
-        guard usesMoodle, !setup.isWorking else { return }
+        guard !setup.isWorking else { return }
         let term = resolvedTerm()
         try? context.save()
-        Task {
-            await setup.run(context: context, settings: app.settings, term: term)
-            if setup.phase == .done, step == 0 {
-                Haptics.success()
-                goingForward = true
-                withAnimation(Motion.step) { step = 1 }
-            }
-        }
+        Task { await setup.run(context: context, settings: app.settings, term: term) }
     }
 
     // MARK: Étapes
@@ -674,31 +494,15 @@ struct OnboardingView: View {
 
             Button {
                 Haptics.tap()
-                if usesMoodle, step == 0, setup.phase != .done {
-                    showingMoodleLogin = true
-                } else {
-                    advance()
-                }
+                advance()
             } label: {
-                Group {
-                    if usesMoodle, step == 0, setup.phase != .done {
-                        if setup.isWorking {
-                            HStack(spacing: 8) { ProgressView().tint(Carnet.ground); Text("Import en cours…") }
-                        } else {
-                            Label(setup.phase == .idle ? "Se connecter avec EPFL" : "Réessayer la connexion",
-                                  systemImage: "person.badge.key.fill")
-                        }
-                    } else {
-                        Text(step == lastStep ? (usesMoodle || !series.isEmpty ? "Terminer" : "Passer et terminer") : "Continuer")
-                    }
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                Text(step == lastStep ? (series.isEmpty ? "Passer et terminer" : "Terminer") : "Continuer")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.carnetPrimary)
-            .disabled((usesMoodle && setup.isWorking)
-                      || (!usesMoodle && step == 0 && sectionCode.isEmpty && !search.isEmpty && EPFLCatalog.search(search).isEmpty))
+            .disabled(step == 0 && sectionCode.isEmpty && !search.isEmpty && EPFLCatalog.search(search).isEmpty)
         }
         .padding(Layout.screenPadding)
         .background(.bar)

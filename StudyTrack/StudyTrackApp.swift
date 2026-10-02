@@ -24,6 +24,9 @@ enum PreviewLaunch {
     /// et ouvre la relecture (`-botafogoCourse 0`).
     static let botafogoCourseFlag = "-botafogoCourse"
     static let onboardingStepFlag = "-onboardingStep"
+    /// `-onboardingDemo N` : l'accueil EPFL, écran N (0 bienvenue, 1 import
+    /// simulé, 2 connexions, 3 fin), sans Moodle — pour les captures.
+    static let onboardingDemoFlag = "-onboardingDemo"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"

@@ -183,7 +183,14 @@ final class MoodleClient {
     /// cours : elles sont sur la page de l'activité (le lien de
     /// « urlworkaround », la ligne « Due: … »). On lit ces pages dans la
     /// session, six à la fois — c'est ce que ferait l'étudiant·e en cliquant.
-    func snapshot(of course: MoodleCourseRef) async throws -> MoodleCourseSnapshot {
+    ///
+    /// - Parameters:
+    ///   - onOutline: le plan du cours est lu (les numéros de ses sections).
+    ///   - onActivities: activités ouvertes / à ouvrir, au fil de la lecture —
+    ///     c'est l'étape longue, que l'accueil montre au compte près.
+    func snapshot(of course: MoodleCourseRef,
+                  onOutline: ([Int]) -> Void = { _ in },
+                  onActivities: (Int, Int) -> Void = { _, _ in }) async throws -> MoodleCourseSnapshot {
         let json = try await call("core_courseformat_get_state", args: ["courseid": course.id])
         let state = (try? JSONDecoder().decode(String.self, from: Data(json.utf8))) ?? json
         guard var snapshot = MoodleStateParser.snapshot(fromStateJSON: state,
@@ -199,6 +206,7 @@ final class MoodleClient {
         // derrière (un PDF d'exercices, une page qui les contient, un chapitre
         // de MOOC) dit ce qu'il faut en faire mieux que son nom. Les règles et
         // le modèle le lisent pour tous les cours, connus ou non.
+        onOutline(snapshot.sections.filter { !$0.activities.isEmpty }.map(\.number))
         let wanted = snapshot.sections.flatMap(\.activities)
             .filter { $0.isVisible && ["url", "assign", "resource", "page", "folder"].contains($0.module) }
             .prefix(160)
@@ -206,8 +214,26 @@ final class MoodleClient {
         snapshot.moocLinks = await moocLinks(courseID: course.id, snapshot: snapshot)
         await addSectionTexts(courseID: course.id, to: &snapshot)
         guard !wanted.isEmpty else { return snapshot }
-        let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: wanted), as: UTF8.self)
-        let raw = try await session.run(#"""
+        // Par lots de 18 (trois vagues de six) : le même travail, mais l'accueil
+        // voit avancer le compteur au lieu d'une attente muette d'une minute.
+        onActivities(0, wanted.count)
+        var merged: [String: Any] = [:]
+        for start in stride(from: 0, to: wanted.count, by: 18) {
+            let chunk = Array(wanted[start..<min(start + 18, wanted.count)])
+            let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: chunk), as: UTF8.self)
+            let part = try await readActivities(argsJSON)
+            if let object = try? JSONSerialization.jsonObject(with: Data(part.utf8)) as? [String: Any] {
+                merged.merge(object) { _, new in new }
+            }
+            onActivities(min(start + 18, wanted.count), wanted.count)
+        }
+        let raw = String(decoding: try JSONSerialization.data(withJSONObject: merged), as: UTF8.self)
+        return await finish(snapshot, found: raw)
+    }
+
+    /// Ouvre un lot d'activités dans la session Moodle (JSON `{id: trouvaille}`).
+    private func readActivities(_ argsJSON: String) async throws -> String {
+        try await session.run(#"""
         const items = JSON.parse(list);
         const out = {};
         const isSolution = (a) => /(corrig|solution|\bsol\b|_sol\b|-sol\b|loesung|answers?\b|reponses|réponses)/i.test((a.innerText || '') + ' ' + a.href);
@@ -261,6 +287,11 @@ final class MoodleClient {
         for (let i = 0; i < items.length; i += 6) { await Promise.all(items.slice(i, i + 6).map(one)); }
         return JSON.stringify(out);
         """#, arguments: ["list": argsJSON])
+    }
+
+    /// Range les trouvailles dans le plan : cibles, corrigés, échéances, dossiers.
+    private func finish(_ input: MoodleCourseSnapshot, found raw: String) async -> MoodleCourseSnapshot {
+        var snapshot = input
         struct Found: Decodable {
             var target: String?; var solution: String?; var dates: String?; var kind: String?; var preview: String?
             var files: [FoundFile]?

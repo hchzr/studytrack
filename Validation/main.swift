@@ -5090,6 +5090,45 @@ do {
           "MathMarkup : ``guillemets'' LaTeX, sans toucher f''(x)")
 }
 
+print("== Progression de l'import (ImportProgress) ==")
+do {
+    let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    var progress = ImportProgress(courseIDs: ["a", "b"], now: t0)
+    check(progress.fraction(at: t0) == 0 && progress.remainingSeconds(at: t0) == nil,
+          "au départ : 0 %, pas d'estimation hasardeuse")
+    progress.enter(.outline, course: "a", now: t0)
+    progress.activities(done: 0, total: 36, course: "a", now: t0.addingTimeInterval(2))
+    progress.activities(done: 18, total: 36, course: "a", now: t0.addingTimeInterval(8))
+    let mid = progress.fraction(at: t0.addingTimeInterval(8))
+    let later = progress.fraction(at: t0.addingTimeInterval(11))
+    check(mid > 0.1 && mid < 0.2, "la moitié des activités d'un cours sur deux ≈ 15 % (\(Int(mid * 100)) %)")
+    check(later > mid, "entre deux lots, l'avancement glisse au rythme mesuré")
+    progress.enter(.sources, course: "a", now: t0.addingTimeInterval(14))
+    progress.enter(.activities, course: "a", now: t0.addingTimeInterval(15))
+    check(progress.courses[0].stage == .sources, "jamais en arrière : un message tardif est ignoré")
+    progress.enter(.analysis, course: "a", now: t0.addingTimeInterval(16))
+    let waiting = progress.fraction(at: t0.addingTimeInterval(300))
+    check(waiting < 0.5, "l'analyse qui traîne ne termine jamais le cours avant sa réponse")
+    progress.enter(.done, course: "a", now: t0.addingTimeInterval(40))
+    check(abs(progress.fraction(at: t0.addingTimeInterval(40)) - 0.5) < 0.001, "un cours sur deux fini = 50 %")
+    let eta = progress.remainingSeconds(at: t0.addingTimeInterval(40)) ?? -1
+    check(eta > 30 && eta < 50, "temps restant extrapolé du rythme réel (\(Int(eta)) s)")
+    check(ImportProgress.remainingLabel(100) == "~1 min 40" && ImportProgress.remainingLabel(23) == "~25 s"
+          && ImportProgress.remainingLabel(nil) == "estimation…", "« ~1 min 40 », « ~25 s »")
+    check(ImportProgress.stage(forMessage: "rangement du cours…") == .analysis
+          && ImportProgress.stage(forMessage: "MOOC cité — lecture de Courseware…") == .sources,
+          "les messages de la chaîne d'import deviennent des étapes")
+    var row = SemesterGridRow(id: "a", code: "MATH-101", colorHex: "#0891B2", weeks: 14)
+    row.outline(sectionNumbers: [1, 2, 3, 20])
+    var draft = ContentDraft(source: .moodle, courseTitle: "", url: "", sections: [])
+    draft.sections = [ContentDraftSection(title: "S2", week: 2, weekIsInferred: false, isIncluded: true, items: [
+        ContentDraftItem(kind: .series, number: "2", title: "", url: "", videoCount: 0, seriesNumber: 2, theoryKind: .reading),
+        ContentDraftItem(kind: .theory, number: "2.1", title: "", url: "", videoCount: 1, seriesNumber: nil, theoryKind: .video, week: 3)])]
+    row.fill(with: draft)
+    check(row.cells[0].outlined && !row.cells[0].isFilled && row.cells[1].series == 1 && row.cells[2].theory == 1,
+          "grille : contour à la lecture, série et théorie rangées dans leur semaine")
+}
+
 print("== Temps d'étude : cours automatiques, exercices chronométrés (StudyTime) ==")
 do {
     let t0 = Date(timeIntervalSince1970: 1_790_000_000)
