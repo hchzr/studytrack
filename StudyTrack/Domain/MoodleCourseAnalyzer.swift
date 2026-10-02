@@ -72,6 +72,9 @@ struct MoodleCourseSnapshot: Equatable {
     /// sections, étiquettes, pages. Le cours d'algèbre linéaire en classe
     /// inversée ou CS-107 renvoient ainsi aux vidéos de la semaine.
     var moocLinks: [MoocReference] = []
+    /// Les activités qui n'ont pas été ouvertes (cours trop long : au-delà de
+    /// `MoodleClient.openLimit`).
+    var unopened = 0
 
     var activityCount: Int { sections.reduce(0) { $0 + $1.activities.count } }
 }
@@ -168,6 +171,15 @@ enum MoodleCourseAnalyzer {
         var documents: [ContentDraftItem] = []
         var pastExams: [ContentDraftItem] = []
         var deadlines: [ContentDraftItem] = []
+        // Les séries posées hors de leur semaine — un dossier « Séries » dans la
+        // section générale, ou toutes les séries du semestre dans la semaine 1 :
+        // chacune rejoint la semaine de son numéro.
+        var loose: [Int: (statement: [MoodleActivity], solution: [MoodleActivity])] = [:]
+        func addLoose(_ activity: MoodleActivity, number: Int, solution: Bool) {
+            var entry = loose[number] ?? ([], [])
+            if solution { entry.solution.append(activity) } else { entry.statement.append(activity) }
+            loose[number] = entry
+        }
 
         for section in snapshot.sections {
             let title = sectionTitle(section)
@@ -188,9 +200,14 @@ enum MoodleCourseAnalyzer {
             case .general:
                 for activity in visible {
                     let kind = classify(activity, inWeek: false)
+                    let number = seriesNumber(activity.name) ?? hints[activity.id]?.seriesNumber
                     switch kind {
                     case .deadline: deadlines.append(deadline(for: activity, calendar: calendar))
                     case .ignore: continue
+                    case .series where number != nil:
+                        addLoose(activity, number: number!, solution: false)
+                    case .solution where number != nil && !isDeliverableSolution(activity.name):
+                        addLoose(activity, number: number!, solution: true)
                     default: documents.append(document(activity, section: title))
                     }
                 }
@@ -221,10 +238,22 @@ enum MoodleCourseAnalyzer {
                 }
             }
 
+            // Un dossier déplié qui porte plusieurs séries numérotées (toutes
+            // celles du semestre, posées en semaine 1) : chacune ira à sa semaine.
+            let folderNumbers = Set(visible.filter { Self.isFromFolder($0) && classify($0, inWeek: true) == .series }
+                .compactMap { seriesNumber($0.name) })
+            let spreadsFolder = folderNumbers.count >= 2
+
             // Les corrigés d'abord mis de côté : ils se rattachent à leur série.
             var pendingSolutions: [MoodleActivity] = []
             for activity in visible {
-                switch classify(activity, inWeek: true) {
+                let kind = classify(activity, inWeek: true)
+                if spreadsFolder, Self.isFromFolder(activity), let number = seriesNumber(activity.name),
+                   kind == .series || (kind == .solution && !isDeliverableSolution(activity.name)) {
+                    addLoose(activity, number: number, solution: kind == .solution)
+                    continue
+                }
+                switch kind {
                 case .series:
                     let number = seriesNumber(activity.name) ?? hints[activity.id]?.seriesNumber ?? week ?? section.number
                     // « Enoncé/Corrigé de la série 4 » : l'énoncé et le corrigé à la même adresse.
@@ -287,6 +316,21 @@ enum MoodleCourseAnalyzer {
                 sections[index].week = min(offset + 1, max(totalWeeks, 1))
             }
         }
+        // Les séries hors de leur semaine : la semaine de leur numéro, une
+        // proposition montrée comme telle (`weekIsInferred`).
+        for number in loose.keys.sorted() {
+            let entry = loose[number]!
+            let item = seriesItem(number, statement: entry.statement, solution: entry.solution)
+            let week = min(max(number, 1), max(totalWeeks, 1))
+            if let index = sections.firstIndex(where: { $0.week == week }) {
+                sections[index].items.append(item)
+            } else {
+                sections.append(ContentDraftSection(title: "Semaine \(week)", week: week, weekIsInferred: true,
+                                                    isIncluded: true, items: [item]))
+            }
+        }
+        joinStraySolutions(&sections)
+
         // Semaines d'un cours rangées à l'envers (« Semaine 4 » en premier) :
         // on les remet dans l'ordre du semestre.
         sections.sort { lhs, rhs in
@@ -365,12 +409,58 @@ enum MoodleCourseAnalyzer {
                                                           weekIsInferred: false, isIncluded: true, items: [item]))
             }
         }
+        joinStraySolutions(&draft.sections)
         draft.sections.removeAll { $0.items.isEmpty }
         draft.sections.sort { lhs, rhs in
             if lhs.week == 0 || rhs.week == 0 { return lhs.week != 0 && rhs.week == 0 }
             return lhs.week < rhs.week
         }
         return draft
+    }
+
+    /// Un corrigé publié une autre semaine que son énoncé (« Corrigé série 3 »
+    /// en semaine 4) donnait une seconde « Série 3 », faite de son seul
+    /// corrigé — et, à l'écriture, la série passait en semaine 4. Il rejoint
+    /// ici la série qui a un énoncé, qui garde sa semaine.
+    static func joinStraySolutions(_ sections: inout [ContentDraftSection]) {
+        func hasStatement(_ item: ContentDraftItem) -> Bool {
+            !item.pdfURL.isEmpty || (!item.url.isEmpty && item.url != item.solutionURL)
+        }
+        var stray: [(section: Int, item: Int)] = []
+        for (s, section) in sections.enumerated() {
+            for (i, item) in section.items.enumerated() where item.kind == .series && !hasStatement(item) && item.seriesNumber != nil {
+                stray.append((s, i))
+            }
+        }
+        var removed: [(section: Int, item: Int)] = []
+        for position in stray {
+            let orphan = sections[position.section].items[position.item]
+            var target: (section: Int, item: Int)?
+            for (s, section) in sections.enumerated() {
+                if let i = section.items.firstIndex(where: { $0.kind == .series && $0.seriesNumber == orphan.seriesNumber && hasStatement($0) }) {
+                    target = (s, i)
+                    break
+                }
+            }
+            guard let target else { continue }
+            var item = sections[target.section].items[target.item]
+            if item.solutionURL.isEmpty { item.solutionURL = orphan.solutionURL }
+            for link in orphan.links where !item.links.contains(where: { $0.url == link.url }) {
+                item.links.append(link)
+            }
+            sections[target.section].items[target.item] = item
+            removed.append(position)
+        }
+        for position in removed.sorted(by: { ($0.section, $0.item) > ($1.section, $1.item) }) {
+            sections[position.section].items.remove(at: position.item)
+        }
+        sections.removeAll { $0.items.isEmpty }
+    }
+
+    /// Une activité née d'un dossier déplié (`MoodleFolderExpander`) : son
+    /// identifiant est celui du dossier, suivi de son rang.
+    static func isFromFolder(_ activity: MoodleActivity) -> Bool {
+        activity.id.contains("-")
     }
 
     // MARK: Rôle d'une section
@@ -740,6 +830,16 @@ enum MoodleCourseAnalyzer {
             Range(match.range(at: index), in: text).flatMap { Int(text[$0]) }
         }
         guard let day = group(1), let month = group(2), (1...31).contains(day), (1...12).contains(month) else { return nil }
+        // « Projet 1.2 », « Partie 3.1 » : un numéro, pas une date. Une date
+        // courte se reconnaît à son heure, son année, une parenthèse ou un mot
+        // qui l'annonce (« délai », « le », « avant », un jour de la semaine).
+        let start = Range(match.range, in: text)!.lowerBound
+        let before = ContentDraftBuilder.fold(String(text[text.index(start, offsetBy: -min(28, text.distance(from: text.startIndex, to: start)))..<start]))
+        if before.range(of: #"\b(projets?|projects?|parties?|parts?|chapitres?|chapters?|exercices?|exercises?|version|v|tp|td|series?|questions?|sections?|lectures?|cours|modules?|semaines?|weeks?)\s*$"#,
+                        options: .regularExpression) != nil { return nil }
+        let announced = before.range(of: #"(\(|\b(delai|deadline|due|rendu|remise|avant|until|before|le|du|jusqu|date|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)[^()]*$"#,
+                                        options: .regularExpression) != nil
+        guard group(3) != nil || group(4) != nil || announced else { return nil }
         var year = group(3) ?? calendar.component(.year, from: termStart ?? Date())
         if year < 100 { year += 2000 }
         if group(3) == nil, let termStart {

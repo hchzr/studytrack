@@ -4930,7 +4930,7 @@ do {
     let payload = MoodleCourseAI.payload(for: bio, termStart: nil, totalWeeks: 14)
     let outline = payload["outline"] as? String ?? ""
     check(outline.contains("Texte : « Cette semaine : lisez") && outline.contains("Lien L1 : feuille d'exercices → bio.example.org/td/feuille2.html")
-          && outline.contains("{mooc}") && outline.contains("« Chapitre 2 · vidéos »") && payload["instructions"] != nil,
+          && outline.contains("{mooc}") && outline.contains("« Chapitre 2 · vidéos »") && payload["instructions"] == nil,
           "le modèle reçoit consignes, liens cités, nature et début de chaque cible")
 
     let answer = MoodleCourseAI.answer(#"{"activities":[{"id":"10","kind":"document","week":2},{"id":"11","kind":"solution","week":2,"series":2},{"id":"12","kind":"theory","week":2}],"series":[{"number":2,"week":2,"statement":"L1","solution":11},{"number":3,"week":3,"statement":"L99","solution":null}],"weeks":[{"week":2,"todo":"Lire le chapitre 2, faire la feuille 2 sur le site du cours."},{"week":40,"todo":"hors semestre"}]}"#)
@@ -5173,6 +5173,118 @@ do {
           && ImportFeed.openedLabel(["target": "https://x/a.pdf", "kind": "pdf"]) == "PDF"
           && ImportFeed.openedLabel([:]) == "Page",
           "ce que cachait une activité, en un mot")
+}
+
+print("== Import Moodle : corrections de l'audit ==")
+do {
+    func res(_ id: String, _ name: String, module: String = "resource") -> MoodleActivity {
+        var activity = MoodleActivity(id: id, name: name, module: module, url: "https://moodle.epfl.ch/mod/\(module)/view.php?id=\(id)")
+        activity.target = "https://moodle.epfl.ch/pluginfile.php/1/\(id).pdf"
+        return activity
+    }
+    func series(_ draft: ContentDraft, _ number: Int) -> [(week: Int, url: String, solution: String)] {
+        draft.sections.flatMap { section in
+            section.items.filter { $0.kind == .series && $0.seriesNumber == number }
+                .map { ($0.week ?? section.week, $0.pdfURL.isEmpty ? $0.url : $0.pdfURL, $0.solutionURL) }
+        }
+    }
+
+    // 1. Le corrigé publié la semaine suivante rejoint sa série, qui garde sa semaine.
+    let nextWeek = MoodleCourseSnapshot(title: "Analyse I", url: "u", sections: [
+        MoodleSection(number: 3, title: "Semaine 3", activities: [res("31", "Série 3")]),
+        MoodleSection(number: 4, title: "Semaine 4", activities: [res("41", "Série 4"), res("42", "Corrigé série 3")]),
+    ])
+    let joined = series(MoodleCourseAnalyzer.draft(from: nextWeek, termStart: nil, totalWeeks: 14), 3)
+    check(joined.count == 1 && joined[0].week == 3 && joined[0].solution.hasSuffix("42.pdf"),
+          "corrigé publié la semaine suivante : une seule « Série 3 », en semaine 3, avec son corrigé")
+
+    // L'écriture : un corrigé seul ne déplace jamais sa série.
+    let writerCourse = Course(code: "AUDIT-101", name: "Audit")
+    context.insert(writerCourse)
+    var split = ContentDraft(source: .moodle, courseTitle: "", url: "", sections: [])
+    var statement = ContentDraftItem(kind: .series, number: "3", title: "Série 3", url: "https://x/s3.pdf", videoCount: 0, seriesNumber: 3, theoryKind: .reading)
+    statement.pdfURL = "https://x/s3.pdf"
+    var onlySolution = ContentDraftItem(kind: .series, number: "3", title: "Série 3", url: "", videoCount: 0, seriesNumber: 3, theoryKind: .reading)
+    onlySolution.solutionURL = "https://x/s3-sol.pdf"
+    split.sections = [ContentDraftSection(title: "S3", week: 3, weekIsInferred: false, isIncluded: true, items: [statement]),
+                      ContentDraftSection(title: "S4", week: 4, weekIsInferred: false, isIncluded: true, items: [onlySolution])]
+    _ = ContentDraftWriter.apply(split, to: writerCourse, context: context)
+    let written = writerCourse.series.first { $0.seriesNumber == 3 }
+    check(written?.plannedWeek == 3 && written?.solutionURLString == "https://x/s3-sol.pdf",
+          "écriture : la série reste en semaine 3, le corrigé est rattaché")
+
+    // 2. Un dossier « Séries » dans la section générale : chaque série à sa semaine.
+    var folder = MoodleActivity(id: "9", name: "Séries", module: "folder", url: "f")
+    folder.target = "https://moodle.epfl.ch/pluginfile.php/1/Serie_01.pdf"
+    let files = (1...3).map { MoodleFolderExpander.File(title: "Serie_0\($0).pdf", url: "https://moodle.epfl.ch/pluginfile.php/1/Serie_0\($0).pdf") }
+        + (1...3).map { MoodleFolderExpander.File(title: "Serie_0\($0)_sol.pdf", url: "https://moodle.epfl.ch/pluginfile.php/1/Serie_0\($0)_sol.pdf") }
+    let expanded = MoodleFolderExpander.expand(folder, files: files)
+    let general = MoodleCourseAnalyzer.draft(from: MoodleCourseSnapshot(title: "X", url: "u", sections: [
+        MoodleSection(number: 0, title: "Général", activities: expanded),
+        MoodleSection(number: 1, title: "Semaine 1", activities: [res("11", "Cours 1 slides")]),
+    ]), termStart: nil, totalWeeks: 14)
+    check((1...3).allSatisfy { n in series(general, n).map(\.week) == [n] && series(general, n)[0].solution.contains("_sol") },
+          "dossier « Séries » en section générale : séries 1, 2, 3 suivies, chacune à sa semaine, avec son corrigé")
+    check(!general.sections.flatMap(\.items).contains { $0.kind == .resource && $0.title.hasPrefix("Serie") },
+          "… et plus rangées en « documents non suivis »")
+
+    // 3. Toutes les séries du semestre posées en semaine 1.
+    let firstWeek = MoodleCourseAnalyzer.draft(from: MoodleCourseSnapshot(title: "X", url: "u", sections: [
+        MoodleSection(number: 1, title: "Semaine 1", activities: expanded + [res("11", "Cours 1 slides")]),
+    ]), termStart: nil, totalWeeks: 14)
+    check((1...3).allSatisfy { series(firstWeek, $0).map(\.week) == [$0] },
+          "dossier de toutes les séries en semaine 1 : chacune à la semaine de son numéro")
+    let single = MoodleCourseAnalyzer.draft(from: MoodleCourseSnapshot(title: "X", url: "u", sections: [
+        MoodleSection(number: 2, title: "Semaine 2", activities: [res("21", "Série 1")]),
+    ]), termStart: nil, totalWeeks: 14)
+    check(series(single, 1).map(\.week) == [2], "une série seule reste dans sa section (série 1 posée en semaine 2)")
+
+    // 4. Botafogo : le nom du cours doit être expliqué en entier.
+    let catalog: [(title: String, url: URL)] = [
+        ("Mon cours d'analyse", URL(string: "https://botafogo.epfl.ch/analyse-1/")!),
+        ("Mon cours d'analyse pour GM", URL(string: "https://botafogo.epfl.ch/analyse-1-GM/")!),
+        ("Mon cours d'analyse classe inversée", URL(string: "https://botafogo.epfl.ch/analyse-1-flipped/")!),
+        ("Le polycopié d'Algèbre linéaire et Géométrie", URL(string: "https://botafogo.epfl.ch/algebre-lineaire-geometrie/")!),
+        ("Le polycopié d'analyse-b", URL(string: "https://botafogo.epfl.ch/analyse-b/matiere/m_suites_intro")!),
+        ("Mon cours d'algèbre linéaire", URL(string: "https://botafogo.epfl.ch/algebre-lineaire/index.html")!),
+    ]
+    func site(_ name: String) -> String { BotafogoCatalog.match(courseName: name, in: catalog)?.absoluteString.replacingOccurrences(of: "https://botafogo.epfl.ch", with: "") ?? "aucun" }
+    check(site("Analyse I (MATH-101(e))") == "/analyse-1/", "Analyse I → analyse-1 (\(site("Analyse I (MATH-101(e))")))")
+    check(site("Analyse I (classe inversée) (MATH-101(pi))") == "/analyse-1-flipped/", "Analyse I classe inversée → analyse-1-flipped")
+    check(site("Algèbre linéaire (MATH-111(e))") == "/algebre-lineaire/index.html", "Algèbre linéaire → algebre-lineaire")
+    check(site("Analyse numérique (MATH-251(a))") == "aucun" && site("Analyse II (MATH-106(en))") == "aucun"
+          && site("Algèbre linéaire avancée I (MATH-110)") == "aucun" && site("Physique générale I") == "aucun",
+          "Analyse numérique, Analyse II, Algèbre linéaire avancée : aucun polycopié (et plus celui d'Analyse I)")
+    check(site("Analyse B (MATH-105)") == "/analyse-b/matiere/m_suites_intro", "Analyse B → analyse-b")
+
+    // 10. Une date courte n'est pas un numéro.
+    let now = Date()
+    check(MoodleCourseAnalyzer.shortDate(in: "Projet 1.2 — consignes", termStart: now, calendar: .current) == nil
+          && MoodleCourseAnalyzer.shortDate(in: "Partie 3.1", termStart: now, calendar: .current) == nil,
+          "« Projet 1.2 », « Partie 3.1 » ne sont pas des échéances")
+    check(MoodleCourseAnalyzer.shortDate(in: "Sélection d'un groupe (DÉLAI 13.10, 18:00)", termStart: now, calendar: .current) != nil
+          && MoodleCourseAnalyzer.shortDate(in: "Examen Final (samedi 12.12, 09:00-12:00)", termStart: now, calendar: .current) != nil
+          && MoodleCourseAnalyzer.shortDate(in: "Rendu le 4.11", termStart: now, calendar: .current) != nil,
+          "les vraies dates courtes restent lues (délai, examen, « le 4.11 »)")
+
+    // La consigne du serveur est celle de l'app (le serveur n'accepte plus celle du client).
+    let function = FileManager.default.currentDirectoryPath + "/supabase/functions/analyze-course/index.ts"
+    if let source = try? String(contentsOfFile: function, encoding: .utf8),
+       let start = source.range(of: "const INSTRUCTIONS = "), let end = source.range(of: "\";\n", range: start.upperBound..<source.endIndex),
+       let literal = String(source[start.upperBound..<end.lowerBound]).appending("\"").data(using: .utf8),
+       let serverText = try? JSONDecoder().decode(String.self, from: literal) {
+        check(serverText == MoodleCourseAI.instructions, "analyze-course : la consigne du serveur est celle de l'app (sinon : la recopier et redéployer)")
+    } else {
+        check(false, "analyze-course : consigne du serveur introuvable dans \(function)")
+    }
+
+    // L'accueil : la source lue d'après les messages de la chaîne.
+    check(ImportFeed.source(ofMessage: "vidéos MediaSpace…") == "MediaSpace"
+          && ImportFeed.source(ofMessage: "MOOC cité — lecture de Courseware…") == "MOOC"
+          && ImportFeed.source(ofMessage: "rangement du cours…") == nil
+          && ImportProgress.stage(forMessage: "vidéos MediaSpace…") == .sources
+          && ImportProgress.stage(forMessage: "outils du cours : Explique…") == .sources,
+          "MediaSpace et Explique sont lus pendant l'étape « sources », avant l'analyse")
 }
 
 print("== Temps d'étude : cours automatiques, exercices chronométrés (StudyTime) ==")

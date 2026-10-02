@@ -99,6 +99,8 @@ Règles :
 const MAX_IMAGES_PER_CALL = 5;
 const MAX_PAGES = 20;
 
+import { allowed } from "../_shared/limits.ts";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -113,6 +115,9 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return json({ error: "POST attendu" }, 405);
   }
+  // La clé `anon` est publique : un plafond par adresse et par jour.
+  const gate = await allowed(request, { name: "extract-series", perIPPerHour: 120, globalPerDay: 4000 });
+  if (!gate.ok) return json({ error: gate.reason }, 429);
 
   const apiKey = Deno.env.get("LLM_API_KEY");
   if (!apiKey) {

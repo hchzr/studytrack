@@ -31,8 +31,18 @@ enum MoodleCourseAIService {
         guard !outline.isEmpty else { return .init() }
         // La consigne fait partie de l'empreinte : la changer redemande au modèle.
         let fingerprint = MoodleCourseAI.instructions + "|" + outline + "|" + (payload["plan"] as? String ?? "") + "|" + (payload["mooc"] as? String ?? "") + "|" + (payload["sources"] as? String ?? "")
-        let key = "moodleAI3." + Insecure.SHA1.hash(data: Data(fingerprint.utf8)).map { String(format: "%02x", $0) }.joined()
-        if let cached = UserDefaults.standard.string(forKey: key) { return MoodleCourseAI.answer(cached) }
+        // **Une** réponse gardée par cours (la dernière) : une clé par empreinte
+        // en gardait une nouvelle à chaque changement du cours, sans fin.
+        dropLegacyCache()
+        #if DEBUG
+        AIPayloadDump.record(payload: payload)
+        #endif
+        let key = "moodleAI4." + hash(snapshot.url.isEmpty ? snapshot.title : snapshot.url)
+        let print = hash(fingerprint)
+        if !debugBypassCache, let cached = UserDefaults.standard.dictionary(forKey: key), cached["print"] as? String == print,
+           let raw = cached["raw"] as? String {
+            return MoodleCourseAI.answer(raw)
+        }
 
         var raw: String?
         do {
@@ -42,13 +52,39 @@ enum MoodleCourseAIService {
             raw = try? await askOnDevice(payload)
         }
         guard let raw else { return .init() }
+        #if DEBUG
+        AIPayloadDump.record(answer: raw)
+        #endif
         let answer = MoodleCourseAI.answer(raw)
         if !answer.hints.isEmpty || !answer.guide.isEmpty {
-            UserDefaults.standard.set(raw, forKey: key)
+            UserDefaults.standard.set(["print": print, "raw": raw], forKey: key)
             AppLog.record(.info, "import", "Cours rangé avec l'IA",
                           detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.series.count) séries, \(answer.moocWeeks.count) chapitres de MOOC, \(answer.guide.count) semaines expliquées")
         }
         return answer
+    }
+
+    private static var debugBypassCache: Bool {
+        #if DEBUG
+        return AIPayloadDump.isActive
+        #else
+        return false
+        #endif
+    }
+
+    private static func hash(_ text: String) -> String {
+        Insecure.SHA1.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Les réponses gardées par l'ancienne version (une par empreinte), effacées une fois.
+    private static var legacyDropped = false
+    private static func dropLegacyCache() {
+        guard !legacyDropped else { return }
+        legacyDropped = true
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("moodleAI3.") {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private static func askShared(_ payload: [String: Any]) async throws -> String {

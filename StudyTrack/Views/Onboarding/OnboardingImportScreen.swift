@@ -84,7 +84,14 @@ struct ImportScreen: View {
         case .activities:
             return "Ouverture de chaque lien et fichier pour voir ce qu'il contient : \(course.openedCount) / \(max(course.openableCount, course.openedCount))."
         case .sources:
-            return "Lecture des vidéos et du MOOC liés au cours."
+            switch course.currentSource {
+            case "Plan du cours"?: return "Lecture du plan du cours, pour savoir quoi faire chaque semaine."
+            case "MOOC"?: return "Lecture du MOOC Courseware cité par le cours : ses chapitres et leurs vidéos."
+            case "MediaSpace"?: return "Lecture des listes de vidéos MediaSpace citées par le cours."
+            case "Explique"?: return "Lecture des vidéos et des exercices d'Explique."
+            case "Botafogo"?: return "Lecture du polycopié Botafogo du cours."
+            default: return "Recherche des autres sources du cours : plan, MOOC, vidéos."
+            }
         case .analysis:
             return "Analyse : à quelle semaine appartient chaque élément, et s'il s'agit d'une série, d'une vidéo ou d'une échéance."
         case .writing, .done:
@@ -280,6 +287,7 @@ private struct ImportStage: View {
             }
             if act == .analysis {
                 AnalysisLens(course: course, readingSources: course.stage == .sources)
+                    .id(course.stage == .sources)
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
             if act == .placing {
@@ -556,9 +564,17 @@ private struct AnalysisLens: View {
     }
 
     private var questions: [String] {
-        readingSources
-            ? ["MediaSpace", "MOOC", "Site du cours"]
-            : ["Quelle semaine ?", "Quel type ?", "Quelle date ?"]
+        guard readingSources else { return ["Quelle semaine ?", "Quel type ?", "Quelle date ?"] }
+        return course.sourcesRead.isEmpty ? ["Plan du cours", "MOOC", "Vidéos"] : Array(course.sourcesRead.suffix(3))
+    }
+
+    /// La question allumée : à tour de rôle pendant l'analyse ; la source en
+    /// cours de lecture, sinon.
+    private func lit(_ tick: Int) -> Int {
+        guard readingSources, let current = course.currentSource, let index = questions.firstIndex(of: current) else {
+            return tick % questions.count
+        }
+        return index
     }
 
     var body: some View {
@@ -584,7 +600,7 @@ private struct AnalysisLens: View {
                 .animation(.spring(duration: 0.55, bounce: 0.2), value: tick)
                 .rotation3DEffect(.degrees(8), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
 
-                FlowRow(questions: questions, lit: tick % questions.count, tint: tint)
+                FlowRow(questions: questions, lit: lit(tick), tint: tint)
             }
             .padding(.top, 10)
         }

@@ -583,23 +583,71 @@ enum BotafogoCatalog {
             .map(BotafogoParser.courseRoot(of:))
     }
 
-    /// L'entrée du catalogue qui correspond au cours : tous ses mots
-    /// significatifs se retrouvent dans le nom du cours, et le plus possible.
+    /// L'entrée du catalogue qui correspond au cours, ou `nil`.
+    ///
+    /// **Chaque** mot significatif du nom du cours doit être expliqué par
+    /// l'entrée (son titre ou son adresse) : « Analyse I (classe inversée) »
+    /// → `analyse-1-flipped`, « Mon cours d'analyse classe inversée ». Il ne
+    /// suffit plus qu'un mot de l'entrée se retrouve dans le cours : « Analyse
+    /// numérique » ou « Analyse II » étaient reliés au polycopié d'Analyse I, et
+    /// tout le cours en était importé. Le niveau compte (I ≠ II, B), le code du
+    /// cours et la langue non ; un sigle (« ICS ») vaut le nom entier.
     static func match(courseName: String, in catalog: [(title: String, url: URL)]) -> URL? {
-        let stop: Set<String> = ["mon", "ma", "cours", "course", "de", "du", "d", "la", "le", "l", "les", "pour", "for",
-                                 "polycopie", "the", "my", "et", "and", "en", "a"]
-        func words(_ text: String) -> Set<String> {
-            Set(ContentDraftBuilder.fold(text).split { !$0.isLetter && !$0.isNumber }.map(String.init)
-                .filter { !stop.contains($0) && $0.count > 1 })
-        }
-        let course = words(courseName)
-        var best: (url: URL, score: Int)?
+        let course = courseWords(courseName)
+        guard !course.isEmpty else { return nil }
+        let acronym = String(course.filter { !isLevel($0) }.compactMap(\.first))
+        var best: (url: URL, extra: Int)?
         for entry in catalog {
-            let wanted = words(entry.title)
-            guard !wanted.isEmpty, wanted.isSubset(of: course) else { continue }
-            if wanted.count > (best?.score ?? 0) { best = (entry.url, wanted.count) }
+            let words = entryWords(entry.title).union(entryWords(entry.url.path))
+            guard !words.isEmpty else { continue }
+            let explained = acronym.count >= 3 && words.contains(acronym)
+                || course.allSatisfy { word in
+                    words.contains(word) || (word == "1" && !words.contains(where: isLevel))
+                }
+            guard explained else { continue }
+            // Un niveau dans l'entrée (« analyse-1 », « analyse-b ») doit être celui du cours.
+            let levels = words.filter(isLevel)
+            if !levels.isEmpty, levels.isDisjoint(with: course), !(acronym.count >= 3 && words.contains(acronym)) { continue }
+            let extra = words.subtracting(course).count
+            if best == nil || extra < best!.extra { best = (entry.url, extra) }
         }
         return best?.url
+    }
+
+    private static let stop: Set<String> = ["mon", "ma", "cours", "course", "de", "du", "d", "la", "le", "l", "les", "pour",
+                                            "for", "polycopie", "the", "my", "et", "and", "a", "of", "version", "ligne",
+                                            "index", "html", "matiere", "en", "fr", "english", "francais", "french"]
+
+    /// Les mots d'un nom, accents et casse retirés ; « I », « II » deviennent
+    /// « 1 », « 2 ».
+    private static func words(_ text: String) -> [String] {
+        let romans = ["i": "1", "ii": "2", "iii": "3", "iv": "4"]
+        return ContentDraftBuilder.fold(text).split { !$0.isLetter && !$0.isNumber }.map(String.init)
+            .map { romans[$0] ?? $0 }
+    }
+
+    /// Le nom du cours sans son code (« (MATH-101(pi)) ») ni sa langue.
+    private static func courseWords(_ name: String) -> [String] {
+        let bare = name.replacingOccurrences(of: #"\([^()]*[A-Z]{2,}-\d{3}[^()]*(\([^()]*\))?[^()]*\)"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\b[A-Z]{2,}-\d{3}[A-Za-z]?(\([^()]*\))?"#, with: " ", options: .regularExpression)
+        var seen = Set<String>()
+        return words(bare).filter(significant).filter { seen.insert($0).inserted }
+    }
+
+    /// Un mot qui dit quelque chose du cours : ni mot vide, ni lettre seule, ni
+    /// nombre — sauf un niveau.
+    private static func significant(_ word: String) -> Bool {
+        if isLevel(word) { return true }
+        return !stop.contains(word) && word.count > 1 && !word.allSatisfy(\.isNumber)
+    }
+
+    private static func entryWords(_ text: String) -> Set<String> {
+        Set(words(text).filter(significant))
+    }
+
+    /// « 1 », « 2 », « b » : le niveau d'un cours (Analyse I, II, B).
+    private static func isLevel(_ word: String) -> Bool {
+        ["1", "2", "3", "4", "b"].contains(word)
     }
 }
 

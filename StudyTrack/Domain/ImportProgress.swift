@@ -190,6 +190,7 @@ struct ImportProgress: Equatable {
         let text = message.lowercased()
         if text.contains("rangement") { return .analysis }
         if text.contains("mooc") || text.contains("courseware") || text.contains("plan du cours")
+            || text.contains("mediaspace") || text.contains("explique")
             || text.contains("botafogo") || text.contains("outils") || text.contains("site du cours") {
             return .sources
         }

@@ -53,15 +53,27 @@ enum SiteAutoLogin {
     }
 
     /// Touche le bouton d'authentification EPFL d'une page de connexion, s'il
-    /// y en a un et un seul candidat évident. Ne remplit aucun champ.
+    /// y en a **un seul** candidat évident. Ne remplit aucun champ.
+    ///
+    /// Un candidat évident : un bouton ou un lien qui dit « EPFL » / « SSO » /
+    /// « Microsoft » **et** mène à une authentification (Tequila, SAML, OAuth…),
+    /// ou dont le texte n'est que cela (« EPFL », « Se connecter avec EPFL »).
+    /// Le premier lien venu qui contenait « EPFL » (le lien du pied de page
+    /// vers epfl.ch) était touché à la place.
     private static let ssoButtonScript = #"""
     if (document.querySelector('input[type=password]')) return 'form';
-    const candidates = [...document.querySelectorAll('a, button, input[type=submit]')]
+    const label = e => ((e.innerText || e.value || e.getAttribute('aria-label') || e.title || '') + '').replace(/\s+/g, ' ').trim();
+    const target = e => (e.getAttribute('href') || e.getAttribute('formaction') || (e.form && e.form.action) || '');
+    const says = t => /(\bEPFL\b|tequila|microsoft|single sign|\bsso\b|se connecter avec|sign in with|log ?in with|edu-?id)/i.test(t);
+    const exact = t => /^(epfl|tequila|sso|se connecter avec (l')?epfl|connexion epfl|sign in with epfl|log ?in with epfl|epfl (login|sso|tequila))$/i.test(t);
+    const auth = h => /(tequila|saml|shibboleth|oauth|openid|\bsso\b|\/login|\/auth|wayf|microsoftonline|idp)/i.test(h);
+    const strong = [...document.querySelectorAll('a, button, input[type=submit]')]
       .filter(e => e.offsetParent !== null)
-      .filter(e => /(\bEPFL\b|tequila|microsoft|single sign|sso|se connecter avec|sign in with|log ?in with)/i
-        .test((e.innerText || e.value || e.getAttribute('aria-label') || e.title || '') + ' ' + (e.getAttribute('href') || '')));
-    if (candidates.length === 0) return 'none';
-    candidates[0].click();
+      .filter(e => exact(label(e)) || (says(label(e) + ' ' + target(e)) && (auth(target(e)) || e.tagName !== 'A')));
+    const distinct = [...new Set(strong.map(e => target(e) || label(e)))];
+    if (distinct.length === 0) return 'none';
+    if (distinct.length > 1) return 'ambiguous';
+    strong[0].click();
     return 'clicked';
     """#
 }

@@ -27,6 +27,9 @@ enum PreviewLaunch {
     /// `-onboardingDemo N` : l'accueil EPFL, écran N (0 bienvenue, 1 import
     /// simulé, 2 semestre, 3 to-do, 4 chrono), sans Moodle — pour les captures.
     static let onboardingDemoFlag = "-onboardingDemo"
+    /// `-dumpAIPayloads` : relit les cours Moodle sans rien écrire et garde, par
+    /// cours, ce que le modèle reçoit et répond (`Documents/ai-eval/`).
+    static let dumpAIPayloadsFlag = "-dumpAIPayloads"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"
@@ -146,6 +149,13 @@ enum PreviewLaunch {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(400))
                 ExamActivityController.startTest()
+            }
+        }
+
+        if isSet(dumpAIPayloadsFlag) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                await AIPayloadDump.run(container: container.modelContainer, settings: container.settings)
             }
         }
 

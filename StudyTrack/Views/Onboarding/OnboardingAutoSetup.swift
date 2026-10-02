@@ -230,6 +230,7 @@ final class OnboardingAutoSetup {
             guard let self else { return }
             self.progress.activities(done: done, total: total, course: id, now: Date())
             self.feed.setStage(.activities, course: id)
+            self.feed.setOpenTotal(total, course: id)
             self.updateActivity()
         }, onSections: { [weak self] sections in
             self?.feed.outline(sections, course: id)
@@ -242,6 +243,7 @@ final class OnboardingAutoSetup {
                                                        termStart: course.term?.startDate ?? term.startDate,
                                                        totalWeeks: course.term?.totalWeeks ?? term.totalWeeks,
                                                        settings: settings) { [weak self] message in
+            self?.feed.note(message, course: id)
             guard let stage = ImportProgress.stage(forMessage: message) else { return }
             self?.enter(stage, course: id)
             self?.updateActivity()
@@ -419,7 +421,10 @@ final class OnboardingAutoSetup {
                 progress.activities(done: min(start + 18, openable.count), total: openable.count, course: id, now: Date())
             }
             enter(.sources, course: id)
-            try? await Task.sleep(for: .seconds(1.6 * pace))
+            for message in ["lecture du plan du cours…", "vidéos MediaSpace…"] {
+                feed.note(message, course: id)
+                try? await Task.sleep(for: .seconds(1.0 * pace))
+            }
             enter(.analysis, course: id)
             try? await Task.sleep(for: .seconds(4.5 * pace))
             enter(.writing, course: id)

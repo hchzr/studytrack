@@ -26,6 +26,9 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
 
     var currentURL: URL? { webView.url }
     private var loadToken: UUID?
+    /// La navigation attendue : une annonce tardive d'une navigation arrêtée
+    /// (délai dépassé, page remplacée) ne doit pas conclure la suivante.
+    private var pendingNavigation: ObjectIdentifier?
 
     /// Charge une page et attend la fin du chargement (20 s au plus).
     ///
@@ -41,7 +44,7 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
             self.loading = continuation
             let token = UUID()
             self.loadToken = token
-            self.webView.load(URLRequest(url: url))
+            self.pendingNavigation = self.webView.load(URLRequest(url: url)).map(ObjectIdentifier.init)
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(timeout))
                 // Toujours **ce** chargement-là : une autre page a pu le remplacer.
@@ -78,19 +81,23 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
     }
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor in self.finish(nil) }
+        let id = navigation.map(ObjectIdentifier.init)
+        Task { @MainActor in self.finish(nil, navigation: id) }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.finish(error) }
+        let id = navigation.map(ObjectIdentifier.init)
+        Task { @MainActor in self.finish(error, navigation: id) }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.finish(error) }
+        let id = navigation.map(ObjectIdentifier.init)
+        Task { @MainActor in self.finish(error, navigation: id) }
     }
 
-    private func finish(_ error: Error?) {
+    private func finish(_ error: Error?, navigation: ObjectIdentifier?) {
         guard let loading else { return }
+        if let navigation, let pendingNavigation, navigation != pendingNavigation { return }
         self.loading = nil
         if let error { loading.resume(throwing: error) } else { loading.resume() }
     }
@@ -225,6 +232,9 @@ final class MoodleClient {
     ///   - onOutline: le plan du cours est lu (les numéros de ses sections).
     ///   - onActivities: activités ouvertes / à ouvrir, au fil de la lecture —
     ///     c'est l'étape longue, que l'accueil montre au compte près.
+    /// Le nombre d'activités ouvertes par cours, au plus.
+    static let openLimit = 400
+
     func snapshot(of course: MoodleCourseRef,
                   onOutline: ([Int]) -> Void = { _ in },
                   onActivities: (Int, Int) -> Void = { _, _ in },
@@ -247,12 +257,16 @@ final class MoodleClient {
         // le modèle le lisent pour tous les cours, connus ou non.
         onOutline(snapshot.sections.filter { !$0.activities.isEmpty }.map(\.number))
         onSections(snapshot.sections.filter { !$0.activities.isEmpty })
-        let wanted = snapshot.sections.flatMap(\.activities)
+        let openable = snapshot.sections.flatMap(\.activities)
             .filter { $0.isVisible && ["url", "assign", "resource", "page", "folder"].contains($0.module) }
-            .prefix(160)
-            .map { ["id": $0.id, "module": $0.module] }
-        snapshot.moocLinks = await moocLinks(courseID: course.id, snapshot: snapshot)
-        await addSectionTexts(courseID: course.id, to: &snapshot)
+        // Au-delà de 400, les dernières activités ne sont pas ouvertes (le
+        // cours le dit) : une lecture de plusieurs minutes pour un seul cours.
+        snapshot.unopened = max(0, openable.count - Self.openLimit)
+        let wanted = openable.prefix(Self.openLimit).map { ["id": $0.id, "module": $0.module] }
+        // La page du cours, lue une fois : texte et liens des sections, et les
+        // liens Courseware qu'elle porte ; puis les pages Moodle, pour leurs MOOC.
+        let fromCoursePage = await addSectionTexts(courseID: course.id, to: &snapshot)
+        snapshot.moocLinks = await moocLinks(snapshot: snapshot, coursePage: fromCoursePage)
         guard !wanted.isEmpty else { return snapshot }
         // Par lots de 18 (trois vagues de six) : le même travail, mais l'accueil
         // voit avancer le compteur au lieu d'une attente muette d'une minute.
@@ -367,11 +381,17 @@ final class MoodleClient {
     /// Le texte de chaque section (résumé, étiquettes) et ses liens, lus sur
     /// la page du cours : la consigne de la semaine y est souvent écrite
     /// (« regardez les vidéos du module 2, la série est sur le site du cours »).
-    private func addSectionTexts(courseID: Int, to snapshot: inout MoodleCourseSnapshot) async {
+    private func addSectionTexts(courseID: Int, to snapshot: inout MoodleCourseSnapshot) async -> [MoocReference] {
         let raw = (try? await session.run(#"""
         const r = await fetch('/course/view.php?id=' + course, { credentials: 'include' });
         const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
         const out = [];
+        const mooc = [];
+        doc.querySelectorAll('a[href*="courseware.epfl.ch"]').forEach(a => {
+          const holder = a.closest('[data-sectionnumber], [data-number], li.section');
+          const n = holder && (holder.getAttribute('data-sectionnumber') || holder.getAttribute('data-number') || (holder.id || '').replace('section-', ''));
+          mooc.push({ url: a.href, title: (a.innerText || a.textContent || '').trim(), section: n !== null && n !== undefined && n !== '' && !isNaN(Number(n)) ? Number(n) : null });
+        });
         doc.querySelectorAll('li.section[data-sectionnumber], li.section[data-number], [data-for="section"][data-number]').forEach(section => {
           const n = Number(section.getAttribute('data-sectionnumber') ?? section.getAttribute('data-number'));
           if (isNaN(n)) return;
@@ -389,10 +409,13 @@ final class MoodleClient {
           });
           out.push({ number: n, text: parts.join(' · ').slice(0, 2000), links: links.slice(0, 25) });
         });
-        return JSON.stringify(out);
-        """#, arguments: ["course": String(courseID)])) ?? "[]"
+        return JSON.stringify({ sections: out, mooc: mooc });
+        """#, arguments: ["course": String(courseID)])) ?? "{}"
         struct Row: Decodable { var number: Int; var text: String; var links: [Link]; struct Link: Decodable { var url: String; var title: String } }
-        let rows = (try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? []
+        struct Mooc: Decodable { var url: String; var title: String; var section: Int? }
+        struct Page: Decodable { var sections: [Row]; var mooc: [Mooc] }
+        let page = (try? JSONDecoder().decode(Page.self, from: Data(raw.utf8))) ?? Page(sections: [], mooc: [])
+        let rows = page.sections
         for row in rows {
             guard let index = snapshot.sections.firstIndex(where: { $0.number == row.number }) else { continue }
             snapshot.sections[index].text = row.text
@@ -400,19 +423,20 @@ final class MoodleClient {
                 ContentLink(title: link.title, url: link.url, kind: CourseEvidence.linkKind(link.url))
             }
         }
+        return page.mooc.map { MoocReference(url: $0.url, title: $0.title, sectionNumber: $0.section) }
     }
 
     /// Les liens Courseware du cours : ceux de la page du cours (texte des
     /// sections, étiquettes) et ceux des pages Moodle (« Matériel MOOC de la
     /// semaine »), chacun avec le numéro de sa section.
-    private func moocLinks(courseID: Int, snapshot: MoodleCourseSnapshot) async -> [MoocReference] {
+    private func moocLinks(snapshot: MoodleCourseSnapshot, coursePage: [MoocReference]) async -> [MoocReference] {
         var pages: [[String: Any]] = []
         for section in snapshot.sections {
             for activity in section.activities where activity.isVisible && activity.module == "page" {
                 pages.append(["id": activity.id, "section": section.number])
             }
         }
-        guard let pagesJSON = try? JSONSerialization.data(withJSONObject: pages) else { return [] }
+        guard let pagesJSON = try? JSONSerialization.data(withJSONObject: pages) else { return coursePage }
         let raw = (try? await session.run(#"""
         const out = [];
         const collect = (doc, section) => {
@@ -426,10 +450,6 @@ final class MoodleClient {
             out.push({ url: a.href, title: (a.innerText || a.textContent || '').trim(), section: s });
           });
         };
-        try {
-          const r = await fetch('/course/view.php?id=' + course, { credentials: 'include' });
-          collect(new DOMParser().parseFromString(await r.text(), 'text/html'), null);
-        } catch (e) {}
         const pages = JSON.parse(list);
         for (let i = 0; i < pages.length; i += 6) {
           await Promise.all(pages.slice(i, i + 6).map(async p => {
@@ -440,13 +460,13 @@ final class MoodleClient {
           }));
         }
         return JSON.stringify(out);
-        """#, arguments: ["course": String(courseID), "list": String(decoding: pagesJSON, as: UTF8.self)])) ?? "[]"
+        """#, arguments: ["list": String(decoding: pagesJSON, as: UTF8.self)])) ?? "[]"
         struct Row: Decodable { var url: String; var title: String; var section: Int? }
-        let rows = (try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? []
+        let rows = coursePage + ((try? JSONDecoder().decode([Row].self, from: Data(raw.utf8))) ?? [])
+            .map { MoocReference(url: $0.url, title: $0.title, sectionNumber: $0.section) }
         var seen = Set<String>()
-        return rows.compactMap { row in
-            guard MoocReference.courseKey(in: row.url) != nil, seen.insert(row.url + "|\(row.section ?? -1)").inserted else { return nil }
-            return MoocReference(url: row.url, title: row.title, sectionNumber: row.section)
+        return rows.filter { row in
+            MoocReference.courseKey(in: row.url) != nil && seen.insert(row.url + "|\(row.sectionNumber ?? -1)").inserted
         }
     }
 
@@ -650,32 +670,51 @@ final class ExpliqueClient {
 
 /// Explique, quand Moodle y renvoie (AICC) : ses cours en replay et ses
 /// exercices, ajoutés au brouillon dans leurs semaines.
+///
+/// Lu **avant** l'analyse, avec les autres sources du cours (`fetch`), rangé
+/// après (`merge`) : l'avancement dit alors vraiment ce qui se fait.
 @MainActor
 enum ExpliqueSupplement {
-    struct Outcome {
-        var draft: ContentDraft
+    struct Fetched {
+        var lectures: [ExpliqueImport.Lecture] = []
+        var exercises: [ExpliqueImport.Exercise] = []
         var note: String?
         var needsLogin = false
     }
 
-    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
-                         termStart: Date?, totalWeeks: Int) async -> Outcome {
-        let links = snapshot.sections.flatMap(\.activities).flatMap { [$0.url, $0.target ?? ""] }
-        guard let slug = ExpliqueImport.slug(in: links) else { return Outcome(draft: draft) }
+    static func fetch(_ snapshot: MoodleCourseSnapshot) async -> Fetched {
+        guard let slug = ExpliqueImport.slug(in: CourseLinks.all(in: snapshot)) else { return Fetched() }
         let client = ExpliqueClient()
         do {
             let lectures = try await client.lectures(slug: slug)
             let exercises = (try? await client.exercises(slug: slug)) ?? []
-            let merged = ExpliqueImport.merge(lectures: lectures, exercises: exercises, into: draft,
-                                              termStart: termStart, totalWeeks: totalWeeks)
-            let note = merged.added > 0 ? "+ Explique (\(lectures.count) vidéo\(lectures.count > 1 ? "s" : ""), \(exercises.count) exercice\(exercises.count > 1 ? "s" : ""))" : nil
-            return Outcome(draft: merged.draft, note: note)
+            return Fetched(lectures: lectures, exercises: exercises)
         } catch ExpliqueClient.Failure.notSignedIn {
-            return Outcome(draft: draft, note: "Explique cité sur Moodle — connecte-toi à Explique (Profil › Comptes) pour ses vidéos", needsLogin: true)
+            return Fetched(note: "Explique cité sur Moodle — connecte-toi à Explique (Profil › Comptes) pour ses vidéos", needsLogin: true)
         } catch {
             AppLog.record(.warning, "import", "Explique illisible", detail: error.localizedDescription)
-            return Outcome(draft: draft, note: "Explique illisible")
+            return Fetched(note: "Explique illisible")
         }
+    }
+
+    static func merge(_ fetched: Fetched, into draft: ContentDraft, termStart: Date?, totalWeeks: Int) -> (draft: ContentDraft, note: String?) {
+        guard !fetched.lectures.isEmpty || !fetched.exercises.isEmpty else { return (draft, fetched.note) }
+        let merged = ExpliqueImport.merge(lectures: fetched.lectures, exercises: fetched.exercises, into: draft,
+                                          termStart: termStart, totalWeeks: totalWeeks)
+        let lectures = fetched.lectures.count, exercises = fetched.exercises.count
+        let note = merged.added > 0 ? "+ Explique (\(lectures) vidéo\(lectures > 1 ? "s" : ""), \(exercises) exercice\(exercises > 1 ? "s" : ""))" : nil
+        return (merged.draft, note)
+    }
+}
+
+/// Tous les liens d'un cours : ceux des activités (et leur cible) **et** ceux
+/// du texte des sections. Une liste de lecture MediaSpace est souvent citée
+/// dans une étiquette (« Enregistrements des cours »), pas posée en activité.
+enum CourseLinks {
+    static func all(in snapshot: MoodleCourseSnapshot) -> [String] {
+        snapshot.sections.flatMap { section in
+            section.activities.flatMap { [$0.url, $0.target ?? ""] } + section.links.map(\.url)
+        }.filter { !$0.isEmpty }
     }
 }
 
@@ -748,10 +787,16 @@ final class MediaSpaceClient {
         }
         if (isLogin()) return '__login__';
         // « Charger plus » et défilement : les chaînes ne montrent qu'une page.
-        for (let i = 0; i < 10; i++) {
+        // On s'arrête dès que deux passages n'ajoutent plus rien (une liste de
+        // lecture est entière d'emblée) : dix passages fixes coûtaient 5 à 12 s.
+        const count = () => document.querySelectorAll('[class*="playlistItemThumbnailWrap"], a[href*="/media/"]').length;
+        let stable = 0;
+        for (let i = 0; i < 12 && stable < 2; i++) {
+          const before = count();
           window.scrollTo(0, document.body.scrollHeight);
           const more = [...document.querySelectorAll('button, a')].find(b => /load more|charger plus|afficher plus|voir plus|more media|show more/i.test(b.innerText || ''));
-          if (more) { more.click(); await sleep(1200); } else { await sleep(500); }
+          if (more) { more.click(); await sleep(1200); } else { await sleep(450); }
+          stable = (!more && count() === before) ? stable + 1 : 0;
         }
         const seen = new Set([own]);
         const out = [];
@@ -790,49 +835,61 @@ final class MediaSpaceClient {
     }
 }
 
-/// Les listes de lecture MediaSpace qu'un cours cite sur Moodle : chacune de
-/// leurs vidéos rejoint l'élément de théorie de sa semaine.
+/// Les listes de lecture MediaSpace qu'un cours cite sur Moodle (activités ou
+/// texte des sections) : chacune de leurs vidéos rejoint l'élément de théorie
+/// de sa semaine. Lues avant l'analyse (`fetch`), rangées après (`merge`).
 @MainActor
 enum MediaSpaceSupplement {
-    struct Outcome {
-        var draft: ContentDraft
+    struct Fetched {
+        var videos: [CourseVideos.Video] = []
         var note: String?
         var needsLogin = false
     }
 
-    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
-                         termStart: Date?, totalWeeks: Int) async -> Outcome {
-        let links = snapshot.sections.flatMap(\.activities).flatMap { [$0.url, $0.target ?? ""] }
-        let collections = Array(Set(links.filter(MediaSpaceClient.isCollection))).sorted().compactMap(URL.init(string:))
-        guard !collections.isEmpty else { return Outcome(draft: draft) }
-        // Les vidéos que Moodle donne déjà, par leur identifiant.
-        let known = Set(draft.sections.flatMap(\.items).flatMap { [$0.url] + $0.links.map(\.url) }
-            .compactMap(MediaSpaceClient.entryID(in:)))
+    static func collections(in snapshot: MoodleCourseSnapshot) -> [URL] {
+        Array(Set(CourseLinks.all(in: snapshot).filter(MediaSpaceClient.isCollection))).sorted().compactMap(URL.init(string:))
+    }
+
+    static func fetch(_ snapshot: MoodleCourseSnapshot) async -> Fetched {
+        let collections = collections(in: snapshot)
+        guard !collections.isEmpty else { return Fetched() }
         let client = MediaSpaceClient()
-        var videos: [CourseVideos.Video] = []
-        do {
-            for collection in collections.prefix(4) {
-                videos += try await client.entries(of: collection)
+        var result = Fetched()
+        var failed = 0
+        // Une liste illisible n'emporte plus les autres : chacune pour soi.
+        for collection in collections.prefix(4) {
+            do {
+                result.videos += try await client.entries(of: collection)
+            } catch MediaSpaceClient.Failure.notSignedIn {
+                result.note = "Liste de vidéos MediaSpace citée — connecte-toi à MediaSpace (Profil › Comptes)"
+                result.needsLogin = true
+                return result
+            } catch {
+                failed += 1
+                AppLog.record(.warning, "import", "Liste MediaSpace illisible", detail: "\(collection.absoluteString) — \(error.localizedDescription)")
             }
-        } catch MediaSpaceClient.Failure.notSignedIn {
-            return Outcome(draft: draft, note: "Liste de vidéos MediaSpace citée — connecte-toi à MediaSpace (Profil › Comptes)", needsLogin: true)
-        } catch {
-            AppLog.record(.warning, "import", "MediaSpace illisible", detail: error.localizedDescription)
-            return Outcome(draft: draft, note: "MediaSpace illisible")
         }
-        var seen = known
-        let fresh = videos.filter { video in
+        if failed > 0, result.videos.isEmpty { result.note = "MediaSpace illisible" }
+        return result
+    }
+
+    static func merge(_ fetched: Fetched, into draft: ContentDraft, termStart: Date?, totalWeeks: Int) -> (draft: ContentDraft, note: String?) {
+        guard !fetched.videos.isEmpty else { return (draft, fetched.note) }
+        // Les vidéos que Moodle donne déjà, par leur identifiant.
+        var seen = Set(draft.sections.flatMap(\.items).flatMap { [$0.url] + $0.links.map(\.url) }
+            .compactMap(MediaSpaceClient.entryID(in:)))
+        let fresh = fetched.videos.filter { video in
             guard let id = MediaSpaceClient.entryID(in: video.url) else { return false }
             return seen.insert(id).inserted
         }
-        guard !fresh.isEmpty else { return Outcome(draft: draft) }
+        guard !fresh.isEmpty else { return (draft, fetched.note) }
         let perWeek = CourseVideos.lecturesPerWeek(fresh.map(\.title), totalWeeks: totalWeeks)
         let placed = fresh.map { video in
             CourseVideos.Video(title: video.title, url: video.url,
                                week: CourseVideos.week(of: video.title, termStart: termStart, totalWeeks: totalWeeks, lecturesPerWeek: perWeek))
         }
         let merged = CourseVideos.merge(placed, into: draft, totalWeeks: totalWeeks, sourceLabel: "MediaSpace")
-        return Outcome(draft: merged.draft, note: "+ MediaSpace (\(fresh.count) vidéo\(fresh.count > 1 ? "s" : ""))")
+        return (merged.draft, "+ MediaSpace (\(fresh.count) vidéo\(fresh.count > 1 ? "s" : ""))")
     }
 }
 
@@ -876,14 +933,6 @@ enum CoursePlanReader {
 
 @MainActor
 enum MoocImport {
-    struct Outcome {
-        var draft: ContentDraft
-        /// « + MOOC Algèbre linéaire (24 leçons) », ou pourquoi il manque.
-        var note: String?
-        /// Courseware demande une connexion.
-        var needsLogin = false
-    }
-
     /// Les MOOC cités par Moodle, lus sur Courseware.
     static func fetch(_ snapshot: MoodleCourseSnapshot, client: CoursewareClient? = nil)
         async -> (moocs: [(key: String, course: ScrapedCourse)], note: String?, needsLogin: Bool) {
@@ -922,34 +971,6 @@ enum MoocImport {
         }
         return (result, notes.isEmpty ? nil : notes.joined(separator: " · "))
     }
-
-    static func complete(_ draft: ContentDraft, snapshot: MoodleCourseSnapshot,
-                         termStart: Date?, totalWeeks: Int,
-                         client: CoursewareClient? = nil) async -> Outcome {
-        let client = client ?? CoursewareClient()
-        let keys = Array(Set(snapshot.moocLinks.compactMap(\.courseKey))).sorted()
-        guard !keys.isEmpty else { return Outcome(draft: draft) }
-        guard await client.isSignedIn() else {
-            return Outcome(draft: draft, note: "MOOC cité sur Moodle — connecte-toi à Courseware pour l'ajouter", needsLogin: true)
-        }
-        var result = draft
-        var notes: [String] = []
-        for key in keys {
-            do {
-                let mooc = try await client.content(of: key)
-                let before = result.theoryCount
-                result = MoocMerger.merge(mooc: mooc,
-                                          references: snapshot.moocLinks.filter { $0.courseKey == key },
-                                          snapshot: snapshot, into: result,
-                                          termStart: termStart, totalWeeks: totalWeeks)
-                notes.append("+ MOOC \(mooc.title) (\(result.theoryCount - before) leçons)")
-            } catch {
-                AppLog.record(.warning, "import", "MOOC illisible", detail: "\(key) — \(error.localizedDescription)")
-                notes.append("MOOC \(key) illisible")
-            }
-        }
-        return Outcome(draft: result, note: notes.joined(separator: " · "))
-    }
 }
 
 
@@ -963,7 +984,8 @@ enum MoocImport {
 /// 3. le modèle range ce que les règles ne savent pas lire — activités aux noms
 ///    inattendus, chapitres du MOOC à regarder selon le plan ;
 /// 4. les règles construisent le brouillon (un élément de théorie par semaine) ;
-/// 5. MOOC, Explique et listes MediaSpace complètent chaque semaine.
+/// 5. MOOC, Explique et listes MediaSpace (lus avant l'analyse, avec les autres
+///    sources) complètent chaque semaine.
 @MainActor
 enum CourseImportPipeline {
     struct Outcome {
@@ -976,6 +998,9 @@ enum CourseImportPipeline {
     static func draft(from snapshot: MoodleCourseSnapshot, termStart: Date?, totalWeeks: Int,
                       settings: SettingsStore?, progress: (String) -> Void = { _ in }) async -> Outcome {
         var notes: [String] = []
+        if snapshot.unopened > 0 {
+            notes.append("\(snapshot.unopened) activités non ouvertes (cours très long)")
+        }
         // Un cours vide sur Moodle vit ailleurs : le site Botafogo cité par le
         // cours, ou celui du catalogue dont le titre correspond. Lu dès que
         // besoin, et donné au modèle avec le reste.
@@ -997,6 +1022,19 @@ enum CourseImportPipeline {
             let fetched = await MoocImport.fetch(snapshot)
             moocs = fetched.moocs
             if let note = fetched.note { notes.append(note) }
+        }
+        // Vidéos et exercices des outils du cours, lus **avant** l'analyse :
+        // l'étape « sources » dure ce qu'elle dure, l'analyse n'attend que le
+        // modèle (l'accueil montrait « Analyse » pendant la lecture de MediaSpace).
+        var media = MediaSpaceSupplement.Fetched()
+        if !MediaSpaceSupplement.collections(in: snapshot).isEmpty {
+            progress("vidéos MediaSpace…")
+            media = await MediaSpaceSupplement.fetch(snapshot)
+        }
+        var explique = ExpliqueSupplement.Fetched()
+        if ExpliqueImport.slug(in: CourseLinks.all(in: snapshot)) != nil {
+            progress("outils du cours : Explique…")
+            explique = await ExpliqueSupplement.fetch(snapshot)
         }
         var answer = MoodleCourseAI.Answer()
         var plan: String?
@@ -1036,13 +1074,12 @@ enum CourseImportPipeline {
             draft = merged.draft
             if let note = merged.note { notes.append(note) }
         }
-        progress("outils du cours…")
-        let explique = await ExpliqueSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: totalWeeks)
-        draft = explique.draft
-        if let note = explique.note { notes.append(note) }
-        let media = await MediaSpaceSupplement.complete(draft, snapshot: snapshot, termStart: termStart, totalWeeks: totalWeeks)
-        draft = media.draft
-        if let note = media.note { notes.append(note) }
+        let withExplique = ExpliqueSupplement.merge(explique, into: draft, termStart: termStart, totalWeeks: totalWeeks)
+        draft = withExplique.draft
+        if let note = withExplique.note { notes.append(note) }
+        let withMedia = MediaSpaceSupplement.merge(media, into: draft, termStart: termStart, totalWeeks: totalWeeks)
+        draft = withMedia.draft
+        if let note = withMedia.note { notes.append(note) }
         if let botafogo {
             // Moodle et Botafogo à la fois : ce que Moodle n'a pas (une série,
             // la théorie d'une semaine) vient de Botafogo.

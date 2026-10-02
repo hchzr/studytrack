@@ -19,6 +19,10 @@ enum MoodleCourseAI {
 
     /// La consigne, partagée par la fonction serveur et le modèle embarqué.
     ///
+    /// **Recopiée** dans `supabase/functions/analyze-course/index.ts` : le
+    /// serveur n'accepte plus de consigne venue du client. La changer ici,
+    /// c'est la changer là-bas et redéployer (`validate.sh` le vérifie).
+    ///
     /// Le modèle lit **tout ce que le cours montre** — sections et leurs
     /// consignes, activités et ce qu'il y a derrière chaque lien, plan du cours,
     /// MOOC — et dit ce qu'il faut regarder et faire chaque semaine, et où sont
@@ -104,8 +108,7 @@ enum MoodleCourseAI {
                 lines.append(line)
             }
         }
-        var payload: [String: Any] = ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n"),
-                                      "instructions": instructions]
+        var payload: [String: Any] = ["course": snapshot.title, "weeks": totalWeeks, "outline": lines.joined(separator: "\n")]
         if let plan, !plan.isEmpty { payload["plan"] = String(plan.prefix(12_000)) }
         if !moocs.isEmpty {
             payload["mooc"] = moocs.enumerated().flatMap { index, mooc in

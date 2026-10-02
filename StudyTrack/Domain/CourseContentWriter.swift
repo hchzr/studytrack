@@ -214,7 +214,12 @@ enum ContentDraftWriter {
                     guard let number = item.seriesNumber ?? Int(item.number) else { continue }
                     let series: ExerciseSeries
                     if let existing = course.series.first(where: { $0.seriesNumber == number }) {
-                        if updateWeeks || existing.plannedWeek == 0 { existing.plannedWeek = item.plannedWeek(in: section) }
+                        // Un corrigé seul (sans énoncé) ne déplace jamais sa série :
+                        // la semaine est celle de l'énoncé, pas celle du corrigé.
+                        let carriesStatement = !item.url.isEmpty || !item.pdfURL.isEmpty
+                        if (updateWeeks && carriesStatement) || existing.plannedWeek == 0 {
+                            existing.plannedWeek = item.plannedWeek(in: section)
+                        }
                         // L'adresse de l'énoncé est remplacée quand l'ancienne n'a rien
                         // donné (aucun exercice lu) : une série de CS-107 créée par un
                         // ancien import du MOOC gardait sa page Courseware, et la

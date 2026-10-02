@@ -424,6 +424,7 @@ enum AuthenticatedDownloader {
     static func resolve(_ address: URL) async -> (statement: URL, solution: URL?)? {
         guard MoodleLinks.activityModule(of: address) != nil else { return nil }
         let session = await authenticatedSession(for: address)
+        defer { session.finishTasksAndInvalidate() }
         guard let (data, response) = try? await session.data(from: MoodleLinks.workaroundPage(address)) else { return nil }
         let final = response.url ?? address
         if isPDF(response) || final.path.contains("/pluginfile.php/") { return (final, nil) }
@@ -440,6 +441,7 @@ enum AuthenticatedDownloader {
         // `mod/resource/view.php` → `…&redirect=1` : le fichier, pas la page.
         let url = SiteLinks.normalize(address)
         let session = await authenticatedSession(for: url)
+        defer { session.finishTasksAndInvalidate() }
         let (temporary, response) = try await session.download(from: url)
         guard isPDF(response) else {
             // Une page HTML : celle d'une activité Moodle qui porte le lien du
@@ -472,16 +474,41 @@ enum AuthenticatedDownloader {
     }
 
     /// Le texte d'une adresse et sa nature (PDF ou page). `pages` limite la
-    /// lecture d'un PDF à ses premières pages (un aperçu).
+    /// lecture d'un PDF à ses premières pages (un aperçu) — et le
+    /// téléchargement à `previewLimit` octets : un polycopié de 80 Mo n'était
+    /// téléchargé en entier que pour en lire deux pages.
     @MainActor
     static func document(at address: URL, timeout: TimeInterval = 30, pages: Int? = nil) async -> (body: String, isPDF: Bool)? {
         let url = SiteLinks.normalize(address)
         let session = await authenticatedSession(for: url)
+        defer { session.finishTasksAndInvalidate() }
         var request = URLRequest(url: url)
         request.timeoutInterval = timeout
-        guard let (data, response) = try? await session.data(for: request) else { return nil }
+        let data: Data
+        let response: URLResponse
+        if pages != nil {
+            guard let (bytes, head) = try? await session.bytes(for: request) else { return nil }
+            response = head
+            if head.expectedContentLength > Int64(previewLimit) {
+                // Trop gros pour un aperçu : on sait au moins ce que c'est.
+                bytes.task.cancel()
+                return isPDF(head) ? ("", true) : nil
+            }
+            var buffer = Data()
+            do {
+                for try await byte in bytes {
+                    buffer.append(byte)
+                    if buffer.count > previewLimit { bytes.task.cancel(); break }
+                }
+            } catch { return nil }
+            data = buffer
+        } else {
+            guard let (body, head) = try? await session.data(for: request) else { return nil }
+            data = body
+            response = head
+        }
         if isPDF(response) || data.starts(with: Data("%PDF".utf8)) {
-            guard let pdf = PDFDocument(data: data) else { return nil }
+            guard let pdf = PDFDocument(data: data) else { return ("", true) }
             let count = min(pdf.pageCount, pages ?? pdf.pageCount)
             let body = TextRepair.composeAccents((0..<count).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n"))
             return body.isEmpty ? nil : (body, true)
@@ -502,6 +529,9 @@ enum AuthenticatedDownloader {
             .filter { !$0.isEmpty }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
+
+    /// Un aperçu ne télécharge pas plus de 8 Mo.
+    static let previewLimit = 8_000_000
 
     private static func isPDF(_ response: URLResponse) -> Bool {
         let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""

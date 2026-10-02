@@ -76,6 +76,8 @@ enum CourseEvidence {
         if let entry = cache[key], Date().timeIntervalSince1970 - entry.at < 3 * 86_400 { return entry.peek }
         guard let text = await AuthenticatedDownloader.document(at: url, timeout: 10, pages: 2) else { return nil }
         let kind = text.isPDF ? "pdf" : "page web"
+        // Un PDF trop lourd pour l'aperçu : sa nature suffit, et rien n'est gardé.
+        if text.body.isEmpty { return Peek(kind: kind, text: "") }
         let flat = text.body.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         let peek = Peek(kind: kind, text: String(flat.prefix(500)))
         cache[key] = CacheEntry(at: Date().timeIntervalSince1970, peek: peek)

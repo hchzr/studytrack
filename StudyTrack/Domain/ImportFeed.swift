@@ -22,11 +22,16 @@ struct ImportFeed: Equatable {
         var stage: ImportProgress.Stage = .waiting
         var sections: [Section] = []
         var placed: [Placed] = []
+        /// Combien d'activités l'import ouvre vraiment (plafonné : `MoodleClient.openLimit`).
+        var openTotal: Int?
+        /// Les autres sources lues, dans l'ordre (« MOOC », « MediaSpace »…), et celle en cours.
+        var sourcesRead: [String] = []
+        var currentSource: String?
 
         var activities: [Activity] { sections.flatMap(\.activities) }
         var openedCount: Int { activities.filter(\.isOpened).count }
         /// Les activités que l'import ouvre (les autres — forums, étiquettes — se lisent dans le plan).
-        var openableCount: Int { activities.filter(\.isOpenable).count }
+        var openableCount: Int { openTotal ?? activities.filter(\.isOpenable).count }
 
         func placed(inWeek week: Int) -> [Placed] { placed.filter { $0.week == week } }
     }
@@ -130,6 +135,30 @@ struct ImportFeed: Equatable {
                                activities: activities)
             }
         }
+    }
+
+    mutating func setOpenTotal(_ total: Int, course id: String) {
+        update(id) { $0.openTotal = total }
+    }
+
+    /// Un message de la chaîne d'import (« vidéos MediaSpace… ») : la source
+    /// en cours de lecture.
+    mutating func note(_ message: String, course id: String) {
+        guard let source = ImportFeed.source(ofMessage: message) else { return }
+        update(id) { course in
+            if !course.sourcesRead.contains(source) { course.sourcesRead.append(source) }
+            course.currentSource = source
+        }
+    }
+
+    static func source(ofMessage message: String) -> String? {
+        let text = message.lowercased()
+        if text.contains("botafogo") || text.contains("site du cours") { return "Botafogo" }
+        if text.contains("mooc") || text.contains("courseware") { return "MOOC" }
+        if text.contains("mediaspace") { return "MediaSpace" }
+        if text.contains("explique") { return "Explique" }
+        if text.contains("plan du cours") { return "Plan du cours" }
+        return nil
     }
 
     /// Un lot d'activités ouvertes : `[id d'activité: ce qu'elle était]`.
