@@ -2663,9 +2663,9 @@ if let cs = courses.first(where: { $0.code == "CS-250" }),
 }
 
 print("== Notice de chaque intégration de tâches ==")
-check(TaskProvider.allCases.count == 8,
-      "huit fournisseurs de tâches (\(TaskProvider.allCases.count))")
-for provider in [TaskProvider.microsoftToDo, .googleTasks, .tickTick] {
+check(TaskProvider.allCases.count == 7,
+      "sept fournisseurs de tâches (\(TaskProvider.allCases.count))")
+for provider in [TaskProvider.googleTasks, .tickTick] {
     check(provider.supportsReading, "\(provider.label) : lecture annoncée")
     check(provider.credentialLabel != nil, "\(provider.label) : identifiant nommé")
     check(provider.icon != TaskProvider.reminders.icon,

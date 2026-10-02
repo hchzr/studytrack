@@ -281,7 +281,7 @@ enum TheoryKind: String, Codable, CaseIterable, Identifiable {
 
 enum TaskProvider: String, Codable, CaseIterable, Identifiable {
     case reminders, todoist, things, notion, webhook
-    case microsoftToDo, googleTasks, tickTick
+    case googleTasks, tickTick
 
     var id: String { rawValue }
 
@@ -292,7 +292,6 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
         case .things: return "Things 3"
         case .notion: return "Notion"
         case .webhook: return "Webhook"
-        case .microsoftToDo: return "Microsoft To Do"
         case .googleTasks: return "Google Tasks"
         case .tickTick: return "TickTick"
         }
@@ -305,7 +304,6 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
         case .things: return "checkmark.circle"
         case .notion: return "doc.richtext"
         case .webhook: return "bolt.horizontal.circle.fill"
-        case .microsoftToDo: return "list.bullet.clipboard.fill"
         case .googleTasks: return "checkmark.circle.fill"
         case .tickTick: return "checkmark.seal.fill"
         }
@@ -318,7 +316,7 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
     var supportsReading: Bool {
         switch self {
         case .reminders, .todoist, .notion,
-             .microsoftToDo, .googleTasks, .tickTick:
+             .googleTasks, .tickTick:
             return true
         case .things, .webhook:
             return false
@@ -336,7 +334,6 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
         case .things: return nil
         case .notion: return "Jeton d'intégration Notion"
         case .webhook: return "URL du webhook"
-        case .microsoftToDo: return "Jeton d'accès Microsoft Graph"
         case .googleTasks: return "Refresh token OAuth Google"
         case .tickTick: return "Jeton d'accès TickTick"
         }
@@ -354,8 +351,6 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
             return "Créez une intégration Notion, partagez-lui une base de données, puis collez le jeton et l'ID de la base."
         case .webhook:
             return "StudyTrack envoie un JSON à cette URL (compatible Shortcuts, Home Assistant, Zapier, n8n)."
-        case .microsoftToDo:
-            return "Jeton d'accès Microsoft Graph : le plus simple est de le prendre dans Graph Explorer, puis de le renouveler quand il expire."
         case .googleTasks:
             return "Identifiant client, secret et refresh token OAuth : l'app renouvelle ensuite l'accès toute seule."
         case .tickTick:

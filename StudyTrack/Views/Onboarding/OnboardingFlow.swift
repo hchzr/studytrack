@@ -889,7 +889,7 @@ private struct ConnectionsScreen: View {
     @State private var calendarGranted = false
     @State private var refresh = 0
 
-    private static let providers: [TaskProvider] = [.reminders, .todoist, .microsoftToDo, .googleTasks, .notion, .tickTick]
+    private static let providers: [TaskProvider] = [.reminders, .todoist, .googleTasks, .notion, .tickTick, .things]
 
     var body: some View {
         ScrollView {

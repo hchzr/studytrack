@@ -20,8 +20,6 @@ extension TaskProvider {
             return "Lecture et création de tâches dans une base de données Notion."
         case .webhook:
             return "Chaque tâche créée est envoyée en JSON à l'URL de ton choix — Raccourcis, n8n, Zapier, Home Assistant. Rien n'est relu."
-        case .microsoftToDo:
-            return "Lecture et création de tâches dans Microsoft To Do, via l'API Microsoft Graph."
         case .googleTasks:
             return "Lecture et création de tâches dans Google Tasks. L'app renouvelle elle-même son accès grâce au refresh token."
         case .tickTick:
@@ -32,7 +30,7 @@ extension TaskProvider {
     /// Ce que l'intégration sait faire, en clair.
     var capabilityLabel: String {
         switch self {
-        case .reminders, .todoist, .notion, .microsoftToDo, .googleTasks, .tickTick:
+        case .reminders, .todoist, .notion, .googleTasks, .tickTick:
             return "Lecture et écriture"
         case .things, .webhook:
             return "Écriture seule"
@@ -80,14 +78,6 @@ extension TaskProvider {
                 "À chaque tâche créée, StudyTrack envoie un objet JSON avec le titre, les notes, l'échéance, la priorité et le code du cours."
             ]
 
-        case .microsoftToDo:
-            return [
-                "Ouvre Graph Explorer et connecte-toi avec ton compte Microsoft.",
-                "Ouvre l'onglet « Access token » et copie le jeton affiché.",
-                "Colle-le ci-dessus : StudyTrack lit et crée alors des tâches dans ta liste « Tasks ».",
-                "Le jeton expire en une heure environ : recolle-en un nouveau quand la synchronisation s'arrête."
-            ]
-
         case .googleTasks:
             return [
                 "Dans Google Cloud Console, crée un projet puis active l'API « Google Tasks ».",
@@ -115,8 +105,6 @@ extension TaskProvider {
             return "https://todoist.com/app/settings/integrations/developer"
         case .notion:
             return "https://www.notion.so/my-integrations"
-        case .microsoftToDo:
-            return "https://developer.microsoft.com/graph/graph-explorer"
         case .googleTasks:
             return "https://console.cloud.google.com/apis/library/tasks.googleapis.com"
         case .tickTick:
@@ -137,8 +125,6 @@ extension TaskProvider {
             return "Un jeton d'intégration ne voit que les bases que tu lui as explicitement partagées."
         case .webhook:
             return "Écriture seule, et sans réessai : si l'URL est injoignable, la tâche n'est pas renvoyée plus tard."
-        case .microsoftToDo:
-            return "Un jeton Graph expire en une heure environ. StudyTrack ne stocke aucun mot de passe Microsoft : c'est le jeton, et lui seul, qui donne accès."
         case .googleTasks:
             return "Le refresh token ne s'obtient qu'une fois. Si tu le révoques depuis ton compte Google, il faut refaire l'étape 3."
         case .tickTick:

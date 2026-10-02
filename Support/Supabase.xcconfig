@@ -30,10 +30,8 @@ SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 //  Vide = le bouton « Se connecter avec… » n'apparaît pas pour ce fournisseur.
 //  Les SECRETS ne vont jamais ici : `supabase secrets set` (voir SUPABASE.md).
 //  Google : l'identifiant d'un client « iOS » (sans secret).
-//  Microsoft : l'identifiant d'une app « mobile et bureau » (client public).
 // ─────────────────────────────────────────────────────────────────────────────
 TODOIST_CLIENT_ID = 5ab65c1fe96e4e66b94900ca202fbeb6
 GOOGLE_CLIENT_ID = 413798671134-b7iho9eeluot8a9godf8uujb69kuj24h.apps.googleusercontent.com
-MICROSOFT_CLIENT_ID =
 TICKTICK_CLIENT_ID = eu29Eh8ZryZku9GC1M
-NOTION_CLIENT_ID =
+NOTION_CLIENT_ID = 3edd872b-594c-819b-9d74-00375522ef0c

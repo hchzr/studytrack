@@ -442,150 +442,6 @@ final class WebhookTaskService: TaskService {
 ///
 /// Auparavant, chaque case cochée construisait un `RemindersTaskService` neuf,
 /// donc un `EKEventStore` neuf : coûteux et source d'incohérences.
-// MARK: - Microsoft To Do (Microsoft Graph)
-
-/// Tâches Microsoft To Do via Graph.
-///
-/// Graph n'émet pas de jeton durable sans inscription d'application : le jeton
-/// d'accès est fourni par l'étudiant·e et expire en une heure environ. La liste
-/// « Tasks » par défaut est résolue une fois puis mémorisée.
-final class MicrosoftToDoTaskService: TaskService {
-    let provider: TaskProvider = .microsoftToDo
-
-    private var token: String
-    /// Connecté par OAuth : le jeton d'accès (une heure) se renouvelle seul.
-    private var refreshToken: String
-    private var tokenExpiry: Date
-    private let session: URLSession
-    private let baseURL = URL(string: "https://graph.microsoft.com/v1.0/me/todo")!
-    private var listID: String?
-    /// Le nouveau jeton de renouvellement, à garder (Microsoft en émet un à chaque fois).
-    var onRefresh: ((String) -> Void)?
-
-    init(token: String, refreshToken: String = "", session: URLSession = .shared) {
-        self.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.refreshToken = refreshToken
-        self.tokenExpiry = refreshToken.isEmpty ? .distantFuture : .distantPast
-        self.session = session
-    }
-
-    var isConfigured: Bool { !token.isEmpty || !refreshToken.isEmpty }
-    func requestAccess() async -> Bool { await currentToken() != nil }
-
-    @MainActor
-    private func currentToken() async -> String? {
-        if !token.isEmpty, Date() < tokenExpiry { return token }
-        guard !refreshToken.isEmpty, let fresh = await OAuthSignIn.refreshMicrosoft(refreshToken: refreshToken) else {
-            return token.isEmpty ? nil : token
-        }
-        token = fresh.accessToken
-        tokenExpiry = Date().addingTimeInterval(50 * 60)
-        if let next = fresh.refreshToken, next != refreshToken {
-            refreshToken = next
-            onRefresh?(next)
-        }
-        return token
-    }
-
-    private func send(_ path: String, method: String = "GET", body: [String: Any]? = nil) async -> Data? {
-        guard let token = await currentToken() else { return nil }
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = method
-        request.timeoutInterval = 30
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let body { request.httpBody = try? JSONSerialization.data(withJSONObject: body) }
-        do {
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode) else { return nil }
-            return data
-        } catch {
-            return nil
-        }
-    }
-
-    private func resolvedListID() async -> String? {
-        if let listID { return listID }
-        guard let data = await send("lists"),
-              let page = try? JSONDecoder().decode(GraphListPage.self, from: data),
-              let first = page.value.first else { return nil }
-        listID = first.id
-        return listID
-    }
-
-    func fetchTasks() async -> [ExternalTask] {
-        guard isConfigured, let list = await resolvedListID(),
-              let data = await send("lists/\(list)/tasks") else { return [] }
-        guard let page = try? JSONDecoder().decode(GraphTaskPage.self, from: data) else { return [] }
-        return page.value.map { task in
-            ExternalTask(identifier: task.id,
-                         title: task.title,
-                         notes: task.body?.content ?? "",
-                         dueDate: Self.parse(task.dueDateTime),
-                         isDone: task.status == "completed",
-                         priority: Self.priority(from: task.importance),
-                         listName: "Tasks")
-        }
-    }
-
-    func createTask(title: String, notes: String, dueDate: Date?, priority: Int) async -> ExternalTask? {
-        guard isConfigured, let list = await resolvedListID() else { return nil }
-        var body: [String: Any] = ["title": title]
-        if !notes.isEmpty { body["body"] = ["content": notes, "contentType": "text"] }
-        if let dueDate {
-            body["dueDateTime"] = ["dateTime": ISO8601DateFormatter().string(from: dueDate),
-                                   "timeZone": TimeZone.current.identifier]
-        }
-        guard let data = await send("lists/\(list)/tasks", method: "POST", body: body),
-              let task = try? JSONDecoder().decode(GraphTask.self, from: data) else { return nil }
-        return ExternalTask(identifier: task.id, title: task.title, notes: notes,
-                            dueDate: dueDate, isDone: false, priority: priority, listName: "Tasks")
-    }
-
-    func setCompleted(identifier: String, completed: Bool) async -> Bool {
-        guard isConfigured, let list = await resolvedListID() else { return false }
-        let body: [String: Any] = ["status": completed ? "completed" : "notStarted"]
-        return await send("lists/\(list)/tasks/\(identifier)", method: "PATCH", body: body) != nil
-    }
-
-    func deleteTask(identifier: String) async -> Bool {
-        guard isConfigured, let list = await resolvedListID() else { return false }
-        return await send("lists/\(list)/tasks/\(identifier)", method: "DELETE") != nil
-    }
-
-    /// Graph renvoie sept décimales de fraction de seconde : les trois formats du
-    /// projet sont essayés, du plus précis au plus permissif.
-    private static func parse(_ value: GraphDateTime?) -> Date? {
-        guard let raw = value?.dateTime else { return nil }
-        return DateUtils.iso8601Fractional.date(from: raw)
-            ?? DateUtils.iso8601.date(from: raw)
-            ?? DateUtils.parse(raw)
-    }
-
-    private static func priority(from importance: String?) -> Int {
-        switch importance {
-        case "high": return 4
-        case "low": return 1
-        default: return 2
-        }
-    }
-}
-
-struct GraphListPage: Decodable { let value: [GraphList] }
-struct GraphList: Decodable { let id: String }
-struct GraphTaskPage: Decodable { let value: [GraphTask] }
-struct GraphTask: Decodable {
-    let id: String
-    let title: String
-    let status: String?
-    let importance: String?
-    let body: GraphTaskBody?
-    let dueDateTime: GraphDateTime?
-}
-struct GraphTaskBody: Decodable { let content: String? }
-struct GraphDateTime: Decodable { let dateTime: String }
-
 // MARK: - Google Tasks
 
 /// Tâches Google via l'API Tasks.
@@ -836,8 +692,6 @@ final class TaskServiceFactory {
     private var notionKey = ""
     private var webhook: WebhookTaskService?
     private var webhookURL = ""
-    private var microsoft: MicrosoftToDoTaskService?
-    private var microsoftToken = ""
     private var google: GoogleTasksTaskService?
     private var googleKey = ""
     private var tickTick: TickTickTaskService?
@@ -881,19 +735,6 @@ final class TaskServiceFactory {
             }
             return webhook
 
-        case .microsoftToDo:
-            let key = "\(settings.microsoftToken)|\(settings.microsoftRefreshToken.prefix(12))"
-            guard !settings.microsoftToken.isEmpty || !settings.microsoftRefreshToken.isEmpty else { return nil }
-            if microsoft == nil || microsoftToken != key {
-                let service = MicrosoftToDoTaskService(token: settings.microsoftToken,
-                                                       refreshToken: settings.microsoftRefreshToken)
-                service.onRefresh = { next in
-                    Task { @MainActor in settings.microsoftRefreshToken = next }
-                }
-                microsoft = service
-                microsoftToken = "\(settings.microsoftToken)|\(settings.microsoftRefreshToken.prefix(12))"
-            }
-            return microsoft
 
         case .googleTasks:
             let key = "\(settings.googleClientID)|\(settings.googleRefreshToken)"

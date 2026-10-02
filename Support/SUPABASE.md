@@ -360,7 +360,6 @@ L'adresse de retour des fournisseurs à secret est la fonction `oauth` :
 | TickTick | developer.ticktick.com › Manage Apps | idem | `TICKTICK_CLIENT_ID` | `TICKTICK_CLIENT_ID`, `TICKTICK_CLIENT_SECRET` |
 | Notion | notion.so/my-integrations › Public integration | idem | `NOTION_CLIENT_ID` | `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` |
 | Google Tasks | console.cloud.google.com › Identifiants › ID client **iOS** (bundle `com.hczr.studytrack.app`), API Tasks activée, écran de consentement | (automatique : schéma inversé du client) | `GOOGLE_CLIENT_ID` | — (client public, PKCE) |
-| Microsoft To Do | entra.microsoft.com › Inscriptions d'applications › « Comptes personnels et professionnels », plateforme **iOS/macOS** (bundle ci-dessus), permission déléguée `Tasks.ReadWrite` | `msauth.com.hczr.studytrack.app://auth` | `MICROSOFT_CLIENT_ID` | — (client public, PKCE) |
 
     supabase secrets set TODOIST_CLIENT_ID=… TODOIST_CLIENT_SECRET=… \
         TICKTICK_CLIENT_ID=… TICKTICK_CLIENT_SECRET=… \

@@ -179,7 +179,6 @@ struct TaskIntegrationsView: View {
         case .things: settings.thingsEnabled = false
         case .notion: settings.notionToken = ""; settings.notionDatabaseID = ""
         case .webhook: settings.webhookURL = ""
-        case .microsoftToDo: settings.microsoftToken = ""; settings.microsoftRefreshToken = ""
         case .googleTasks: settings.googleRefreshToken = ""; settings.googleClientSecret = ""
         case .tickTick: settings.tickTickToken = ""
         }
@@ -230,8 +229,6 @@ private struct ManualProviderForm: View {
                     TextField("ID de la base de données", text: $settings.notionDatabaseID)
                 case .webhook:
                     TextField("https://…", text: $settings.webhookURL).keyboardType(.URL)
-                case .microsoftToDo:
-                    SecureField("Jeton d'accès Microsoft Graph", text: $settings.microsoftToken)
                 case .googleTasks:
                     TextField("Identifiant client OAuth", text: $settings.googleClientID)
                     SecureField("Secret client (client Web uniquement)", text: $settings.googleClientSecret)
@@ -277,7 +274,6 @@ enum TaskConnector {
             switch provider {
             case .todoist: return .todoist
             case .googleTasks: return .google
-            case .microsoftToDo: return .microsoft
             case .tickTick: return .tickTick
             case .notion: return .notion
             default: return nil
@@ -303,9 +299,6 @@ enum TaskConnector {
                 settings.googleClientID = OAuthConfig.googleClientID
                 settings.googleClientSecret = ""
                 settings.googleRefreshToken = tokens.refreshToken ?? ""
-            case .microsoftToDo:
-                settings.microsoftToken = tokens.accessToken
-                settings.microsoftRefreshToken = tokens.refreshToken ?? ""
             case .notion:
                 settings.notionToken = tokens.accessToken
                 let databases = await NotionDatabase.list(token: tokens.accessToken)

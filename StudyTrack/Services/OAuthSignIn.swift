@@ -11,7 +11,6 @@ import UIKit
 enum OAuthConfig {
     static var todoistClientID: String { value("TodoistClientID") }
     static var googleClientID: String { value("GoogleClientID") }
-    static var microsoftClientID: String { value("MicrosoftClientID") }
     static var tickTickClientID: String { value("TickTickClientID") }
     static var notionClientID: String { value("NotionClientID") }
 
@@ -19,7 +18,6 @@ enum OAuthConfig {
         switch provider {
         case .todoist: return todoistClientID
         case .google: return googleClientID
-        case .microsoft: return microsoftClientID
         case .tickTick: return tickTickClientID
         case .notion: return notionClientID
         }
@@ -39,19 +37,18 @@ enum OAuthConfig {
 }
 
 enum OAuthProvider: String, CaseIterable, Identifiable {
-    case todoist, google, microsoft, tickTick = "ticktick", notion
+    case todoist, google, tickTick = "ticktick", notion
     var id: String { rawValue }
 
-    /// Google et Microsoft acceptent un client public (PKCE, sans secret) :
+    /// Google accepte un client public (PKCE, sans secret) :
     /// l'échange du code se fait depuis l'app. Les autres exigent un secret, qui
     /// ne vit que dans la fonction Supabase `oauth`.
-    var usesPKCE: Bool { self == .google || self == .microsoft }
+    var usesPKCE: Bool { self == .google }
 
     var label: String {
         switch self {
         case .todoist: return "Todoist"
         case .google: return "Google"
-        case .microsoft: return "Microsoft"
         case .tickTick: return "TickTick"
         case .notion: return "Notion"
         }
@@ -123,14 +120,12 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
 
     // MARK: Adresses
 
-    /// Google : le schéma inversé du client iOS. Microsoft : `msauth.<bundle>`.
+    /// Google : le schéma inversé du client iOS.
     private func redirectURI(_ provider: OAuthProvider) -> String {
         switch provider {
         case .google:
             let reversed = OAuthConfig.googleClientID.split(separator: ".").reversed().joined(separator: ".")
             return "\(reversed):/oauth2redirect"
-        case .microsoft:
-            return "msauth.\(Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.app")://auth"
         default:
             return "studytrack://oauth"
         }
@@ -152,10 +147,6 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
                       URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/tasks"),
                       URLQueryItem(name: "access_type", value: "offline"),
                       URLQueryItem(name: "prompt", value: "consent")]
-        case .microsoft:
-            components = URLComponents(string: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize")!
-            items += [URLQueryItem(name: "response_type", value: "code"),
-                      URLQueryItem(name: "scope", value: "Tasks.ReadWrite offline_access")]
         case .tickTick:
             components = URLComponents(string: "https://ticktick.com/oauth/authorize")!
             items += [URLQueryItem(name: "response_type", value: "code"),
@@ -185,7 +176,6 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
                       "code_verifier": verifier,
                       "redirect_uri": redirect,
                       "grant_type": "authorization_code"]
-        if provider == .microsoft { fields["scope"] = "Tasks.ReadWrite offline_access" }
         let payload = try await Self.postForm(endpoint, fields: fields)
         guard let access = payload["access_token"] as? String else {
             throw OAuthError.badResponse(payload["error_description"] as? String ?? payload["error"] as? String ?? "?")
@@ -193,17 +183,6 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
         return OAuthTokens(accessToken: access, refreshToken: payload["refresh_token"] as? String)
     }
 
-    /// Un nouveau jeton d'accès Microsoft à partir du jeton de renouvellement.
-    /// Microsoft en renvoie un nouveau à chaque fois : l'appelant le garde.
-    static func refreshMicrosoft(refreshToken: String) async -> OAuthTokens? {
-        let fields = ["client_id": OAuthConfig.microsoftClientID,
-                      "refresh_token": refreshToken,
-                      "grant_type": "refresh_token",
-                      "scope": "Tasks.ReadWrite offline_access"]
-        guard let payload = try? await postForm("https://login.microsoftonline.com/common/oauth2/v2.0/token", fields: fields),
-              let access = payload["access_token"] as? String else { return nil }
-        return OAuthTokens(accessToken: access, refreshToken: payload["refresh_token"] as? String ?? refreshToken)
-    }
 
     static func postForm(_ endpoint: String, fields: [String: String]) async throws -> [String: Any] {
         var request = URLRequest(url: URL(string: endpoint)!)

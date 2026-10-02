@@ -55,8 +55,6 @@
 	<string>$(TODOIST_CLIENT_ID)</string>
 	<key>GoogleClientID</key>
 	<string>$(GOOGLE_CLIENT_ID)</string>
-	<key>MicrosoftClientID</key>
-	<string>$(MICROSOFT_CLIENT_ID)</string>
 	<key>TickTickClientID</key>
 	<string>$(TICKTICK_CLIENT_ID)</string>
 	<key>NotionClientID</key>
