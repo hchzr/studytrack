@@ -36,7 +36,7 @@ enum PDFLayoutExtractor {
         guard let selection = page.selection(for: bounds) else {
             // Repli : le texte de la page, ligne par ligne, sans information de police.
             let raw = page.string ?? ""
-            return raw
+            return TextRepair.composeAccents(raw).precomposedStringWithCanonicalMapping
                 .components(separatedBy: .newlines)
                 .map { PDFLayoutLine(text: $0, pageIndex: pageIndex) }
         }
@@ -51,7 +51,8 @@ enum PDFLayoutExtractor {
             let indent = known ? max(0, Double(frame.minX - bounds.minX)) : 0
             // PDF : l'origine est en bas. 0 = haut de page, 1 = bas.
             let vertical: Double? = known ? Double((bounds.maxY - frame.midY) / bounds.height) : nil
-            return PDFLayoutLine(text: attributed.string,
+            // « s´erie » → « série » : l'accent qu'un PDF LaTeX dessine à part.
+            return PDFLayoutLine(text: TextRepair.composeAccents(attributed.string).precomposedStringWithCanonicalMapping,
                                  fontSize: Double(metrics.size),
                                  isBold: metrics.isBold,
                                  pageIndex: pageIndex,

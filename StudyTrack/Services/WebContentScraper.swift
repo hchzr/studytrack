@@ -483,7 +483,7 @@ enum AuthenticatedDownloader {
         if isPDF(response) || data.starts(with: Data("%PDF".utf8)) {
             guard let pdf = PDFDocument(data: data) else { return nil }
             let count = min(pdf.pageCount, pages ?? pdf.pageCount)
-            let body = (0..<count).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n")
+            let body = TextRepair.composeAccents((0..<count).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n"))
             return body.isEmpty ? nil : (body, true)
         }
         guard let body = Self.plainText(fromHTML: String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? "") else { return nil }

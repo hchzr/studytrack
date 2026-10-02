@@ -128,6 +128,8 @@ struct RootTabView: View {
                 // Une commande venue de l'écran verrouillé pendant que l'app
                 // dormait attend dans le dépôt partagé : on la rejoue ici.
                 // Même principe pour un fichier partagé depuis une autre app.
+                // La socket temps réel des groupes a pu être coupée par la veille.
+                app.social.realtime?.resume()
                 Task { @MainActor in
                     // Le chrono rattrape ce qui s'est passé app fermée : une fin
                     // de bloc, une pause écoulée.

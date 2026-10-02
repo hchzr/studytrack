@@ -218,9 +218,17 @@ struct RemotePost: Codable, Identifiable, Equatable {
     var body: String
     var resolved: Bool
     var createdAt: Date
+    /// Le corps chiffré (`GroupCrypto`), quand le message l'est : `body` est
+    /// alors vide sur le serveur et rempli ici, une fois déchiffré.
+    var ciphertext: String?
+    var keyId: String?
+    /// Chiffré avec une clé que cet appareil n'a pas (encore) : le corps est
+    /// remplacé par une phrase d'explication.
+    var isLocked = false
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, body, resolved
+        case id, kind, body, resolved, ciphertext
+        case keyId = "key_id"
         case groupId = "group_id"
         case authorId = "author_id"
         case authorName = "author_name"
@@ -261,6 +269,11 @@ struct LeaderboardRow: Codable, Identifiable {
 // MARK: - Service social
 
 /// Façade des fonctionnalités sociales (groupes, classements, planning partagé).
+///
+/// `@MainActor`, comme le client qu'elle enveloppe : ses propriétés observées
+/// (`isSignedIn`, `userID`) sont lues par les vues, et étaient écrites depuis
+/// n'importe quel fil au retour d'une requête.
+@MainActor
 @Observable
 final class SocialService {
 
@@ -269,6 +282,11 @@ final class SocialService {
     private(set) var userID: String?
     private(set) var email: String?
     private(set) var lastError: String?
+
+    /// La clé de chaque groupe (chiffrement de bout en bout de l'entraide).
+    @ObservationIgnored let encryption = GroupEncryption()
+    /// Les changements des groupes, à l'instant (`RealtimeClient`).
+    @ObservationIgnored private(set) var realtime: RealtimeClient?
 
     var isConfigured: Bool { client != nil }
 
@@ -289,12 +307,22 @@ final class SocialService {
         client?.onSessionChange = { [weak self] in
             Task { @MainActor in self?.syncSession() }
         }
+        realtime = client.flatMap { client in
+            RealtimeClient(baseURL: client.baseURL, anonKey: client.anonKey) { [weak client] in
+                client?.accessToken
+            }
+        }
     }
 
     private func syncSession() {
+        let previous = userID
         isSignedIn = client?.isSignedIn ?? false
         userID = client?.userID
         email = client?.userEmail
+        // Autre compte, ou plus de compte : les clés en mémoire ne sont plus
+        // les bonnes (celles du trousseau sont rangées par compte).
+        if previous != userID { encryption.reset() }
+        realtime?.tokenDidChange()
     }
 
     // MARK: Authentification
@@ -306,9 +334,7 @@ final class SocialService {
         }
         do {
             try await client.signInWithApple(idToken: idToken, nonce: nonce)
-            isSignedIn = true
-            userID = client.userID
-            email = client.userEmail
+            syncSession()
             lastError = nil
             return true
         } catch {
@@ -324,9 +350,7 @@ final class SocialService {
         }
         do {
             try await client.signUp(email: value, password: password)
-            isSignedIn = true
-            userID = client.userID
-            email = client.userEmail
+            syncSession()
             lastError = nil
             return true
         } catch {
@@ -342,9 +366,7 @@ final class SocialService {
         }
         do {
             try await client.signIn(email: value, password: password)
-            isSignedIn = true
-            userID = client.userID
-            email = client.userEmail
+            syncSession()
             lastError = nil
             return true
         } catch {
@@ -358,6 +380,8 @@ final class SocialService {
         isSignedIn = false
         userID = nil
         email = nil
+        encryption.reset()
+        realtime?.tokenDidChange()
     }
 
     /// Supprime le compte **et** tout ce qui en dépend sur le serveur (profil,
@@ -396,6 +420,10 @@ final class SocialService {
         _ = try? await client.upsert("profiles",
                                      rows: [["id": userID, "display_name": displayName]],
                                      onConflict: "id")
+
+        // Ma clé publique avant tout : les autres membres en ont besoin pour me
+        // transmettre la clé de l'entraide chiffrée.
+        try? await encryption.publishIdentity(client: client)
 
         let subjects = StudyGroup.normalize(courseCodes.isEmpty ? [courseCode] : courseCodes)
         let inviteCode = StudyGroup.generateInviteCode()
@@ -439,6 +467,11 @@ final class SocialService {
         _ = try? await client.upsert("profiles",
                                      rows: [["id": userID, "display_name": displayName]],
                                      onConflict: "id")
+
+        // Ma clé publique **avant** l'adhésion : l'adhésion prévient en temps réel
+        // les membres connectés, qui me scellent aussitôt la clé du groupe — à
+        // condition de trouver ma clé publique à ce moment-là.
+        try? await encryption.publishIdentity(client: client)
 
         let data = try await client.select("study_groups",
                                            query: [URLQueryItem(name: "invite_code", value: "eq.\(inviteCode)"),
@@ -826,7 +859,51 @@ final class SocialService {
                                                    URLQueryItem(name: "order", value: "created_at.desc"),
                                                    URLQueryItem(name: "limit", value: String(limit))])
         guard let data else { return [] }
-        return RemotePost.decodeList(data)
+        let posts = RemotePost.decodeList(data)
+        guard posts.contains(where: { $0.ciphertext != nil }) else { return posts }
+        if encryption.activeKey(groupID: groupID) == nil {
+            await encryption.prepare(groupID: groupID, client: client)
+        }
+        return posts.map { decrypted($0, groupID: groupID) }
+    }
+
+    /// Le message tel qu'on le lit : déchiffré si cet appareil a la clé.
+    private func decrypted(_ post: RemotePost, groupID: String) -> RemotePost {
+        guard let sealed = post.ciphertext else { return post }
+        var copy = post
+        if let active = encryption.activeKey(groupID: groupID), post.keyId == nil || post.keyId == active.id,
+           let text = try? GroupCrypto.open(sealed, key: active.key, groupID: groupID, authorID: post.authorId) {
+            copy.body = text
+        } else {
+            copy.body = "Message chiffré — la clé du groupe n'est pas encore arrivée sur cet appareil."
+            copy.isLocked = true
+        }
+        return copy
+    }
+
+    /// Prépare le chiffrement d'un groupe et chiffre **mes** anciens messages
+    /// restés en clair (avant le chiffrement) : seul l'auteur peut les modifier.
+    @discardableResult
+    func prepareEncryption(groupID: String, forceDistribution: Bool = false) async -> GroupEncryption.State {
+        guard let client, client.userID != nil else { return .waitingForKey }
+        let state = await encryption.prepare(groupID: groupID, client: client, forceDistribution: forceDistribution)
+        if state == .ready { await encryptLegacyPosts(groupID: groupID, client: client) }
+        return state
+    }
+
+    private func encryptLegacyPosts(groupID: String, client: SupabaseClient) async {
+        guard let userID = client.userID, let active = encryption.activeKey(groupID: groupID),
+              let data = try? await client.select("group_posts",
+                                                  query: [URLQueryItem(name: "group_id", value: "eq.\(groupID)"),
+                                                          URLQueryItem(name: "author_id", value: "eq.\(userID)"),
+                                                          URLQueryItem(name: "ciphertext", value: "is.null"),
+                                                          URLQueryItem(name: "select", value: "*")]) else { return }
+        for post in RemotePost.decodeList(data) where !post.body.isEmpty {
+            guard let sealed = try? GroupCrypto.seal(post.body, key: active.key, groupID: groupID, authorID: userID) else { continue }
+            _ = try? await client.update("group_posts",
+                                         query: [URLQueryItem(name: "id", value: "eq.\(post.id)")],
+                                         values: ["ciphertext": sealed, "key_id": active.id, "body": ""])
+        }
     }
 
     /// Pose une question (sur un exercice) ou répond à une question.
@@ -836,6 +913,15 @@ final class SocialService {
                     exerciseNumber: String = "", body: String) async throws -> RemotePost {
         guard let client else { throw SupabaseError.notConfigured }
         guard let userID = client.userID else { throw SupabaseError.notSignedIn }
+        // Jamais en clair : sans clé, on n'envoie pas. Le serveur ne doit pas
+        // recevoir une seule fois le texte d'un message.
+        if encryption.activeKey(groupID: groupID) == nil {
+            await encryption.prepare(groupID: groupID, client: client)
+        }
+        guard let active = encryption.activeKey(groupID: groupID) else {
+            throw SupabaseError.groupKeyPending
+        }
+        let sealed = try GroupCrypto.seal(body, key: active.key, groupID: groupID, authorID: userID)
         var payload: [String: Any] = [
             "group_id": groupID,
             "author_id": userID,
@@ -843,7 +929,9 @@ final class SocialService {
             "kind": parentID == nil ? "help" : "reply",
             "course_code": courseCode,
             "exercise_number": exerciseNumber,
-            "body": body
+            "body": "",
+            "ciphertext": sealed,
+            "key_id": active.id
         ]
         if let parentID { payload["parent_id"] = parentID }
         if let seriesNumber { payload["series_number"] = seriesNumber }
@@ -851,7 +939,7 @@ final class SocialService {
         guard let data, let post = RemotePost.decodeList(data).first else {
             throw SupabaseError.decoding("group_posts")
         }
-        return post
+        return decrypted(post, groupID: groupID)
     }
 
     func setPostResolved(postID: String, resolved: Bool) async throws {

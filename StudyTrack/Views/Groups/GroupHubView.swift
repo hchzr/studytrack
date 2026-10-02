@@ -25,6 +25,8 @@ struct GroupHubView: View {
     @State private var composing = false
     @State private var openedThread: RemotePost?
     @State private var showingPlan = false
+    /// Où en est le chiffrement de l'entraide sur ce téléphone.
+    @State private var encryption: GroupEncryption.State?
 
     // MARK: Dérivés
 
@@ -268,6 +270,9 @@ struct GroupHubView: View {
                     }
                 }
             }
+            if isOnline, let encryption {
+                encryptionNote(encryption)
+            }
             CarnetSheet {
                 if !isOnline {
                     CarnetRow(icon: "bubble.left.and.bubble.right", tint: Carnet.inkSecondary,
@@ -292,6 +297,27 @@ struct GroupHubView: View {
                     if index < min(questions.count, 8) - 1 { CarnetRule(inset: 56) }
                 }
             }
+        }
+    }
+
+    /// Une ligne discrète sous le titre : chiffré, ou en attente de la clé.
+    @ViewBuilder
+    private func encryptionNote(_ state: GroupEncryption.State) -> some View {
+        switch state {
+        case .ready:
+            Label("Chiffré de bout en bout : le serveur ne lit pas vos messages.", systemImage: "lock.fill")
+                .font(.caption)
+                .foregroundStyle(Carnet.inkTertiary)
+                .padding(.horizontal, 6)
+        case .waitingForKey:
+            Label("Clé de chiffrement en route : elle arrive dès qu'un membre du groupe ouvre l'app.",
+                  systemImage: "lock.badge.clock")
+                .font(.caption)
+                .foregroundStyle(Carnet.review.accessibleInk)
+                .padding(.horizontal, 6)
+                .fixedSize(horizontal: false, vertical: true)
+        case .unavailable:
+            EmptyView()
         }
     }
 
@@ -361,14 +387,52 @@ struct GroupHubView: View {
 
     // MARK: Réseau
 
-    /// Le direct et l'entraide, relus tant que la page est ouverte.
+    /// Le direct et l'entraide, **en temps réel** tant que la page est ouverte.
+    ///
+    /// Ils étaient relus toutes les 30 s : un message ou un chrono lancé mettait
+    /// jusque-là à apparaître. Realtime prévient maintenant à l'instant ; la
+    /// relecture complète toutes les deux minutes ne sert plus que de filet
+    /// (socket coupée sans qu'on le sache, événement perdu).
     private func watch() async {
-        guard isOnline else { return }
+        guard isOnline, let remoteID = group.remoteID else { return }
+        encryption = await app.social.prepareEncryption(groupID: remoteID)
+        await refreshPresence()
+        await reloadPosts()
+
+        let subscription = app.social.realtime?.subscribe(groupID: remoteID) { table in
+            Task { @MainActor in await changed(table, groupID: remoteID) }
+        }
+        defer { if let subscription { app.social.realtime?.unsubscribe(subscription) } }
+
+        var ticks = 0
         while !Task.isCancelled {
-            await refreshPresence()
-            await reloadPosts()
-            now = Date()
             try? await Task.sleep(for: .seconds(30))
+            if Task.isCancelled { break }
+            now = Date()
+            ticks += 1
+            if ticks % 4 == 0 {
+                await refreshPresence()
+                await reloadPosts()
+            }
+        }
+    }
+
+    /// Un changement annoncé par le serveur : relire ce qu'il touche.
+    private func changed(_ table: RealtimeClient.Table, groupID: String) async {
+        switch table {
+        case .posts:
+            await reloadPosts()
+        case .presence:
+            await refreshPresence()
+            now = Date()
+        case .members:
+            // Quelqu'un vient d'arriver : lui sceller la clé tout de suite,
+            // pour qu'il lise l'entraide sans attendre.
+            encryption = await app.social.prepareEncryption(groupID: groupID, forceDistribution: true)
+        case .keyShares:
+            // Une clé m'a peut-être été transmise : la prendre, et relire en clair.
+            encryption = await app.social.prepareEncryption(groupID: groupID)
+            await reloadPosts()
         }
     }
 
@@ -567,6 +631,7 @@ struct HelpThread: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 6)
             }
+            .task { await watchReplies() }
             .navigationTitle(question.target.isEmpty ? "Question" : question.target)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -622,6 +687,26 @@ struct HelpThread: View {
             Haptics.success()
         } catch {
             self.error = GroupSync.explain(error)
+        }
+    }
+
+    /// Les réponses arrivent pendant qu'on lit le fil, sans le rouvrir.
+    private func watchReplies() async {
+        guard let remoteID = group.remoteID,
+              let realtime = app.social.realtime else { return }
+        let subscription = realtime.subscribe(groupID: remoteID) { table in
+            guard table == .posts || table == .keyShares else { return }
+            Task { @MainActor in
+                guard let all = try? await app.social.fetchPosts(groupID: remoteID) else { return }
+                withAnimation(Motion.snappy) {
+                    replies = all.filter { $0.parentId == question.id }.sorted { $0.createdAt < $1.createdAt }
+                    if let fresh = all.first(where: { $0.id == question.id }) { resolved = fresh.resolved }
+                }
+            }
+        }
+        defer { realtime.unsubscribe(subscription) }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3600))
         }
     }
 

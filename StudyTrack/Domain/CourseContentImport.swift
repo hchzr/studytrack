@@ -770,6 +770,9 @@ enum BotafogoParser {
         let entities = ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'",
                         "&#x27;": "'", "&apos;": "'", "&nbsp;": " ", "&#x2F;": "/", "&rsquo;": "'"]
         for (entity, value) in entities { result = result.replacingOccurrences(of: entity, with: value) }
-        return result
+        // Le reste des entités (`&eacute;`, `&#233;`, `&#039;`), un texte relu
+        // en Latin-1 en route (« SÃ©rie ») et les accents détachés : les titres
+        // de Moodle et du polycopié passent tous par ici.
+        return TextRepair.clean(result)
     }
 }

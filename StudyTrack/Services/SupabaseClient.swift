@@ -10,6 +10,9 @@ enum SupabaseError: LocalizedError {
     case invalidResponse
     case server(status: Int, message: String)
     case decoding(String)
+    /// L'entraide d'un groupe est chiffrée, et la clé n'est pas encore arrivée
+    /// sur cet appareil : on n'envoie rien plutôt que d'envoyer en clair.
+    case groupKeyPending
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +22,7 @@ enum SupabaseError: LocalizedError {
         case .invalidResponse: return "Réponse invalide du serveur."
         case .server(let status, let message): return "Erreur serveur (\(status)) : \(message)"
         case .decoding(let detail): return "Décodage impossible : \(detail)"
+        case .groupKeyPending: return "La clé de chiffrement du groupe n'est pas encore arrivée sur ce téléphone. Elle arrive dès qu'un membre du groupe ouvre l'app ; réessaie dans un instant."
         }
     }
 }
@@ -46,6 +50,15 @@ struct SupabaseUser: Decodable {
 }
 
 /// Client REST minimal pour Supabase (Auth + PostgREST), sans dépendance externe.
+///
+/// `@MainActor` : le jeton, son rafraîchissement en cours (`refreshing`) et la
+/// session vivent ici, et une synchronisation lance six requêtes ensemble
+/// (`async let`). Sans isolation, elles tournaient sur six fils à la fois : deux
+/// d'entre elles pouvaient présenter le **même** jeton de rafraîchissement, que
+/// Supabase fait tourner à chaque usage — le second est pris pour un vol, et la
+/// session entière est révoquée. C'était la « connexion qui ne tient pas ».
+/// Le réseau, lui, ne bloque pas le fil principal : `URLSession` attend ailleurs.
+@MainActor
 final class SupabaseClient {
 
     let baseURL: URL

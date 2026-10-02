@@ -13,9 +13,9 @@ import SwiftData
 /// minutes et je disparais du direct — alors que le chrono, lui, tourne toujours.
 /// La durée de travail enregistrée reste juste ; seule la présence s'éteint.
 ///
-/// La classe n'est **pas** `@MainActor` dans son ensemble : `AppContainer` la
-/// construit depuis un initialiseur non isolé. Seuls les deux points d'entrée le
-/// sont, puisque ce sont eux qui touchent l'interface.
+/// `@MainActor` en entier : `AppContainer`, qui la construit, l'est aussi, et
+/// `shareableGroupIDs` lit des modèles SwiftData du contexte principal.
+@MainActor
 @Observable
 final class PresenceService {
 

@@ -20,11 +20,34 @@ enum MathMarkup {
 
     /// Le texte contient-il quelque chose à mettre en forme ?
     static func hasMarkup(_ text: String) -> Bool {
-        text.contains("_") || text.contains("^") || text.contains("\\") || text.contains("$")
+        text.contains("_") || text.contains("^") || text.contains("\\") || text.contains("$") || text.contains("``")
+    }
+
+    /// Accent de LaTeX → accent combinant Unicode.
+    static let accentMarks: [String: String] = [
+        "'": "\u{0301}", "`": "\u{0300}", "^": "\u{0302}", "\"": "\u{0308}",
+        "~": "\u{0303}", "c": "\u{0327}", "H": "\u{030B}", "v": "\u{030C}"
+    ]
+
+    /// ``guillemets'' de LaTeX → « “ ” ». Seulement après un ``, pour ne pas
+    /// toucher la dérivée seconde f''(x).
+    static func typographicQuotes(_ source: String) -> String {
+        guard source.contains("``") else { return source }
+        var result = ""
+        var rest = Substring(source)
+        while let open = rest.range(of: "``") {
+            result += rest[..<open.lowerBound] + "“"
+            rest = rest[open.upperBound...]
+            if let close = rest.range(of: "''") {
+                result += rest[..<close.lowerBound] + "”"
+                rest = rest[close.upperBound...]
+            }
+        }
+        return result + rest
     }
 
     static func runs(_ source: String) -> [Run] {
-        var parser = Parser(Array(source.replacingOccurrences(of: "$", with: "")))
+        var parser = Parser(Array(typographicQuotes(source).replacingOccurrences(of: "$", with: "")))
         return merge(parser.parse(style: .normal, until: nil))
     }
 
@@ -194,6 +217,18 @@ enum MathMarkup {
                 return argument(style: style)
             case "overline", "bar":
                 return argument(style: style).map { Run(text: $0.text + "\u{0305}", style: $0.style) }
+            // Les accents de LaTeX : `\'e`, `\'{e}`, `\`a`, `\^o`, `\"u`, `\c{c}`.
+            // Ils sortaient tels quels — « 'e », « ^o » — dans un énoncé ou un
+            // titre lu par le modèle : l'accent était là, mais à côté de la lettre.
+            case "'", "`", "^", "\"", "~", "c", "H", "v":
+                guard let mark = MathMarkup.accentMarks[command] else { return [] }
+                let isCommand = !atEnd && chars[index] == "\\"
+                let body = argument(style: style)
+                // `\"\i ve` : l'espace qui termine `\i` n'est pas du texte.
+                if isCommand, !atEnd, chars[index] == " " { index += 1 }
+                guard let first = body.first, let letter = first.text.first else { return body }
+                let accented = (String(letter) + mark).precomposedStringWithCanonicalMapping
+                return [Run(text: accented + first.text.dropFirst(), style: first.style)] + body.dropFirst()
             default:
                 if let symbol = MathMarkup.symbols[command] {
                     return [Run(text: symbol, style: style)]

@@ -930,6 +930,7 @@ final class TaskServiceFactory {
 
 // MARK: - Synchronisation vers le modèle local
 
+@MainActor
 enum TaskSync {
 
     struct SyncResult {

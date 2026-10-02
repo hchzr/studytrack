@@ -166,9 +166,12 @@ final class MoodleClient {
     }
 
     /// Les cours où l'on est inscrit·e (vide sans connexion).
-    func enrolled() async throws -> [MoodleCourseRef] {
+    ///
+    /// - Parameter classification: `all` (défaut), ou `inprogress` — les cours
+    ///   du semestre en cours seulement, sans ceux des années passées.
+    func enrolled(classification: String = "all") async throws -> [MoodleCourseRef] {
         let json = try await call("core_course_get_enrolled_courses_by_timeline_classification",
-                                  args: ["offset": 0, "limit": 0, "classification": "all", "sort": "fullname"])
+                                  args: ["offset": 0, "limit": 0, "classification": classification, "sort": "fullname"])
         return MoodleStateParser.courses(fromJSON: json)
     }
 
@@ -237,8 +240,14 @@ final class MoodleClient {
             const text = (main.querySelector('.box.generalbox, .no-overflow, [role="main"]') || main).innerText || '';
             const preview = text.replace(/\s+/g, ' ').trim().slice(0, 500);
             if (statement || solution) {
+              // Un dossier (ou une page) peut porter **toutes** les séries :
+              // la liste complète part avec, l'app la déplie en activités.
+              const files = docs.slice(0, 80).map(l => ({
+                title: ((l.a.innerText || l.a.textContent || '').replace(/\s+/g, ' ').trim()) || decodeURIComponent((l.href.split('?')[0].split('/').pop() || '')),
+                url: l.href }));
               out[item.id] = { target: (statement || solution).href, solution: statement && solution ? solution.href : '',
-                               kind: item.module === 'folder' ? 'dossier' : 'pdf', preview: item.module === 'page' ? preview : '' };
+                               kind: item.module === 'folder' ? 'dossier' : 'pdf', preview: item.module === 'page' ? preview : '',
+                               files: (item.module === 'folder' || item.module === 'page') ? files : [] };
               return;
             }
             if (item.module === 'url') {
@@ -252,7 +261,11 @@ final class MoodleClient {
         for (let i = 0; i < items.length; i += 6) { await Promise.all(items.slice(i, i + 6).map(one)); }
         return JSON.stringify(out);
         """#, arguments: ["list": argsJSON])
-        struct Found: Decodable { var target: String?; var solution: String?; var dates: String?; var kind: String?; var preview: String? }
+        struct Found: Decodable {
+            var target: String?; var solution: String?; var dates: String?; var kind: String?; var preview: String?
+            var files: [FoundFile]?
+            struct FoundFile: Decodable { var title: String; var url: String }
+        }
         let found = (try? JSONDecoder().decode([String: Found].self, from: Data(raw.utf8))) ?? [:]
         for s in snapshot.sections.indices {
             for a in snapshot.sections[s].activities.indices {
@@ -265,6 +278,13 @@ final class MoodleClient {
                 }
                 if let kind = info.kind, !kind.isEmpty { snapshot.sections[s].activities[a].destination = kind }
                 if let preview = info.preview, !preview.isEmpty { snapshot.sections[s].activities[a].preview = preview }
+            }
+            // Les dossiers de plusieurs PDF, dépliés en un élément par fichier :
+            // chaque série d'un dossier « Séries » devient visible et importable.
+            snapshot.sections[s].activities = snapshot.sections[s].activities.flatMap { activity -> [MoodleActivity] in
+                guard activity.module == "folder",
+                      let files = found[activity.id]?.files, files.count > 1 else { return [activity] }
+                return MoodleFolderExpander.expand(activity, files: files.map { .init(title: $0.title, url: $0.url) })
             }
         }
         await CourseEvidence.peekTargets(in: &snapshot)

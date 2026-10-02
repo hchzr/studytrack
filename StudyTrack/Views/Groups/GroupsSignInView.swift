@@ -10,6 +10,7 @@ import AuthenticationServices
 /// d'un même formulaire.
 struct GroupsSignInView: View {
     @Environment(AppContainer.self) private var app
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var mode: Mode = .signUp
     @State private var email = ""
@@ -64,7 +65,12 @@ struct GroupsSignInView: View {
                     } onCompletion: { result in
                         handleApple(result)
                     }
-                    .signInWithAppleButtonStyle(.whiteOutline)
+                    // Noir le jour, blanc la nuit (recommandation d'Apple) : le
+                    // contour blanc posé sur le papier crème faisait un bouton
+                    // délavé, ni plein ni vide. `.id` : le style d'un bouton
+                    // Apple ne suit pas un changement d'apparence tout seul.
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .id(colorScheme)
                     .frame(height: 50)
                     .clipShape(Capsule())
 

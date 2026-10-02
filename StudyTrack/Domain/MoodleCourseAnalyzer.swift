@@ -852,3 +852,96 @@ struct CourseDocument: Codable, Equatable, Hashable, Identifiable {
         return String(decoding: data, as: UTF8.self)
     }
 }
+
+// MARK: - Dossiers Moodle
+
+/// Un dossier Moodle (`mod/folder`) déplié en ses fichiers.
+///
+/// Un dossier « Séries » contient souvent **toutes** les séries du semestre,
+/// et leurs corrigés. Il était lu comme une seule activité : le premier PDF
+/// devenait l'énoncé, le premier corrigé sa solution, et les onze autres
+/// séries restaient invisibles. Ici, chaque PDF devient une activité à part
+/// (avec son nom de fichier, ce que les règles et le modèle reconnaissent), et
+/// chaque corrigé rejoint l'énoncé qui porte le même numéro.
+enum MoodleFolderExpander {
+
+    struct File: Equatable {
+        var title: String
+        var url: String
+    }
+
+    /// Les activités qui remplacent le dossier. Un dossier d'un seul document
+    /// (ou d'un énoncé et de son corrigé) reste tel quel : rien à déplier.
+    static func expand(_ folder: MoodleActivity, files: [File]) -> [MoodleActivity] {
+        var seen = Set<String>()
+        let unique = files.filter { seen.insert($0.url).inserted }
+        let statements = unique.filter { !isSolution($0) }
+        let solutions = unique.filter(isSolution)
+        guard statements.count > 1 || (statements.isEmpty && solutions.count > 1) else { return [folder] }
+
+        var unmatched = solutions
+        var result: [MoodleActivity] = []
+        for (index, file) in statements.enumerated() {
+            var child = activity(for: file, in: folder, index: index)
+            if let number = number(in: file),
+               let match = unmatched.firstIndex(where: { self.number(in: $0) == number }) {
+                child.solutionTarget = unmatched.remove(at: match).url
+            }
+            result.append(child)
+        }
+        // Un corrigé sans énoncé correspondant reste visible : l'analyse le
+        // reconnaîtra comme tel par son nom.
+        for (offset, file) in unmatched.enumerated() {
+            result.append(activity(for: file, in: folder, index: statements.count + offset))
+        }
+        return result
+    }
+
+    private static func activity(for file: File, in folder: MoodleActivity, index: Int) -> MoodleActivity {
+        var child = MoodleActivity(id: "\(folder.id)-\(index + 1)",
+                                   name: displayName(file),
+                                   module: "resource",
+                                   url: folder.url,
+                                   target: file.url,
+                                   isVisible: folder.isVisible)
+        child.destination = "pdf"
+        child.dueDate = folder.dueDate
+        return child
+    }
+
+    /// « Serie_03.pdf » → « Serie 03 » : le nom affiché, et ce que lisent les
+    /// règles. Le nom du dossier le précède quand le fichier n'en dit rien
+    /// (« 3.pdf » dans « Séries »).
+    static func displayName(_ file: File) -> String {
+        var name = file.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty {
+            name = (URL(string: file.url)?.lastPathComponent ?? file.url).removingPercentEncoding ?? file.url
+        }
+        if name.lowercased().hasSuffix(".pdf") { name = String(name.dropLast(4)) }
+        name = name.replacingOccurrences(of: "_", with: " ")
+        return name.precomposedStringWithCanonicalMapping
+    }
+
+    static func isSolution(_ file: File) -> Bool {
+        let text = (file.title + " " + ((URL(string: file.url)?.lastPathComponent).flatMap { $0.removingPercentEncoding } ?? file.url)).lowercased()
+        return text.range(of: #"(corrig|solution|\bsol\b|[_-]sol\b|loesung|lösung|answers?\b|reponses|réponses)"#,
+                          options: .regularExpression) != nil
+    }
+
+    /// Le numéro d'une série dans un nom de fichier : « Serie_03 », « série 3 »,
+    /// « ex03 », « week-4 », sinon le premier nombre (hors années).
+    static func number(in file: File) -> Int? {
+        let text = (displayName(file) + " " + (URL(string: file.url)?.lastPathComponent ?? "")).lowercased()
+            .folding(options: .diacriticInsensitive, locale: nil)
+        let keyed = #"(?:serie|series|exercices?|exercises?|sheet|week|semaine|ex|tp|td|uebung|ubung)[\s_\-.]*0*(\d{1,2})(?!\d)"#
+        if let range = text.range(of: keyed, options: .regularExpression),
+           let digits = text[range].range(of: #"\d+"#, options: .regularExpression) {
+            return Int(text[range][digits])
+        }
+        let pattern = try? NSRegularExpression(pattern: #"\d+"#)
+        let range = NSRange(text.startIndex..., in: text)
+        return pattern?.matches(in: text, range: range)
+            .compactMap { Range($0.range, in: text).flatMap { Int(text[$0]) } }
+            .first { $0 < 100 }
+    }
+}

@@ -226,3 +226,52 @@ private extension KeyedDecodingContainer {
         return String(try decode(Int.self, forKey: key))
     }
 }
+
+// MARK: - Accueil : les cours de l'étudiant·e, tels que Moodle les connaît
+
+/// Les cours à créer à l'accueil, d'après les inscriptions Moodle du semestre.
+///
+/// L'accueil demandait la section, puis l'horaire ou chaque cours à la main,
+/// puis de relier Moodle, puis d'importer : quatre écrans pour une information
+/// que Moodle a déjà. Ici, une connexion suffit. Pur, donc testé : on écarte ce
+/// qui n'est pas un cours (aide, bac à sable, espaces de section), on ne garde
+/// qu'une fois un cours suivi dans deux sections Moodle, et on nettoie le nom.
+enum MoodleOnboarding {
+
+    struct PlannedCourse: Equatable {
+        var code: String
+        var name: String
+        var ref: MoodleCourseRef
+    }
+
+    static func courses(from refs: [MoodleCourseRef]) -> [PlannedCourse] {
+        var seen = Set<String>()
+        return refs.compactMap { ref -> PlannedCourse? in
+            guard let code = courseCode(ref) else { return nil }
+            guard seen.insert(code).inserted else { return nil }
+            return PlannedCourse(code: code, name: cleanName(ref.fullname, code: code), ref: ref)
+        }
+    }
+
+    /// « MATH-101(pi) » → « MATH-101 » ; rien sans code de cours EPFL.
+    static func courseCode(_ ref: MoodleCourseRef) -> String? {
+        for text in [ref.shortname, ref.fullname] {
+            if let range = text.range(of: #"\b[A-Z]{2,5}-\d{3}(?:\([a-z]+\))?"#, options: .regularExpression) {
+                return MoodleCourseMatcher.baseCode(String(text[range]))
+            }
+        }
+        return nil
+    }
+
+    /// « Analyse I (classe inversée) (MATH-101(pi)) » → « Analyse I (classe inversée) ».
+    static func cleanName(_ fullname: String, code: String) -> String {
+        var name = fullname
+        if let range = name.range(of: #"\s*[\(\[]?\s*\#(NSRegularExpression.escapedPattern(for: code))(\([a-z]+\))?\s*[\)\]]?\s*$"#,
+                                  options: .regularExpression) {
+            name.removeSubrange(range)
+        }
+        name = name.replacingOccurrences(of: code, with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–·|:").union(.whitespaces))
+        return name.isEmpty ? code : name
+    }
+}

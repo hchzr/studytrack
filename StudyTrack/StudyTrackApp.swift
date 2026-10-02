@@ -185,6 +185,7 @@ struct StudyTrackApp: App {
                 .environment(container)
                 .modelContainer(container.modelContainer)
                 .tint(Theme.accent)
+                .toggleStyle(CarnetSwitchStyle())
         }
     }
 }

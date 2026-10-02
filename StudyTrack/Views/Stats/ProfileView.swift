@@ -6,6 +6,7 @@ import CryptoKit
 /// Profil, réglages et intégrations.
 struct ProfileView: View {
     @Environment(AppContainer.self) private var app
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
@@ -562,6 +563,8 @@ struct ProfileView: View {
                 } onCompletion: { result in
                     handleApple(result)
                 }
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .id(colorScheme)
                 .frame(height: 44)
 
                 TextField("Email", text: $email)

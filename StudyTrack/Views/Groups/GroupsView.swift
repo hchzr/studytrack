@@ -129,6 +129,10 @@ struct GroupsView: View {
                 }
             }
             .refreshable { await syncNow() }
+            // Le point vert du sélecteur : qui travaille, dans chaque groupe.
+            // La fonction existait mais n'était appelée nulle part — le direct
+            // ne s'allumait jamais hors du groupe ouvert.
+            .task(id: groups.compactMap(\.remoteID)) { await watchPresence() }
             .sheet(isPresented: $showingCreate) { CreateGroupView() }
             .sheet(isPresented: $showingJoin) { JoinGroupView(prefilledCode: joinCode) }
             .task {
@@ -235,19 +239,30 @@ struct GroupsView: View {
                                               settings: app.settings)
     }
 
-    /// Le direct de chaque groupe synchronisé. Une minute d'intervalle : la
-    /// liste n'a pas besoin de la seconde, la fiche du groupe s'en charge.
+    /// Le direct de chaque groupe synchronisé : relu à chaque changement de
+    /// présence annoncé en temps réel, et toutes les deux minutes par sécurité
+    /// (une présence s'éteint aussi d'elle-même, sans événement, en vieillissant).
     private func watchPresence() async {
         guard app.social.isSignedIn else { return }
+        let remote = groups.compactMap { group in group.remoteID.map { (group.id, $0) } }
+        let subscriptions = remote.compactMap { local, remoteID in
+            app.social.realtime?.subscribe(groupID: remoteID) { table in
+                guard table == .presence else { return }
+                Task { @MainActor in
+                    guard let entries = try? await app.social.fetchPresence(groupID: remoteID) else { return }
+                    live[local] = PresenceBoard.live(entries)
+                }
+            }
+        }
+        defer { subscriptions.forEach { app.social.realtime?.unsubscribe($0) } }
         while !Task.isCancelled {
             var next: [UUID: [PresenceEntry]] = [:]
-            for group in groups {
-                guard let remoteID = group.remoteID,
-                      let entries = try? await app.social.fetchPresence(groupID: remoteID) else { continue }
-                next[group.id] = PresenceBoard.live(entries)
+            for (local, remoteID) in remote {
+                guard let entries = try? await app.social.fetchPresence(groupID: remoteID) else { continue }
+                next[local] = PresenceBoard.live(entries)
             }
             live = next
-            try? await Task.sleep(for: .seconds(60))
+            try? await Task.sleep(for: .seconds(120))
         }
     }
 

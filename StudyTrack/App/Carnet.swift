@@ -26,6 +26,12 @@ enum Carnet {
     static let rule = Color.dynamic(light: "#E6DFD0", dark: "#353027")
     /// Le surligneur : la sous-question en cours dans un énoncé.
     static let marker = Color.dynamic(light: "#FBF1C9", dark: "#4A4020")
+    /// Un interrupteur **activé**. L'encre servait de teinte à tout, interrupteurs
+    /// compris : la nuit, elle devient crème — et un interrupteur crème sous un
+    /// bouton blanc ne se distingue plus d'un interrupteur éteint (« Ajouter à
+    /// mon calendrier » semblait d'une seule couleur). Un vert d'herbier, sombre
+    /// les deux modes, pour que le bouton blanc s'en détache toujours.
+    static let switchOn = Color.dynamic(light: "#3F7A3F", dark: "#3E7A3A")
 
     // MARK: Verdicts de correction
 
@@ -141,6 +147,18 @@ extension View {
             .background(Carnet.ground.ignoresSafeArea())
             .tint(Carnet.ink)
             .labelStyle(CarnetFormLabelStyle())
+    }
+}
+
+/// Les interrupteurs de toute l'app : la teinte « activé » de `Carnet.switchOn`,
+/// quelle que soit la teinte ambiante (l'encre, illisible sur un interrupteur
+/// la nuit). Posé une fois à la racine : `toggleStyle` descend dans les
+/// formulaires et les feuilles.
+struct CarnetSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Toggle(configuration)
+            .toggleStyle(.switch)
+            .tint(Carnet.switchOn)
     }
 }
 

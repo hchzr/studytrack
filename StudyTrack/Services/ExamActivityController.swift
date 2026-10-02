@@ -1,4 +1,5 @@
 import ActivityKit
+import UIKit
 import Foundation
 import SwiftData
 import os
@@ -77,6 +78,13 @@ enum ExamActivityController {
             lastError = "Les Live Activities sont désactivées pour StudyTrack."
             return
         }
+
+        // iOS n'ouvre une activité que depuis l'avant-plan (« Target is not
+        // foreground »). Le raccord tourne aussi en tâche de fond — replanification
+        // des rappels, rafraîchissement — et y remplissait le journal de refus.
+        // Le prochain passage à l'avant-plan rattrape : `reconcileFromStore` est
+        // appelé à chaque activation.
+        guard UIApplication.shared.applicationState == .active else { return }
 
         do {
             let created = try Activity.request(attributes: attributes,

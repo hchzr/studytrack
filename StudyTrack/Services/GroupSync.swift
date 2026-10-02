@@ -6,6 +6,14 @@ import SwiftData
 ///
 /// Toutes les opérations sont « best effort » : sans Supabase configuré,
 /// les groupes restent utilisables localement.
+///
+/// `@MainActor` : chaque fonction modifie des modèles du contexte **principal**
+/// (`StudyGroup`, `GroupMember`…) après un `await`. Non isolées, elles reprenaient
+/// sur un fil quelconque et écrivaient dans SwiftData pendant que l'écran Groupes
+/// ou Aujourd'hui lisait les mêmes objets : `EXC_BAD_ACCESS` dans SwiftData
+/// (`GroupsView.subtitle`, `pushMyProgress`, `Course.theoryItems`) — les trois
+/// crashs relevés sur l'iPhone le 2 octobre.
+@MainActor
 enum GroupSync {
 
     struct PushResult {

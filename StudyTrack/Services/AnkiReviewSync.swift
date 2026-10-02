@@ -7,6 +7,9 @@ import SwiftData
 /// passage au premier plan rapatrie les révisions faites depuis le dernier
 /// relevé. Anki fermé ou hors réseau n'est pas une erreur — on réessaiera au
 /// prochain passage, sans bruit.
+/// `@MainActor` : le contexte reçu est celui de l'écran ; l'écrire après un
+/// `await` depuis un autre fil corrompait SwiftData.
+@MainActor
 enum AnkiReviewSync {
 
     /// Pas plus d'un relevé toutes les dix minutes : `didBecomeActive` arrive

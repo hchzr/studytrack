@@ -580,3 +580,7 @@ grant execute on function public.delete_my_account() to authenticated;
 -- sur `presence` et sur l'avancement.
 
 notify pgrst, 'reload schema';
+
+-- Entraide chiffrée et temps réel : voir
+-- `supabase/migrations/20261002000000_group_e2ee_realtime.sql` (à exécuter après
+-- ce fichier sur une base neuve).

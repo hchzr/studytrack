@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import PDFKit
+import CryptoKit
 
 // Stub minimal : remplace App/SettingsStore.swift pour la validation hors app iOS.
 final class SettingsStore {
@@ -5057,6 +5058,121 @@ do {
     check(all.filter { $0.kind == .series }.map(\.url) == ["m1", "b2"] && all.contains { $0.url == "t1" },
           "la série 1 reste celle de Moodle ; la série 2 et la théorie manquantes viennent de l'autre source")
     check(other.outline.contains("## Semaine 2 [semaine 2]") && other.outline.contains("Série 2 [série 2]"), "résumé lisible pour le modèle")
+}
+
+print("== Accents réparés à la source (TextRepair, MathMarkup) ==")
+do {
+    check(TextRepair.clean("S´erie 3 : ´equations diff´erentielles") == "Série 3 : équations différentielles",
+          "PDF LaTeX : l'accent aigu dessiné avant la lettre rejoint sa lettre")
+    check(TextRepair.composeAccents("e´te´, re´sume´") == "été, résumé", "…et dessiné après la lettre aussi")
+    check(TextRepair.composeAccents("pr`es de la fenˆetre, M¨uller, garc¸on") == "près de la fenêtre, Müller, garçon",
+          "grave, circonflexe, tréma, cédille")
+    check(TextRepair.composeAccents("l´analyse, qu´il, jusqu´ici, d´efinition") == "l’analyse, qu’il, jusqu’ici, définition",
+          "« ´ » tapé pour une apostrophe devient une apostrophe")
+    check(TextRepair.composeAccents("x^2 + `code`, x^y, ℝ^n") == "x^2 + `code`, x^y, ℝ^n",
+          "un exposant (même entre deux lettres) ou du code ne sont pas touchés")
+    check(TextRepair.clean("S&eacute;rie 4 &#8211; l&#039;int&#xE9;grale &amp; co") == "Série 4 – l'intégrale & co",
+          "Moodle : entités nommées, décimales et hexadécimales")
+    check(TextRepair.clean("SÃ©rie 2 Ã\u{00A0} rendre â€” corrigÃ©") == "Série 2 à rendre — corrigé",
+          "Moodle : texte UTF-8 relu en Latin-1 (double encodage) réparé")
+    check(TextRepair.clean("e\u{0301}nonce\u{0301}") == "énoncé" && TextRepair.clean("énoncé").unicodeScalars.count == 6,
+          "forme composée (NFC) : un « é » est un seul caractère")
+    let clean = "Algèbre linéaire — Série 4 : l’ensemble A′ = {n : xₙ < 0}, f''(x) ≥ 0"
+    check(TextRepair.clean(clean) == clean, "un texte propre ressort intact")
+    check(MathMarkup.plain(#"Montrer que la s\'erie est \`a termes positifs, o\`u \^etre, na\"\i ve, gar\c{c}on"#)
+          == "Montrer que la série est à termes positifs, où être, naïve, garçon",
+          "MathMarkup : accents LaTeX composés au lieu de « 'e »")
+    check(MathMarkup.plain("Quelques indéterminations ``\\frac{0}{0}''") == "Quelques indéterminations “0⁄0”"
+          && MathMarkup.plain("f''(x) > 0") == "f''(x) > 0",
+          "MathMarkup : ``guillemets'' LaTeX, sans toucher f''(x)")
+}
+
+print("== Accueil : les cours lus sur Moodle (MoodleOnboarding) ==")
+do {
+    let refs = [
+        MoodleCourseRef(id: 15221, fullname: "Analyse I (classe inversée) (MATH-101(pi))", shortname: "MATH-101(pi)"),
+        MoodleCourseRef(id: 15272, fullname: "Algèbre linéaire (classe inversée) (MATH-111(pi))", shortname: "MATH-111(pi)"),
+        MoodleCourseRef(id: 99, fullname: "Aide Moodle pour les étudiants", shortname: "AIDE-ETU"),
+        MoodleCourseRef(id: 14847, fullname: "Introduction à la programmation", shortname: "CS-107"),
+        MoodleCourseRef(id: 15000, fullname: "Analyse I (MATH-101(e))", shortname: "MATH-101(e)"),
+        MoodleCourseRef(id: 18568, fullname: "CS-101 Advanced information, computation, communication I", shortname: "AICC-I")
+    ]
+    let planned = MoodleOnboarding.courses(from: refs)
+    check(planned.map(\.code) == ["MATH-101", "MATH-111", "CS-107", "CS-101"],
+          "les cours EPFL seulement, une fois chacun (deux sections Moodle du même cours → un cours)")
+    check(planned.map(\.name) == ["Analyse I (classe inversée)", "Algèbre linéaire (classe inversée)",
+                                  "Introduction à la programmation", "Advanced information, computation, communication I"],
+          "noms nettoyés du code et de la section")
+    check(planned[0].ref.id == 15221, "le cours garde **sa** page Moodle (la première inscription)")
+}
+
+print("== Dossiers Moodle dépliés (MoodleFolderExpander) ==")
+do {
+    let folder = MoodleActivity(id: "1377178", name: "Séries", module: "folder",
+                                url: "https://moodle.epfl.ch/mod/folder/view.php?id=1377178")
+    let base = "https://moodle.epfl.ch/pluginfile.php/1/mod_folder/content/0/"
+    let files: [MoodleFolderExpander.File] = [
+        .init(title: "Serie_01.pdf", url: base + "Serie_01.pdf"),
+        .init(title: "Serie_02.pdf", url: base + "Serie_02.pdf"),
+        .init(title: "Corrigé série 1.pdf", url: base + "Corrige_01.pdf"),
+        .init(title: "", url: base + "S%C3%A9rie%2003.pdf"),
+        .init(title: "Serie_02.pdf", url: base + "Serie_02.pdf"),
+        .init(title: "Solution 7.pdf", url: base + "sol7.pdf")
+    ]
+    let out = MoodleFolderExpander.expand(folder, files: files)
+    check(out.count == 4, "un dossier de 3 séries + 2 corrigés donne 4 éléments (doublon retiré, corrigé orphelin gardé)")
+    check(out.map(\.name) == ["Serie 01", "Serie 02", "Série 03", "Solution 7"],
+          "noms lisibles, tirés du fichier quand le lien n'a pas de texte (accents décodés)")
+    check(out[0].solutionTarget == base + "Corrige_01.pdf" && out[1].solutionTarget == nil,
+          "le corrigé rejoint l'énoncé du même numéro")
+    check(out.allSatisfy { $0.module == "resource" && $0.destination == "pdf" && $0.target?.hasPrefix(base) == true }
+          && Set(out.map(\.id)).count == 4, "chaque fichier devient un PDF à part, d'identifiant unique")
+    check(MoodleFolderExpander.expand(folder, files: [files[0], files[2]]) == [folder],
+          "un dossier d'un énoncé et de son corrigé reste tel quel")
+    check(MoodleFolderExpander.number(in: .init(title: "ex03_2026.pdf", url: "x")) == 3
+          && MoodleFolderExpander.number(in: .init(title: "Week-12 exercises", url: "x")) == 12,
+          "numéro de série lu dans « ex03_2026 » et « Week-12 », pas l'année")
+}
+
+print("== Entraide chiffrée de bout en bout (GroupCrypto) ==")
+do {
+    let group = "56B0C700-8B2E-4D63-A661-7CDB3E9B026F"
+    let alice = Curve25519.KeyAgreement.PrivateKey()
+    let bob = Curve25519.KeyAgreement.PrivateKey()
+    let eve = Curve25519.KeyAgreement.PrivateKey()
+    let key = GroupCrypto.newGroupKey()
+
+    let sealed = try GroupCrypto.seal("Je bloque sur 4.3 (b) — l'intégrale ∫ diverge ?", key: key, groupID: group, authorID: "a1")
+    check(sealed.hasPrefix("v1:") && !sealed.contains("bloque"), "le message part chiffré, versionné, sans texte lisible")
+    check((try? GroupCrypto.open(sealed, key: key, groupID: group.lowercased(), authorID: "A1")) == "Je bloque sur 4.3 (b) — l'intégrale ∫ diverge ?",
+          "déchiffré à l'identique, accents et symboles compris (identifiants insensibles à la casse)")
+    check((try? GroupCrypto.open(sealed, key: key, groupID: group, authorID: "b2")) == nil,
+          "recollé sous le nom d'un autre auteur : refusé")
+    check((try? GroupCrypto.open(sealed, key: key, groupID: "autre-groupe", authorID: "a1")) == nil,
+          "recollé dans un autre groupe : refusé")
+    check((try? GroupCrypto.open(sealed, key: GroupCrypto.newGroupKey(), groupID: group, authorID: "a1")) == nil,
+          "une autre clé ne l'ouvre pas")
+    check(GroupCrypto.keyID(of: key) == GroupCrypto.keyID(of: GroupCrypto.decodeKey(GroupCrypto.encode(key))!)
+          && GroupCrypto.keyID(of: key).count == 16, "l'identifiant de clé est stable et court")
+
+    let envelope = try GroupCrypto.wrap(key, from: alice, to: bob.publicKey, groupID: group)
+    let opened = try? GroupCrypto.unwrap(envelope, with: bob, from: alice.publicKey, groupID: group)
+    check(opened.map(GroupCrypto.keyID) == GroupCrypto.keyID(of: key), "Bob ouvre l'enveloppe qu'Alice lui a scellée")
+    check((try? GroupCrypto.unwrap(envelope, with: eve, from: alice.publicKey, groupID: group)) == nil,
+          "Ève, qui lit la base, ne l'ouvre pas")
+    check((try? GroupCrypto.unwrap(envelope, with: bob, from: alice.publicKey, groupID: "autre")) == nil,
+          "une enveloppe ne sert que pour son groupe")
+    let pk = GroupCrypto.publicKeyString(bob.publicKey)
+    check(pk.count == 44 && GroupCrypto.publicKey(from: pk)?.rawRepresentation == bob.publicKey.rawRepresentation,
+          "clé publique publiée en base64 (44 caractères, accepté par la contrainte SQL)")
+
+    let missing = GroupCrypto.missingRecipients(memberIDs: ["a", "b", "c"],
+                                                publicKeys: [("a", "KA"), ("b", "KB"), ("b", "KB2"), ("x", "KX"), ("b", "KB")],
+                                                servedKeys: ["KA"])
+    check(missing.map(\.key) == ["KB", "KB2"],
+          "distribution : seules les clés de membres non servies, sans doublon ni ancien membre")
+} catch {
+    check(false, "GroupCrypto a levé : \(error)")
 }
 
 if CommandLine.arguments.contains("--bench") {

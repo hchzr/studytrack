@@ -185,6 +185,9 @@ struct SchoolSetupView: View {
                     set: { course.hasLectures = $0; try? context.save() }
                 ))
                 .labelsHidden()
+                // Bleu, pour se distinguer de « suivre » juste à côté : le
+                // style d'interrupteur de l'app (vert) est remplacé ici.
+                .toggleStyle(.switch)
                 .tint(.blue)
                 .accessibilityLabel("\(course.code) a des heures de cours")
             }
