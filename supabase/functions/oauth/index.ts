@@ -72,7 +72,11 @@ Deno.serve(async (req: Request) => {
   const code = url.searchParams.get("code");
   if (!code) return back({ state, error: "missing_code" });
   // L'adresse de retour doit être exactement celle envoyée à l'autorisation.
-  const redirect = `${url.origin}/functions/v1/oauth`;
+  // `req.url` est l'adresse **interne** de la fonction (http, sans
+  // `/functions/v1`) : l'adresse publique vient de `SUPABASE_URL`, toujours
+  // définie dans les fonctions Supabase.
+  const base = (Deno.env.get("SUPABASE_URL") ?? url.origin).replace(/\/$/, "");
+  const redirect = `${base}/functions/v1/oauth`;
   try {
     const payload = await exchange(provider, code, redirect);
     const token = typeof payload.access_token === "string" ? payload.access_token : "";
