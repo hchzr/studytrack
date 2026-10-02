@@ -755,13 +755,31 @@ final class SocialService {
         return (try? JSONDecoder().decode([LeaderboardRow].self, from: data)) ?? []
     }
 
-    func pushStudyLogs(_ logs: [RemoteStudyLog]) async {
-        guard let client, !logs.isEmpty else { return }
-        guard let data = try? JSONEncoder().encode(logs) else { return }
+    /// **Remplace** mes agrégats d'un groupe depuis `since` par `logs`.
+    ///
+    /// Ils étaient ajoutés à chaque synchronisation : les mêmes journées
+    /// s'empilaient (1 107 lignes pour 27 journées), et le classement affichait
+    /// 1 235 h en sept jours. Supprimer puis réinsérer la fenêtre rend l'envoi
+    /// idempotent, efface au passage les doublons déjà là, et fait disparaître
+    /// une session supprimée sur le téléphone.
+    func replaceStudyLogs(_ logs: [RemoteStudyLog], groupID: String, since: Date) async {
+        guard let client, let userID = client.userID else { return }
+        let formatter = ISO8601DateFormatter()
+        do {
+            _ = try await client.delete("study_log_public",
+                                        query: [URLQueryItem(name: "group_id", value: "eq.\(groupID)"),
+                                                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                                                URLQueryItem(name: "started_at", value: "gte.\(formatter.string(from: since))")])
+        } catch {
+            // Sans suppression, réinsérer recréerait les doublons : on s'arrête.
+            AppLog.record(.warning, AppLog.Category.sync, "Temps du groupe non remplacé", detail: GroupSync.explain(error))
+            return
+        }
+        guard !logs.isEmpty, let data = try? JSONEncoder().encode(logs) else { return }
         _ = try? await client.request("/rest/v1/study_log_public",
                                       method: "POST",
                                       body: data,
-                                      prefer: "return=minimal")
+                                      prefer: "resolution=ignore-duplicates,return=minimal")
     }
 
     func pushSeriesCompletion(groupID: String, courseCode: String, seriesNumber: Int) async {

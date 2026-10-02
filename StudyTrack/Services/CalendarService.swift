@@ -205,6 +205,9 @@ enum CalendarSync {
         // Une évaluation se lit dans l'intitulé : un créneau d'exercices peut
         // accueillir un midterm, qui reste un midterm.
         if base == .midterm || base == .exam { return base }
+        // Un bloc personnel ou une échéance au même créneau qu'un cours reste ce
+        // qu'il est : le créneau appris ne vaut que pour l'horaire.
+        if TimetableClassifier.isPersonal(title) || TimetableClassifier.isDeadline(title) { return base }
         let slot = TimetableClassifier.slot(owner: TimetableClassifier.owner(courseID: course?.id, title: title), start: start)
         return learned[slot] ?? base
     }

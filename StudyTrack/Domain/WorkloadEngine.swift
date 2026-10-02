@@ -156,15 +156,16 @@ enum WorkloadEngine {
 
     /// Heures d'amphi suivies : les cours magistraux de l'horaire, finis et pas
     /// marqués manqués. Les séances d'exercices n'y entrent pas (chronométrées).
+    ///
+    /// La part d'un cours recouverte par un chrono du même cours n'est pas
+    /// recomptée : elle est déjà dans `studySeconds` (`StudyTime`).
     static func classSeconds(for course: Course, from: Date? = nil, to: Date? = nil) -> Int {
-        course.linkedEvents
-            .filter(\.countsAsAttendedLecture)
-            .filter { event in
-                if let from, event.startsAt < from { return false }
-                if let to, event.startsAt >= to { return false }
-                return true
-            }
-            .reduce(0) { $0 + $1.durationSeconds }
+        let events = course.linkedEvents.filter { event in
+            if let from, event.startsAt < from { return false }
+            if let to, event.startsAt >= to { return false }
+            return true
+        }
+        return StudyTime.lectureBlocks(events: events, sessions: course.sessions).reduce(0) { $0 + $1.seconds }
     }
 
     // MARK: Delta

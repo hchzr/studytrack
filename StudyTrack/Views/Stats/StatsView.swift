@@ -88,9 +88,15 @@ struct StatsView: View {
     /// manqués, plus les sessions saisies comme amphi.
     private var lectures: [LectureSlot] {
         let r = range
-        var slots = events
-            .filter { $0.countsAsAttendedLecture && $0.startsAt >= r.start && $0.startsAt < r.end }
-            .map { LectureSlot(date: $0.startsAt, seconds: $0.durationSeconds, course: $0.course) }
+        // Moins ce qu'un chrono du même cours recouvre déjà (`StudyTime`).
+        let inRange = events.filter { $0.startsAt >= r.start && $0.startsAt < r.end }
+        var slots = inRange.filter(\.countsAsAttendedLecture).compactMap { event -> LectureSlot? in
+            let own = event.course?.sessions.map {
+                StudyTime.Interval(start: $0.startedAt, end: $0.startedAt.addingTimeInterval(TimeInterval($0.durationSeconds)))
+            } ?? []
+            let seconds = StudyTime.lectureSeconds(start: event.startsAt, end: event.endsAt, minus: own)
+            return seconds > 0 ? LectureSlot(date: event.startsAt, seconds: seconds, course: event.course) : nil
+        }
         slots += sessions
             .filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical == .lecture }
             .map { LectureSlot(date: $0.startedAt, seconds: $0.durationSeconds, course: $0.course) }
@@ -255,8 +261,8 @@ struct StatsView: View {
                 study[DateUtils.startOfWeek(session.startedAt), default: 0] += session.durationSeconds
             }
         }
-        for event in events where event.countsAsAttendedLecture && event.startsAt >= start {
-            lecture[DateUtils.startOfWeek(event.startsAt), default: 0] += event.durationSeconds
+        for block in StudyTime.lectureBlocks(events: events.filter { $0.startsAt >= start }, sessions: Array(sessions)) {
+            lecture[DateUtils.startOfWeek(block.start), default: 0] += block.seconds
         }
         var points: [WeekPoint] = []
         var cursor = start

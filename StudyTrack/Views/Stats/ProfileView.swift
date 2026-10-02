@@ -222,6 +222,18 @@ struct ProfileView: View {
                 settingsRow("Données et sauvegarde", icon: "externaldrive",
                             value: "\(sessions.count) session\(sessions.count > 1 ? "s" : "")")
             }
+            // L'accueil rejoué : connexion EPFL, cours lus sur Moodle, import.
+            // Rien n'est effacé — un cours déjà là est retrouvé par son code et
+            // complété, pas dupliqué.
+            Button {
+                Haptics.tap()
+                app.router.showingProfile = false
+                dismiss()
+                app.settings.hasCompletedOnboarding = false
+            } label: {
+                settingsRow("Revoir l'accueil", icon: "arrow.counterclockwise")
+            }
+            .foregroundStyle(Carnet.ink)
         }
     }
 

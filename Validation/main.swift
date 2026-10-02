@@ -3077,7 +3077,10 @@ print("== Tâches, calendrier, sessions planifiées ==")
 let task = LinkedTask(provider: .todoist, externalID: "t1", title: "CS-250 exercice 1.1", dueDate: Date())
 task.course = cs
 context.insert(task)
-let event = LinkedCalendarEvent(title: "CS-250 Cours", startsAt: Date(), endsAt: Date().addingTimeInterval(3600), kind: .lecture)
+// Hors de toute session de test : un chrono qui recouvre le cours en retire
+// la part recouverte (`StudyTime`), et ce test porte sur le cours seul.
+let event = LinkedCalendarEvent(title: "CS-250 Cours", startsAt: Date().addingTimeInterval(-3 * 3600 - 7 * 86400),
+                                endsAt: Date().addingTimeInterval(-2 * 3600 - 7 * 86400), kind: .lecture)
 event.isAttended = true
 event.course = cs
 context.insert(event)
@@ -5085,6 +5088,44 @@ do {
     check(MathMarkup.plain("Quelques indéterminations ``\\frac{0}{0}''") == "Quelques indéterminations “0⁄0”"
           && MathMarkup.plain("f''(x) > 0") == "f''(x) > 0",
           "MathMarkup : ``guillemets'' LaTeX, sans toucher f''(x)")
+}
+
+print("== Temps d'étude : cours automatiques, exercices chronométrés (StudyTime) ==")
+do {
+    let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60) }
+    check(StudyTime.lectureSeconds(start: at(0), end: at(105), minus: []) == 105 * 60,
+          "un cours de 1 h 45 compte 1 h 45 sans rien lancer")
+    check(StudyTime.lectureSeconds(start: at(0), end: at(105), minus: [.init(start: at(30), end: at(60))]) == 75 * 60,
+          "un chrono de 30 min pendant le cours n'est pas compté deux fois")
+    check(StudyTime.lectureSeconds(start: at(0), end: at(105),
+                                   minus: [.init(start: at(-10), end: at(40)), .init(start: at(20), end: at(50))]) == 55 * 60,
+          "deux chronos qui se chevauchent ne retirent pas deux fois la même minute")
+    check(StudyTime.lectureSeconds(start: at(0), end: at(24 * 60), minus: []) == 0,
+          "une « séance » de 24 h (journée, échéance) ne compte pas comme cours")
+
+    let course = Course(code: "MATH-101", name: "Analyse I")
+    context.insert(course)
+    let lecture = LinkedCalendarEvent(title: "Analyse I", startsAt: at(-3000), endsAt: at(-2895), kind: .lecture)
+    lecture.course = course
+    let exercises = LinkedCalendarEvent(title: "Analyse I", startsAt: at(-2880), endsAt: at(-2760), kind: .exerciseSession)
+    exercises.course = course
+    let chrono = StudySession(course: course, taskType: .exercise, startedAt: at(-2870), durationSeconds: 50 * 60)
+    context.insert(lecture); context.insert(exercises); context.insert(chrono)
+    let blocks = StudyTime.blocks(events: [lecture, exercises], sessions: [chrono])
+    check(blocks.reduce(0) { $0 + $1.seconds } == (105 + 50) * 60,
+          "séance d'exercices de 2 h : seules les 50 min chronométrées comptent ; le cours compte seul")
+    check(blocks.contains { $0.taskType == "lecture" && $0.courseCode == "MATH-101" },
+          "le cours part dans les groupes avec son code et la nature « lecture »")
+
+    check(TimetableClassifier.kind(title: "🧠 MATH-111 — finir la série", location: "", hasCourse: true) == .study
+          && TimetableClassifier.kind(title: "✓ [MATH-101] Série 2", location: "", hasCourse: true) == .study,
+          "un bloc personnel qui cite un cours n'est pas un cours (ni une séance d'exercices)")
+    check(TimetableClassifier.kind(title: "[CS-107] Rendu mini-projet 2 — 50 %", location: "", hasCourse: true) == .other
+          && TimetableClassifier.kind(title: "[CS-107] Défense du projet noté", location: "", hasCourse: true) == .other,
+          "une échéance n'est pas un cours")
+    check(TimetableClassifier.kind(title: "Analyse I (classe inversée)", location: "CE1", hasCourse: true) == .lecture,
+          "l'horaire EPFL reste un cours")
 }
 
 print("== Accueil : les cours lus sur Moodle (MoodleOnboarding) ==")

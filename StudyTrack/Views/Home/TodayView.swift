@@ -61,14 +61,12 @@ struct TodayView: View {
         let weekStart = DateUtils.startOfWeek(Date())
         let weekEnd = DateUtils.addDays(7, to: weekStart)
         let weeks = tracked.map { ProgressEngine.weekProgress(for: $0, week: $0.currentWeek) }
-        var days = Array(repeating: 0, count: 7)
-        for session in sessions {
-            // Triées de la plus récente à la plus ancienne : on s'arrête au lundi.
-            if session.startedAt < weekStart { break }
-            guard session.startedAt < weekEnd else { continue }
-            let index = DateUtils.daysBetween(weekStart, session.startedAt)
-            if days.indices.contains(index) { days[index] += session.durationSeconds }
-        }
+        // Le chrono **et** les heures de cours passées (`StudyTime`) : un amphi
+        // suivi est du travail, une séance d'exercices ne l'est que chronométrée.
+        // Les sessions sont triées de la plus récente à la plus ancienne.
+        let weekSessions = Array(sessions.prefix { $0.startedAt >= weekStart }).filter { $0.startedAt < weekEnd }
+        let weekEvents = events.filter { $0.startsAt >= weekStart && $0.startsAt < weekEnd }
+        let days = StudyTime.days(of: StudyTime.blocks(events: weekEvents, sessions: weekSessions), weekStart: weekStart)
         return TodayState(
             tracked: tracked,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),

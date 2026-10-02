@@ -353,20 +353,21 @@ enum GroupSync {
         }
         guard !remoteGroups.isEmpty else { return result }
 
-        // 1. Temps de travail : agrégat journalier par cours et type (7 derniers jours).
+        // 1. Temps de travail : agrégat journalier par cours et type (7 derniers
+        //    jours) — le chrono **et** les heures de cours suivies, comptés comme
+        //    partout ailleurs (`StudyTime`).
         let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
-        let start = DateUtils.dateRange(days: 7).start
-        let recent = sessions.filter { $0.startedAt >= start }
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
+        let start = Calendar.current.startOfDay(for: DateUtils.dateRange(days: 7).start)
+        let blocks = StudyTime.blocks(events: events.filter { $0.startsAt >= start },
+                                      sessions: sessions.filter { $0.startedAt >= start })
         let calendar = Calendar.current
         var aggregated: [String: (Date, String?, String?, Int)] = [:]
-        for session in recent {
-            let day = calendar.startOfDay(for: session.startedAt)
-            let key = "\(day.timeIntervalSince1970)-\(session.course?.code ?? "-")-\(session.taskTypeRaw)"
+        for block in blocks {
+            let day = calendar.startOfDay(for: block.start)
+            let key = "\(day.timeIntervalSince1970)-\(block.courseCode ?? "-")-\(block.taskType)"
             let existing = aggregated[key]
-            aggregated[key] = (day,
-                               session.course?.code,
-                               session.taskTypeRaw,
-                               (existing?.3 ?? 0) + session.durationSeconds)
+            aggregated[key] = (day, block.courseCode, block.taskType, (existing?.3 ?? 0) + block.seconds)
         }
 
         let formatter = ISO8601DateFormatter()
@@ -385,10 +386,16 @@ enum GroupSync {
                                       startedAt: formatter.string(from: entry.0),
                                       durationSeconds: entry.3)
             }
-            if !logs.isEmpty {
-                await social.pushStudyLogs(logs)
-                result.logs += logs.count
-            }
+            // Remplacées, pas ajoutées : deux codes masqués le même jour donnent
+            // deux lignes de même clé, fusionnées ici avant l'envoi.
+            let merged = Dictionary(grouping: logs) { "\($0.startedAt)|\($0.courseCode ?? "-")|\($0.taskType ?? "-")" }
+                .values.map { group in
+                    var first = group[0]
+                    first.durationSeconds = group.reduce(0) { $0 + $1.durationSeconds }
+                    return first
+                }
+            await social.replaceStudyLogs(merged, groupID: remoteID, since: start)
+            result.logs += merged.count
         }
 
         // 2. Séries terminées et avancement détaillé, **restreints aux matières du

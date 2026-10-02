@@ -59,6 +59,7 @@ final class LinkedCalendarEvent {
     /// ou moins longtemps : elle se chronomètre.
     var countsAsAttendedLecture: Bool {
         isLecture && !isSkipped && (endsAt <= Date() || isAttended)
+            && durationSeconds > 0 && TimeInterval(durationSeconds) <= StudyTime.longestLecture
     }
 
     /// Ce qui a sa place dans l'agenda : l'horaire (cours, exercices), les

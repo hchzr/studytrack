@@ -49,6 +49,12 @@ enum TimetableClassifier {
         if haystack.contains("examen") || haystack.contains("exam") || haystack.contains("final") {
             return .exam
         }
+        // L'agenda **personnel** qui cite un cours n'est pas l'horaire : un bloc
+        // « 🧠 MATH-111 — finir la série », une échéance « [CS-107] Rendu du
+        // projet ». Rattachés au cours par leur code, ils devenaient des cours
+        // magistraux, et leurs heures s'ajoutaient au travail de la semaine.
+        if isDeadline(title) { return .other }
+        if isPersonal(title) { return .study }
         if haystack.contains("exercice") || haystack.contains("exercise") || haystack.contains("série")
             || haystack.contains("serie") || haystack.contains(" tp") || haystack.contains("labo") {
             return .exerciseSession
@@ -62,6 +68,19 @@ enum TimetableClassifier {
             return .study
         }
         return hasCourse ? .lecture : .other
+    }
+
+    /// Un intitulé d'agenda personnel : il commence par un symbole (émoji, « ✓ »,
+    /// « [ ») — l'horaire EPFL commence toujours par le nom du cours.
+    static func isPersonal(_ title: String) -> Bool {
+        guard let first = title.trimmingCharacters(in: .whitespaces).first else { return false }
+        return !(first.isLetter || first.isNumber)
+    }
+
+    /// Une échéance, pas une séance : rendu, remise, défense, deadline.
+    static func isDeadline(_ title: String) -> Bool {
+        let folded = title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        return ["rendu", "remise", "deadline", "due ", "defense", "soumission", "a rendre"].contains { folded.contains($0) }
     }
 
     /// Le type d'une séance de l'horaire EPFL : `CATEGORIES` d'abord, puis le
