@@ -265,31 +265,12 @@ final class MoodleClient {
             if let object = try? JSONSerialization.jsonObject(with: Data(part.utf8)) as? [String: Any] {
                 merged.merge(object) { _, new in new }
                 // Ce que chaque activité ouverte s'est révélée être, pour l'accueil.
-                onOpened(object.mapValues { Self.openedLabel($0 as? [String: Any] ?? [:]) })
+                onOpened(object.mapValues { ImportFeed.openedLabel($0 as? [String: Any] ?? [:]) })
             }
             onActivities(min(start + 18, wanted.count), wanted.count)
         }
         let raw = String(decoding: try JSONSerialization.data(withJSONObject: merged), as: UTF8.self)
         return await finish(snapshot, found: raw)
-    }
-
-    /// « PDF », « Dossier · 12 PDF », « Vidéo », « Devoir »… : ce qu'il y avait
-    /// derrière une activité, en un mot.
-    static func openedLabel(_ found: [String: Any]) -> String {
-        if let dates = found["dates"] as? String, !dates.isEmpty { return "Devoir" }
-        let files = (found["files"] as? [Any])?.count ?? 0
-        if files > 1 { return "Dossier · \(files) PDF" }
-        let target = ((found["target"] as? String) ?? "").lowercased()
-        if target.contains("mediaspace") || target.contains("kaltura") || target.contains("youtu") || target.contains("switch.tube") {
-            return "Vidéo"
-        }
-        if target.contains("courseware") { return "MOOC" }
-        switch found["kind"] as? String {
-        case "pdf"?: return "PDF"
-        case "dossier"?: return "Dossier"
-        case "fichier"?: return "Fichier"
-        default: return target.isEmpty ? "Page" : "Lien"
-        }
     }
 
     /// Ouvre un lot d'activités dans la session Moodle (JSON `{id: trouvaille}`).

@@ -5118,15 +5118,61 @@ do {
     check(ImportProgress.stage(forMessage: "rangement du cours…") == .analysis
           && ImportProgress.stage(forMessage: "MOOC cité — lecture de Courseware…") == .sources,
           "les messages de la chaîne d'import deviennent des étapes")
-    var row = SemesterGridRow(id: "a", code: "MATH-101", colorHex: "#0891B2", weeks: 14)
-    row.outline(sectionNumbers: [1, 2, 3, 20])
+}
+
+print("== Accueil : ce que l'import montre, élément par élément (ImportFeed) ==")
+do {
+    var feed = ImportFeed()
+    feed.reset([(id: "a", code: "MATH-101", name: "Analyse I", colorHex: "#0891B2"),
+                (id: "b", code: "CS-107", name: "Programmation", colorHex: "#059669")])
+    let sections = [
+        MoodleSection(number: 0, title: "", activities: [
+            MoodleActivity(id: "1", name: "Annonces", module: "forum", url: ""),
+            MoodleActivity(id: "2", name: "Bienvenue", module: "label", url: "")]),
+        MoodleSection(number: 3, title: "Semaine 3 &amp; suites", activities: [
+            MoodleActivity(id: "3", name: "S\u{00e9}rie 3", module: "resource", url: ""),
+            MoodleActivity(id: "4", name: "Vidéos", module: "url", url: "")]),
+        MoodleSection(number: 4, title: "Semaine 4", activities: [
+            MoodleActivity(id: "5", name: "Cach\u{00e9}", module: "label", url: "")]),
+    ]
+    feed.outline(sections, course: "a")
+    let course = feed.courses[0]
+    check(course.sections.count == 2 && course.sections[1].title == "Semaine 3 & suites"
+          && course.activities.map(\.id) == ["1", "3", "4"],
+          "plan : étiquettes et sections vides retirées, titres nettoyés")
+    check(course.openableCount == 2 && course.openedCount == 0, "deux activités à ouvrir (le forum se lit dans le plan)")
+    feed.opened(["3": "PDF", "4": "Vidéo", "zz": "PDF"], course: "a")
+    check(feed.courses[0].openedCount == 2 && feed.courses[0].activities.first { $0.id == "4" }?.revealed == "Vidéo",
+          "ouverture : chaque activité dit ce qu'elle cachait")
+    feed.setStage(.analysis, course: "a")
+    feed.setStage(.activities, course: "a")
+    check(feed.courses[0].stage == .analysis, "l'étape ne recule jamais")
+
     var draft = ContentDraft(source: .moodle, courseTitle: "", url: "", sections: [])
-    draft.sections = [ContentDraftSection(title: "S2", week: 2, weekIsInferred: false, isIncluded: true, items: [
-        ContentDraftItem(kind: .series, number: "2", title: "", url: "", videoCount: 0, seriesNumber: 2, theoryKind: .reading),
-        ContentDraftItem(kind: .theory, number: "2.1", title: "", url: "", videoCount: 1, seriesNumber: nil, theoryKind: .video, week: 3)])]
-    row.fill(with: draft)
-    check(row.cells[0].outlined && !row.cells[0].isFilled && row.cells[1].series == 1 && row.cells[2].theory == 1,
-          "grille : contour à la lecture, série et théorie rangées dans leur semaine")
+    draft.sections = [ContentDraftSection(title: "S3", week: 3, weekIsInferred: false, isIncluded: true, items: [
+        ContentDraftItem(kind: .series, number: "3", title: "", url: "", videoCount: 0, seriesNumber: 3, theoryKind: .reading),
+        ContentDraftItem(kind: .theory, number: "3.1", title: "Limites", url: "", videoCount: 2, seriesNumber: nil, theoryKind: .video),
+        ContentDraftItem(kind: .resource, number: "", title: "Formulaire", url: "", videoCount: 0, seriesNumber: nil, theoryKind: .reading),
+        ContentDraftItem(kind: .deadline, number: "", title: "Midterm", url: "", videoCount: 0, seriesNumber: nil,
+                         theoryKind: .reading, week: 8)]),
+        ContentDraftSection(title: "Non planifié", week: 0, weekIsInferred: true, isIncluded: true, items: [
+            ContentDraftItem(kind: .series, number: "9", title: "Bonus", url: "", videoCount: 0, seriesNumber: nil, theoryKind: .reading)])]
+    feed.place(draft, course: "a")
+    let placed = feed.courses[0].placed
+    check(placed.map(\.title) == ["Limites", "Série 3", "Midterm"] && placed.map(\.week) == [3, 3, 8],
+          "rangement : vidéo, série, échéance dans leur semaine ; ni document ni élément sans semaine")
+    check(placed[0].kind == .video && placed[0].detail == "2 vidéos", "« 2 vidéos »")
+    check(feed.week(3).count == 1 && feed.week(3)[0].items.count == 2 && feed.week(5).isEmpty,
+          "la semaine 3, tous cours confondus")
+    check(feed.totals.series == 1 && feed.totals.videos == 1 && feed.totals.deadlines == 1, "totaux")
+    feed.remove("b")
+    check(feed.courses.count == 1, "un cours ignoré disparaît")
+    check(ImportFeed.openedLabel(["dates": "Due: 12 Oct"]) == "Devoir"
+          && ImportFeed.openedLabel(["files": [1, 2, 3], "kind": "dossier"]) == "Dossier · 3 PDF"
+          && ImportFeed.openedLabel(["target": "https://mediaspace.epfl.ch/media/x"]) == "Vidéo"
+          && ImportFeed.openedLabel(["target": "https://x/a.pdf", "kind": "pdf"]) == "PDF"
+          && ImportFeed.openedLabel([:]) == "Page",
+          "ce que cachait une activité, en un mot")
 }
 
 print("== Temps d'étude : cours automatiques, exercices chronométrés (StudyTime) ==")

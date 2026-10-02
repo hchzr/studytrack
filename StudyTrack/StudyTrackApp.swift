@@ -27,8 +27,6 @@ enum PreviewLaunch {
     /// `-onboardingDemo N` : l'accueil EPFL, écran N (0 bienvenue, 1 import
     /// simulé, 2 semestre, 3 to-do, 4 chrono), sans Moodle — pour les captures.
     static let onboardingDemoFlag = "-onboardingDemo"
-    /// `-onboardingDeck N` : le réglage N de l'import (1 objectif, 2 rappel, 3 fini).
-    static let onboardingDeckFlag = "-onboardingDeck"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"
@@ -149,6 +147,12 @@ enum PreviewLaunch {
                 try? await Task.sleep(for: .milliseconds(400))
                 ExamActivityController.startTest()
             }
+        }
+
+        // L'accueil se rejoue à chaque lancement de démo, même après l'avoir fini.
+        if isSet(onboardingDemoFlag) {
+            container.settings.hasCompletedOnboarding = false
+            return
         }
 
         guard isSet(seedFlag) else { return }

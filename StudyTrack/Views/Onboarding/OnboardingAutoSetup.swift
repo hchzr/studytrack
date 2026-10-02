@@ -20,9 +20,9 @@ import UserNotifications
 /// et reprend tout seul au retour si iOS l'a suspendu. Une Live Activity montre
 /// l'avancement dans l'îlot et sur l'écran verrouillé.
 ///
-/// L'écran, lui, écoute : l'avancement pondéré (`ImportProgress`), la grille du
-/// semestre (`SemesterGridRow`), et chaque élément trouvé (`onDrop`) — que la
-/// scène physique fait tomber dans le semestre.
+/// L'écran, lui, écoute : l'avancement pondéré (`ImportProgress`) et, cours par
+/// cours, ce que l'import lit, ouvre et range (`ImportFeed`) — avec les vrais
+/// noms des activités Moodle.
 @MainActor
 @Observable
 final class OnboardingAutoSetup {
@@ -34,18 +34,7 @@ final class OnboardingAutoSetup {
         case failed(String)
     }
 
-    /// Ce que l'import a trouvé, pour les cartes de présentation et la fin.
-    struct Highlight: Equatable {
-        var code: String
-        var name: String
-        var colorHex: String
-        var week: Int
-        var theory: Int
-        var series: Int
-        var videos: Int
-    }
-
-    /// Un cours à trier (garder ou ignorer, choisir sa couleur).
+    /// Un cours trouvé dans les inscriptions Moodle, à garder ou ignorer.
     struct CourseCard: Identifiable, Equatable {
         let id: String
         var code: String
@@ -55,32 +44,19 @@ final class OnboardingAutoSetup {
         var kept = true
     }
 
-    /// Un élément trouvé, que la scène fait tomber.
-    struct Drop: Equatable {
-        enum Kind: String { case page, video, theory, series, deadline }
-        var kind: Kind
-        var colorHex: String
-        var courseID: String
-        var week: Int?
-    }
-
     private(set) var phase: Phase = .idle
     private(set) var headline = "Connexion à Moodle…"
     private(set) var progress = ImportProgress()
-    private(set) var grid: [SemesterGridRow] = []
+    private(set) var feed = ImportFeed()
     private(set) var weeks = 14
+    /// La semaine du semestre, aujourd'hui.
+    private(set) var currentWeek = 1
     private(set) var currentID: String?
-    private(set) var highlights: [Highlight] = []
     private(set) var totals = (courses: 0, series: 0, theory: 0, deadlines: 0)
     private(set) var extraSites: [String] = []
     private(set) var cards: [CourseCard] = []
     /// Vrai quand iOS a suspendu l'import (app en arrière-plan trop longtemps).
     private(set) var isPaused = false
-
-    /// Chaque élément trouvé, au moment où il l'est (la scène physique).
-    @ObservationIgnored var onDrop: ((Drop) -> Void)?
-    /// Un cours fini : ses éléments rejoignent la grille.
-    @ObservationIgnored var onCourseFinished: ((String) -> Void)?
 
     @ObservationIgnored private var context: ModelContext?
     @ObservationIgnored private var coursesByID: [String: Course] = [:]
@@ -94,18 +70,18 @@ final class OnboardingAutoSetup {
     var isWorking: Bool { phase == .working }
 
     func currentLine(at now: Date) -> (code: String, step: String)? {
-        guard let id = currentID, let row = grid.first(where: { $0.id == id }),
+        guard let id = currentID, let card = cards.first(where: { $0.id == id }),
               let course = progress.courses.first(where: { $0.id == id }) else { return nil }
-        if isPaused { return (row.code, "en pause") }
+        if isPaused { return (card.code, "en pause") }
         if course.stage == .activities, course.total > 0 {
-            return (row.code, "activités \(course.done) / \(course.total)")
+            return (card.code, "activités \(course.done) / \(course.total)")
         }
-        return (row.code, course.stage.label)
+        return (card.code, course.stage.label)
     }
 
     // MARK: Tri des cours
 
-    /// Garder un cours (glissé à droite).
+    /// Garder un cours.
     func keep(_ id: String) {
         guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
         cards[index].decided = true
@@ -115,8 +91,8 @@ final class OnboardingAutoSetup {
         try? context?.save()
     }
 
-    /// Ignorer un cours (glissé à gauche) : il n'est pas importé s'il ne l'est
-    /// pas encore, et ne sera pas suivi.
+    /// Ignorer un cours : il n'est pas importé s'il ne l'est pas encore, et ne
+    /// sera pas suivi.
     func skip(_ id: String) {
         guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
         cards[index].decided = true
@@ -124,18 +100,14 @@ final class OnboardingAutoSetup {
         skipped.insert(id)
         coursesByID[id]?.isTracked = false
         try? context?.save()
-        withAnimationIfNeeded { self.grid.removeAll { $0.id == id } }
+        feed.remove(id)
     }
 
-    func setColor(_ hex: String, for id: String) {
-        guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
-        cards[index].colorHex = hex
-        coursesByID[id]?.colorHex = hex
-        if let row = grid.firstIndex(where: { $0.id == id }) { grid[row].colorHex = hex }
-        try? context?.save()
+    /// Les deux à la fois : la progression pondérée et ce que l'écran raconte.
+    private func enter(_ stage: ImportProgress.Stage, course id: String) {
+        progress.enter(stage, course: id, now: Date())
+        feed.setStage(stage, course: id)
     }
-
-    private func withAnimationIfNeeded(_ change: () -> Void) { change() }
 
     // MARK: Import
 
@@ -190,13 +162,12 @@ final class OnboardingAutoSetup {
         try? context.save()
 
         weeks = max(term.totalWeeks, 1)
-        grid = targets.map { course, _ in
-            SemesterGridRow(id: course.id.uuidString, code: course.displayCode, colorHex: course.colorHex, weeks: weeks)
-        }
+        currentWeek = min(max(term.currentWeek, 1), weeks)
         cards = targets.map { course, _ in
             CourseCard(id: course.id.uuidString, code: course.displayCode, name: course.name, colorHex: course.colorHex)
         }
-        progress.reset(courseIDs: grid.map(\.id), now: Date())
+        feed.reset(cards.map { (id: $0.id, code: $0.code, name: $0.name, colorHex: $0.colorHex) })
+        progress.reset(courseIDs: cards.map(\.id), now: Date())
         totals.courses = targets.count
         headline = "Ton semestre se construit"
         startActivity()
@@ -210,6 +181,7 @@ final class OnboardingAutoSetup {
                 continue
             }
             currentID = id
+            feed.currentID = id
             await waitIfSuspended()
             var attempt = 0
             while true {
@@ -231,10 +203,8 @@ final class OnboardingAutoSetup {
                     break
                 }
             }
-            onCourseFinished?(id)
             updateActivity()
         }
-        currentID = nil
         totals.courses = targets.count - skipped.count
 
         if !imported.isEmpty {
@@ -255,86 +225,39 @@ final class OnboardingAutoSetup {
                               imported: inout [Course]) async throws {
         let id = course.id.uuidString
         beginBackgroundTask()
-        progress.enter(.outline, course: id, now: Date())
-        var lastDone = 0
-        let snapshot = try await client.snapshot(of: ref, onOutline: { [weak self] numbers in
-            self?.updateRow(id) { $0.outline(sectionNumbers: numbers) }
-        }, onActivities: { [weak self] done, total in
+        enter(.outline, course: id)
+        let snapshot = try await client.snapshot(of: ref, onActivities: { [weak self] done, total in
             guard let self else { return }
             self.progress.activities(done: done, total: total, course: id, now: Date())
-            // Une page lue = un caillou qui tombe.
-            for _ in 0..<max(0, min(done - lastDone, 18)) {
-                self.onDrop?(Drop(kind: .page, colorHex: self.color(of: id), courseID: id, week: nil))
-            }
-            lastDone = done
+            self.feed.setStage(.activities, course: id)
             self.updateActivity()
+        }, onSections: { [weak self] sections in
+            self?.feed.outline(sections, course: id)
+        }, onOpened: { [weak self] labels in
+            self?.feed.opened(labels, course: id)
         })
-        progress.enter(.sources, course: id, now: Date())
+        enter(.sources, course: id)
         updateActivity()
         let outcome = await CourseImportPipeline.draft(from: snapshot,
                                                        termStart: course.term?.startDate ?? term.startDate,
                                                        totalWeeks: course.term?.totalWeeks ?? term.totalWeeks,
                                                        settings: settings) { [weak self] message in
             guard let stage = ImportProgress.stage(forMessage: message) else { return }
-            self?.progress.enter(stage, course: id, now: Date())
+            self?.enter(stage, course: id)
             self?.updateActivity()
         }
-        progress.enter(.writing, course: id, now: Date())
+        enter(.writing, course: id)
         let draft = outcome.draft
         if !draft.isEmpty, !skipped.contains(id) {
             ContentDraftWriter.apply(draft, to: course, context: context)
             try? context.save()
             imported.append(course)
-            updateRow(id) { $0.fill(with: draft) }
-            record(draft, for: course)
-            dropItems(of: draft, course: id)
+            totals.series += draft.seriesCount
+            totals.theory += draft.theoryCount
+            totals.deadlines += draft.deadlineCount
+            feed.place(draft, course: id)
         }
-        progress.enter(.done, course: id, now: Date())
-    }
-
-    private func color(of id: String) -> String { grid.first { $0.id == id }?.colorHex ?? "#6B655A" }
-
-    /// Les éléments rangés d'un cours tombent dans la scène, un à un.
-    private func dropItems(of draft: ContentDraft, course id: String) {
-        let hex = color(of: id)
-        var drops: [Drop] = []
-        for section in draft.sections where section.isIncluded {
-            for item in section.items {
-                let kind: Drop.Kind
-                switch item.kind {
-                case .theory: kind = item.videoCount > 0 ? .video : .theory
-                case .series: kind = .series
-                case .deadline: kind = .deadline
-                default: continue
-                }
-                drops.append(Drop(kind: kind, colorHex: hex, courseID: id, week: item.plannedWeek(in: section)))
-            }
-        }
-        for drop in drops.prefix(40) { onDrop?(drop) }
-    }
-
-    private func updateRow(_ id: String, _ change: (inout SemesterGridRow) -> Void) {
-        guard let index = grid.firstIndex(where: { $0.id == id }) else { return }
-        change(&grid[index])
-    }
-
-    private func record(_ draft: ContentDraft, for course: Course) {
-        totals.series += draft.seriesCount
-        totals.theory += draft.theoryCount
-        totals.deadlines += draft.deadlineCount
-        let week = min(max(course.currentWeek, 1), weeks)
-        var theory = 0, series = 0, videos = 0
-        for section in draft.sections where section.isIncluded {
-            for item in section.items where item.plannedWeek(in: section) == week {
-                switch item.kind {
-                case .theory: theory += 1; videos += item.videoCount
-                case .series: series += 1
-                default: break
-                }
-            }
-        }
-        highlights.append(Highlight(code: course.displayCode, name: course.name, colorHex: course.colorHex,
-                                    week: week, theory: theory, series: series, videos: videos))
+        enter(.done, course: id)
     }
 
     // MARK: Arrière-plan
@@ -411,7 +334,7 @@ final class OnboardingAutoSetup {
     private func startActivity() {
         guard activity == nil, ActivityAuthorizationInfo().areActivitiesEnabled,
               UIApplication.shared.applicationState == .active else { return }
-        let attributes = ImportActivityAttributes(colors: grid.map(\.colorHex))
+        let attributes = ImportActivityAttributes(colors: cards.map(\.colorHex))
         activity = try? Activity.request(attributes: attributes,
                                          content: .init(state: activityState(), staleDate: nil),
                                          pushType: nil)
@@ -462,62 +385,53 @@ final class OnboardingAutoSetup {
     }
 
     #if DEBUG
-    /// Un import simulé (quatre cours), pour voir l'accueil sans Moodle.
+    /// Un import simulé (quatre cours au contenu vraisemblable), pour voir
+    /// l'accueil sans Moodle.
     func runDemo(fast: Bool = false) async {
         phase = .working
         headline = "Ton semestre se construit"
-        let courses = [("MATH-101", "Analyse I", "#0891B2", 34), ("MATH-111", "Algèbre linéaire", "#4F46E5", 55),
-                       ("CS-107", "Introduction à la programmation", "#059669", 24), ("PHYS-101", "Physique générale", "#D97706", 18)]
+        let courses = DemoSemester.courses
         weeks = 14
-        grid = courses.map { SemesterGridRow(id: $0.0, code: $0.0, colorHex: $0.2, weeks: 14) }
-        cards = courses.map { CourseCard(id: $0.0, code: $0.0, name: $0.1, colorHex: $0.2) }
-        progress.reset(courseIDs: courses.map(\.0), now: Date())
+        currentWeek = 4
+        cards = courses.map { CourseCard(id: $0.code, code: $0.code, name: $0.name, colorHex: $0.color) }
+        feed.reset(cards.map { (id: $0.id, code: $0.code, name: $0.name, colorHex: $0.colorHex) })
+        progress.reset(courseIDs: cards.map(\.id), now: Date())
         totals.courses = courses.count
         startActivity()
-        let pace = fast ? 0.05 : 1.0
-        for (code, name, color, activities) in courses {
-            if skipped.contains(code) { progress.fail(course: code, now: Date()); continue }
-            currentID = code
-            progress.enter(.outline, course: code, now: Date())
-            try? await Task.sleep(for: .seconds(1.2 * pace))
-            updateRow(code) { $0.outline(sectionNumbers: Array(1...14)) }
-            var last = 0
-            for done in stride(from: 0, through: activities, by: 18) {
-                progress.activities(done: min(done, activities), total: activities, course: code, now: Date())
-                for _ in 0..<(done - last) { onDrop?(Drop(kind: .page, colorHex: color, courseID: code, week: nil)) }
-                last = done
-                try? await Task.sleep(for: .seconds(1.4 * pace))
+        let pace = fast ? 0.04 : 1.0
+        for course in courses {
+            let id = course.code
+            if skipped.contains(id) { progress.fail(course: id, now: Date()); continue }
+            currentID = id
+            feed.currentID = id
+            enter(.outline, course: id)
+            try? await Task.sleep(for: .seconds(1.6 * pace))
+            let sections = course.sections
+            feed.outline(sections, course: id)
+            try? await Task.sleep(for: .seconds(1.8 * pace))
+            let openable = sections.flatMap(\.activities).filter { ImportFeed.openedModules.contains($0.module) }
+            progress.activities(done: 0, total: openable.count, course: id, now: Date())
+            feed.setStage(.activities, course: id)
+            for start in stride(from: 0, to: openable.count, by: 18) {
+                try? await Task.sleep(for: .seconds(1.6 * pace))
+                let chunk = openable[start..<min(start + 18, openable.count)]
+                feed.opened(Dictionary(uniqueKeysWithValues: chunk.map { ($0.id, DemoSemester.label(for: $0)) }), course: id)
+                progress.activities(done: min(start + 18, openable.count), total: openable.count, course: id, now: Date())
             }
-            progress.activities(done: activities, total: activities, course: code, now: Date())
-            progress.enter(.sources, course: code, now: Date())
-            try? await Task.sleep(for: .seconds(1.5 * pace))
-            progress.enter(.analysis, course: code, now: Date())
-            try? await Task.sleep(for: .seconds(2.5 * pace))
-            progress.enter(.writing, course: code, now: Date())
-            var draft = ContentDraft(source: .moodle, courseTitle: name, url: "", sections: [])
-            draft.sections = (1...14).map { week in
-                var items = [ContentDraftItem(kind: .theory, number: "\(week).1", title: "Chapitre \(week) — vidéos", url: "",
-                                              videoCount: 2, seriesNumber: nil, theoryKind: .video)]
-                if week % 7 != 0 {
-                    items.append(ContentDraftItem(kind: .series, number: "\(week)", title: "Série \(week)", url: "",
-                                                  videoCount: 0, seriesNumber: week, theoryKind: .reading))
-                }
-                if week == 8 {
-                    items.append(ContentDraftItem(kind: .deadline, number: "", title: "Midterm", url: "", videoCount: 0,
-                                                  seriesNumber: nil, theoryKind: .reading))
-                }
-                return ContentDraftSection(title: "Semaine \(week)", week: week, weekIsInferred: false, isIncluded: true, items: items)
-            }
-            updateRow(code) { $0.fill(with: draft) }
+            enter(.sources, course: id)
+            try? await Task.sleep(for: .seconds(1.6 * pace))
+            enter(.analysis, course: id)
+            try? await Task.sleep(for: .seconds(4.5 * pace))
+            enter(.writing, course: id)
+            let draft = course.draft
             totals.series += draft.seriesCount
             totals.theory += draft.theoryCount
-            highlights.append(Highlight(code: code, name: name, colorHex: color, week: 4, theory: 1, series: 1, videos: 2))
-            dropItems(of: draft, course: code)
-            progress.enter(.done, course: code, now: Date())
-            onCourseFinished?(code)
+            feed.place(draft, course: id)
+            try? await Task.sleep(for: .seconds(3.2 * pace))
+            enter(.done, course: id)
             updateActivity()
+            try? await Task.sleep(for: .seconds(0.6 * pace))
         }
-        currentID = nil
         extraSites = ["Courseware", "MediaSpace"]
         headline = "C'est prêt"
         phase = .done
