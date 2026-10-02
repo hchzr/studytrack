@@ -8,9 +8,11 @@ import UIKit
 /// Chaque page Moodle lue est un petit caillou ; chaque vidéo, série ou
 /// échéance rangée, un objet à l'icône et à la couleur de son cours. Ils
 /// tombent, rebondissent, roulent selon l'inclinaison du téléphone (gyroscope)
-/// et se poussent du doigt — on peut les lancer. Quand un cours est fini, ses
-/// objets passent à travers le sol : ils rejoignent la grille du semestre, juste
-/// dessous, qui se remplit.
+/// et se poussent du doigt — on peut les lancer. Le sol est la carte du moment
+/// (on trie ses cours, on règle son objectif) : les objets s'y posent, et
+/// retombent quand elle s'en va. Quand un cours est fini, ses objets s'envolent
+/// dans le compteur ; à la fin, tout s'effondre au centre en une onde, d'où naît
+/// la grille du semestre.
 ///
 /// Pourquoi SpriteKit : une centaine de corps en collision à 60 images par
 /// seconde, avec gravité variable, n'est pas raisonnable en SwiftUI.
@@ -34,6 +36,11 @@ final class ImportPhysicsScene: SKScene, SKPhysicsContactDelegate {
     /// Les cours finis : leurs objets, même arrivés après, rejoignent la grille.
     private var finishedCourses: Set<String> = []
     private var lastSpawn: TimeInterval = 0
+    /// La hauteur visée du sol (le haut de la carte du moment), depuis le bas.
+    var floorTarget: CGFloat = 0
+    /// Là où s'envolent les objets d'un cours fini : le compteur.
+    var collectPoint: CGPoint?
+    private var imploding = false
     private static var textures: [String: SKTexture] = [:]
 
     static func make(reduceMotion: Bool) -> ImportPhysicsScene {
@@ -78,6 +85,8 @@ final class ImportPhysicsScene: SKScene, SKPhysicsContactDelegate {
         floor.physicsBody = SKPhysicsBody(edgeFrom: CGPoint(x: -40, y: 0), to: CGPoint(x: size.width + 40, y: 0))
         floor.physicsBody?.categoryBitMask = Category.floor
         floor.physicsBody?.friction = 0.6
+        floor.physicsBody?.isDynamic = false
+        floor.position.y = floorTarget
         addChild(floor)
         let walls = SKNode()
         walls.name = "walls"
@@ -100,15 +109,26 @@ final class ImportPhysicsScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        if !pending.isEmpty, currentTime - lastSpawn > 0.05 {
+        if !pending.isEmpty, !imploding, currentTime - lastSpawn > 0.05 {
             lastSpawn = currentTime
             spawn(pending.removeFirst())
         }
-        // Ce qui est passé sous le sol a rejoint la grille.
-        for node in children where node.name == "item" && node.position.y < -60 {
-            node.removeFromParent()
-        }
+        moveFloor()
         trimIfCrowded()
+    }
+
+    /// Le sol suit la carte, par petits pas : un bond d'un coup ferait passer
+    /// les cailloux au travers. Ce qui s'est retrouvé dessous remonte dessus.
+    private func moveFloor() {
+        guard let floor = childNode(withName: "floor") else { return }
+        let delta = floorTarget - floor.position.y
+        guard abs(delta) > 0.5 else { return }
+        let step = delta > 0 ? min(delta, 6) : max(delta, -24)
+        floor.position.y += step
+        guard step > 0 else { return }
+        for node in children where node.name == "item" && node.position.y < floor.position.y - 4 {
+            node.position.y = floor.position.y + 8
+        }
     }
 
     private func spawn(_ drop: OnboardingAutoSetup.Drop) {
@@ -160,22 +180,31 @@ final class ImportPhysicsScene: SKScene, SKPhysicsContactDelegate {
         body.angularVelocity = CGFloat.random(in: -3...3)
         // Un objet d'un cours déjà rangé : on le voit tomber, rebondir, puis
         // rejoindre la grille — au lieu de rester sur le sol.
-        if finishedCourses.contains(drop.courseID) { sink(node, after: 1.4 + Double.random(in: 0...0.8)) }
+        if finishedCourses.contains(drop.courseID) { collect(node, after: 1.4 + Double.random(in: 0...0.8)) }
     }
 
-    /// L'objet traverse le sol (il rejoint la grille), ou s'efface si c'est un caillou.
-    private func sink(_ node: SKNode, after delay: TimeInterval) {
-        if (node.userData?["kind"] as? String) == "page" {
-            node.name = "leaving"
-            node.run(.sequence([.wait(forDuration: delay),
-                                .group([.fadeOut(withDuration: 0.35), .scale(to: 0.2, duration: 0.35)]),
-                                .removeFromParent()]))
-        } else {
-            node.run(.sequence([.wait(forDuration: delay), .run { [weak node] in
-                node?.physicsBody?.collisionBitMask = Category.item | Category.wall
-                node?.physicsBody?.applyImpulse(CGVector(dx: 0, dy: -12))
-            }]))
-        }
+    /// L'objet s'envole dans le compteur — un cours rangé, c'est autant de gagné.
+    /// Les cailloux, eux, restent : ils font le sol du semestre.
+    private func collect(_ node: SKNode, after delay: TimeInterval) {
+        guard (node.userData?["kind"] as? String) != "page" else { return }
+        let target = collectPoint ?? CGPoint(x: size.width / 2, y: size.height - 120)
+        node.run(.sequence([
+            .wait(forDuration: delay),
+            .run { [weak node] in
+                node?.name = "leaving"
+                node?.physicsBody = nil
+            },
+            .group([
+                .scale(to: 1.25, duration: 0.12),
+                .rotate(toAngle: 0, duration: 0.3, shortestUnitArc: true),
+            ]),
+            .group([
+                .move(to: target, duration: 0.55).withTiming(.easeIn),
+                .scale(to: 0.15, duration: 0.55).withTiming(.easeIn),
+                .sequence([.wait(forDuration: 0.35), .fadeOut(withDuration: 0.2)]),
+            ]),
+            .removeFromParent(),
+        ]))
     }
 
     /// Jamais plus de 140 objets : les cailloux les plus anciens s'effacent.
@@ -189,31 +218,88 @@ final class ImportPhysicsScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
-    /// Un cours est rangé : ses cailloux s'effacent, ses objets traversent le
-    /// sol vers la grille, en cascade.
+    /// Un cours est rangé : ses objets s'envolent dans le compteur, en cascade.
     func courseFinished(_ courseID: String) {
         finishedCourses.insert(courseID)
         let mine = children.filter { $0.name == "item" && ($0.userData?["course"] as? String) == courseID }
         for (index, node) in mine.enumerated() {
-            sink(node, after: 0.6 + Double(index % 30) * 0.03)
+            collect(node, after: 0.4 + Double(index % 40) * 0.035)
         }
     }
 
-    /// La fin : tout ce qui reste s'aspire vers le bas, en vague.
-    func finishAll() {
-        let items = children.filter { $0.name == "item" }
-        for (index, node) in items.enumerated() {
-            node.run(.sequence([.wait(forDuration: Double(index) * 0.012), .run { [weak node] in
-                node?.physicsBody?.collisionBitMask = Category.wall
-                node?.physicsBody?.applyImpulse(CGVector(dx: 0, dy: -8))
-            }]))
+    /// La fin : tout ce qui reste est aspiré au centre, s'y écrase, et repart
+    /// en onde de choc — la grille du semestre naît de là. Appelle `completion`
+    /// à l'instant du choc.
+    func implode(at center: CGPoint? = nil, completion: @escaping () -> Void) {
+        imploding = true
+        pending.removeAll()
+        dragged = nil
+        let point = center ?? CGPoint(x: size.width / 2, y: size.height * 0.5)
+        let items = children.filter { $0.name == "item" || $0.name == "leaving" }
+        // Un temps suspendu : la gravité s'inverse doucement, tout flotte.
+        physicsWorld.gravity = CGVector(dx: 0, dy: 1.5)
+        motion.stopDeviceMotionUpdates()
+        let gather: TimeInterval = 0.75
+        for node in items {
+            node.removeAllActions()
+            let distance = node.position.distance(to: point)
+            let lag = 0.25 + Double(min(distance, 600) / 600) * 0.35
+            node.run(.sequence([
+                .wait(forDuration: lag),
+                .run { [weak node] in node?.physicsBody = nil },
+                .group([
+                    .move(to: point, duration: gather).withTiming(.easeIn),
+                    .scale(to: 0.05, duration: gather).withTiming(.easeIn),
+                    .rotate(byAngle: .pi * 2, duration: gather),
+                ]),
+                .removeFromParent(),
+            ]))
+        }
+        let impact: TimeInterval = 0.6 + gather + 0.05
+        // Le cœur : un point qui grossit à mesure qu'il avale.
+        let core = SKShapeNode(circleOfRadius: 10)
+        core.fillColor = UIColor(Carnet.ink)
+        core.strokeColor = .clear
+        core.position = point
+        core.setScale(0.01)
+        core.zPosition = 10
+        addChild(core)
+        core.run(.sequence([
+            .scale(to: 1.6, duration: impact - 0.1).withTiming(.easeIn),
+            .scale(to: 0.6, duration: 0.1),
+            .run { [weak self] in self?.shockwave(at: point) },
+            .group([.scale(to: 0, duration: 0.18), .fadeOut(withDuration: 0.18)]),
+            .removeFromParent(),
+        ]))
+        run(.sequence([.wait(forDuration: impact), .run(completion)]))
+    }
+
+    private func shockwave(at point: CGPoint) {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        let reach = max(size.width, size.height) * 1.2
+        for (index, width) in [CGFloat(10), 4, 2].enumerated() {
+            let ring = SKShapeNode(circleOfRadius: 10)
+            ring.strokeColor = UIColor(Carnet.ink).withAlphaComponent(0.5 - CGFloat(index) * 0.12)
+            ring.lineWidth = width
+            ring.fillColor = .clear
+            ring.position = point
+            ring.zPosition = 9
+            addChild(ring)
+            ring.run(.sequence([
+                .wait(forDuration: Double(index) * 0.07),
+                .group([
+                    .scale(to: reach / 10, duration: 0.7).withTiming(.easeOut),
+                    .fadeOut(withDuration: 0.7),
+                ]),
+                .removeFromParent(),
+            ]))
         }
     }
 
     // MARK: Toucher
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
+        guard let touch = touches.first, !imploding else { return }
         let point = touch.location(in: self)
         // Le plus proche dans un rayon généreux : un caillou de 5 pt se rate au doigt.
         let candidate = children
@@ -312,13 +398,27 @@ private extension CGPoint {
     func distance(to other: CGPoint) -> CGFloat { hypot(x - other.x, y - other.y) }
 }
 
-/// La scène, dans SwiftUI, reliée à l'import.
+private extension SKAction {
+    func withTiming(_ mode: SKActionTimingMode) -> SKAction {
+        timingMode = mode
+        return self
+    }
+}
+
+/// La scène, dans SwiftUI, reliée à l'import. Elle couvre tout l'écran.
 struct ImportPhysicsStage: View {
     let setup: OnboardingAutoSetup
-    var finished: Bool
+    /// La hauteur du sol depuis le bas de la scène (le haut de la carte du moment).
+    var floor: CGFloat
+    /// Le centre du compteur, depuis le haut de la scène.
+    var collectPoint: CGPoint?
+    /// Passe à vrai : tout s'effondre au centre ; `onImploded` à l'instant du choc.
+    var implode: Bool
+    var onImploded: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scene: ImportPhysicsScene?
+    @State private var height: CGFloat = 0
 
     var body: some View {
         Group {
@@ -328,9 +428,11 @@ struct ImportPhysicsStage: View {
                 Color.clear
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0; sync() }
         .onAppear {
             let made = ImportPhysicsScene.make(reduceMotion: reduceMotion)
             scene = made
+            sync()
             setup.onDrop = { [weak made] drop in made?.enqueue(drop) }
             setup.onCourseFinished = { [weak made] id in made?.courseFinished(id) }
         }
@@ -338,10 +440,21 @@ struct ImportPhysicsStage: View {
             setup.onDrop = nil
             setup.onCourseFinished = nil
         }
-        .onChange(of: finished) { _, done in
-            if done { scene?.finishAll() }
+        .onChange(of: floor) { _, _ in sync() }
+        .onChange(of: collectPoint) { _, _ in sync() }
+        .onChange(of: implode) { _, now in
+            guard now else { return }
+            guard let scene, !reduceMotion else { onImploded(); return }
+            scene.implode(completion: onImploded)
         }
         .accessibilityElement()
-        .accessibilityLabel("Les éléments trouvés tombent dans ton semestre. Touche-les pour les déplacer.")
+        .accessibilityLabel("Ce que l'app trouve sur Moodle tombe à l'écran. Touche-le pour le lancer.")
+    }
+
+    private func sync() {
+        scene?.floorTarget = max(0, floor)
+        if let collectPoint, height > 0 {
+            scene?.collectPoint = CGPoint(x: collectPoint.x, y: height - collectPoint.y)
+        }
     }
 }

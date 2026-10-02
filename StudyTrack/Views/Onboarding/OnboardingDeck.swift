@@ -92,6 +92,32 @@ struct CourseSortDeck: View {
     private var pending: [OnboardingAutoSetup.CourseCard] { setup.cards.filter { !$0.decided } }
 
     var body: some View {
+        if setup.cards.isEmpty {
+            intro
+        } else {
+            deck
+        }
+    }
+
+    /// Avant les cours : ce qu'on regarde, et ce qu'on peut en faire.
+    private var intro: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ce qui tombe, c'est ton Moodle.")
+                .font(Carnet.serif(.title3, weight: .semibold))
+                .foregroundStyle(Carnet.ink)
+            Text("Touche, lance, incline le téléphone.")
+                .font(.subheadline)
+                .foregroundStyle(Carnet.inkSecondary)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Tes cours arrivent…").font(.footnote).foregroundStyle(Carnet.inkTertiary)
+            }
+            .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var deck: some View {
         VStack(spacing: 14) {
             HStack {
                 Text(pending.isEmpty ? "Tes cours" : "Tu suis ce cours ?")
@@ -106,12 +132,8 @@ struct CourseSortDeck: View {
                 }
             }
             ZStack {
-                if setup.cards.isEmpty {
-                    waitingCard
-                } else {
-                    ForEach(Array(pending.prefix(3).enumerated().reversed()), id: \.element.id) { depth, card in
-                        cardView(card, depth: depth)
-                    }
+                ForEach(Array(pending.prefix(3).enumerated().reversed()), id: \.element.id) { depth, card in
+                    cardView(card, depth: depth)
                 }
             }
             .frame(height: 118)
@@ -132,15 +154,6 @@ struct CourseSortDeck: View {
         .onChange(of: pending.isEmpty) { _, empty in
             if empty, !setup.cards.isEmpty { finished() }
         }
-    }
-
-    private var waitingCard: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-            Text("Tes cours arrivent…").font(.subheadline).foregroundStyle(Carnet.inkSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func cardView(_ card: OnboardingAutoSetup.CourseCard, depth: Int) -> some View {

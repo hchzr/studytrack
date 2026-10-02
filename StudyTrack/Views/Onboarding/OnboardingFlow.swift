@@ -1,18 +1,14 @@
 import SwiftUI
 import EventKit
 
-/// L'accueil par la connexion EPFL, en quatre temps :
+/// L'accueil par la connexion EPFL, une idée par écran :
 ///
 ///   1. **Bienvenue** — la promesse, et un seul bouton ;
-///   2. **Ton semestre se construit** — l'import *est* la visite : un anneau
-///      donne l'avancement réel et le temps restant, la grille du semestre se
-///      remplit cours par cours, et des cartes présentent l'app avec **ses**
-///      cours à mesure qu'ils arrivent ;
-///   3. **Relie le reste** — to-do, calendrier, groupes, Anki, chacun d'un toucher ;
-///   4. **C'est prêt** — le semestre entier, d'un coup d'œil.
-///
-/// L'attente d'un import (une à trois minutes) était un écran de chargement :
-/// elle devient le moment où l'on découvre l'app, sur ses propres données.
+///   2. **L'import** — en plein écran, ce qui est trouvé tombe ; un grand chiffre,
+///      et une seule carte à la fois (ses cours, son objectif, son rappel) ;
+///   3. **Le semestre** — né de l'effondrement final, la grille se déploie ;
+///   4. **Tes to-do** — chacune d'un toucher ;
+///   5. **À toi** — le chrono, essayé dix secondes.
 struct OnboardingFlow: View {
     @Bindable var setup: OnboardingAutoSetup
     /// Lance l'import (une fois Moodle connecté).
@@ -21,7 +17,7 @@ struct OnboardingFlow: View {
     var goManual: () -> Void
     var finish: () -> Void
 
-    enum Screen: Int { case welcome, importing, connections, finale }
+    enum Screen: Int { case welcome, importing, reveal, connections, finale }
 
     @State private var screen: Screen = .welcome
     @State private var showingLogin = false
@@ -38,15 +34,18 @@ struct OnboardingFlow: View {
                     WelcomeScreen(connect: { showingLogin = true }, goManual: goManual)
                 case .importing:
                     ImportScreen(setup: setup, retry: { showingLogin = true }, goManual: goManual) {
-                        advance(to: .connections)
+                        // À l'instant du choc : pas de glissé, la grille naît sur place.
+                        withAnimation(.easeOut(duration: 0.15)) { screen = .reveal }
                     }
+                case .reveal:
+                    RevealScreen(setup: setup) { advance(to: .connections) }
                 case .connections:
                     ConnectionsScreen(setup: setup) { advance(to: .finale) }
                 case .finale:
                     FinaleScreen(setup: setup, finish: finish)
                 }
             }
-            .transition(reduceMotion ? .opacity : .asymmetric(
+            .transition(reduceMotion || screen == .reveal ? .opacity : .asymmetric(
                 insertion: .offset(x: 40).combined(with: .opacity),
                 removal: .offset(x: -40).combined(with: .opacity)))
         }
@@ -57,8 +56,9 @@ struct OnboardingFlow: View {
             guard let demo = PreviewLaunch.int(PreviewLaunch.onboardingDemoFlag), demo > 0 else { return }
             screen = .importing
             await setup.runDemo(fast: demo > 1)
-            if demo >= 2 { screen = .connections }
-            if demo >= 3 { screen = .finale }
+            if demo >= 2 { screen = .reveal }
+            if demo >= 3 { screen = .connections }
+            if demo >= 4 { screen = .finale }
         }
         #endif
         .sheet(isPresented: $showingLogin, onDismiss: {
@@ -139,17 +139,11 @@ private struct WelcomeScreen: View {
                     .font(Carnet.serif(.largeTitle, weight: .semibold))
                     .foregroundStyle(Carnet.ink)
                     .rise(appeared, delay: 0.25)
-                Text("Ton semestre EPFL, semaine par semaine : la théorie, les séries, et le temps que tu y passes vraiment.")
+                Text("Tout ton semestre EPFL, lu sur Moodle et rangé semaine par semaine.")
                     .font(.title3)
                     .foregroundStyle(Carnet.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .rise(appeared, delay: 0.33)
-                HStack(spacing: 18) {
-                    promise("graduationcap", "Tes cours, lus sur Moodle")
-                    promise("sparkles", "Rangés pour toi")
-                }
-                .padding(.top, 4)
-                .rise(appeared, delay: 0.41)
             }
             Spacer(minLength: 32)
 
@@ -178,11 +172,6 @@ private struct WelcomeScreen: View {
         .onAppear { appeared = true }
     }
 
-    private func promise(_ icon: String, _ text: String) -> some View {
-        Label(text, systemImage: icon)
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(Carnet.inkSecondary)
-    }
 }
 
 /// La grille d'un semestre qui vit : 14 semaines × 5 cours, qui se dessinent
@@ -240,6 +229,11 @@ private struct LivingGrid: View {
 
 // MARK: - 2. Ton semestre se construit
 
+/// L'import, en plein écran : ce que l'app trouve tombe, un seul grand chiffre
+/// dit où on en est, et **une** carte à la fois propose ce qu'on peut faire en
+/// attendant (trier ses cours, son objectif, son rappel). Les objets se posent
+/// sur la carte ; chaque cours fini s'envole dans le chiffre. À la fin, tout
+/// s'effondre au centre — et la grille du semestre en naît (écran suivant).
 private struct ImportScreen: View {
     @Bindable var setup: OnboardingAutoSetup
     var retry: () -> Void
@@ -247,151 +241,146 @@ private struct ImportScreen: View {
     var proceed: () -> Void
 
     @State private var smoother = Smoother()
-    @State private var celebrate = false
     @State private var deckDone = false
-    @State private var opened: WeekSelection?
-    @Namespace private var hero
+    @State private var stageBottom: CGFloat = 0
+    @State private var cardTop: CGFloat?
+    @State private var counterCenter: CGPoint?
+    @State private var implode = false
+    @State private var bump = 0
+    @State private var hintGone = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isDone: Bool { setup.phase == .done }
+    private var failure: String? {
+        if case .failed(let message) = setup.phase { return message }
+        return nil
+    }
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                if case .failed(let message) = setup.phase {
-                    failure(message)
-                    Spacer()
-                } else {
-                    stage
-                    Group {
-                        if !deckDone {
-                            OnboardingDeck(setup: setup, finished: $deckDone)
-                        } else {
-                            FeatureCarousel(highlights: setup.highlights, paused: false)
-                                .transition(.deckStep)
-                        }
-                    }
-                    .frame(height: 252, alignment: .top)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .frame(maxWidth: Layout.readableWidth)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        ZStack(alignment: .bottom) {
+            counter
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.top, 28)
 
-            if let opened {
-                WeekDetailCard(selection: opened, namespace: hero) {
-                    withAnimation(.spring(duration: 0.4, bounce: 0.12)) { self.opened = nil }
-                }
-                .zIndex(2)
-            }
+            ImportPhysicsStage(setup: setup, floor: floor, collectPoint: counterCenter,
+                               implode: implode, onImploded: proceed)
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { stageBottom = $0 }
+
+            chapter
+                .padding(.horizontal, 14)
+                .padding(.bottom, 6)
+                .frame(maxWidth: Layout.readableWidth)
         }
-        .safeAreaInset(edge: .bottom) {
-            if isDone {
-                Button(action: proceed) {
-                    Label("Continuer", systemImage: "arrow.right")
-                }
-                .buttonStyle(.carnetPrimaryWide)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(duration: 0.5, bounce: 0.2), value: isDone)
-        .animation(.spring(duration: 0.55, bounce: 0.2), value: deckDone)
-        .onChange(of: isDone) { _, done in
-            guard done else { return }
+        .onChange(of: isDone && deckDone) { _, ready in
+            guard ready else { return }
             Haptics.success()
-            guard !reduceMotion else { return }
-            celebrate = true
             Task {
-                try? await Task.sleep(for: .seconds(0.9))
-                celebrate = false
+                // Le temps de voir « 100 », puis tout s'effondre.
+                try? await Task.sleep(for: .seconds(0.7))
+                implode = true
             }
         }
+        .onChange(of: setup.totals.courses) { _, _ in bump += 1 }
     }
 
-    /// La scène physique posée sur la grille du semestre : ce qui tombe
-    /// rejoint sa semaine.
-    private var stage: some View {
-        VStack(spacing: 0) {
-            ImportPhysicsStage(setup: setup, finished: isDone)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 120, maxHeight: .infinity)
-            Rectangle().fill(Carnet.rule).frame(height: 1)
-            SemesterGrid(rows: setup.grid, weeks: setup.weeks, currentID: setup.currentID,
-                         working: setup.isWorking, celebrate: celebrate, showsLegend: true,
-                         namespace: hero, openedID: opened?.id) { row, week in
-                guard let cell = setup.grid.first(where: { $0.id == row })?.cells[safe: week - 1], cell.isFilled,
-                      let line = setup.grid.first(where: { $0.id == row }) else { return }
-                Haptics.tap()
-                withAnimation(.spring(duration: 0.45, bounce: 0.16)) {
-                    opened = WeekSelection(rowID: row, week: week, code: line.code, colorHex: line.colorHex, cell: cell)
-                }
-            }
-            .padding(14)
-        }
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Carnet.rule, lineWidth: 0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    /// Le sol de la scène : le haut de la carte du moment, ou le bas de l'écran.
+    private var floor: CGFloat {
+        guard let cardTop, !deckDone || failure != nil else { return 0 }
+        return max(0, stageBottom - cardTop + 2)
     }
 
-    /// L'anneau, le titre, le temps restant et ce qui se fait à l'instant.
-    private var header: some View {
+    // MARK: Le chiffre
+
+    private var counter: some View {
         TimelineView(.animation(minimumInterval: 1 / 24, paused: !setup.isWorking)) { context in
             let now = context.date
             let target: Double = isDone ? 1 : setup.progress.fraction(at: now)
             let fraction: Double = smoother.value(target)
-            HStack(alignment: .center, spacing: 16) {
-                ImportRing(fraction: fraction, done: isDone,
-                           colors: setup.grid.map { Carnet.tint($0.colorHex) })
-                    .frame(width: 84, height: 84)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(setup.isPaused ? "En pause" : setup.headline)
-                        .font(Carnet.serif(.title2, weight: .semibold))
-                        .foregroundStyle(Carnet.ink)
-                        .contentTransition(.opacity)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    if isDone {
-                        Text(summary)
-                            .font(.subheadline)
-                            .foregroundStyle(Carnet.inkSecondary)
-                            .transition(.opacity)
-                    } else if setup.isWorking {
-                        Text(setup.isPaused ? "reprend dès que l'app est ouverte"
-                             : ImportProgress.remainingLabel(setup.progress.remainingSeconds(at: now)))
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(Carnet.inkSecondary)
-                            .contentTransition(.numericText())
-                        if let line = setup.currentLine(at: now) {
-                            HStack(spacing: 6) {
-                                Text(line.code).font(.caption.weight(.bold))
-                                Text(line.step).font(.caption.monospacedDigit())
-                                    .contentTransition(.numericText())
-                            }
-                            .foregroundStyle(Carnet.inkTertiary)
-                            .animation(.snappy, value: line.step)
-                        }
-                    }
+            VStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(Int(fraction * 100))")
+                        .font(.system(size: 112, weight: .semibold, design: .serif).monospacedDigit())
+                        .contentTransition(.numericText(value: fraction * 100))
+                        .animation(.snappy(duration: 0.25), value: Int(fraction * 100))
+                    Text("%")
+                        .font(.system(size: 34, weight: .semibold, design: .serif))
+                        .foregroundStyle(Carnet.inkTertiary)
                 }
-                Spacer(minLength: 0)
+                .foregroundStyle(Carnet.ink)
+                .phaseAnimator([1.0, 1.07, 1.0], trigger: bump) { view, scale in
+                    view.scaleEffect(scale)
+                } animation: { scale in
+                    scale > 1 ? .spring(duration: 0.18, bounce: 0) : .spring(duration: 0.5, bounce: 0.5)
+                }
+                .onGeometryChange(for: CGPoint.self) { proxy in
+                    let frame = proxy.frame(in: .global)
+                    return CGPoint(x: frame.midX, y: frame.midY)
+                } action: { counterCenter = $0 }
+
+                Text(caption(at: now))
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .contentTransition(.opacity)
+                    .animation(.easeOut(duration: 0.25), value: caption(at: now))
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(isDone ? "Import terminé. \(summary)" : "Import en cours, \(Int(fraction * 100)) pour cent")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(isDone ? "Import terminé" : "Import en cours, \(Int(fraction * 100)) pour cent")
         }
+        .allowsHitTesting(false)
     }
 
-    private var summary: String {
-        let t = setup.totals
-        var parts = ["\(t.courses) cours"]
-        if t.series > 0 { parts.append("\(t.series) séries") }
-        if t.theory > 0 { parts.append("\(t.theory) éléments de théorie") }
-        return parts.joined(separator: " · ")
+    /// Une seule ligne : le cours lu et le temps qui reste.
+    private func caption(at now: Date) -> String {
+        if failure != nil { return "Import interrompu" }
+        if isDone { return deckDone ? "Ton semestre est prêt" : "Prêt — finis ton réglage" }
+        if setup.isPaused { return "En pause · reprend à l'ouverture de l'app" }
+        let remaining = ImportProgress.remainingLabel(setup.progress.remainingSeconds(at: now))
+        guard let line = setup.currentLine(at: now) else { return setup.headline }
+        return "\(line.code) · \(remaining)"
     }
 
-    private func failure(_ message: String) -> some View {
+    // MARK: La carte du moment
+
+    @ViewBuilder
+    private var chapter: some View {
+        Group {
+            if let failure {
+                failureCard(failure)
+                    .transition(.chapter)
+            } else if !deckDone {
+                OnboardingDeck(setup: setup, finished: $deckDone)
+                    .padding(18)
+                    .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Carnet.rule, lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.10), radius: 24, y: 10)
+                    .transition(.chapter)
+            } else if !hintGone, !isDone {
+                hint
+                    .transition(.chapter)
+                    .task {
+                        try? await Task.sleep(for: .seconds(5))
+                        withAnimation(.smooth(duration: 0.5)) { hintGone = true }
+                    }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { cardTop = $0 }
+        .animation(.spring(duration: 0.55, bounce: 0.18), value: deckDone)
+        .animation(.spring(duration: 0.55, bounce: 0.18), value: failure)
+    }
+
+    /// Une fois tout réglé, la scène est à soi : une invitation, puis plus rien.
+    private var hint: some View {
+        Label("Incline le téléphone. Lance-les du doigt.", systemImage: "iphone.gen3.radiowaves.left.and.right")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(Carnet.inkSecondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.bottom, 12)
+    }
+
+    private func failureCard(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline)
@@ -403,7 +392,92 @@ private struct ImportScreen: View {
                 .buttonStyle(.carnetSecondaryWide)
         }
         .padding(18)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+}
+
+extension AnyTransition {
+    /// La carte du moment monte du bas, et y redescend.
+    static var chapter: AnyTransition {
+        .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+// MARK: - 3. Le semestre, révélé
+
+/// Né du choc de la fin d'import : la gerbe part du centre, la grille s'y
+/// déploie case par case. Une seule chose à faire : toucher une semaine.
+private struct RevealScreen: View {
+    @Bindable var setup: OnboardingAutoSetup
+    var proceed: () -> Void
+
+    @State private var revealed = false
+    @State private var opened: WeekSelection?
+    @Namespace private var hero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if !reduceMotion { Burst(colors: setup.grid.map { Carnet.tint($0.colorHex) }, origin: 0.5) }
+            VStack(spacing: 0) {
+                Spacer(minLength: 16)
+                VStack(spacing: 8) {
+                    Text("Ton semestre")
+                        .font(Carnet.serif(.largeTitle, weight: .semibold))
+                        .foregroundStyle(Carnet.ink)
+                    Text(summary)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(Carnet.inkSecondary)
+                }
+                .rise(revealed, delay: 0.55)
+                Spacer(minLength: 24).frame(maxHeight: 40)
+                SemesterGrid(rows: setup.grid, weeks: setup.weeks, currentID: nil, working: false,
+                             celebrate: false, namespace: hero, openedID: opened?.id,
+                             revealed: revealed) { row, week in
+                    guard let line = setup.grid.first(where: { $0.id == row }),
+                          let cell = line.cells[safe: week - 1], cell.isFilled else { return }
+                    Haptics.tap()
+                    withAnimation(.spring(duration: 0.45, bounce: 0.16)) {
+                        opened = WeekSelection(rowID: row, week: week, code: line.code, colorHex: line.colorHex, cell: cell)
+                    }
+                }
+                .padding(16)
+                .background(Carnet.sheet.opacity(revealed ? 1 : 0), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .animation(.smooth(duration: 0.6).delay(0.2), value: revealed)
+                Text("Touche une semaine pour l'ouvrir.")
+                    .font(.footnote)
+                    .foregroundStyle(Carnet.inkTertiary)
+                    .padding(.top, 14)
+                    .rise(revealed, delay: 1.1)
+                Spacer(minLength: 24)
+                Button(action: proceed) {
+                    Label("Continuer", systemImage: "arrow.right")
+                }
+                .buttonStyle(.carnetPrimaryWide)
+                .rise(revealed, delay: 1.3)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+
+            if let opened {
+                WeekDetailCard(selection: opened, namespace: hero) {
+                    withAnimation(.spring(duration: 0.34, bounce: 0.1)) { self.opened = nil }
+                }
+                .zIndex(2)
+            }
+        }
+        .onAppear { revealed = true }
+    }
+
+    private var summary: String {
+        let t = setup.totals
+        var parts = ["\(t.courses) cours"]
+        if t.series > 0 { parts.append("\(t.series) séries") }
+        if t.theory > 0 { parts.append("\(t.theory) chapitres") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -509,58 +583,6 @@ private final class Smoother {
     }
 }
 
-/// L'anneau d'avancement : la trace aux couleurs des cours, une tête lumineuse,
-/// le pourcentage qui roule — et une coche quand c'est fini.
-private struct ImportRing: View {
-    var fraction: Double
-    var done: Bool
-    var colors: [Color]
-
-    var body: some View {
-        GeometryReader { proxy in
-            let size = min(proxy.size.width, proxy.size.height)
-            let line = size * 0.085
-            let gradient = colors.count >= 2 ? colors + [colors[0]] : [Carnet.ink.opacity(0.6), Carnet.ink]
-            ZStack {
-                Circle().stroke(Carnet.rule, lineWidth: line)
-                Circle()
-                    .trim(from: 0, to: max(0.002, fraction))
-                    .stroke(AngularGradient(colors: gradient, center: .center),
-                            style: StrokeStyle(lineWidth: line, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                // La tête : un point qui brille, là où l'import en est.
-                Circle()
-                    .fill(Carnet.sheet)
-                    .frame(width: line * 0.55, height: line * 0.55)
-                    .shadow(color: (colors.first ?? Carnet.ink).opacity(0.7), radius: 5)
-                    .offset(y: -size / 2 + line / 2)
-                    .rotationEffect(.degrees(360 * fraction))
-                    .opacity(done || fraction < 0.01 ? 0 : 1)
-                Group {
-                    if done {
-                        Image(systemName: "checkmark")
-                            .font(.system(.title, design: .rounded).weight(.bold))
-                            .foregroundStyle(Carnet.ink)
-                            .transition(.scale(scale: 0.4).combined(with: .opacity))
-                    } else {
-                        HStack(alignment: .firstTextBaseline, spacing: 1) {
-                            Text("\(Int(fraction * 100))")
-                                .font(Carnet.serif(.title, weight: .semibold).monospacedDigit())
-                                .contentTransition(.numericText(value: fraction * 100))
-                            Text("%").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkSecondary)
-                        }
-                        .foregroundStyle(Carnet.ink)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.spring(duration: 0.5, bounce: 0.35), value: done)
-            }
-            .frame(width: size, height: size)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-}
-
 /// La grille du semestre : une ligne par cours, une case par semaine. Une
 /// semaine lue sur Moodle apparaît en contour ; une fois rangée, elle se
 /// remplit — un point pour la théorie, un carré pour une série, une marque
@@ -575,6 +597,8 @@ struct SemesterGrid: View {
     var showsLegend = false
     var namespace: Namespace.ID? = nil
     var openedID: String? = nil
+    /// Faux puis vrai : la grille se déploie depuis son centre, case par case.
+    var revealed = true
     var onTap: ((String, Int) -> Void)? = nil
 
     var body: some View {
@@ -629,11 +653,16 @@ struct SemesterGrid: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                             .frame(width: 64, alignment: .leading)
+                            .opacity(revealed ? 1 : 0)
+                            .offset(x: revealed ? 0 : -10)
+                            .animation(.smooth(duration: 0.5).delay(0.5 + Double(rowIndex) * 0.06), value: revealed)
                     }
                     HStack(spacing: compact ? 2 : 3) {
                         ForEach(Array(row.cells.enumerated()), id: \.offset) { index, cell in
                             GridCell(cell: cell, tint: Carnet.tint(row.colorHex), index: index,
-                                     wave: celebrate, waveDelay: Double(index + rowIndex) * 0.025)
+                                     wave: celebrate, waveDelay: Double(index + rowIndex) * 0.025,
+                                     revealed: revealed,
+                                     revealDelay: revealDelay(row: rowIndex, column: index))
                                 .modifier(HeroSource(id: "\(row.id)-\(index + 1)", namespace: namespace,
                                                      hidden: openedID == "\(row.id)-\(index + 1)"))
                                 .contentShape(Rectangle())
@@ -652,6 +681,13 @@ struct SemesterGrid: View {
             }
         }
         .animation(.spring(duration: 0.5, bounce: 0.2), value: rows.count)
+    }
+
+    /// Les cases partent du centre : leur retard croît avec la distance.
+    private func revealDelay(row: Int, column: Int) -> Double {
+        let dx = Double(column) - Double(weeks - 1) / 2
+        let dy = (Double(row) - Double(rows.count - 1) / 2) * 1.6
+        return 0.05 + (dx * dx + dy * dy).squareRoot() * 0.045
     }
 
     private var placeholderRow: some View {
@@ -697,6 +733,8 @@ private struct GridCell: View {
     var index: Int
     var wave: Bool
     var waveDelay: Double
+    var revealed = true
+    var revealDelay = 0.0
 
     var body: some View {
         ZStack {
@@ -727,6 +765,9 @@ private struct GridCell: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .scaleEffect(wave && cell.isFilled ? 1.16 : 1)
+        .scaleEffect(revealed ? 1 : 0.01)
+        .opacity(revealed ? 1 : 0)
+        .animation(.spring(duration: 0.6, bounce: 0.45).delay(revealDelay), value: revealed)
         .animation(.spring(duration: 0.55, bounce: 0.45).delay(Double(index) * 0.035), value: cell.isFilled)
         .animation(.smooth(duration: 0.35).delay(Double(index) * 0.02), value: cell.outlined)
         .animation(.spring(duration: 0.4, bounce: 0.5).delay(waveDelay), value: wave)
@@ -751,287 +792,6 @@ private struct Sheen: View {
     }
 }
 
-// MARK: Cartes de présentation
-
-/// L'app, présentée pendant l'import : une carte toutes les six secondes,
-/// illustrée — et, dès qu'un cours est rangé, racontée avec **ses** données.
-private struct FeatureCarousel: View {
-    var highlights: [OnboardingAutoSetup.Highlight]
-    var paused: Bool
-
-    @State private var index = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var cards: [FeatureCard.Kind] { FeatureCard.Kind.allCases }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            TabView(selection: $index) {
-                ForEach(Array(cards.enumerated()), id: \.offset) { offset, kind in
-                    FeatureCard(kind: kind, highlight: highlights.first, active: offset == index)
-                        .padding(.horizontal, 2)
-                        .tag(offset)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 300)
-            HStack(spacing: 6) {
-                ForEach(cards.indices, id: \.self) { offset in
-                    Capsule()
-                        .fill(offset == index ? Carnet.ink : Carnet.rule)
-                        .frame(width: offset == index ? 20 : 6, height: 6)
-                }
-            }
-            .animation(.snappy(duration: 0.32), value: index)
-            .frame(maxWidth: .infinity)
-            .accessibilityHidden(true)
-        }
-        .task(id: index) {
-            guard !paused else { return }
-            try? await Task.sleep(for: .seconds(6))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.12)) {
-                index = (index + 1) % cards.count
-            }
-        }
-    }
-}
-
-private struct FeatureCard: View {
-    enum Kind: CaseIterable {
-        case week, series, time, groups, refresh
-    }
-
-    var kind: Kind
-    var highlight: OnboardingAutoSetup.Highlight?
-    var active: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            illustration
-                .frame(height: 112)
-                .frame(maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(Carnet.serif(.title3, weight: .semibold))
-                    .foregroundStyle(Carnet.ink)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        // Du papier, pas du verre : dans une `TabView` paginée, le verre laissait
-        // voir le rectangle de la page derrière ses coins arrondis.
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Carnet.rule, lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var tint: Color { highlight.map { Carnet.tint($0.colorHex) } ?? Carnet.ink }
-
-    private var title: String {
-        switch kind {
-        case .week:
-            if let h = highlight { return "Semaine \(h.week) · \(h.name)" }
-            return "Ta semaine, d'un coup d'œil"
-        case .series: return "Chaque série, question par question"
-        case .time: return "Le temps qui compte vraiment"
-        case .groups: return "Travailler à plusieurs"
-        case .refresh: return "Rien à refaire"
-        }
-    }
-
-    private var text: String {
-        switch kind {
-        case .week:
-            if let h = highlight {
-                var parts: [String] = []
-                if h.videos > 0 { parts.append("\(h.videos) vidéo\(h.videos > 1 ? "s" : "")") }
-                if h.theory > 0 { parts.append("\(h.theory) élément\(h.theory > 1 ? "s" : "") de théorie") }
-                if h.series > 0 { parts.append("la série à faire") }
-                let content = parts.isEmpty ? "ce qui est prévu" : parts.joined(separator: ", ")
-                return "Cette semaine en \(h.code) : \(content). Aujourd'hui te dit par quoi commencer."
-            }
-            return "La théorie à voir, la série à rendre, et ce que tu as en retard — rangés dans la bonne semaine."
-        case .series:
-            return "L'énoncé imprimé, agrandi d'un toucher ; tu coches chaque sous-question et le corrigé arrive à sa date."
-        case .time:
-            return "Les heures de cours comptent seules. Les exercices, au chrono. Tu vois où tu en es face à la charge EPFL."
-        case .groups:
-            return "Vois qui travaille en direct, compare l'avancement série par série, pose une question — chiffrée de bout en bout."
-        case .refresh:
-            return "Une nouvelle série publiée sur Moodle arrive toute seule, énoncé lu. Ton semestre se tient à jour."
-        }
-    }
-
-    @ViewBuilder
-    private var illustration: some View {
-        switch kind {
-        case .week: WeekBarsIllustration(tint: tint, active: active)
-        case .series: SubQuestionIllustration(tint: tint, active: active)
-        case .time: TimeIllustration(tint: tint, active: active)
-        case .groups: GroupIllustration(active: active)
-        case .refresh: RefreshIllustration(tint: tint, active: active)
-        }
-    }
-}
-
-// MARK: Illustrations des cartes
-
-/// Les heures de la semaine, qui montent jour après jour.
-private struct WeekBarsIllustration: View {
-    var tint: Color
-    var active: Bool
-    private let heights: [CGFloat] = [0.45, 0.7, 0.35, 0.9, 0.6, 0.2, 0.1]
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            ForEach(heights.indices, id: \.self) { day in
-                VStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(day == 3 ? tint : tint.opacity(0.35))
-                        .frame(width: 18, height: active ? 70 * heights[day] : 4)
-                        .animation(.spring(duration: 0.6, bounce: 0.25).delay(0.12 + Double(day) * 0.06), value: active)
-                    Text(["L", "M", "M", "J", "V", "S", "D"][day])
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(Carnet.inkTertiary)
-                }
-            }
-        }
-    }
-}
-
-/// Des sous-questions qui se cochent une à une.
-private struct SubQuestionIllustration: View {
-    var tint: Color
-    var active: Bool
-    private let labels = ["1a", "1b", "1c", "2", "3a", "3b"]
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.7)) { context in
-            let step = active ? Int(context.date.timeIntervalSinceReferenceDate / 0.7) % (labels.count + 3) : 0
-            HStack(spacing: 8) {
-                ForEach(labels.indices, id: \.self) { i in
-                    let done = i < step
-                    Text(labels[i])
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(done ? Carnet.ground : Carnet.inkSecondary)
-                        .frame(width: 36, height: 34)
-                        .background(done ? tint : Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        .scaleEffect(i == step - 1 ? 1.12 : 1)
-                        .animation(.spring(duration: 0.35, bounce: 0.5), value: step)
-                }
-            }
-        }
-    }
-}
-
-/// Un anneau de charge qui se remplit : cours (seul) puis chrono.
-private struct TimeIllustration: View {
-    var tint: Color
-    var active: Bool
-
-    var body: some View {
-        HStack(spacing: 22) {
-            ZStack {
-                Circle().stroke(Carnet.rule, lineWidth: 9)
-                Circle().trim(from: 0, to: active ? 0.42 : 0)
-                    .stroke(tint.opacity(0.45), style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.smooth(duration: 0.9).delay(0.15), value: active)
-                Circle().trim(from: 0.42, to: active ? 0.78 : 0.42)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.smooth(duration: 0.9).delay(0.9), value: active)
-            }
-            .frame(width: 76, height: 76)
-            VStack(alignment: .leading, spacing: 8) {
-                legend(tint.opacity(0.45), "Cours, comptés seuls")
-                legend(tint, "Exercices, au chrono")
-            }
-        }
-    }
-
-    private func legend(_ color: Color, _ text: String) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 9, height: 9)
-            Text(text).font(.caption.weight(.medium)).foregroundStyle(Carnet.inkSecondary)
-        }
-    }
-}
-
-/// Trois membres, dont un en direct ; un cadenas pour l'entraide.
-private struct GroupIllustration: View {
-    var active: Bool
-
-    var body: some View {
-        HStack(spacing: -10) {
-            ForEach(Array(["A", "M", "C"].enumerated()), id: \.offset) { offset, initial in
-                Text(initial)
-                    .font(.headline)
-                    .foregroundStyle(Carnet.ink)
-                    .frame(width: 52, height: 52)
-                    .background(Carnet.sheetRaised, in: Circle())
-                    .overlay(Circle().strokeBorder(Carnet.sheet, lineWidth: 3))
-                    .overlay(alignment: .bottomTrailing) {
-                        if offset == 1 {
-                            Circle().fill(Carnet.correct)
-                                .frame(width: 14, height: 14)
-                                .overlay(Circle().strokeBorder(Carnet.sheet, lineWidth: 2.5))
-                                .symbolEffect(.pulse, isActive: active)
-                        }
-                    }
-                    .offset(y: active ? 0 : 12)
-                    .opacity(active ? 1 : 0)
-                    .animation(.spring(duration: 0.5, bounce: 0.3).delay(Double(offset) * 0.08), value: active)
-            }
-            Image(systemName: "lock.fill")
-                .font(.title3)
-                .foregroundStyle(Carnet.inkSecondary)
-                .padding(.leading, 26)
-                .opacity(active ? 1 : 0)
-                .animation(.easeOut(duration: 0.4).delay(0.35), value: active)
-        }
-    }
-}
-
-/// Une nouvelle série qui arrive d'elle-même.
-private struct RefreshIllustration: View {
-    var tint: Color
-    var active: Bool
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.title)
-                .foregroundStyle(Carnet.inkSecondary)
-                .symbolEffect(.bounce, value: active)
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(0..<3, id: \.self) { row in
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 3).fill(row == 0 ? tint : tint.opacity(0.3))
-                            .frame(width: 12, height: 12)
-                        RoundedRectangle(cornerRadius: 3).fill(Carnet.sheetRaised)
-                            .frame(width: row == 0 ? 120 : 96, height: 10)
-                    }
-                    .offset(x: row == 0 && !active ? 30 : 0)
-                    .opacity(row == 0 && !active ? 0 : 1)
-                    .animation(.spring(duration: 0.55, bounce: 0.3).delay(0.5), value: active)
-                }
-            }
-        }
-    }
-}
-
 // MARK: - 3. Relie le reste
 
 private struct ConnectionsScreen: View {
@@ -1053,19 +813,16 @@ private struct ConnectionsScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Relie le reste")
+                    Text("Tes to-do")
                         .font(Carnet.serif(.largeTitle, weight: .semibold))
                         .foregroundStyle(Carnet.ink)
-                    Text("Tout est facultatif, et se règle aussi plus tard dans le profil.")
+                    Text("Elles apparaissent dans ton agenda. Facultatif.")
                         .font(.subheadline)
                         .foregroundStyle(Carnet.inkSecondary)
                 }
                 .rise(appeared, delay: 0.05)
 
-                epflCard.rise(appeared, delay: 0.12)
-
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("Tes to-do", "Les tâches datées dans l'agenda, celles d'un cours dans le cours.")
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10),
                                         GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         ForEach(Self.providers) { provider in
@@ -1077,11 +834,11 @@ private struct ConnectionsScreen: View {
                             .transition(.opacity)
                     }
                 }
-                .rise(appeared, delay: 0.2)
+                .rise(appeared, delay: 0.12)
 
                 VStack(spacing: 10) {
                     row(icon: "calendar", title: "Calendrier de l'iPhone",
-                        detail: "Ton horaire et tes sessions dans l'agenda",
+                        detail: "Ton horaire EPFL",
                         connected: calendarGranted) {
                         Task {
                             calendarGranted = await app.calendar.requestAccess()
@@ -1089,13 +846,10 @@ private struct ConnectionsScreen: View {
                         }
                     }
                     row(icon: "person.2", title: "Compte StudyTrack",
-                        detail: "Groupes en direct, entraide chiffrée",
+                        detail: "Pour étudier en groupe",
                         connected: app.social.isSignedIn) { sheet = .groups }
-                    row(icon: "rectangle.stack", title: "AnkiWeb",
-                        detail: "Tes cartes et ton temps de révision",
-                        connected: AnkiWebSync.shared.isSignedIn) { sheet = .ankiweb }
                 }
-                .rise(appeared, delay: 0.28)
+                .rise(appeared, delay: 0.22)
             }
             .padding(.horizontal, 20)
             .padding(.top, 28)
@@ -1107,7 +861,7 @@ private struct ConnectionsScreen: View {
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom) {
             Button(action: proceed) {
-                Label("Voir mon semestre", systemImage: "arrow.right")
+                Label("Continuer", systemImage: "arrow.right")
             }
             .buttonStyle(.carnetPrimaryWide)
             .padding(.horizontal, 20)
@@ -1123,31 +877,6 @@ private struct ConnectionsScreen: View {
         .onAppear {
             calendarGranted = app.calendar.hasAccess
             appeared = true
-        }
-    }
-
-    private var epflCard: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.title2)
-                .foregroundStyle(Carnet.correct)
-                .symbolEffect(.bounce, value: appeared)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("EPFL connecté").font(.headline).foregroundStyle(Carnet.ink)
-                Text((["Moodle"] + setup.extraSites).joined(separator: ", "))
-                    .font(.subheadline)
-                    .foregroundStyle(Carnet.inkSecondary)
-            }
-            Spacer()
-        }
-        .padding(16)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private func sectionTitle(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Carnet.serif(.title3, weight: .semibold)).foregroundStyle(Carnet.ink)
-            Text(detail).font(.footnote).foregroundStyle(Carnet.inkSecondary)
         }
     }
 
@@ -1235,138 +964,123 @@ private struct ConnectionsScreen: View {
     }
 }
 
-// MARK: - 4. C'est prêt
+// MARK: - 5. À toi
 
+/// Une seule chose : lancer le chrono, dix secondes, sur sa vraie série. On
+/// comprend en le faisant ce qu'il mesure — les exercices ne comptent qu'ainsi.
 private struct FinaleScreen: View {
     @Bindable var setup: OnboardingAutoSetup
     var finish: () -> Void
 
     @State private var appeared = false
-    @State private var counts = (courses: 0, series: 0, theory: 0)
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ZStack {
-            if !reduceMotion { Burst(colors: setup.grid.map { Carnet.tint($0.colorHex) }) }
-            VStack(alignment: .leading, spacing: 26) {
-                Spacer(minLength: 20)
-                Text("C'est prêt.")
-                    .font(Carnet.serif(.largeTitle, weight: .semibold))
-                    .foregroundStyle(Carnet.ink)
-                    .rise(appeared, delay: 0.1)
-                SemesterGrid(rows: setup.grid, weeks: setup.weeks, currentID: nil,
-                             working: false, celebrate: appeared, compact: false)
-                    .padding(14)
-                    .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .rise(appeared, delay: 0.2)
-                HStack(spacing: 12) {
-                    stat(counts.courses, "cours")
-                    stat(counts.series, "séries")
-                    stat(counts.theory, "théorie")
-                }
-                .rise(appeared, delay: 0.3)
-                TryTimerCard(highlight: setup.highlights.first)
-                    .rise(appeared, delay: 0.34)
-                Text("Chaque matin, Aujourd'hui te dit quoi faire. Les nouvelles séries arrivent seules.")
-                    .font(.subheadline)
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .rise(appeared, delay: 0.38)
-                Spacer(minLength: 20)
-                Button(action: finish) {
-                    Label("Ouvrir Aujourd'hui", systemImage: "sun.max.fill")
-                }
-                .buttonStyle(.carnetPrimaryWide)
-                .rise(appeared, delay: 0.46)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
-            .frame(maxWidth: Layout.readableWidth)
-            .frame(maxWidth: .infinity)
-        }
-        .sensoryFeedback(.success, trigger: appeared)
-        .onAppear {
-            appeared = true
-            // Les chiffres roulent jusqu'à leur valeur, l'un après l'autre.
-            let target = setup.totals
-            withAnimation(.smooth(duration: 1.0).delay(0.35)) { counts.courses = target.courses }
-            withAnimation(.smooth(duration: 1.2).delay(0.5)) { counts.series = target.series }
-            withAnimation(.smooth(duration: 1.4).delay(0.65)) { counts.theory = target.theory }
-        }
-    }
-
-    private func stat(_ value: Int, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)")
-                .font(Carnet.serif(.title, weight: .semibold).monospacedDigit())
-                .foregroundStyle(Carnet.ink)
-                .contentTransition(.numericText(value: Double(value)))
-            Text(label).font(.footnote).foregroundStyle(Carnet.inkSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-/// Le chrono, essayé dix secondes sur la série de la semaine : on comprend en
-/// le faisant ce qu'il mesure — et que les exercices ne comptent qu'au chrono.
-private struct TryTimerCard: View {
-    var highlight: OnboardingAutoSetup.Highlight?
-
     @State private var start: Date?
     @State private var finished = false
+    @State private var pulse = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let length: TimeInterval = 10
 
+    private var highlight: OnboardingAutoSetup.Highlight? { setup.highlights.first }
+    private var tint: Color { highlight.map { Carnet.tint($0.colorHex) } ?? Carnet.ink }
+
     var body: some View {
-        let tint = highlight.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
-        HStack(spacing: 16) {
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: start == nil || finished)) { context in
-                let elapsed = start.map { min(length, context.date.timeIntervalSince($0)) } ?? 0
-                ZStack {
-                    Circle().stroke(Carnet.rule, lineWidth: 6)
-                    Circle().trim(from: 0, to: elapsed / length)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
+        VStack(spacing: 0) {
+            Spacer(minLength: 20)
+            VStack(spacing: 10) {
+                Text(finished ? "Dix secondes, comptées." : "Essaie le chrono")
+                    .font(Carnet.serif(.largeTitle, weight: .semibold))
+                    .foregroundStyle(Carnet.ink)
+                    .contentTransition(.opacity)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.opacity)
+            }
+            .rise(appeared, delay: 0.05)
+            Spacer(minLength: 24).frame(maxHeight: 56)
+            dial
+                .rise(appeared, delay: 0.18)
+            Spacer(minLength: 24)
+            Button(action: finish) {
+                Label("Ouvrir Aujourd'hui", systemImage: "sun.max.fill")
+            }
+            .buttonStyle(.carnetPrimaryWide)
+            .rise(appeared, delay: 0.3)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 8)
+        .frame(maxWidth: Layout.readableWidth)
+        .frame(maxWidth: .infinity)
+        .animation(.smooth(duration: 0.4), value: finished)
+        .onAppear { appeared = true }
+    }
+
+    private var subtitle: String {
+        if finished { return "Lance-le pour de vrai quand tu fais une série : ta séance d'exercices ne compte qu'ainsi." }
+        if let h = highlight { return "Sur la série de la semaine \(h.week) en \(h.code). Touche le cercle." }
+        return "Touche le cercle."
+    }
+
+    /// Le grand cadran : on le touche, il se remplit à la couleur du cours, et
+    /// éclate en coche à la dixième seconde.
+    private var dial: some View {
+        TimelineView(.animation(minimumInterval: 1 / 60, paused: start == nil || finished)) { context in
+            let elapsed = start.map { min(length, context.date.timeIntervalSince($0)) } ?? 0
+            let fraction = finished ? 1 : elapsed / length
+            ZStack {
+                Circle().fill(tint.opacity(start == nil ? 0.08 : 0.12 + 0.1 * fraction))
+                Circle().stroke(Carnet.rule, lineWidth: 14)
+                Circle().trim(from: 0, to: fraction)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: tint.opacity(0.5), radius: 10)
+                Group {
                     if finished {
-                        Image(systemName: "checkmark").font(.headline.weight(.bold)).foregroundStyle(tint)
-                            .transition(.scale.combined(with: .opacity))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 64, weight: .bold, design: .rounded))
+                            .foregroundStyle(tint)
+                            .transition(.scale(scale: 0.3).combined(with: .opacity))
+                    } else if start == nil {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 54, weight: .bold))
+                            .foregroundStyle(tint)
+                            .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
                     } else {
-                        Text(start == nil ? "10" : "\(Int(ceil(length - elapsed)))")
-                            .font(Carnet.mono(.headline, weight: .semibold))
-                            .contentTransition(.numericText(countsDown: true))
-                            .animation(.snappy, value: Int(elapsed))
+                        Text(String(format: "%05.2f", elapsed))
+                            .font(.system(size: 48, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Carnet.ink)
                     }
                 }
-                .frame(width: 54, height: 54)
-                .onChange(of: elapsed >= length) { _, done in
-                    guard done, !finished else { return }
-                    withAnimation(.spring(duration: 0.4, bounce: 0.4)) { finished = true }
+                .animation(.spring(duration: 0.5, bounce: 0.45), value: finished)
+            }
+            .frame(width: 230, height: 230)
+            .phaseAnimator([1.0, 1.08, 1.0], trigger: pulse) { view, scale in
+                view.scaleEffect(scale)
+            } animation: { scale in
+                scale > 1 ? .spring(duration: 0.16, bounce: 0) : .spring(duration: 0.55, bounce: 0.5)
+            }
+            .contentShape(Circle())
+            .onTapGesture {
+                guard start == nil else { return }
+                Haptics.tap()
+                pulse += 1
+                start = Date()
+            }
+            .onChange(of: Int(elapsed)) { _, second in
+                guard start != nil, !finished else { return }
+                if second >= Int(length) {
+                    finished = true
+                    pulse += 1
                     Haptics.success()
+                } else if second > 0 {
+                    Haptics.soft()
                 }
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(finished ? "10 secondes de travail, comptées." : "Essaie le chrono")
-                    .font(.headline).foregroundStyle(Carnet.ink)
-                Text(finished ? "Lance-le pour de vrai sur une série : la séance d'exercices ne compte qu'ainsi."
-                     : highlight.map { "Sur la série de la semaine \($0.week) en \($0.code)." } ?? "Dix secondes, pour voir.")
-                    .font(.footnote).foregroundStyle(Carnet.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            if start == nil {
-                Button {
-                    Haptics.tap()
-                    start = Date()
-                } label: {
-                    Image(systemName: "play.fill").font(.headline).foregroundStyle(Carnet.ground)
-                        .frame(width: 44, height: 44).background(tint, in: Circle())
-                }
-                .accessibilityLabel("Lancer le chrono dix secondes")
-            }
+            .accessibilityElement()
+            .accessibilityLabel(finished ? "Chrono terminé" : "Lancer le chrono dix secondes")
+            .accessibilityAddTraits(.isButton)
         }
-        .padding(14)
-        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -1374,15 +1088,17 @@ private struct TryTimerCard: View {
 /// couleurs des cours, une seule fois, deux secondes et demie.
 private struct Burst: View {
     var colors: [Color]
+    /// La hauteur du point d'origine, en fraction de l'écran.
+    var origin: Double = 0.42
     @State private var start = Date()
 
     private struct Particle {
         var angle: Double, speed: Double, spin: Double, size: Double, colorIndex: Int, square: Bool
     }
 
-    @State private var particles: [Particle] = (0..<90).map { i in
-        Particle(angle: Double.random(in: -Double.pi * 0.95 ... -Double.pi * 0.05),
-                 speed: Double.random(in: 260...620), spin: Double.random(in: -6...6),
+    @State private var particles: [Particle] = (0..<140).map { i in
+        Particle(angle: Double.random(in: -Double.pi ... Double.pi),
+                 speed: Double.random(in: 220...640), spin: Double.random(in: -6...6),
                  size: Double.random(in: 5...10), colorIndex: i, square: i % 3 == 0)
     }
 
@@ -1391,7 +1107,7 @@ private struct Burst: View {
             let t = context.date.timeIntervalSince(start)
             Canvas { canvas, size in
                 guard t < 2.6 else { return }
-                let origin = CGPoint(x: size.width / 2, y: size.height * 0.42)
+                let origin = CGPoint(x: size.width / 2, y: size.height * self.origin)
                 let palette = colors.isEmpty ? [Carnet.ink] : colors
                 for particle in particles {
                     let x = origin.x + cos(particle.angle) * particle.speed * t
