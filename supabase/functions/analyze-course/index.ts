@@ -40,7 +40,7 @@ Deno.serve(async (request) => {
     const gate = await allowed(request, { name: "analyze-course", perIPPerHour: 40, globalPerDay: 2000 });
     if (!gate.ok) return json({ error: gate.reason }, 429);
   }
-  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; sources?: string; model?: string };
+  let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; sources?: string; model?: string; provider?: unknown };
   try {
     const raw = await request.text();
     if (raw.length > MAX_BODY) return json({ error: "requête trop lourde" }, 413);
@@ -80,7 +80,7 @@ Deno.serve(async (request) => {
   for (const candidate of (evaluation && body.model ? candidates.slice(0, 1) : candidates)) {
     try {
       const started = Date.now();
-      const { content, usage } = await ask(candidate, messages);
+      const { content, usage } = await ask(candidate, messages, evaluation ? body.provider : undefined);
       const start = content.indexOf("{"), end = content.lastIndexOf("}");
       if (start < 0 || end <= start) throw new Error("réponse sans JSON");
       const parsed = JSON.parse(content.slice(start, end + 1));
@@ -101,7 +101,7 @@ Deno.serve(async (request) => {
 });
 
 async function ask(candidate: { baseURL: string; apiKey: string; model: string },
-                   messages: Array<{ role: string; content: string }>): Promise<{ content: string; usage: unknown }> {
+                   messages: Array<{ role: string; content: string }>, provider?: unknown): Promise<{ content: string; usage: unknown }> {
   const payload: Record<string, unknown> = {
     model: candidate.model,
     temperature: 0,
@@ -114,6 +114,8 @@ async function ask(candidate: { baseURL: string; apiKey: string; model: string }
     // Certains modèles n'existent qu'avec raisonnement (gpt-oss) : le plus court.
     payload.reasoning = candidate.model.includes("gpt-oss") ? { effort: "low" } : { enabled: false };
     payload.usage = { include: true };
+    const routing = provider ?? (Deno.env.get("ANALYZE_PROVIDER_SORT") ? { sort: Deno.env.get("ANALYZE_PROVIDER_SORT") } : undefined);
+    if (routing) payload.provider = routing;
   }
   const response = await fetch(`${candidate.baseURL}/chat/completions`, {
     method: "POST",
