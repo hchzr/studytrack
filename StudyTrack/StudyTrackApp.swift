@@ -27,6 +27,8 @@ enum PreviewLaunch {
     /// `-onboardingDemo N` : l'accueil EPFL, écran N (0 bienvenue, 1 import
     /// simulé, 2 connexions, 3 fin), sans Moodle — pour les captures.
     static let onboardingDemoFlag = "-onboardingDemo"
+    /// `-onboardingDeck N` : le réglage N de l'import (1 objectif, 2 rappel, 3 fini).
+    static let onboardingDeckFlag = "-onboardingDeck"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"

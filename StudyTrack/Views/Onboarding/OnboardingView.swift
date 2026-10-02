@@ -45,7 +45,7 @@ struct OnboardingView: View {
     @Query private var series: [ExerciseSeries]
     /// Le parcours automatique par Moodle (par défaut), ou le parcours à la main.
     @State private var usesMoodle = true
-    @State private var setup = OnboardingAutoSetup()
+    private var setup: OnboardingAutoSetup { app.semesterImport }
 
     private let lastStep = 3
 

@@ -623,6 +623,121 @@ struct ExamActivityLockView: View {
     }
 }
 
+// MARK: - Import du semestre
+
+/// L'import du semestre (accueil), visible pendant qu'on fait autre chose.
+struct ImportActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: ImportActivityAttributes.self) { context in
+            ImportActivityLockView(context: context)
+                .activityBackgroundTint(Color.black.opacity(0.55))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    ImportActivityRing(state: context.state, colors: context.attributes.colors)
+                        .frame(width: 44, height: 44)
+                        .padding(.leading, 4)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text("\(Int(context.state.fraction * 100)) %")
+                        .font(.title3.weight(.semibold).monospacedDigit())
+                        .padding(.trailing, 4)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    ImportActivityLine(state: context.state)
+                }
+            } compactLeading: {
+                ImportActivityRing(state: context.state, colors: context.attributes.colors, line: 3)
+                    .frame(width: 16, height: 16)
+            } compactTrailing: {
+                Text(context.state.phase == .paused ? "pause" : "\(Int(context.state.fraction * 100))%")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+            } minimal: {
+                ImportActivityRing(state: context.state, colors: context.attributes.colors, line: 3)
+                    .frame(width: 16, height: 16)
+            }
+            .keylineTint(.green)
+        }
+    }
+}
+
+/// L'anneau d'avancement, aux couleurs des cours.
+struct ImportActivityRing: View {
+    let state: ImportActivityAttributes.ContentState
+    let colors: [String]
+    var line: CGFloat = 5
+
+    var body: some View {
+        let tints = colors.map { Color(hexString: $0) }
+        let gradient = tints.count >= 2 ? tints + [tints[0]] : [Color.green, Color.mint]
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.18), lineWidth: line)
+            Circle()
+                .trim(from: 0, to: max(0.02, state.fraction))
+                .stroke(AngularGradient(colors: gradient, center: .center),
+                        style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if state.phase == .done {
+                Image(systemName: "checkmark").font(.system(size: line * 2.4, weight: .bold))
+            } else if state.phase == .paused {
+                Image(systemName: "pause.fill").font(.system(size: line * 2))
+            }
+        }
+    }
+}
+
+/// Ce qui se passe, ou ce qu'il faut faire.
+struct ImportActivityLine: View {
+    let state: ImportActivityAttributes.ContentState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            switch state.phase {
+            case .paused:
+                Text("En pause — rouvre StudyTrack pour finir l'import")
+                    .font(.caption.weight(.semibold))
+            case .done:
+                Text("Ton semestre est prêt · \(state.coursesTotal) cours")
+                    .font(.caption.weight(.semibold))
+            case .running:
+                Text(state.courseCode).font(.caption.weight(.bold))
+                Text(state.step).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
+                if let end = state.estimatedEnd, end > Date() {
+                    Text(timerInterval: Date()...end, countsDown: true)
+                        .font(.caption2.monospacedDigit())
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+        }
+    }
+}
+
+struct ImportActivityLockView: View {
+    let context: ActivityViewContext<ImportActivityAttributes>
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ImportActivityRing(state: context.state, colors: context.attributes.colors)
+                .frame(width: 46, height: 46)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(context.state.phase == .done ? "Semestre importé" : "Ton semestre se construit")
+                        .font(.subheadline.weight(.bold))
+                    Spacer()
+                    Text("\(context.state.coursesDone)/\(context.state.coursesTotal) cours")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                ImportActivityLine(state: context.state)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
 @main
 struct StudyTrackWidgetsBundle: WidgetBundle {
     var body: some Widget {
@@ -630,6 +745,7 @@ struct StudyTrackWidgetsBundle: WidgetBundle {
         TodayScheduleWidget()
         StudyActivityWidget()
         ExamActivityWidget()
+        ImportActivityWidget()
         if #available(iOS 18.0, *) {
             FocusControl()
             FocusPauseControl()

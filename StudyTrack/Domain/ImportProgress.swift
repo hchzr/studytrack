@@ -72,6 +72,10 @@ struct ImportProgress: Equatable {
         /// Le dernier lot lu, et la durée mesurée d'un lot : entre deux lots,
         /// l'avancement glisse au rythme réel au lieu d'attendre puis sauter.
         var lastBatchAt: Date?
+        /// Début et fin du cours : la durée réelle d'un cours fini sert à
+        /// estimer celle des suivants.
+        var startedAt: Date?
+        var finishedAt: Date?
         var batchSeconds: Double = 6
         static let batchSize = 18
 
@@ -115,6 +119,8 @@ struct ImportProgress: Equatable {
         guard let index = courses.firstIndex(where: { $0.id == id }) else { return }
         // Jamais en arrière : un message tardif d'une étape passée est ignoré.
         guard stage > courses[index].stage else { return }
+        if courses[index].startedAt == nil { courses[index].startedAt = now }
+        if stage == .done { courses[index].finishedAt = now }
         courses[index].stage = stage
         courses[index].stageStartedAt = now
     }
@@ -135,6 +141,7 @@ struct ImportProgress: Equatable {
     mutating func fail(course id: String, now: Date) {
         guard let index = courses.firstIndex(where: { $0.id == id }) else { return }
         courses[index].failed = true
+        courses[index].finishedAt = now
         courses[index].stage = .done
         courses[index].stageStartedAt = now
     }
@@ -154,6 +161,17 @@ struct ImportProgress: Equatable {
         let elapsed = now.timeIntervalSince(startedAt)
         let fraction = self.fraction(at: now)
         guard elapsed >= 6, fraction >= 0.04 else { return nil }
+        // Dès qu'un cours est fini, sa durée réelle fait référence : ce qui
+        // reste vaut « la part restante de chaque cours × la durée d'un cours ».
+        // L'extrapolation linéaire, elle, s'affolait dès qu'une étape traînait.
+        let durations = courses.compactMap { course -> Double? in
+            guard !course.failed, let start = course.startedAt, let end = course.finishedAt else { return nil }
+            return end.timeIntervalSince(start)
+        }
+        if !durations.isEmpty {
+            let perCourse = durations.reduce(0, +) / Double(durations.count)
+            return max(0, courses.reduce(0) { $0 + (1 - $1.fraction(at: now)) * perCourse })
+        }
         return max(0, elapsed / fraction * (1 - fraction))
     }
 
@@ -187,6 +205,14 @@ struct SemesterGridRow: Equatable, Identifiable {
         var theory = 0
         var series = 0
         var deadline = false
+        /// Ce que la semaine contient, pour l'ouvrir d'un toucher.
+        var entries: [Entry] = []
+
+        struct Entry: Equatable, Hashable {
+            var kind: ContentItemKind
+            var title: String
+            var videos: Int = 0
+        }
 
         var isFilled: Bool { theory > 0 || series > 0 || deadline }
     }
@@ -222,8 +248,9 @@ struct SemesterGridRow: Equatable, Identifiable {
                 case .theory: cells[week - 1].theory += 1
                 case .series: cells[week - 1].series += 1
                 case .deadline: cells[week - 1].deadline = true
-                default: break
+                default: continue
                 }
+                cells[week - 1].entries.append(.init(kind: item.kind, title: item.title, videos: item.videoCount))
             }
         }
     }

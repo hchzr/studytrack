@@ -15,6 +15,9 @@ final class AppContainer {
     let presence: PresenceService
     /// Le chrono : un seul, partagé par Focus, le dock et l'écran verrouillé.
     let focus: FocusController
+    /// L'import du semestre de l'accueil : détenu ici, pas par l'écran, pour
+    /// qu'il continue quand on quitte l'accueil ou que l'app passe en arrière-plan.
+    let semesterImport = OnboardingAutoSetup()
 
     @ObservationIgnored private var cachedCalendar: CalendarService? = nil
 

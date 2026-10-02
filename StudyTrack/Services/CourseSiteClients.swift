@@ -25,30 +25,56 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
     }
 
     var currentURL: URL? { webView.url }
+    private var loadToken: UUID?
 
     /// Charge une page et attend la fin du chargement (20 s au plus).
-    func load(_ url: URL) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                try await withCheckedThrowingContinuation { continuation in
-                    self.loading?.resume(throwing: CancellationError())
-                    self.loading = continuation
-                    self.webView.load(URLRequest(url: url))
-                }
+    ///
+    /// Le délai précédent ne s'appliquait jamais : il faisait la course dans un
+    /// groupe de tâches, et un groupe attend **tous** ses enfants avant de
+    /// rendre la main — y compris l'attente de `didFinish`, qui ne s'annule
+    /// pas. Une page qui ne signalait pas sa fin (réseau coupé, app passée en
+    /// arrière-plan) figeait l'import pour toujours, à un pourcentage précis.
+    /// Ici, le délai **relâche** lui-même l'attente.
+    func load(_ url: URL, timeout: TimeInterval = 20) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.loading?.resume(throwing: CancellationError())
+            self.loading = continuation
+            let token = UUID()
+            self.loadToken = token
+            self.webView.load(URLRequest(url: url))
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(timeout))
+                // Toujours **ce** chargement-là : une autre page a pu le remplacer.
+                guard let self, self.loadToken == token, let pending = self.loading else { return }
+                self.loading = nil
+                self.webView.stopLoading()
+                pending.resume(throwing: SiteError.timeout)
             }
-            group.addTask {
-                try await Task.sleep(for: .seconds(20))
-                throw SiteError.timeout
-            }
-            defer { group.cancelAll() }
-            try await group.next()
         }
     }
 
-    /// Exécute un script `async` dans la page et rend sa valeur texte.
-    func run(_ script: String, arguments: [String: Any] = [:]) async throws -> String {
-        let value = try await webView.callAsyncJavaScript(script, arguments: arguments, contentWorld: .page)
-        return (value as? String) ?? ""
+    /// Exécute un script `async` dans la page et rend sa valeur texte, en
+    /// `timeout` secondes au plus.
+    ///
+    /// Sans délai, un `fetch` qui ne répondait jamais — ou une page suspendue
+    /// par iOS en arrière-plan — bloquait l'import sans fin.
+    func run(_ script: String, arguments: [String: Any] = [:], timeout: TimeInterval = 90) async throws -> String {
+        let gate = ResumeOnce<String>()
+        return try await withCheckedThrowingContinuation { continuation in
+            gate.continuation = continuation
+            Task { @MainActor [webView] in
+                do {
+                    let value = try await webView.callAsyncJavaScript(script, arguments: arguments, contentWorld: .page)
+                    gate.resume(.success((value as? String) ?? ""))
+                } catch {
+                    gate.resume(.failure(error))
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(timeout))
+                gate.resume(.failure(SiteError.timeout))
+            }
+        }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -67,6 +93,17 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
         guard let loading else { return }
         self.loading = nil
         if let error { loading.resume(throwing: error) } else { loading.resume() }
+    }
+
+    /// Une attente qu'on ne reprend qu'une fois : le premier arrivé (réponse ou
+    /// délai) l'emporte, l'autre est ignoré.
+    private final class ResumeOnce<T> {
+        var continuation: CheckedContinuation<T, Error>?
+        @MainActor func resume(_ result: Result<T, Error>) {
+            guard let continuation else { return }
+            self.continuation = nil
+            continuation.resume(with: result)
+        }
     }
 
     enum SiteError: LocalizedError {
