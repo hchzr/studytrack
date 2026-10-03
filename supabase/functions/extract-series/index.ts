@@ -99,7 +99,7 @@ Règles :
 const MAX_IMAGES_PER_CALL = 5;
 const MAX_PAGES = 20;
 
-import { allowed } from "../_shared/limits.ts";
+import { allowed, isEvaluation } from "../_shared/limits.ts";
 import { recordUsage } from "../_shared/usage.ts";
 
 const CORS = {
@@ -117,8 +117,11 @@ Deno.serve(async (request) => {
     return json({ error: "POST attendu" }, 405);
   }
   // La clé `anon` est publique : un plafond par adresse et par jour.
-  const gate = await allowed(request, { name: "extract-series", perIPPerHour: 120, globalPerDay: 4000 });
-  if (!gate.ok) return json({ error: gate.reason }, 429);
+  const evaluation = isEvaluation(request);
+  if (!evaluation) {
+    const gate = await allowed(request, { name: "extract-series", perIPPerHour: 120, globalPerDay: 4000 });
+    if (!gate.ok) return json({ error: gate.reason }, 429);
+  }
 
   const apiKey = Deno.env.get("LLM_API_KEY");
   if (!apiKey) {
@@ -152,6 +155,7 @@ Deno.serve(async (request) => {
   let listOnly = false;
   /** Diagnostic : `"only": "backup"` n'interroge que le repli OpenRouter. */
   let onlyBackup = false;
+  let evalModel: string | null = null;
   try {
     const body = await request.json();
     text = typeof body?.text === "string" ? body.text : "";
@@ -164,10 +168,23 @@ Deno.serve(async (request) => {
       ? body.language.trim() : null;
     listOnly = body?.listModels === true;
     onlyBackup = body?.only === "backup";
+    evalModel = evaluation && typeof body?.model === "string" ? body.model : null;
   } catch {
     return json({ error: "corps JSON attendu : {\"text\": …} ou {\"images\": [...]}" }, 400);
   }
   text = text.slice(0, MAX_CHARACTERS).trim();
+
+  // Évaluation (jeton secret) : un seul modèle OpenRouter lit les pages, sans
+  // course ni repli — pour comparer les modèles sur de vrais énoncés.
+  if (evalModel && images.length > 0) {
+    const key = Deno.env.get("OPENROUTER_API_KEY")?.trim();
+    if (!key) return json({ error: "OPENROUTER_API_KEY manquante" }, 503);
+    const pages = images.slice(0, MAX_PAGES);
+    const started = Date.now();
+    const outcome = await readWith({ base: OPENROUTER_URL, key, model: evalModel }, pages, 0, pages.length,
+                                   seriesHint, language, text, new AbortController().signal);
+    return json({ ...outcome, ms: Date.now() - started });
+  }
 
   // ── Diagnostic : les modèles que les clés peuvent utiliser (identifiants
   // seulement, jamais de secret). Sert à choisir LLM_VISION_MODEL.
@@ -202,6 +219,13 @@ Deno.serve(async (request) => {
     const add = (candidate: Candidate) => {
       if (!candidates.some((c) => c.base === candidate.base && c.model === candidate.model)) candidates.push(candidate);
     };
+    // Le modèle retenu au banc d'essai (SERIES_VISION_MODEL, chez OpenRouter)
+    // passe devant : le meilleur lecteur d'énoncés, et ~8 fois moins cher que
+    // Gemini Flash au tarif payant. Les modèles du fournisseur de vision restent
+    // en secours.
+    const preferredVision = Deno.env.get("SERIES_VISION_MODEL")?.trim();
+    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY")?.trim();
+    if (preferredVision && openRouterKey) add({ base: OPENROUTER_URL, key: openRouterKey, model: preferredVision });
     add({ base: visionBase, key: visionKey,
           model: explicitVisionModel || (visionBase === GROQ ? GROQ_VISION : configuredModel!) });
     const available = await listModels(visionBase, visionKey);
@@ -227,7 +251,7 @@ Deno.serve(async (request) => {
       let index = 0;
       while (index < ordered.length) {
         if (outer.aborted) return { error: "annulé" };
-        const pair = ordered.slice(index, index + RACE_WIDTH);
+        const pair = ordered.slice(index, index + raceWidth());
         index += pair.length;
         const controllers = pair.map(() => new AbortController());
         const stop = () => controllers.forEach((controller) => controller.abort());
@@ -383,6 +407,13 @@ async function complete(
   // « Internal Server Error » — masquant le vrai message du fournisseur.
   // `attempt` le lit donc une fois, et le garde dans `detail`.
   let upstream = await attempt();
+
+  // Repli 0 — un modèle qui n'existe qu'avec raisonnement (Gemini 3.6 chez
+  // OpenRouter) : retenu, puis relancé avec le raisonnement le plus court.
+  if (!upstream.ok && /Reasoning is mandatory/i.test(detail) && !mandatoryReasoning.has(usedModel)) {
+    mandatoryReasoning.add(usedModel);
+    upstream = await attempt();
+  }
 
   // Repli 1 — le nom du modèle. C'est une donnée **extérieure** au projet : les
   // offres changent, et `llama-3.1-8b-instant` est devenu Enterprise sans que rien
@@ -607,6 +638,17 @@ const GROQ_VISION = "qwen/qwen3.8-27b";
 const COOLDOWN_MS = 2 * 60 * 1000;
 /** Modèles lancés ensemble sur un même paquet de pages. */
 const RACE_WIDTH = 5;
+/**
+ * Combien de modèles courent ensemble. 5 quand la vision est un palier gratuit
+ * (Gemini : chaque modèle a son quota, la course ne coûte rien) ; 1 — les
+ * modèles l'un après l'autre — dès qu'un modèle payant passe devant
+ * (SERIES_VISION_MODEL), sinon chaque énoncé serait payé cinq fois.
+ */
+function raceWidth(): number {
+  const configured = Number(Deno.env.get("SERIES_RACE_WIDTH"));
+  if (Number.isFinite(configured) && configured >= 1) return configured;
+  return Deno.env.get("SERIES_VISION_MODEL") ? 1 : RACE_WIDTH;
+}
 /** Avance donnée aux modèles complets sur les « Lite ». */
 const LITE_HEAD_START_MS = 5000;
 const cooldowns = new Map<string, number>();
@@ -756,6 +798,9 @@ function pickModel(available: string[], preferred: string[]): string | null {
 }
 
 /** Un appel de complétion, isolé pour pouvoir être rejoué avec un autre modèle. */
+/** Les modèles qui refusent qu'on coupe leur raisonnement (appris en route). */
+const mandatoryReasoning = new Set<string>();
+
 function callProvider(
   baseURL: string,
   apiKey: string,
@@ -781,7 +826,7 @@ function callProvider(
   if (baseURL.includes("openrouter.ai")) {
     // Réflexion **coupée** : avec « effort: low », DeepSeek v4.1 Flash mettait
     // 72 s sur la série 3 (3 pages) — plus lent que la chaîne qu'il remplace.
-    payload.reasoning = { enabled: false };
+    payload.reasoning = mandatoryReasoning.has(model) ? { effort: "low" } : { enabled: false };
     payload.provider = { sort: "throughput" };
     payload.usage = { include: true };
   }
