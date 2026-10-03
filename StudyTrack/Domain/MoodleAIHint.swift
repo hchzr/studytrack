@@ -138,6 +138,50 @@ enum MoodleCourseAI {
         return payload
     }
 
+    // MARK: Quand redemander
+
+    /// La **structure** du cours : ses sections, ses activités (id, type, nom,
+    /// adresse stable), les liens de ses sections, les chapitres de ses MOOC, et
+    /// s'il a un plan. Pas le début du texte des pages liées, ni le texte des
+    /// sections, ni le plan lui-même : ils changent sans cesse (une date de
+    /// « dernière mise à jour », une flèche « semaine en cours ») et faisaient
+    /// redemander l'analyse à chaque mise à jour, deux fois par jour et par cours.
+    static func structure(of snapshot: MoodleCourseSnapshot, moocs: [ScrapedCourse] = [], hasPlan: Bool = false) -> String {
+        var lines: [String] = []
+        for section in snapshot.sections {
+            lines.append("S\(section.number)|\(MoodleCourseAnalyzer.sectionTitle(section))")
+            for activity in section.activities where activity.isVisible {
+                lines.append("\(activity.id)|\(activity.module)|\(activity.name)|\(stableLink(activity.link))")
+            }
+            for link in section.links { lines.append("L|\(stableLink(link.url))") }
+        }
+        for (index, mooc) in moocs.enumerated() {
+            for chapter in mooc.sections { lines.append("M\(index)|\(chapter.id ?? chapter.title)|\(chapter.items.count)") }
+        }
+        lines.append(hasPlan ? "plan" : "sans plan")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Une adresse sans ce qui change d'une lecture à l'autre : la requête, et le
+    /// numéro de révision d'un fichier Moodle (`…/content/6/…`).
+    static func stableLink(_ address: String) -> String {
+        guard let url = URL(string: address), let host = url.host else { return address }
+        let path = url.path.replacingOccurrences(of: #"/content/\d+/"#, with: "/content/", options: .regularExpression)
+        return host + path
+    }
+
+    /// Faut-il garder la réponse déjà reçue ? Oui si la structure n'a pas bougé
+    /// et que rien d'autre n'a changé, ou que la réponse a moins d'une semaine.
+    /// Une structure nouvelle (une série publiée, une section ajoutée) est
+    /// toujours redemandée.
+    static func reuses(cachedStructure: String?, cachedFull: String?, cachedAt: Date?,
+                       structure: String, full: String, now: Date, maxAge: TimeInterval = 7 * 86_400) -> Bool {
+        guard let cachedStructure, cachedStructure == structure else { return false }
+        if cachedFull == full { return true }
+        guard let cachedAt else { return false }
+        return now.timeIntervalSince(cachedAt) < maxAge
+    }
+
     /// `proginsc.epfl.ch/wwwhiver/series/serie04/serie.html` : l'hôte et le
     /// chemin disent souvent ce qu'est un lien.
     static func shortURL(_ address: String) -> String {

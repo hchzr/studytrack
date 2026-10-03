@@ -5278,6 +5278,28 @@ do {
         check(false, "analyze-course : consigne du serveur introuvable dans \(function)")
     }
 
+    // Quand redemander l'analyse : la structure, pas le texte qui bouge.
+    var base = MoodleCourseSnapshot(title: "X", url: "u", sections: [
+        MoodleSection(number: 3, title: "Semaine 3 (semaine courante)", activities: [res("31", "Série 3")], text: "Rendu lundi")])
+    let before = MoodleCourseAI.structure(of: base, hasPlan: true)
+    base.sections[0].text = "Rendu mardi"
+    base.sections[0].activities[0].preview = "Dernière mise à jour : 3 octobre"
+    base.sections[0].activities[0].target = "https://moodle.epfl.ch/pluginfile.php/1/mod_resource/content/7/31.pdf?forcedownload=1"
+    var moved = base
+    moved.sections[0].title = "Semaine 3"
+    check(MoodleCourseAI.structure(of: base, hasPlan: true) == MoodleCourseAI.structure(of: moved, hasPlan: true),
+          "structure : ni texte de section, ni aperçu, ni révision de fichier, ni « semaine courante »")
+    base.sections[0].activities.append(res("32", "Corrigé série 3"))
+    check(MoodleCourseAI.structure(of: base, hasPlan: true) != before, "structure : une activité publiée la change")
+    let day: TimeInterval = 86_400
+    let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    check(MoodleCourseAI.reuses(cachedStructure: "s", cachedFull: "f", cachedAt: t0, structure: "s", full: "f", now: t0.addingTimeInterval(30 * day))
+          && MoodleCourseAI.reuses(cachedStructure: "s", cachedFull: "f", cachedAt: t0, structure: "s", full: "g", now: t0.addingTimeInterval(3 * day))
+          && !MoodleCourseAI.reuses(cachedStructure: "s", cachedFull: "f", cachedAt: t0, structure: "s", full: "g", now: t0.addingTimeInterval(8 * day))
+          && !MoodleCourseAI.reuses(cachedStructure: "s", cachedFull: "f", cachedAt: t0, structure: "t", full: "f", now: t0)
+          && !MoodleCourseAI.reuses(cachedStructure: nil, cachedFull: "f", cachedAt: t0, structure: "s", full: "f", now: t0),
+          "réanalyse : structure nouvelle → toujours ; texte changé → au plus une fois par semaine ; rien → jamais")
+
     // L'accueil : la source lue d'après les messages de la chaîne.
     check(ImportFeed.source(ofMessage: "vidéos MediaSpace…") == "MediaSpace"
           && ImportFeed.source(ofMessage: "MOOC cité — lecture de Courseware…") == "MOOC"

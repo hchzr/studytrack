@@ -39,8 +39,13 @@ enum MoodleCourseAIService {
         #endif
         let key = "moodleAI4." + hash(snapshot.url.isEmpty ? snapshot.title : snapshot.url)
         let print = hash(fingerprint)
-        if !debugBypassCache, let cached = UserDefaults.standard.dictionary(forKey: key), cached["print"] as? String == print,
-           let raw = cached["raw"] as? String {
+        let structure = hash(analysisVersion + "|" + MoodleCourseAI.instructions + "|"
+                             + MoodleCourseAI.structure(of: snapshot, moocs: moocs, hasPlan: !(plan ?? "").isEmpty))
+        let cached = UserDefaults.standard.dictionary(forKey: key)
+        if !debugBypassCache, let cached, let raw = cached["raw"] as? String,
+           MoodleCourseAI.reuses(cachedStructure: cached["structure"] as? String, cachedFull: cached["print"] as? String,
+                                 cachedAt: (cached["at"] as? Double).map(Date.init(timeIntervalSince1970:)),
+                                 structure: structure, full: print, now: Date()) {
             return MoodleCourseAI.answer(raw)
         }
 
@@ -57,7 +62,8 @@ enum MoodleCourseAIService {
         #endif
         let answer = MoodleCourseAI.answer(raw)
         if !answer.hints.isEmpty || !answer.guide.isEmpty {
-            UserDefaults.standard.set(["print": print, "raw": raw], forKey: key)
+            UserDefaults.standard.set(["print": print, "structure": structure, "at": Date().timeIntervalSince1970, "raw": raw],
+                                      forKey: key)
             AppLog.record(.info, "import", "Cours rangé avec l'IA",
                           detail: "\(snapshot.title) — \(answer.hints.count) activités, \(answer.series.count) séries, \(answer.moocWeeks.count) chapitres de MOOC, \(answer.guide.count) semaines expliquées")
         }

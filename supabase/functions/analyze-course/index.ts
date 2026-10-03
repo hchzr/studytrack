@@ -18,6 +18,7 @@
 //   LLM_API_KEY (Groq), LLM_BASE_URL / LLM_MODEL (facultatifs, ensemble).
 
 import { allowed, isEvaluation } from "../_shared/limits.ts";
+import { recordUsage } from "../_shared/usage.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -83,6 +84,7 @@ Deno.serve(async (request) => {
     try {
       const started = Date.now();
       const { content, usage } = await ask(candidate, messages, evaluation ? body.provider : undefined);
+      recordUsage("analyze-course", candidate.baseURL, candidate.model, usage, Date.now() - started, evaluation);
       const start = content.indexOf("{"), end = content.lastIndexOf("}");
       if (start < 0 || end <= start) throw new Error("réponse sans JSON");
       const parsed = JSON.parse(content.slice(start, end + 1));

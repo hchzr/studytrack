@@ -100,6 +100,7 @@ const MAX_IMAGES_PER_CALL = 5;
 const MAX_PAGES = 20;
 
 import { allowed } from "../_shared/limits.ts";
+import { recordUsage } from "../_shared/usage.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -362,6 +363,7 @@ async function complete(
   let usedModel = model;
   let structured = true;
   let detail = "";
+  const began = Date.now();
   const attempt = async (): Promise<Response> => {
     // Bride **dès le premier essai** : `failed_generation` montrait un JSON
     // tronqué en pleine chaîne, parce que le raisonnement avait consommé le
@@ -436,6 +438,8 @@ async function complete(
   }
 
   const payload = await upstream.json();
+  // Ce que l'appel a coûté (jetons ; coût annoncé chez OpenRouter).
+  recordUsage("extract-series", baseURL, usedModel, payload?.usage, Date.now() - began);
   const message = payload?.choices?.[0]?.message;
   // Certains modèles qui raisonnent laissent `content` vide et écrivent tout dans
   // `reasoning_content`. On regarde les deux avant de conclure à une réponse vide.
@@ -779,6 +783,7 @@ function callProvider(
     // 72 s sur la série 3 (3 pages) — plus lent que la chaîne qu'il remplace.
     payload.reasoning = { enabled: false };
     payload.provider = { sort: "throughput" };
+    payload.usage = { include: true };
   }
   return fetch(`${baseURL}/chat/completions`, {
     signal,

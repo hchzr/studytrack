@@ -30,6 +30,9 @@ enum PreviewLaunch {
     /// `-dumpAIPayloads` : relit les cours Moodle sans rien écrire et garde, par
     /// cours, ce que le modèle reçoit et répond (`Documents/ai-eval/`).
     static let dumpAIPayloadsFlag = "-dumpAIPayloads"
+    /// `-dumpSeriesPayloads` : ce que l'app enverrait pour lire quelques énoncés
+    /// par cours (`Documents/ai-eval/series/`), sans l'envoyer.
+    static let dumpSeriesPayloadsFlag = "-dumpSeriesPayloads"
     static let profileFlag = "-profile"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"
@@ -149,6 +152,13 @@ enum PreviewLaunch {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(400))
                 ExamActivityController.startTest()
+            }
+        }
+
+        if isSet(dumpSeriesPayloadsFlag) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                await AIPayloadDump.runSeries(container: container.modelContainer)
             }
         }
 
