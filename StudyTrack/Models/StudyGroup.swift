@@ -4,31 +4,43 @@ import SwiftData
 /// Groupe d'étude (cache local d'un groupe distant Supabase).
 @Model
 final class StudyGroup {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// Identifiant côté Supabase (nil si le groupe n'est pas encore synchronisé).
     var remoteID: String?
-    var name: String
-    var details: String
+    var name: String = ""
+    var details: String = ""
     /// Ancien champ mono-matière, conservé pour ne pas perdre les groupes déjà
     /// enregistrés. `subjectCodes` reste la seule source de vérité à l'usage.
-    var courseCode: String
+    var courseCode: String = ""
     /// Les matières que le groupe travaille. Un groupe d'entraide porte presque
     /// toujours sur **plusieurs** cours : c'est la même promo, pas la même matière.
     var courseCodes: [String] = []
-    var inviteCode: String
-    var isAdmin: Bool
-    var createdAt: Date
+    var inviteCode: String = ""
+    var isAdmin: Bool = false
+    var createdAt: Date = Date.now
     var lastSyncedAt: Date?
 
-    @Relationship(deleteRule: .cascade, inverse: \GroupMember.group)
-    var members: [GroupMember] = []
+    @Relationship(deleteRule: .cascade, originalName: "members", inverse: \GroupMember.group)
+    var membersStore: [GroupMember]? = []
+    var members: [GroupMember] {
+        get { membersStore ?? [] }
+        set { membersStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \GroupSeriesCompletion.group)
-    var completions: [GroupSeriesCompletion] = []
+    @Relationship(deleteRule: .cascade, originalName: "completions", inverse: \GroupSeriesCompletion.group)
+    var completionsStore: [GroupSeriesCompletion]? = []
+    var completions: [GroupSeriesCompletion] {
+        get { completionsStore ?? [] }
+        set { completionsStore = newValue }
+    }
 
     /// Avancement **exercice par exercice** des membres.
-    @Relationship(deleteRule: .cascade, inverse: \GroupItemCompletion.group)
-    var itemCompletions: [GroupItemCompletion] = []
+    @Relationship(deleteRule: .cascade, originalName: "itemCompletions", inverse: \GroupItemCompletion.group)
+    var itemCompletionsStore: [GroupItemCompletion]? = []
+    var itemCompletions: [GroupItemCompletion] {
+        get { itemCompletionsStore ?? [] }
+        set { itemCompletionsStore = newValue }
+    }
 
     init(id: UUID = UUID(),
          remoteID: String? = nil,
@@ -160,15 +172,15 @@ final class StudyGroup {
 /// Membre d'un groupe, avec ses statistiques agrégées.
 @Model
 final class GroupMember {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var group: StudyGroup?
-    var userID: String
-    var displayName: String
-    var weeklySeconds: Int
-    var totalSeconds: Int
-    var completedSeriesCount: Int
-    var isMe: Bool
-    var isAnonymous: Bool
+    var userID: String = ""
+    var displayName: String = ""
+    var weeklySeconds: Int = 0
+    var totalSeconds: Int = 0
+    var completedSeriesCount: Int = 0
+    var isMe: Bool = false
+    var isAnonymous: Bool = false
     /// `admin` ou `member` — voir `GroupRole`.
     var roleRaw: String = GroupRole.member.rawValue
     /// Les matières du groupe que ce membre suit.
@@ -254,14 +266,14 @@ enum GroupRole: String, CaseIterable, Codable {
 /// « X a terminé la série N du cours Y » — alimente la matrice d'avancement.
 @Model
 final class GroupSeriesCompletion {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var group: StudyGroup?
-    var userID: String
-    var displayName: String
-    var courseCode: String
-    var seriesNumber: Int
-    var totalSeries: Int
-    var completedAt: Date
+    var userID: String = ""
+    var displayName: String = ""
+    var courseCode: String = ""
+    var seriesNumber: Int = 0
+    var totalSeries: Int = 0
+    var completedAt: Date = Date.now
 
     init(id: UUID = UUID(),
          group: StudyGroup? = nil,

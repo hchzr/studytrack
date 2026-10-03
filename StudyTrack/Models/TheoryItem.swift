@@ -8,28 +8,28 @@ import SwiftData
 /// l'**élément**, jamais au cours, et rien ne le suppose.
 @Model
 final class TheoryItem {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
     /// Section (ex : 1 pour les éléments 1.x).
-    var sectionNumber: Int
+    var sectionNumber: Int = 0
     /// Numéro affiché : « 1.1 ».
-    var number: String
-    var title: String
+    var number: String = ""
+    var title: String = ""
     /// Durée en secondes. `0` = inconnue, ce qui est fréquent pour une lecture
     /// ou un chapitre : aucun écran ne doit en déduire une durée nulle.
-    var durationSeconds: Int
+    var durationSeconds: Int = 0
     /// Semaine à laquelle l'élément doit être travaillé (1-based).
-    var plannedWeek: Int
-    var sortOrder: Int
+    var plannedWeek: Int = 0
+    var sortOrder: Int = 0
 
-    var kindRaw: String
+    var kindRaw: String = ""
 
     /// Date à laquelle l'élément a été fait — vu, lu, parcouru.
     var watchedAt: Date?
     /// Date du résumé.
     var summarizedAt: Date?
     var summaryText: String?
-    var urlString: String
+    var urlString: String = ""
 
     /// Nombre de vidéos **dans** l'élément. Une section de polycopié en ligne
     /// (Botafogo) ou une leçon de MOOC contient souvent plusieurs vidéos : ce ne
@@ -49,6 +49,14 @@ final class TheoryItem {
         get { ContentLink.decodeList(linksRaw) }
         set { linksRaw = ContentLink.encodeList(newValue) }
     }
+
+    /// Les sessions et les tâches qui visent cet élément. Inverses de
+    /// `StudySession.theoryItem` et `LinkedTask.video`, exigés par iCloud ;
+    /// supprimer l'élément laisse les sessions, sans cible.
+    @Relationship(deleteRule: .nullify, inverse: \StudySession.theoryItem)
+    var targetedSessions: [StudySession]? = []
+    @Relationship(deleteRule: .nullify, inverse: \LinkedTask.video)
+    var targetedTasks: [LinkedTask]? = []
 
     init(id: UUID = UUID(),
          course: Course? = nil,

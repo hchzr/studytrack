@@ -4,14 +4,14 @@ import SwiftData
 /// Série d'exercices (« Série 1 ») contenant des sous-exercices.
 @Model
 final class ExerciseSeries {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
-    var seriesNumber: Int
-    var title: String
-    var plannedWeek: Int
+    var seriesNumber: Int = 0
+    var title: String = ""
+    var plannedWeek: Int = 0
     var publishedAt: Date?
     var dueDate: Date?
-    var urlString: String
+    var urlString: String = ""
     /// Le thème de la série quand la source le donne (« Suites », « ℂ, Séries »).
     var topic: String = ""
     /// Quand le corrigé est publié, s'il l'est à date fixe (Botafogo).
@@ -23,8 +23,12 @@ final class ExerciseSeries {
     /// repasse, en gardant l'avancement.
     var needsReread: Bool = false
 
-    @Relationship(deleteRule: .cascade, inverse: \Exercise.series)
-    var exercises: [Exercise] = []
+    @Relationship(deleteRule: .cascade, originalName: "exercises", inverse: \Exercise.series)
+    var exercisesStore: [Exercise]? = []
+    var exercises: [Exercise] {
+        get { exercisesStore ?? [] }
+        set { exercisesStore = newValue }
+    }
 
 
 
@@ -68,18 +72,18 @@ final class ExerciseSeries {
 /// Sous-exercice (« exercice 1.1 », « 1.2 ») avec suivi complet.
 @Model
 final class Exercise {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var series: ExerciseSeries?
     /// Numéro affiché : « 1.1 ».
-    var exerciseNumber: String
-    var title: String
+    var exerciseNumber: String = ""
+    var title: String = ""
     /// Ce que l'exercice demande, en une phrase (« Montrer que (xₙ) est
     /// croissante ⇔ ad − bc ⩾ 0 »). Sans elle, un exercice sans questions
     /// numérotées n'était qu'un numéro et un titre. Lue par l'IA sur la page.
     var statement: String = ""
-    var isBonus: Bool
-    var sortOrder: Int
-    var statementURLString: String
+    var isBonus: Bool = false
+    var sortOrder: Int = 0
+    var statementURLString: String = ""
     /// L'indication de l'énoncé, quand la source en donne une (Botafogo).
     var hint: String = ""
     /// La solution, quand la source la publie : affichée seulement à partir de
@@ -95,7 +99,7 @@ final class Exercise {
     var correctedAt: Date?
     /// Correctness.rawValue — juste / moyennement juste / faux.
     var correctnessRaw: String?
-    var redoRequired: Bool
+    var redoRequired: Bool = false
     var correctionNote: String?
     var score: Double?
     var maxScore: Double?
@@ -106,8 +110,19 @@ final class Exercise {
     /// regroupe sous un seul de ces numéros plusieurs questions. Les compter comme
     /// des exercices séparés gonfle la liste et fausse la progression : c'est le
     /// même travail, à rendre ensemble.
-    @Relationship(deleteRule: .cascade, inverse: \SubQuestion.exercise)
-    var subQuestions: [SubQuestion] = []
+    @Relationship(deleteRule: .cascade, originalName: "subQuestions", inverse: \SubQuestion.exercise)
+    var subQuestionsStore: [SubQuestion]? = []
+    var subQuestions: [SubQuestion] {
+        get { subQuestionsStore ?? [] }
+        set { subQuestionsStore = newValue }
+    }
+
+    /// Les sessions et les tâches qui visent cet exercice. Inverses de
+    /// `StudySession.exercise` et `LinkedTask.exercise`, exigés par iCloud.
+    @Relationship(deleteRule: .nullify, inverse: \StudySession.exercise)
+    var targetedSessions: [StudySession]? = []
+    @Relationship(deleteRule: .nullify, inverse: \LinkedTask.exercise)
+    var targetedTasks: [LinkedTask]? = []
 
     init(id: UUID = UUID(),
          series: ExerciseSeries? = nil,
@@ -266,25 +281,29 @@ final class Exercise {
 /// progression de l'exercice en découle, et celle de la série en découle aussi.
 @Model
 final class SubQuestion {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var exercise: Exercise?
     /// La question dont celle-ci est un point : « (a) » sous « 1) ». `nil` au
     /// premier niveau. Deux niveaux au plus — c'est ce que les polycopiés font.
     var parent: SubQuestion?
-    @Relationship(deleteRule: .cascade, inverse: \SubQuestion.parent)
-    var children: [SubQuestion] = []
+    @Relationship(deleteRule: .cascade, originalName: "children", inverse: \SubQuestion.parent)
+    var childrenStore: [SubQuestion]? = []
+    var children: [SubQuestion] {
+        get { childrenStore ?? [] }
+        set { childrenStore = newValue }
+    }
     /// L'étiquette telle qu'elle apparaît dans le polycopié : « 1 », « 2 », « a ».
     /// Vide pour une partie sans numéro (« Ensuite, … »).
-    var label: String
+    var label: String = ""
     /// L'énoncé court, quand il a pu être lu. Facultatif : beaucoup de
     /// sous-questions n'ont qu'une formule.
-    var text: String
+    var text: String = ""
     /// `SubQuestionKind.rawValue`. Une « partie » est un travail demandé sans
     /// numéro : la consigne d'ouverture avant une liste, ou « Ensuite, … » après.
     var kindRaw: String = SubQuestionKind.question.rawValue
-    var isDone: Bool
+    var isDone: Bool = false
     var doneAt: Date?
-    var sortOrder: Int
+    var sortOrder: Int = 0
 
     init(id: UUID = UUID(),
          exercise: Exercise? = nil,

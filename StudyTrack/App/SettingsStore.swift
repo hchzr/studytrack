@@ -15,6 +15,7 @@ final class SettingsStore {
         static let displayName = "settings.displayName"
         static let sectionCode = "settings.sectionCode"
         static let hasCompletedOnboarding = "settings.hasCompletedOnboarding"
+        static let deviceHasOnboarded = "settings.deviceHasOnboarded"
         static let anonymousInLeaderboards = "settings.anonymousInLeaderboards"
         static let dailyReminderEnabled = "settings.dailyReminderEnabled"
         static let dailyReminderHour = "settings.dailyReminderHour"
@@ -69,7 +70,16 @@ final class SettingsStore {
     var displayName: String { didSet { defaults.set(displayName, forKey: Key.displayName) } }
     /// Section EPFL choisie (code, ex : « IN »).
     var sectionCode: String { didSet { defaults.set(sectionCode, forKey: Key.sectionCode) } }
-    var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) } }
+    var hasCompletedOnboarding: Bool {
+        didSet {
+            defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding)
+            if hasCompletedOnboarding { deviceHasOnboarded = true }
+        }
+    }
+    /// Cet appareil a déjà fini l'accueil une fois. « Revoir l'accueil » ne
+    /// le remet pas à faux : seul un **nouvel** appareil saute l'accueil quand
+    /// ses cours arrivent par iCloud.
+    var deviceHasOnboarded: Bool { didSet { defaults.set(deviceHasOnboarded, forKey: Key.deviceHasOnboarded) } }
 
     var section: EPFLSection? { EPFLCatalog.section(code: sectionCode) }
 
@@ -215,6 +225,7 @@ final class SettingsStore {
         self.displayName = defaults.string(forKey: Key.displayName) ?? ""
         self.sectionCode = defaults.string(forKey: Key.sectionCode) ?? ""
         self.hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
+        self.deviceHasOnboarded = defaults.bool(forKey: Key.deviceHasOnboarded) || defaults.bool(forKey: Key.hasCompletedOnboarding)
         self.trackAttendance = defaults.object(forKey: Key.trackAttendance) as? Bool ?? true
         self.anonymousInLeaderboards = defaults.bool(forKey: Key.anonymousInLeaderboards)
         self.shareProgressWithGroups = defaults.object(forKey: Key.shareProgressWithGroups) as? Bool ?? true

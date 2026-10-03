@@ -4,18 +4,18 @@ import SwiftData
 /// Tâche synchronisée depuis un fournisseur externe (Rappels, Todoist).
 @Model
 final class LinkedTask {
-    @Attribute(.unique) var id: UUID
-    var providerRaw: String
+    var id: UUID = UUID()
+    var providerRaw: String = ""
     var externalID: String?
-    var title: String
-    var note: String
+    var title: String = ""
+    var note: String = ""
     var dueDate: Date?
-    var isDone: Bool
-    var priority: Int
+    var isDone: Bool = false
+    var priority: Int = 0
     var course: Course?
     var video: TheoryItem?
     var exercise: Exercise?
-    var updatedAt: Date
+    var updatedAt: Date = Date.now
     var lastSyncedAt: Date?
 
     init(id: UUID = UUID(),

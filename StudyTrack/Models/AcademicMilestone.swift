@@ -10,27 +10,27 @@ import SwiftData
 /// ne se rattrape pas.
 @Model
 final class AcademicMilestone {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// Clé stable : celle du parseur pour une échéance officielle, un identifiant
     /// local pour une échéance ajoutée à la main. C'est elle qui permet de
     /// **mettre à jour** au lieu de dupliquer à chaque rafraîchissement.
-    var externalID: String
-    var title: String
-    var date: Date
-    var kindRaw: String
+    var externalID: String = ""
+    var title: String = ""
+    var date: Date = Date.now
+    var kindRaw: String = ""
     /// Mise en évidence par l'EPFL lui-même dans son tableau.
-    var isImportant: Bool
+    var isImportant: Bool = false
     /// Date approximative (« fin décembre ») : l'app le dit à l'écran au lieu de
     /// faire passer une approximation pour une date exacte.
-    var isApproximate: Bool
-    var termLabel: String
+    var isApproximate: Bool = false
+    var termLabel: String = ""
     /// Vrai si l'échéance vient de l'EPFL, faux si l'étudiant·e l'a ajoutée.
-    var isOfficial: Bool
-    var notes: String
-    var addedAt: Date
+    var isOfficial: Bool = false
+    var notes: String = ""
+    var addedAt: Date = Date.now
     /// Date de dernière confirmation par la source, pour distinguer une échéance
     /// rafraîchie d'une échéance héritée de l'instantané.
-    var confirmedAt: Date
+    var confirmedAt: Date = Date.now
 
     init(id: UUID = UUID(),
          externalID: String,

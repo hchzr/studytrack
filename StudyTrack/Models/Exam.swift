@@ -4,16 +4,16 @@ import SwiftData
 /// Évaluation du cours : midterm, examen final, quiz, projet…
 @Model
 final class Exam {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
-    var kindRaw: String
-    var title: String
-    var date: Date
+    var kindRaw: String = ""
+    var title: String = ""
+    var date: Date = Date.now
     var weightPercent: Double?
-    var location: String
+    var location: String = ""
     /// La page de l'échéance (le devoir sur Moodle), quand elle vient d'un import.
     var urlString: String = ""
-    var notes: String
+    var notes: String = ""
     var externalCalendarEventID: String?
 
     init(id: UUID = UUID(),

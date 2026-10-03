@@ -159,7 +159,12 @@ enum CalendarSync {
                 }
                 continue
             }
-            if let match = existing.first(where: { $0.externalEventID == item.identifier }) {
+            // Par identifiant, sinon par intitulé et horaire : la même séance
+            // arrivée d'un autre appareil (iCloud) porte l'identifiant de son
+            // calendrier à lui. La recréer ferait un doublon à chaque relecture.
+            let twin = existing.first(where: { $0.externalEventID == item.identifier })
+                ?? existing.first(where: { $0.title == item.title && $0.startsAt == item.startsAt && $0.endsAt == item.endsAt })
+            if let match = twin {
                 match.title = item.title
                 match.startsAt = item.startsAt
                 match.endsAt = item.endsAt

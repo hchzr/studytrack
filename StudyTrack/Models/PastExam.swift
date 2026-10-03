@@ -12,21 +12,21 @@ import SwiftData
 /// **quand** le sujet a été travaillé, avec quelle sureté, et ce qu'on en retient.
 @Model
 final class PastExam {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
-    var title: String
+    var title: String = ""
     /// Année de la session.
-    var year: Int
+    var year: Int = 0
     /// `ExamKind.rawValue` — examen, midterm, quiz…
-    var kindRaw: String
-    var urlString: String
-    var solutionURLString: String
+    var kindRaw: String = ""
+    var urlString: String = ""
+    var solutionURLString: String = ""
     /// `ConfidenceLevel.rawValue` — vert / orange / rouge, comme partout ailleurs.
     var confidenceRaw: String?
     /// Date à laquelle le sujet a été travaillé. `nil` = pas encore fait.
     var workedAt: Date?
-    var notes: String
-    var addedAt: Date
+    var notes: String = ""
+    var addedAt: Date = Date.now
 
     init(id: UUID = UUID(),
          course: Course? = nil,

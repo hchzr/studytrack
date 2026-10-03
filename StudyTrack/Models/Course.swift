@@ -4,22 +4,22 @@ import SwiftData
 /// Cours EPFL. Racine de la décomposition théorie / exercices.
 @Model
 final class Course {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// Code officiel EPFL (« CS-250 »).
-    var code: String
-    var name: String
+    var code: String = ""
+    var name: String = ""
     /// Abréviation choisie par l'étudiant·e, affichée partout où la place manque
     /// (« ALGO », « Ana I »). Le code officiel reste `code`, et rien ne l'écrase.
     var shortName: String = ""
-    var credits: Double
-    var colorHex: String
-    var iconName: String
+    var credits: Double = 0
+    var colorHex: String = ""
+    var iconName: String = ""
     var term: AcademicTerm?
 
     /// Heures de **cours magistral** (amphi) par semaine.
-    var weeklyLectureHours: Double
+    var weeklyLectureHours: Double = 0
     /// Heures d'**exercices** (séances) par semaine.
-    var weeklyExerciseHours: Double
+    var weeklyExerciseHours: Double = 0
 
     /// Objectif de travail **personnel** hebdomadaire, en heures.
     ///
@@ -33,16 +33,16 @@ final class Course {
     /// C'est la question posée à l'étudiant·e à l'ajout d'une classe : certains
     /// cours n'ont que des séries d'exercices. Quand ce drapeau est faux, la charge
     /// attendue EPFL ne réserve aucune heure d'amphi, et le suivi de présence est masqué.
-    var hasLectures: Bool
+    var hasLectures: Bool = false
     /// Section EPFL du cours (« IN », « MA », …).
-    var sectionCode: String
+    var sectionCode: String = ""
     /// Cours suivi ce semestre (les autres sont archivés).
-    var isTracked: Bool
+    var isTracked: Bool = false
 
-    var isActive: Bool
-    var lecturer: String
-    var moodleURLString: String
-    var notes: String
+    var isActive: Bool = false
+    var lecturer: String = ""
+    var moodleURLString: String = ""
+    var notes: String = ""
 
     /// Pages d'où le contenu du cours a été importé (Moodle, Courseware,
     /// Botafogo), une par ligne — pour « Mettre à jour depuis… » sans rechercher
@@ -81,7 +81,7 @@ final class Course {
         get {
             guard let data = weekGuideRaw.data(using: .utf8),
                   let raw = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
-            return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in Int(key).map { ($0, value) } })
+            return Dictionary(raw.compactMap { key, value in Int(key).map { ($0, value) } }, uniquingKeysWith: { first, _ in first })
         }
         set {
             let raw = Dictionary(uniqueKeysWithValues: newValue.map { (String($0.key), $0.value) })
@@ -89,26 +89,59 @@ final class Course {
         }
     }
 
-    @Relationship(deleteRule: .cascade, inverse: \TheoryItem.course)
-    var theoryItems: [TheoryItem] = []
+    @Relationship(deleteRule: .cascade, originalName: "theoryItems", inverse: \TheoryItem.course)
+    var theoryItemsStore: [TheoryItem]? = []
+    var theoryItems: [TheoryItem] {
+        get { theoryItemsStore ?? [] }
+        set { theoryItemsStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \ExerciseSeries.course)
-    var series: [ExerciseSeries] = []
+    @Relationship(deleteRule: .cascade, originalName: "series", inverse: \ExerciseSeries.course)
+    var seriesStore: [ExerciseSeries]? = []
+    var series: [ExerciseSeries] {
+        get { seriesStore ?? [] }
+        set { seriesStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \StudySession.course)
-    var sessions: [StudySession] = []
+    @Relationship(deleteRule: .cascade, originalName: "sessions", inverse: \StudySession.course)
+    var sessionsStore: [StudySession]? = []
+    var sessions: [StudySession] {
+        get { sessionsStore ?? [] }
+        set { sessionsStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \Exam.course)
-    var exams: [Exam] = []
+    @Relationship(deleteRule: .cascade, originalName: "exams", inverse: \Exam.course)
+    var examsStore: [Exam]? = []
+    var exams: [Exam] {
+        get { examsStore ?? [] }
+        set { examsStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \PastExam.course)
-    var pastExams: [PastExam] = []
+    @Relationship(deleteRule: .cascade, originalName: "pastExams", inverse: \PastExam.course)
+    var pastExamsStore: [PastExam]? = []
+    var pastExams: [PastExam] {
+        get { pastExamsStore ?? [] }
+        set { pastExamsStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \LinkedTask.course)
-    var linkedTasks: [LinkedTask] = []
+    @Relationship(deleteRule: .cascade, originalName: "linkedTasks", inverse: \LinkedTask.course)
+    var linkedTasksStore: [LinkedTask]? = []
+    var linkedTasks: [LinkedTask] {
+        get { linkedTasksStore ?? [] }
+        set { linkedTasksStore = newValue }
+    }
 
-    @Relationship(deleteRule: .cascade, inverse: \LinkedCalendarEvent.course)
-    var linkedEvents: [LinkedCalendarEvent] = []
+    /// Les sessions de groupe prévues pour ce cours. Inverse de
+    /// `PlannedSession.course`, exigé par iCloud.
+    @Relationship(deleteRule: .nullify, inverse: \PlannedSession.course)
+    var plannedSessionsStore: [PlannedSession]? = []
+
+    @Relationship(deleteRule: .cascade, originalName: "linkedEvents", inverse: \LinkedCalendarEvent.course)
+    var linkedEventsStore: [LinkedCalendarEvent]? = []
+    var linkedEvents: [LinkedCalendarEvent] {
+        get { linkedEventsStore ?? [] }
+        set { linkedEventsStore = newValue }
+    }
 
     init(id: UUID = UUID(),
          code: String,

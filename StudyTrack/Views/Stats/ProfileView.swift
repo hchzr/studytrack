@@ -447,6 +447,7 @@ struct ProfileView: View {
 
     private var dataSection: some View {
         Section {
+            ICloudStatusRow(isSynced: app.isCloudSynced)
             NavigationLink {
                 SessionHistoryView(embedded: true)
             } label: {
@@ -683,6 +684,36 @@ struct ProfileView: View {
                 Label("Diagnostic", systemImage: "stethoscope")
             }
             LabeledContent("Version", value: Self.versionLabel)
+        }
+    }
+}
+
+
+/// « iCloud : synchronisé » — ou pourquoi ça ne l'est pas, et quoi faire.
+private struct ICloudStatusRow: View {
+    let isSynced: Bool
+    @State private var account: CloudSyncMonitor.Account?
+
+    var body: some View {
+        LabeledContent {
+            Text(value).foregroundStyle(Carnet.inkSecondary)
+        } label: {
+            Label("iCloud", systemImage: icon)
+        }
+        .task { account = await CloudSyncMonitor.accountStatus() }
+    }
+
+    private var icon: String {
+        isSynced && account == .available ? "checkmark.icloud" : "icloud.slash"
+    }
+
+    private var value: String {
+        guard isSynced else { return "base locale" }
+        switch account {
+        case .available?: return "synchronisé"
+        case .noAccount?: return "connecte-toi à iCloud dans Réglages"
+        case .restricted?: return "iCloud restreint sur cet appareil"
+        default: return "…"
         }
     }
 }

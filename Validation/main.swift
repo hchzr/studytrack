@@ -737,6 +737,10 @@ let plainExercise = Exercise(series: noteSeries, exerciseNumber: "3.3")
 let plainNote = AnkiNoteFactory.exercise(plainExercise, deck: "StudyTrack")
 check(plainNote.fields["Back"] == "À compléter.",
       "sans contenu, le verso invite à compléter au lieu d'être vide")
+// Série de démonstration : détachée du cours, sinon elle entre dans la base
+// du semestre d'exemple (et dans la sauvegarde testée plus bas).
+noteSeries.course = nil
+context.delete(noteSeries)
 
 let noteCourse = courses.first { $0.code == "CS-250" }!
 let theoryItem = TheoryItem(course: noteCourse, sectionNumber: 1, number: "1.2",
@@ -750,6 +754,8 @@ check(unsentTheory.tags.contains("à-résumer"), "l'étiquette « à résumer »
 theoryItem.summaryText = "La complexité se décrit en grand O."
 let sentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
 check(sentTheory.fields["Back"]?.contains("grand O") == true, "le résumé devient le verso")
+theoryItem.course = nil
+context.delete(theoryItem)
 
 // Le corps envoyé à AnkiConnect.
 let payload = exerciseNote.payload
@@ -5408,6 +5414,68 @@ do {
     check(OfflinePlan.kept(ordered, sizes: sizes, limit: 100) == ["s4", "c4", "s5"],
           "plafond : on s'arrête au premier qui dépasse, l'ordre reste respecté")
     check(OfflinePlan.kept(ordered, sizes: [:], limit: 100).isEmpty, "rien de téléchargé, rien de gardé")
+}
+
+// MARK: iCloud : fusion des doublons
+do {
+    let dupContainer = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+    let ctx = ModelContext(dupContainer)
+    // Deux appareils ont importé le même semestre et le même cours, chacun de son côté.
+    let idA = UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!
+    let idB = UUID(uuidString: "00000000-0000-0000-0000-00000000000B")!
+    let termA = AcademicTerm(year: 2026, season: .autumn, startDate: Date(timeIntervalSince1970: 0), endDate: Date(timeIntervalSince1970: 1))
+    let termB = AcademicTerm(year: 2026, season: .autumn, startDate: Date(timeIntervalSince1970: 0), endDate: Date(timeIntervalSince1970: 1))
+    let a = Course(id: idB, code: "CS-250", name: "Algorithms I", credits: 6)   // identifiant plus grand
+    let b = Course(id: idA, code: "cs-250", name: "Algorithms I", credits: 6)   // gardé : plus petit
+    a.term = termA; b.term = termB
+    a.isTracked = true
+    a.contentSources = ["https://moodle.epfl.ch/course/view.php?id=1"]
+    [termA, termB].forEach(ctx.insert); [a, b].forEach(ctx.insert)
+    let sa = ExerciseSeries(course: a, seriesNumber: 1); let sb = ExerciseSeries(course: b, seriesNumber: 1)
+    let sb2 = ExerciseSeries(course: b, seriesNumber: 2)
+    let a11 = Exercise(series: sa, exerciseNumber: "1.1"); let a12 = Exercise(series: sa, exerciseNumber: "1.2")
+    let b11 = Exercise(series: sb, exerciseNumber: "1.1"); let b12 = Exercise(series: sb, exerciseNumber: "1.2")
+    let b21 = Exercise(series: sb2, exerciseNumber: "2.1")
+    let early = Date(timeIntervalSince1970: 1_000_000), late = Date(timeIntervalSince1970: 2_000_000)
+    a11.doneAt = late; a11.correctedAt = early; a11.correctness = .wrong; a11.redoRequired = true
+    b11.doneAt = early; b11.correctedAt = late; b11.correctness = .correct
+    b12.doneAt = late
+    [sa, sb, sb2].forEach(ctx.insert); [a11, a12, b11, b12, b21].forEach(ctx.insert)
+    let sessA = StudySession(course: a, taskType: .exercise, startedAt: early, durationSeconds: 600)
+    let sessB = StudySession(course: b, taskType: .exercise, startedAt: late, durationSeconds: 900)
+    sessB.exercise = b12
+    let ankiA = StudySession(course: a, taskType: .flashcards, startedAt: early, durationSeconds: 300)
+    let ankiB = StudySession(course: b, taskType: .flashcards, startedAt: early, durationSeconds: 300)
+    ankiA.externalKey = "anki:42"; ankiB.externalKey = "anki:42"
+    [sessA, sessB, ankiA, ankiB].forEach(ctx.insert)
+    let m1 = AcademicMilestone(externalID: "epfl-rentree", title: "Rentrée", date: early, kind: .teachingStart)
+    let m2 = AcademicMilestone(externalID: "epfl-rentree", title: "Rentrée", date: early, kind: .teachingStart)
+    [m1, m2].forEach(ctx.insert)
+    try ctx.save()
+
+    let report = SyncDeduplicator.run(in: ctx)
+    let courses = try ctx.fetch(FetchDescriptor<Course>())
+    check(courses.count == 1 && courses[0].id == idA, "un seul CS-250, le même gardé sur chaque appareil (plus petit identifiant)")
+    let kept = courses[0]
+    check(try ctx.fetch(FetchDescriptor<AcademicTerm>()).count == 1 && kept.term != nil, "un seul semestre, le cours y reste rattaché")
+    check(kept.isTracked && kept.contentSources.count == 1, "suivi et sources repris de l'autre copie")
+    check(kept.series.count == 2, "séries fusionnées par numéro, la série 2 rapatriée (\(kept.series.count))")
+    let s1 = kept.series.first { $0.seriesNumber == 1 }!
+    check(s1.exercises.count == 2, "exercices fusionnés par numéro (\(s1.exercises.count))")
+    let e11 = s1.exercises.first { $0.exerciseNumber == "1.1" }!
+    let e12 = s1.exercises.first { $0.exerciseNumber == "1.2" }!
+    check(e11.doneAt == early, "fait : la date la plus ancienne")
+    check(e11.correctness == .correct && !e11.redoRequired && e11.correctedAt == late, "la correction la plus récente l'emporte, en bloc")
+    check(e12.isDone, "un exercice fait d'un seul côté reste fait")
+    let sessions = try ctx.fetch(FetchDescriptor<StudySession>())
+    check(sessions.count == 3, "aucune session perdue ; la révision Anki relevée deux fois n'est comptée qu'une fois (\(sessions.count))")
+    check(sessions.allSatisfy { $0.course?.id == idA }, "chaque session suit le cours gardé")
+    check(sessB.exercise?.exerciseNumber == "1.2" && sessB.exercise?.series?.course?.id == idA, "une session garde sa cible, fusionnée elle aussi")
+    check(try ctx.fetch(FetchDescriptor<AcademicMilestone>()).count == 1, "le calendrier de l'EPFL installé deux fois : une seule échéance")
+    check(report.merged["cours"] == 1 && report.merged["sessions"] == 1, "compte rendu : \(report.summary)")
+    check(SyncDeduplicator.run(in: ctx).total == 0, "deuxième passage : plus rien à fusionner")
+} catch {
+    check(false, "fusion iCloud : \(error)")
 }
 
 if CommandLine.arguments.contains("--bench") {

@@ -13,6 +13,9 @@
 # « swift-plugin-server produced malformed response ». Désactiver ce sandbox
 # interne rend la compilation possible ; sans effet sur le comportement de l'app.
 # Dans Xcode normal, ce drapeau n'est pas nécessaire.
+#
+# `-DNO_CLOUDKIT` : la build n'est pas signée, donc sans le droit iCloud — et
+# CloudKit arrête l'app au lieu de lever une erreur. La base reste locale.
 
 set -euo pipefail
 
@@ -25,5 +28,5 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO \
-  OTHER_SWIFT_FLAGS="-disable-sandbox" \
+  OTHER_SWIFT_FLAGS="-disable-sandbox -DNO_CLOUDKIT" \
   build

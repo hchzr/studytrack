@@ -97,6 +97,10 @@ struct RootTabView: View {
             // L'assistant lit ce qu'on vient de cocher, sans attendre.
             AssistantSync.scheduleSync(context: context, settings: app.settings)
         }
+        // Un autre appareil a écrit (iCloud) : doublons fusionnés, widgets à jour.
+        .onReceive(NotificationCenter.default.publisher(for: CloudSyncMonitor.remoteChange)) { _ in
+            CloudSyncMonitor.remoteChangeArrived(container: app)
+        }
         .onReceive(NotificationCenter.default.publisher(for: FocusTimerStore.didSave)) { _ in
             WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
         }

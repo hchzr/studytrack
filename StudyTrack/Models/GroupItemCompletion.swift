@@ -12,16 +12,16 @@ import SwiftData
 /// donc toujours possible, sans rien demander de plus à l'utilisateur.
 @Model
 final class GroupItemCompletion {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var group: StudyGroup?
-    var userID: String
-    var displayName: String
-    var courseCode: String
+    var userID: String = ""
+    var displayName: String = ""
+    var courseCode: String = ""
     /// `exercise` ou `theory` — voir `GroupItemKind`.
-    var kindRaw: String
+    var kindRaw: String = ""
     /// Numéro affiché : « 3.2 », « 1.1 ».
-    var itemNumber: String
-    var completedAt: Date
+    var itemNumber: String = ""
+    var completedAt: Date = Date.now
 
     init(id: UUID = UUID(),
          group: StudyGroup? = nil,

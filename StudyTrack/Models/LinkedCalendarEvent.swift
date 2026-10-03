@@ -4,16 +4,16 @@ import SwiftData
 /// Miroir local d'un événement du calendrier système (EventKit).
 @Model
 final class LinkedCalendarEvent {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var externalEventID: String?
     var sourceCalendarID: String?
-    var title: String
-    var startsAt: Date
-    var endsAt: Date
-    var location: String
-    var kindRaw: String
+    var title: String = ""
+    var startsAt: Date = Date.now
+    var endsAt: Date = Date.now
+    var location: String = ""
+    var kindRaw: String = ""
     var course: Course?
-    var isAttended: Bool
+    var isAttended: Bool = false
     /// Cours magistral **manqué**, signalé à la main. Un cours de l'horaire
     /// compte dès qu'il est fini, sauf s'il est marqué ici.
     var isSkipped: Bool = false
@@ -21,7 +21,7 @@ final class LinkedCalendarEvent {
     /// aucune synchronisation ne le recalcule, et les autres semaines du même
     /// créneau le reprennent.
     var kindIsManual: Bool = false
-    var notes: String
+    var notes: String = ""
     var lastSyncedAt: Date?
 
     init(id: UUID = UUID(),

@@ -4,14 +4,14 @@ import SwiftData
 /// Session de travail enregistrée (chrono ou saisie manuelle).
 @Model
 final class StudySession {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
-    var taskTypeRaw: String
-    var startedAt: Date
-    var durationSeconds: Int
-    var isManual: Bool
-    var note: String
-    var createdAt: Date
+    var taskTypeRaw: String = ""
+    var startedAt: Date = Date.now
+    var durationSeconds: Int = 0
+    var isManual: Bool = false
+    var note: String = ""
+    var createdAt: Date = Date.now
 
     /// Sur **quoi** portait exactement la session, quand l'étudiant·e l'a précisé.
     ///

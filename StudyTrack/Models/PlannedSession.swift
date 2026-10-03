@@ -4,20 +4,20 @@ import SwiftData
 /// Session d'étude planifiée (personnelle ou partagée avec un groupe).
 @Model
 final class PlannedSession {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var course: Course?
     /// Identifiant distant du groupe (Supabase) — `nil` = session personnelle.
     var groupRemoteID: String?
-    var groupName: String
-    var title: String
-    var startsAt: Date
-    var durationMinutes: Int
-    var location: String
-    var createdByUserID: String
-    var goingCount: Int
-    var maybeCount: Int
-    var myRSVP: String
-    var externalCalendarEventID: String
+    var groupName: String = ""
+    var title: String = ""
+    var startsAt: Date = Date.now
+    var durationMinutes: Int = 0
+    var location: String = ""
+    var createdByUserID: String = ""
+    var goingCount: Int = 0
+    var maybeCount: Int = 0
+    var myRSVP: String = ""
+    var externalCalendarEventID: String = ""
 
     init(id: UUID = UUID(),
          course: Course? = nil,

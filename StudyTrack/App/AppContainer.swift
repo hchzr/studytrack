@@ -43,19 +43,49 @@ final class AppContainer {
     /// persistance doit se voir.
     let storeError: String?
 
+    /// Le conteneur iCloud de l'app (base privée de l'étudiant·e).
+    static let cloudContainerID = "iCloud.com.hczr.studytrack.app"
+
+    /// Vrai quand la base est synchronisée avec iCloud (iPhone, iPad, Mac).
+    let isCloudSynced: Bool
+
     init() {
         let schema = StudyTrackSchema.current
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         var failure: String?
+        var synced = false
 
-        if let container = try? ModelContainer(for: schema,
-                                               migrationPlan: StudyTrackMigrationPlan.self,
-                                               configurations: [configuration]) {
+        // D'abord synchronisée par iCloud ; à défaut (build sans les droits
+        // iCloud, simulateur non signé), la même base, locale. `.none` est
+        // explicite : `.automatic` activerait iCloud à l'insu du code.
+        let cloud = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
+                                       cloudKitDatabase: .private(Self.cloudContainerID))
+        let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+        var cloudError: String?
+        var cloudContainer: ModelContainer?
+        #if NO_CLOUDKIT
+        // Build non signée (`build.sh`, captures du simulateur) : sans le droit
+        // iCloud, CloudKit arrête l'app au lieu de lever une erreur.
+        cloudError = "build sans iCloud"
+        _ = cloud
+        #else
+        do {
+            cloudContainer = try ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+                                                configurations: [cloud])
+        } catch {
+            cloudError = String(describing: error)
+        }
+        #endif
+        if let cloudContainer {
+            self.modelContainer = cloudContainer
+            synced = true
+        } else if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+                                                      configurations: [local]) {
             self.modelContainer = container
+            AppLog.record(.info, AppLog.Category.storage, "iCloud indisponible : base locale", detail: cloudError ?? "")
         } else {
-            // Deuxième essai **sans** le plan : un plan mal formé ne doit pas
+            // Dernier essai **sans** le plan : un plan mal formé ne doit pas
             // empêcher l'app de démarrer, mais l'échec est retenu et affiché.
-            if let fallback = try? ModelContainer(for: schema, configurations: [configuration]) {
+            if let fallback = try? ModelContainer(for: schema, configurations: [local]) {
                 self.modelContainer = fallback
                 failure = "La migration du schéma a échoué ; la base a été ouverte sans plan de migration."
             } else {
@@ -64,6 +94,7 @@ final class AppContainer {
                 failure = "La base n'a pas pu être ouverte : cette session ne sera pas conservée."
             }
         }
+        self.isCloudSynced = synced
         self.storeError = failure
         if let failure {
             AppLog.record(.error, AppLog.Category.storage, "Base de données", detail: failure)
@@ -85,6 +116,12 @@ final class AppContainer {
         // Réparations de données, nommées et jouées une fois par version.
         let repairContext = ModelContext(self.modelContainer)
         DataRepair.run(in: repairContext)
+        // Les doublons arrivés d'un autre appareil (ou laissés par une
+        // synchronisation interrompue) sont fusionnés dès l'ouverture.
+        let merged = SyncDeduplicator.run(in: repairContext)
+        if merged.total > 0 {
+            AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)
+        }
         focus.app = self
     }
 

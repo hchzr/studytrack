@@ -4,14 +4,14 @@ import SwiftData
 /// Semestre académique EPFL (automne / printemps).
 @Model
 final class AcademicTerm {
-    @Attribute(.unique) var id: UUID
-    var year: Int
-    var seasonRaw: String
+    var id: UUID = UUID()
+    var year: Int = 0
+    var seasonRaw: String = ""
     /// Lundi de la semaine 1.
-    var startDate: Date
-    var endDate: Date
-    var totalWeeks: Int
-    var name: String
+    var startDate: Date = Date.now
+    var endDate: Date = Date.now
+    var totalWeeks: Int = 0
+    var name: String = ""
 
     var season: TermSeason {
         get { TermSeason(rawValue: seasonRaw) ?? .spring }
@@ -22,6 +22,11 @@ final class AcademicTerm {
     var displayName: String {
         name.isEmpty ? "\(season.label) \(year)" : name
     }
+
+    /// Les cours du semestre. Inverse de `Course.term` : iCloud exige que
+    /// chaque relation ait son inverse.
+    @Relationship(deleteRule: .nullify, inverse: \Course.term)
+    var courses: [Course]? = []
 
     init(id: UUID = UUID(),
          year: Int,
