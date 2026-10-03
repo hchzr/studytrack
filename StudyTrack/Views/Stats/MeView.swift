@@ -52,11 +52,16 @@ struct MeView: View {
             ProfileView(isEmbedded: true)
         } label: {
             HStack(spacing: 14) {
-                Text(initials.isEmpty ? "?" : initials)
-                    .font(Carnet.serif(.title3, weight: .semibold))
-                    .foregroundStyle(Carnet.ground)
-                    .frame(width: 52, height: 52)
-                    .background(Carnet.ink, in: Circle())
+                Group {
+                    if initials.isEmpty {
+                        Image(systemName: "person.fill").font(.title3)
+                    } else {
+                        Text(initials).font(Carnet.serif(.title3, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(Carnet.ground)
+                .frame(width: 52, height: 52)
+                .background(Carnet.ink, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name.isEmpty ? "Profil" : name)
                         .font(Carnet.serif(.title3))
