@@ -583,8 +583,8 @@ private struct ExerciseDetailContent: View {
 
     private var statementPage: some View {
         VStack(alignment: .leading, spacing: 12) {
-            CarnetKicker([course?.displayCode, exercise.series.map { "Série \($0.seriesNumber)" },
-                          exercise.isBonus ? "bonus" : nil]
+            // La série est dans la barre (« Série 2 · 1 sur 3 ») : pas deux fois.
+            CarnetKicker([course?.displayCode, exercise.isBonus ? "bonus" : nil]
                             .compactMap { $0 }.joined(separator: " · "),
                          color: tint)
             if !exercise.title.isEmpty {
@@ -749,15 +749,9 @@ private struct ExerciseDetailContent: View {
 
     private var correctSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            stepTitle(number: 2, title: "Corriger", isActive: exercise.isDone && !exercise.isCorrected,
-                      trailing: exercise.correctness.map { $0.lineLabel })
+            // Le résultat se lit sur le bouton choisi : pas de rappel à côté du titre.
+            stepTitle(number: 2, title: "Corriger", isActive: exercise.isDone && !exercise.isCorrected, trailing: nil)
             VStack(alignment: .leading, spacing: 12) {
-                if !exercise.isDone {
-                    Text("Une fois les questions faites, compare avec le corrigé et note le résultat.")
-                        .font(.subheadline)
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 CorrectionPicker(value: exercise.correctness) { setCorrection($0) }
                     .opacity(exercise.isDone ? 1 : 0.45)
                 if hasSolution {
@@ -991,7 +985,9 @@ private struct ExerciseStepBar: View {
         }
         .buttonStyle(PressableStyle(scale: 0.96))
         .disabled(target == nil)
-        .opacity(target == nil ? 0.4 : 1)
+        // Au premier exercice, pas de « Début » grisé : rien (la place reste).
+        .opacity(target == nil ? (direction < 0 ? 0 : 0.4) : 1)
+        .accessibilityHidden(target == nil && direction < 0)
         .accessibilityLabel(direction < 0 ? "Exercice précédent" : "Exercice suivant")
         .accessibilityValue(target?.displayNumber ?? "aucun")
     }

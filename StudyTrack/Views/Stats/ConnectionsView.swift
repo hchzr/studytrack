@@ -181,10 +181,6 @@ struct ConnectionsList: View {
 struct ConnectionsView: View {
     var body: some View {
         CarnetScroll(spacing: 18) {
-            Text("L'app se reconnecte seule quand elle le peut. Elle ne te le demande que si un compte a vraiment expiré.")
-                .font(.subheadline)
-                .foregroundStyle(Carnet.inkSecondary)
-                .padding(.horizontal, 6)
             ConnectionsList()
         }
         .navigationTitle("Comptes")

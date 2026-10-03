@@ -14,7 +14,7 @@ struct MeView: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query(sort: \LinkedTask.dueDate) private var tasks: [LinkedTask]
+    @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
     /// `-settings` (captures) : ouvre les réglages à l'arrivée.
     @State private var debugSettings = false
 
@@ -58,12 +58,14 @@ struct MeView: View {
                     .frame(width: 52, height: 52)
                     .background(Carnet.ink, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name.isEmpty ? "Ton prénom" : name)
+                    Text(name.isEmpty ? "Profil" : name)
                         .font(Carnet.serif(.title3))
-                        .foregroundStyle(name.isEmpty ? Carnet.inkTertiary : Carnet.ink)
-                    Text(app.settings.section?.name ?? "Section non renseignée")
-                        .font(.subheadline)
-                        .foregroundStyle(Carnet.inkSecondary)
+                        .foregroundStyle(Carnet.ink)
+                    if let section = app.settings.section?.name {
+                        Text(section)
+                            .font(.subheadline)
+                            .foregroundStyle(Carnet.inkSecondary)
+                    }
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
@@ -84,16 +86,17 @@ struct MeView: View {
     }
 
     private var weekStats: some View {
-        let seconds = weekSessions.reduce(0) { $0 + $1.durationSeconds }
+        // Le même compte qu'« Aujourd'hui » : le chrono **et** les cours suivis.
+        let start = DateUtils.startOfWeek(Date())
+        let seconds = StudyTime.blocks(events: events.filter { $0.startsAt >= start && $0.startsAt < Date() },
+                                       sessions: weekSessions).reduce(0) { $0 + $1.seconds }
         let progress = tracked.map { ProgressEngine.progress(for: $0) }
         let done = progress.reduce(0) { $0 + $1.watchedCount + $1.doneCount }
         let total = progress.reduce(0) { $0 + $1.videoCount + $1.exerciseCount }
         let corrected = tracked.flatMap(\.allExercises).filter { $0.correctness != nil }
         let right = corrected.filter { $0.correctness == .correct }.count
         return VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Cette semaine") {
-                NavigationLink("Bilan complet") { StatsView() }
-            }
+            CarnetSectionTitle("Cette semaine")
             HStack(spacing: 8) {
                 CarnetStat(label: "Travail", value: DateUtils.hoursLabel(seconds: seconds),
                            detail: "\(weekSessions.count) session\(weekSessions.count > 1 ? "s" : "")")
@@ -112,8 +115,7 @@ struct MeView: View {
             NavigationLink {
                 StatsView()
             } label: {
-                CarnetRow(icon: "chart.bar.xaxis", tint: Carnet.inkSecondary, title: "Bilan",
-                          subtitle: "Temps, matières, avancement, corrections") {
+                CarnetRow(icon: "chart.bar.xaxis", tint: Carnet.inkSecondary, title: "Bilan") {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
                 }
             }
@@ -122,8 +124,7 @@ struct MeView: View {
             NavigationLink {
                 ProfileView(isEmbedded: true)
             } label: {
-                CarnetRow(icon: "gearshape", tint: Carnet.inkSecondary, title: "Réglages",
-                          subtitle: "Études, comptes, outils, rappels, données") {
+                CarnetRow(icon: "gearshape", tint: Carnet.inkSecondary, title: "Réglages") {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
                 }
             }

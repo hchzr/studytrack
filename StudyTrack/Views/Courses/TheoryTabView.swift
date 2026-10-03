@@ -27,7 +27,7 @@ struct TheoryTabView: View {
             if course.theoryItems.isEmpty {
                 EmptyCard(icon: TaskType.theory.icon,
                           title: "Aucune théorie",
-                          message: "Importe le plan du cours depuis Moodle, Courseware ou Botafogo : chaque vidéo, lecture ou section arrive rangée dans sa semaine.",
+                          message: "Depuis Moodle, Courseware ou Botafogo.",
                           actionTitle: "Importer la théorie") {
                     app.router.openContentImport(courseID: course.id)
                 }
@@ -330,8 +330,6 @@ struct VideoDetailSheet: View {
                     }
                 } header: {
                     Text("Planification")
-                } footer: {
-                    Text("La semaine range l'élément dans la progression hebdomadaire.")
                 }
 
                 Section("Résumé") {
@@ -424,10 +422,6 @@ struct AddVideoSheet: View {
                     }
                 } header: {
                     Text("Support")
-                } footer: {
-                    Text(kind.hasDuration
-                         ? "La durée entre dans le calcul du temps de théorie à faire cette semaine."
-                         : "\(kind.label) n'a pas de durée : elle n'entre pas dans le calcul du temps de théorie.")
                 }
                 Section {
                     Stepper("Semaine : \(week)", value: $week, in: 1...30)
@@ -437,8 +431,6 @@ struct AddVideoSheet: View {
                     }
                 } header: {
                     Text("Planification")
-                } footer: {
-                    Text("La semaine sert au calcul « à regarder cette semaine ». Par défaut, la section est le préfixe du numéro (1.4 → section 1).")
                 }
             }
             .carnetBackground()

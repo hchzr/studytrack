@@ -18,6 +18,8 @@ struct GroupsSignInView: View {
     @State private var nonce = ""
     @State private var isWorking = false
     @State private var message: String?
+    /// Le formulaire e-mail, replié : Apple d'abord, l'e-mail pour qui le veut.
+    @State private var usesEmail = false
     @FocusState private var focused: Field?
 
     enum Mode: String, CaseIterable, Identifiable {
@@ -37,27 +39,23 @@ struct GroupsSignInView: View {
                 Text("Travailler ensemble")
                     .font(Carnet.serif(.largeTitle))
                     .foregroundStyle(Carnet.ink)
-                Text("Un compte suffit pour créer un groupe ou en rejoindre un avec un code.")
-                    .font(.body)
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 6)
             .padding(.top, 12)
 
             CarnetSheet {
-                benefit("dot.radiowaves.left.and.right", "Qui travaille en ce moment", "et sur quoi — rejoins-le d'un toucher")
+                benefit("dot.radiowaves.left.and.right", "Qui travaille en ce moment")
                 CarnetRule()
-                benefit("square.grid.3x3.fill", "Qui en est où", "série par série, exercice par exercice")
+                benefit("square.grid.3x3.fill", "Qui en est où, série par série")
                 CarnetRule()
-                benefit("questionmark.bubble", "Entraide", "une question accrochée à un exercice précis")
+                benefit("questionmark.bubble", "Entraide sur un exercice")
                 CarnetRule()
-                benefit("calendar", "Sessions ensemble", "planifiées dans vos calendriers")
+                benefit("calendar", "Sessions ensemble")
             }
 
             if SupabaseConfig.isConfigured {
                 VStack(spacing: 14) {
-                    SignInWithAppleButton(mode == .signUp ? .signUp : .signIn) { request in
+                    SignInWithAppleButton(.continue) { request in
                         let value = AppleSignInSupport.randomNonce()
                         nonce = value
                         request.requestedScopes = [.fullName, .email]
@@ -74,56 +72,66 @@ struct GroupsSignInView: View {
                     .frame(height: 50)
                     .clipShape(Capsule())
 
-                    HStack {
-                        Rectangle().fill(Carnet.rule).frame(height: 1)
-                        Text("ou").font(.footnote).foregroundStyle(Carnet.inkTertiary)
-                        Rectangle().fill(Carnet.rule).frame(height: 1)
-                    }
-
-                    HStack(spacing: 8) {
-                        ForEach(Mode.allCases) { value in
-                            Button {
-                                withAnimation(Motion.snappy) { mode = value }
-                            } label: {
-                                CarnetChip(text: value.title, isSelected: mode == value)
+                    if !usesEmail {
+                        Button {
+                            withAnimation(Motion.snappy) { usesEmail = true }
+                            focused = .email
+                        } label: {
+                            Text("Continuer avec un e-mail")
+                        }
+                        .buttonStyle(.carnetSecondaryWide)
+                    } else {
+                        HStack(spacing: 8) {
+                            ForEach(Mode.allCases) { value in
+                                Button {
+                                    withAnimation(Motion.snappy) { mode = value }
+                                } label: {
+                                    CarnetChip(text: value.title, isSelected: mode == value)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                            Spacer()
                         }
-                        Spacer()
-                    }
 
-                    VStack(spacing: 0) {
-                        TextField("Adresse e-mail", text: $email)
-                            .textContentType(.emailAddress)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focused, equals: .email)
-                            .submitLabel(.next)
-                            .onSubmit { focused = .password }
-                            .padding(14)
-                        Rectangle().fill(Carnet.rule).frame(height: 1)
-                        SecureField(mode == .signUp ? "Mot de passe (6 caractères au moins)" : "Mot de passe",
-                                    text: $password)
-                            .textContentType(mode == .signUp ? .newPassword : .password)
-                            .focused($focused, equals: .password)
-                            .submitLabel(.go)
-                            .onSubmit { Task { await submit() } }
-                            .padding(14)
-                    }
-                    .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        VStack(spacing: 0) {
+                            TextField("Adresse e-mail", text: $email)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .focused($focused, equals: .email)
+                                .submitLabel(.next)
+                                .onSubmit { focused = .password }
+                                .padding(14)
+                            Rectangle().fill(Carnet.rule).frame(height: 1)
+                            SecureField("Mot de passe", text: $password)
+                                .textContentType(mode == .signUp ? .newPassword : .password)
+                                .focused($focused, equals: .password)
+                                .submitLabel(.go)
+                                .onSubmit { Task { await submit() } }
+                                .padding(14)
+                        }
+                        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
 
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        if isWorking {
-                            ProgressView().tint(Carnet.ground)
-                        } else {
-                            Text(mode.title)
+                        Button {
+                            Task { await submit() }
+                        } label: {
+                            if isWorking {
+                                ProgressView().tint(Carnet.ground)
+                            } else {
+                                Text(mode.title)
+                            }
+                        }
+                        .buttonStyle(.carnetPrimaryWide)
+                        .disabled(!isValid || isWorking)
+                        if mode == .signUp, !password.isEmpty, password.count < 6 {
+                            Text("6 caractères au moins.")
+                                .font(.footnote)
+                                .foregroundStyle(Carnet.inkSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .buttonStyle(.carnetPrimaryWide)
-                    .disabled(!isValid || isWorking)
 
                     if let message {
                         Text(message)
@@ -132,15 +140,11 @@ struct GroupsSignInView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Text("Ton suivi reste sur ton téléphone. Le serveur ne reçoit que ce que tu partages avec tes groupes.")
-                        .font(.caption)
-                        .foregroundStyle(Carnet.inkTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 CarnetEmpty(icon: "icloud.slash",
                             title: "Groupes indisponibles",
-                            message: "Cette version de l'app n'est reliée à aucun serveur de groupes. Tout le reste fonctionne normalement.")
+                            message: "Pas de serveur de groupes dans cette version.")
             }
         }
         .navigationTitle("Groupes")
@@ -151,8 +155,8 @@ struct GroupsSignInView: View {
         email.contains("@") && password.count >= 6
     }
 
-    private func benefit(_ icon: String, _ title: String, _ detail: String) -> some View {
-        CarnetRow(icon: icon, tint: Carnet.ink, title: title, subtitle: detail)
+    private func benefit(_ icon: String, _ title: String) -> some View {
+        CarnetRow(icon: icon, tint: Carnet.ink, title: title)
     }
 
     private func submit() async {

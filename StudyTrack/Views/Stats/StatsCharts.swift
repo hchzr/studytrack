@@ -28,9 +28,6 @@ private func percent(_ part: Int, _ total: Int) -> String {
 }
 
 /// « 1 h d'amphi → 0,8 h de théorie » : ce que deviennent les heures de cours.
-private func ratioLabel(_ value: Double) -> String {
-    String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
-}
 
 // MARK: - Répartition
 
@@ -41,7 +38,6 @@ struct SplitCard: View {
     @State private var selected: String?
 
     private var total: Int { slices.reduce(0) { $0 + $1.seconds } }
-    private func seconds(_ name: String) -> Int { slices.first { $0.name == name }?.seconds ?? 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -85,38 +81,11 @@ struct SplitCard: View {
                         }
                     }
 
-                    Rectangle().fill(Carnet.rule).frame(height: 1)
-                    HStack(spacing: 0) {
-                        ratio(title: "Théorie par h d'amphi",
-                              numerator: seconds("Théorie"), denominator: seconds("Amphi"),
-                              hint: "h de théorie perso pour 1 h de cours")
-                        Rectangle().fill(Carnet.rule).frame(width: 1, height: 44)
-                        ratio(title: "Séries par h de théorie",
-                              numerator: seconds("Séries"), denominator: seconds("Théorie"),
-                              hint: "h d'exercices pour 1 h de théorie")
-                        Rectangle().fill(Carnet.rule).frame(width: 1, height: 44)
-                        ratio(title: "Corrigé / fait",
-                              numerator: seconds("Correction"), denominator: seconds("Séries"),
-                              hint: "h de correction pour 1 h d'exercices")
-                    }
                 }
             }
         }
     }
 
-    private func ratio(title: String, numerator: Int, denominator: Int, hint: String) -> some View {
-        VStack(spacing: 3) {
-            Text(denominator == 0 ? "—" : ratioLabel(Double(numerator) / Double(denominator)))
-                .font(Carnet.serif(.title2))
-                .foregroundStyle(Carnet.ink)
-            Text(title).font(.caption2).foregroundStyle(Carnet.inkSecondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(hint)
-    }
 }
 
 // MARK: - Par matière (camembert)
@@ -139,7 +108,7 @@ struct CoursePieCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Par matière") { Text("étude + amphi") }
+            CarnetSectionTitle("Par matière")
             StatsCard {
                 if total == 0 {
                     Text("Rien sur cette période.").font(.subheadline).foregroundStyle(Carnet.inkSecondary)
@@ -193,84 +162,6 @@ struct CoursePieCard: View {
 }
 
 // MARK: - Par cours, par catégorie
-
-struct CourseCategoryBar: Identifiable {
-    let course: String
-    let category: String
-    let seconds: Int
-    var id: String { course + category }
-    var hours: Double { Double(seconds) / 3600 }
-}
-
-/// Chaque cours en une barre, découpée par nature de travail : on voit qu'un
-/// cours n'a eu que de l'amphi, qu'un autre n'a eu que des séries.
-struct CourseCategoryCard: View {
-    let bars: [CourseCategoryBar]
-    let categories: [String]
-    let colors: [Color]
-    @State private var selected: String?
-
-    /// Les natures de travail présentes sur la période, dans l'ordre et leurs couleurs.
-    private var present: [(String, Color)] {
-        let used = Set(bars.filter { $0.seconds > 0 }.map(\.category))
-        return zip(categories, colors).filter { used.contains($0.0) }.map { ($0.0, $0.1) }
-    }
-
-    private var courses: [String] {
-        let totals = Dictionary(grouping: bars, by: \.course).mapValues { $0.reduce(0) { $0 + $1.seconds } }
-        return totals.keys.sorted { totals[$0, default: 0] > totals[$1, default: 0] }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Cours par nature de travail")
-            StatsCard {
-                if bars.isEmpty {
-                    Text("Rien sur cette période.").font(.subheadline).foregroundStyle(Carnet.inkSecondary)
-                } else {
-                    if let selected {
-                        let rows = bars.filter { $0.course == selected && $0.seconds > 0 }
-                        Text("\(selected) : " + rows.map { "\($0.category) \(DateUtils.durationLabel(seconds: $0.seconds))" }.joined(separator: " · "))
-                            .font(.footnote)
-                            .foregroundStyle(Carnet.ink)
-                    }
-                    Chart(bars) { bar in
-                        BarMark(x: .value("Heures", bar.hours), y: .value("Cours", bar.course))
-                            .foregroundStyle(by: .value("Nature", bar.category))
-                            .opacity(selected == nil || selected == bar.course ? 1 : 0.35)
-                    }
-                    .chartForegroundStyleScale(domain: present.map(\.0), range: present.map(\.1))
-                    .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
-                    .chartYSelection(value: $selected)
-                    .chartYScale(domain: courses)
-                    .chartXAxis {
-                        AxisMarks(values: .automatic(desiredCount: 4)) { value in
-                            AxisGridLine().foregroundStyle(Carnet.rule)
-                            AxisValueLabel {
-                                if let hours = value.as(Double.self) {
-                                    Text("\(Int(hours)) h").font(.caption2).foregroundStyle(Carnet.inkTertiary)
-                                }
-                            }
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisValueLabel {
-                                if let code = value.as(String.self) {
-                                    Text(code).font(.caption.weight(.semibold)).foregroundStyle(Carnet.ink)
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: CGFloat(max(courses.count, 1)) * 36 + 50)
-                    .sensoryFeedback(.selection, trigger: selected)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Tendance
 
 struct WeekPoint: Identifiable {
     let week: Date
@@ -408,7 +299,7 @@ struct PaceCard: View {
                     }
                 }
                 .frame(height: CGFloat(max(rows.count, 1)) * 34 + 30)
-                Text("Le trait : la part du programme prévue jusqu'à cette semaine. En rouge, un cours en dessous.")
+                Text("Trait : prévu à ce jour.")
                     .font(.caption)
                     .foregroundStyle(Carnet.inkSecondary)
             }
@@ -417,78 +308,3 @@ struct PaceCard: View {
 }
 
 // MARK: - Quand
-
-struct HeatCell: Identifiable {
-    /// 0 = lundi.
-    let weekday: Int
-    let hour: Int
-    let seconds: Int
-    var id: Int { weekday * 24 + hour }
-}
-
-/// Jour de la semaine × heure : quand je travaille vraiment.
-struct HeatmapCard: View {
-    let cells: [HeatCell]
-    @State private var hour: Int?
-
-    private static let days = ["L", "M", "M", "J", "V", "S", "D"]
-
-    var body: some View {
-        let peak = max(cells.map(\.seconds).max() ?? 1, 1)
-        VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Quand") {
-                if let hour {
-                    let total = cells.filter { $0.hour == hour }.reduce(0) { $0 + $1.seconds }
-                    Text("\(hour) h : \(DateUtils.durationLabel(seconds: total))")
-                } else if let best = cells.max(by: { $0.seconds < $1.seconds }), best.seconds > 0 {
-                    Text("surtout le \(Self.dayName(best.weekday)) vers \(best.hour) h")
-                }
-            }
-            StatsCard {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(0..<7, id: \.self) { day in
-                        HStack(spacing: 3) {
-                            Text(Self.days[day])
-                                .font(.caption2)
-                                .foregroundStyle(Carnet.inkSecondary)
-                                .frame(width: 14)
-                            ForEach(Self.hours, id: \.self) { h in
-                                let seconds = cells.first { $0.weekday == day && $0.hour == h }?.seconds ?? 0
-                                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                    .fill(seconds == 0 ? Carnet.sheetRaised
-                                          : Carnet.ink.opacity(0.2 + 0.8 * Double(seconds) / Double(peak)))
-                                    .overlay {
-                                        if hour == h {
-                                            RoundedRectangle(cornerRadius: 2).strokeBorder(Carnet.ink, lineWidth: 1)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 14)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { hour = hour == h ? nil : h }
-                            }
-                        }
-                    }
-                    HStack(spacing: 3) {
-                        Color.clear.frame(width: 14, height: 1)
-                        ForEach(Self.hours, id: \.self) { h in
-                            Text(h % 3 == 0 ? "\(h)" : "")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Carnet.inkTertiary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                }
-                .sensoryFeedback(.selection, trigger: hour)
-            }
-        }
-    }
-
-    private static let hours = Array(7...23)
-
-    private static func dayName(_ index: Int) -> String {
-        ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"][min(max(index, 0), 6)]
-    }
-}

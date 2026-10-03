@@ -41,11 +41,7 @@ struct TodayView: View {
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
     @Query(sort: \Exam.date) private var exams: [Exam]
     @Query(sort: \PlannedSession.startsAt) private var plannedSessions: [PlannedSession]
-    @Query(sort: \LinkedTask.dueDate) private var tasks: [LinkedTask]
     @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
-
-    @Query private var exercises: [Exercise]
-    @Query private var videos: [TheoryItem]
 
     /// Élément ouvert depuis la liste « À faire » : la fiche, pas le chrono.
     @State private var searchQuery = ""
@@ -122,15 +118,6 @@ struct TodayView: View {
     /// colonnes. Décidé par la classe de taille, jamais par le modèle d'appareil,
     /// pour que Split View et Slide Over se comportent correctement.
     private var isWide: Bool { sizeClass == .regular }
-
-    private var emptyState: some View {
-        EmptyCard(icon: "books.vertical",
-                  title: "Aucun cours suivi",
-                  message: "Ajoute tes classes pour voir ici ce qu'il te reste à faire cette semaine.",
-                  actionTitle: "Ajouter un cours") {
-            app.router.selectedTab = .courses
-        }
-    }
 
     /// Les présentations de « Aujourd'hui », en une seule valeur.
     ///
@@ -294,7 +281,7 @@ struct TodayView: View {
         if state.tracked.isEmpty {
             CarnetEmpty(icon: "books.vertical",
                         title: "Aucun cours suivi",
-                        message: "Importe tes cours depuis Moodle : séries, vidéos et échéances arrivent d'un coup.",
+                        message: "Séries, vidéos et échéances, lues sur Moodle.",
                         actionTitle: "Importer mes cours") {
                 app.router.openContentImport()
             }
@@ -374,11 +361,6 @@ struct TodayView: View {
         }
     }
 
-    /// Les observations de l'accueil, sorties de la chaîne de modificateurs.
-    ///
-    /// Huit `.onChange` à la suite d'une vingtaine d'autres modificateurs font
-    /// échouer le vérificateur de types. Les isoler dans une méthode leur donne un
-    /// contexte court — et le texte des fermetures reste identique.
     /// Les observations de l'accueil, sorties de la chaîne de modificateurs.
     ///
     /// Huit `.onChange` à la suite d'une vingtaine d'autres modificateurs, dans une
@@ -517,9 +499,7 @@ struct TodayView: View {
             } label: {
                 CarnetSheet {
                     if items.isEmpty {
-                        CarnetRow(icon: "sun.max", tint: Carnet.review,
-                                  title: "Rien à l'horaire aujourd'hui",
-                                  subtitle: "La journée est à toi")
+                        CarnetRow(icon: "sun.max", tint: Carnet.review, title: "Rien à l'horaire")
                     } else {
                         ForEach(Array(items.prefix(6).enumerated()), id: \.element.id) { index, item in
                             scheduleRow(item, now: now)

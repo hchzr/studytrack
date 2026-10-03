@@ -45,9 +45,6 @@ struct AnkiSettingsView: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
-                        Text("Facultatif : relève aussi le temps passé dans Anki Desktop quand l'ordinateur est allumé.")
-                            .font(.footnote)
-                            .foregroundStyle(Carnet.inkSecondary)
                     }
                     .tint(Carnet.ink)
                 }
@@ -89,8 +86,6 @@ struct AnkiSettingsView: View {
             .disabled(email.isEmpty || password.isEmpty || sync.isWorking)
         } header: {
             CarnetFormHeader("AnkiWeb")
-        } footer: {
-            Text("Le compte de synchronisation d'Anki (ankiweb.net). Le mot de passe sert une fois à obtenir une clé, gardée dans le trousseau ; il n'est jamais enregistré.")
         }
     }
 
@@ -122,7 +117,7 @@ struct AnkiSettingsView: View {
                     Task { try? await sync.refreshMirror(force: true); reload(); refreshToken = UUID() }
                 }
             } message: {
-                Text("Repart de la version d'AnkiWeb. À n'utiliser que si la synchronisation le demande.")
+                Text("Seulement si la synchronisation le demande.")
             }
             Button(role: .destructive) {
                 sync.signOut()
@@ -169,8 +164,6 @@ struct AnkiSettingsView: View {
             }
         } header: {
             CarnetFormHeader("Un paquet par cours")
-        } footer: {
-            Text("Les cartes d'un cours vont dans son paquet ; le temps de révision de ce paquet compte pour le cours.")
         }
     }
 
@@ -189,8 +182,6 @@ struct AnkiSettingsView: View {
                 set: { sync.notetypeID = $0; refreshToken = UUID() })) {
                 ForEach(types) { type in Text(type.name).tag(type.id) }
             }
-        } footer: {
-            Text("Pour les cartes question / réponse. Une carte qui contient {{c1::…}} utilise ton type « à trous ».")
         }
     }
 
@@ -202,7 +193,7 @@ struct AnkiSettingsView: View {
                 Label("Exercices faux → carte", systemImage: "arrow.counterclockwise")
             }
         } footer: {
-            Text("Un exercice corrigé « faux » devient une carte : l'énoncé au recto, ta note de correction et la solution au verso.")
+            Text("Un exercice faux devient une carte.")
         }
     }
 
@@ -237,8 +228,6 @@ struct AnkiSettingsView: View {
                 .disabled(sync.isWorking)
             } header: {
                 CarnetFormHeader("En attente d'envoi")
-            } footer: {
-                Text("Envoyé tout seul en quittant une révision et à l'ouverture de l'app.")
             }
         }
     }
@@ -296,7 +285,7 @@ struct AnkiCardComposer: View {
                 Group {
                     if !sync.isSignedIn || collection == nil {
                         Section {
-                            Text("Connecte d'abord ton compte AnkiWeb : Moi › Réglages › Intégrations › Anki.")
+                            Text("Connecte d'abord ton compte AnkiWeb (Réglages › Anki).")
                                 .foregroundStyle(Carnet.inkSecondary)
                         }
                     } else if let collection {

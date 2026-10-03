@@ -156,8 +156,6 @@ struct SeriesImportSheet: View {
                     bigChoice(icon: "doc.on.clipboard", title: "Coller l'énoncé",
                               detail: "Depuis Moodle, un mail ou une page web.")
                 }
-            } footer: {
-                Text("Les exercices, leurs questions et leurs points sont repérés automatiquement. Tu vérifies tout avant que quoi que ce soit ne soit créé.")
             }
             if let course {
                 Section {
@@ -199,7 +197,7 @@ struct SeriesImportSheet: View {
                             title: pageImages.isEmpty ? "Vérification par l'IA" : "Lecture des pages par l'IA",
                             detail: pageImages.isEmpty
                                 ? "Structure, intitulés et bonus."
-                                : "Questions, points (a)(b)(c) et formules, lus sur la page. Compte 5 à 20 s.")
+                                : "Environ 5 à 20 s.")
                 }
             }
             if phase == .analyzing {
@@ -212,13 +210,11 @@ struct SeriesImportSheet: View {
                     Button(role: .destructive) {
                         cancelAnalysis()
                     } label: {
-                        Label("Arrêter l'IA et garder la lecture rapide", systemImage: "stop.fill")
+                        Label("Arrêter l'IA", systemImage: "stop.fill")
                     }
                     // L'icône suit le texte : un carré indigo à côté d'un libellé
                     // rouge se lisait comme deux boutons.
                     .foregroundStyle(.red)
-                } footer: {
-                    Text("Sans attendre, tu relis la lecture rapide ; si l'IA trouve autre chose ensuite, elle te le proposera sans rien écraser.")
                 }
             }
         }
@@ -309,7 +305,7 @@ struct SeriesImportSheet: View {
         switch ai {
         case .idle, .unavailable:
             statusRow(icon: "text.magnifyingglass", tint: .secondary, title: "Lecture rapide",
-                      detail: ai == .unavailable ? "IA désactivée (Profil › Import intelligent). Vérifie les questions." : "")
+                      detail: ai == .unavailable ? "IA désactivée (Réglages › IA de lecture). Vérifie les questions." : "")
         case .running:
             HStack(spacing: Layout.control) {
                 ProgressView()
@@ -374,7 +370,7 @@ struct SeriesImportSheet: View {
                 Label("Aucun texte lisible", systemImage: "doc.text.magnifyingglass")
                     .font(.subheadline.weight(.semibold))
             } footer: {
-                Text("C'est le cas des documents scannés : ils contiennent une image, pas du texte. Crée la série à la main — le plan rapide « 1(a-d) 2 3 » va vite.")
+                Text("Document scanné : crée la série à la main, avec le plan « 1(a-d) 2 3 ».")
             }
             Section {
                 Button {
@@ -420,7 +416,7 @@ struct SeriesImportSheet: View {
                         .frame(minHeight: 220)
                         .autocorrectionDisabled()
                 } footer: {
-                    Text("Colle l'énoncé tel quel. Tu relis la liste avant de créer.")
+                    Text("Colle l'énoncé tel quel.")
                 }
             }
             .carnetBackground()

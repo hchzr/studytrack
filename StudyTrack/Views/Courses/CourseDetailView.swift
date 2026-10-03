@@ -171,8 +171,10 @@ struct CourseDetailView: View {
     private var hero: some View {
         let tint = Carnet.tint(course.colorHex)
         return VStack(alignment: .leading, spacing: 6) {
-            CarnetKicker([course.displayCode, CarnetCourseCard.sourceLabel(course)]
-                            .compactMap { $0 }.joined(separator: " · "), color: tint)
+            // Le code est déjà le titre de la barre : ici, seulement d'où vient le cours.
+            if let source = CarnetCourseCard.sourceLabel(course) {
+                CarnetKicker(source, color: tint)
+            }
             Text(course.name.isEmpty ? course.displayCode : course.name)
                 .font(Carnet.serif(.largeTitle))
                 .foregroundStyle(Carnet.ink)
@@ -375,7 +377,7 @@ struct CourseDetailView: View {
             AnkiCourseRow(course: course)
             if theory.isEmpty {
                 CarnetEmpty(icon: "book", title: "Pas de théorie",
-                            message: "Aucune vidéo, lecture ni transparents rangés en semaine \(week).")
+                            message: "Rien en semaine \(week).")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -423,7 +425,7 @@ struct CourseDetailView: View {
         } else {
             if series.isEmpty {
                 CarnetEmpty(icon: "list.number", title: "Pas de série",
-                            message: "Aucune série n'est rangée en semaine \(week).")
+                            message: "Rien en semaine \(week).")
             }
             ForEach(series) { item in
                 seriesBlock(item)
@@ -509,8 +511,7 @@ struct CourseDetailView: View {
                 if series.exercises.isEmpty {
                     CarnetRow(icon: SeriesAutoReader.shared.reading.contains(series.id) ? "hourglass" : "doc.text.magnifyingglass",
                               tint: Carnet.inkSecondary,
-                              title: SeriesAutoReader.shared.reading.contains(series.id) ? "Lecture de l'énoncé…" : "Exercices pas encore lus",
-                              subtitle: "Ouvre l'onglet Séries pour les lire dans le PDF")
+                              title: SeriesAutoReader.shared.reading.contains(series.id) ? "Lecture de l'énoncé…" : "Exercices pas encore lus")
                 }
                 ForEach(Array(series.sortedExercises.enumerated()), id: \.element.id) { index, exercise in
                     Button { openedExercise = exercise } label: {

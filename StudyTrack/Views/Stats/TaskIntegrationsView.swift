@@ -27,8 +27,6 @@ struct TaskIntegrationsView: View {
                     }
                 } header: {
                     CarnetFormHeader("Tes tâches")
-                } footer: {
-                    Text("Les tâches datées apparaissent dans l'agenda ; celles rattachées à un cours, dans le cours. Les jetons restent sur ton téléphone.")
                 }
 
                 if !notionDatabases.isEmpty {

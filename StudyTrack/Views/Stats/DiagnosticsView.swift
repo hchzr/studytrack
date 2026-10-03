@@ -125,8 +125,6 @@ struct DiagnosticsView: View {
                     Label("Vider le journal", systemImage: "trash")
                 }
                 .disabled(entries.isEmpty)
-            } footer: {
-                Text("Le journal reste sur cet appareil. Il ne contient que des messages techniques — aucune donnée de cours ni identité.")
             }
         }
         .carnetForm()

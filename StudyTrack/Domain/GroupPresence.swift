@@ -106,7 +106,7 @@ enum PresenceAvailability: Equatable {
         case .notConfigured:
             return "Cette version de l'app n'a pas de projet Supabase : le direct entre membres est indisponible."
         case .notSignedIn:
-            return "Connecte-toi (Profil › Compte) pour voir qui travaille en ce moment."
+            return "Connecte-toi (Réglages › Compte et groupes) pour voir qui travaille."
         case .groupNotSynced:
             return "Ce groupe n'est pas encore synchronisé : lance une synchronisation depuis la liste des groupes."
         case .failing(let detail):

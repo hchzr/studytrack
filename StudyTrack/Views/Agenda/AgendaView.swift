@@ -531,7 +531,7 @@ struct AgendaView: View {
                 EmptyCard(icon: "calendar",
                           title: isToday ? "Rien aujourd'hui" : "Rien ce jour-là",
                           message: filter.isEverything
-                              ? "Importe ton horaire (Cours › + › Horaire) pour voir tes séances, ou planifie une session d'étude."
+                              ? "Rien de prévu."
                               : "Rien avec ce filtre.",
                           actionTitle: "Planifier une session") {
                     showingPlan = true

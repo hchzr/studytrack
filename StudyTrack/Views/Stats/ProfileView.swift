@@ -12,8 +12,6 @@ struct ProfileView: View {
 
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query private var milestones: [AcademicMilestone]
-    @Query private var groups: [StudyGroup]
 
     @State private var appleNonce = ""
     @State private var email = ""
@@ -192,7 +190,7 @@ struct ProfileView: View {
                 AIImportSettingsView()
             } label: {
                 settingsRow("IA de lecture", icon: "sparkles",
-                            value: SeriesAIExtractor.plannedSource(app.settings)?.label ?? "désactivée")
+                            value: app.settings.aiExtractionEnabled ? "activée" : "désactivée")
             }
             NavigationLink {
                 subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
@@ -202,8 +200,6 @@ struct ProfileView: View {
             }
         } header: {
             CarnetFormHeader("Outils")
-        } footer: {
-            Text("L'IA de lecture range les séries des PDF et les cours Moodle aux formats inhabituels.")
         }
     }
 
@@ -297,15 +293,15 @@ struct ProfileView: View {
                         .font(Carnet.serif(.title2))
                         .textContentType(.givenName)
                         .submitLabel(.done)
-                    Text(settings.section.map { "\($0.name)" } ?? "Section non renseignée")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if let section = settings.section {
+                        Text(section.name)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             .padding(.vertical, Layout.tight)
-        } footer: {
-            Text("Ton prénom apparaît dans l'accueil et dans tes groupes.")
         }
     }
 
@@ -337,8 +333,6 @@ struct ProfileView: View {
             }
         } header: {
             CarnetFormHeader("Horaire")
-        } footer: {
-            Text("L'EPFL n'ouvre pas d'API aux étudiant·e·s : le flux .ics « Mon horaire » est le moyen fiable d'importer ton emploi du temps. StudyTrack en déduit tes cours et détecte ceux qui ont des heures de cours.")
         }
     }
 
@@ -367,8 +361,6 @@ struct ProfileView: View {
             ), in: 20...40, step: 1) {
                 Label("\(Int(settings.hoursPerCredit)) h par crédit ECTS", systemImage: "scalemass")
             }
-        } footer: {
-            Text("Charge attendue = crédits × heures par crédit, dont les heures d'amphi déclarées des cours qui en ont.")
         }
     }
 
@@ -413,8 +405,6 @@ struct ProfileView: View {
             }
         } header: {
             CarnetFormHeader("Rappels")
-        } footer: {
-            Text("Les rappels d'évaluation (J-3, J-1) et de session (15 min avant) sont replanifiés automatiquement à chaque passage en arrière-plan.")
         }
         // Un interrupteur qui n'agit qu'après un bouton plus bas n'est pas un
         // interrupteur : chaque changement replanifie.
@@ -484,8 +474,6 @@ struct ProfileView: View {
             }
         } header: {
             CarnetFormHeader("Données")
-        } footer: {
-            Text("La sauvegarde contient les cours, l'avancement (vidéos vues, exercices faits, corrections) et les sessions. Elle se restaure par « Importer » › JSON, sans doublon.")
         }
         .confirmationDialog("Effacer toutes les données ?",
                             isPresented: $showingReset,
@@ -526,12 +514,8 @@ struct ProfileView: View {
                 // Une build sans configuration reste **pleinement utilisable** : on
                 // le dit clairement, au lieu de montrer des champs que personne ne
                 // peut remplir — l'URL et la clé sont des constantes de build.
-                Label("Groupes non configurés dans cette version", systemImage: "icloud.slash")
+                Label("Groupes indisponibles dans cette version", systemImage: "icloud.slash")
                     .font(.subheadline)
-                Text("Cette build n'est reliée à aucun serveur de groupes. Le suivi des cours, le temps de travail et l'agenda fonctionnent normalement, et rien n'est envoyé nulle part.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if app.social.isSignedIn {
@@ -583,7 +567,7 @@ struct ProfileView: View {
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
-                SecureField("Mot de passe (6 caractères min.)", text: $password)
+                SecureField("Mot de passe", text: $password)
 
                 HStack {
                     Button("Créer un compte") { Task { await authenticate(signUp: true) } }
@@ -591,10 +575,6 @@ struct ProfileView: View {
                     Button("Se connecter") { Task { await authenticate(signUp: false) } }
                 }
                 .disabled(email.isEmpty || password.count < 6)
-            } else {
-                Text("Sans compte, tes groupes restent locaux à cet appareil.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
             if let message {
@@ -609,8 +589,6 @@ struct ProfileView: View {
             }
         } header: {
             CarnetFormHeader("Compte")
-        } footer: {
-            Text("Sans Supabase, tout le suivi privé fonctionne hors ligne : seules les fonctions de groupe restent locales.")
         }
     }
 
@@ -689,9 +667,6 @@ struct ProfileView: View {
                 Label("Diagnostic", systemImage: "stethoscope")
             }
             LabeledContent("Version", value: Self.versionLabel)
-            Text("StudyTrack — suivi du temps d'étude EPFL : théorie par vidéos, exercices et corrections, charge attendue, agenda, groupes et intégrations.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 }

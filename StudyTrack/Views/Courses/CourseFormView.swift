@@ -58,10 +58,6 @@ struct CourseFormView: View {
                     Stepper("Crédits : \(Int(credits)) ECTS", value: $credits, in: 1...40, step: 1)
                 } header: {
                     Text("Charge hebdomadaire")
-                } footer: {
-                    Text(hasLectures
-                         ? "Les heures d'amphi comptent dans le temps prévu par l'EPFL et servent au suivi de présence."
-                         : "Aucune heure d'amphi ne sera comptée : seules les heures d'exercices et le travail personnel sont attendus.")
                 }
 
                 Section {
@@ -77,7 +73,7 @@ struct CourseFormView: View {
                     // se traduise en action, un total semestriel ne dit rien.
                     Text(autoSelfStudy
                          ? "Déduit de la charge ECTS : \(fmt(impliedSelfStudyHours)) h / semaine une fois les heures encadrées retirées. L'écart EPFL est calculé **par semaine**."
-                         : "Objectif fixé à la main. L'écart EPFL est calculé **par semaine**.")
+                         : "Objectif fixé à la main.")
                 }
 
                 Section("Section EPFL") {

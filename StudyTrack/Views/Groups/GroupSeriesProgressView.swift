@@ -41,7 +41,7 @@ struct GroupSeriesProgressView: View {
                 if subjects.isEmpty {
                     EmptyCard(icon: "books.vertical",
                               title: "Aucune matière",
-                              message: "Définis les matières du groupe pour comparer l'avancement des séries.")
+                              message: "Ajoute les matières du groupe.")
                 } else {
                     subjectPicker
                     let all = boards
@@ -56,7 +56,7 @@ struct GroupSeriesProgressView: View {
                     } else if all.isEmpty {
                         EmptyCard(icon: "list.bullet.rectangle",
                                   title: "Aucune série dans \(subject)",
-                                  message: "Importe le PDF d'une série ou ajoute-la depuis le cours : elle apparaîtra ici pour tout le groupe.")
+                                  message: "Les séries de tes cours apparaissent ici.")
                     } else {
                         headline(all)
                         ForEach(visible(all)) { board in
@@ -180,7 +180,7 @@ struct GroupSeriesProgressView: View {
                 }
 
                 if board.total == 0 {
-                    Text("Aucun exercice enregistré dans cette série : rien à comparer.")
+                    Text("Aucun exercice dans cette série.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {

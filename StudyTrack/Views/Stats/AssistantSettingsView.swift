@@ -31,7 +31,7 @@ struct AssistantSettingsView: View {
             } else {
                 Section {
                     VStack(alignment: .leading, spacing: Layout.control) {
-                        Text("Demande à ton assistant « qu'est-ce qu'il me reste en Analyse cette semaine ? », fais-lui corriger ta série, ou dis-lui « j'ai fini le 3.4, pas sûr de la (b) » : il le note dans StudyTrack.")
+                        Text("« Qu'est-ce qu'il me reste en Analyse cette semaine ? » — ton assistant le sait, et note ce que tu lui dis.")
                             .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
@@ -50,18 +50,16 @@ struct AssistantSettingsView: View {
                     }
                     .padding(.vertical, Layout.tight)
                 } footer: {
-                    Text("Fonctionne avec Claude (app, web, Claude Code), ChatGPT et tout client MCP. Tes cours, séries, exercices, théorie, évaluations et sessions sont copiés sur le serveur de StudyTrack pour que l'assistant les lise ; rien d'autre (ni compte, ni groupe). Tu peux tout effacer d'un geste.")
+                    Text("Claude, ChatGPT ou tout client MCP. Tes cours et ton avancement sont copiés sur le serveur pour lui ; tu peux tout effacer.")
                 }
             }
 
             Section {
-                capability("Lire", "où tu en es, ce qui reste, tes séries exercice par exercice, tes évaluations, ton temps de travail")
-                capability("Noter", "un exercice fait, sa sureté, sa correction, « à refaire », une remarque ; des questions cochées")
-                capability("Ajouter", "une série et ses exercices, une évaluation, une session passée, un résumé de théorie")
+                capability("Lire", "avancement, séries, évaluations, temps")
+                capability("Noter", "exercices faits, corrections, questions")
+                capability("Ajouter", "séries, évaluations, sessions, résumés")
             } header: {
                 Text("Ce que l'assistant peut faire")
-            } footer: {
-                Text("Il ne peut rien supprimer. Ses demandes sont appliquées par l'app, avec les mêmes règles que l'interface, et listées ci-dessous.")
             }
 
             if !AssistantSync.lastApplied.isEmpty {

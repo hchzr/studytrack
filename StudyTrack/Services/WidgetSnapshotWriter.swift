@@ -58,6 +58,13 @@ enum WidgetSnapshotWriter {
                                       date: $0.date,
                                       colorHex: $0.course?.colorHex ?? "#6B655A") })
 
+        // Rien de visible n'a changé (une note de correction, un titre de
+        // session) : pas de rechargement. iOS accorde aux widgets un budget de
+        // rechargements, et chacun réveille l'extension.
+        if var previous = WidgetBridge.read() {
+            previous.updatedAt = snapshot.updatedAt
+            if previous == snapshot { return }
+        }
         WidgetBridge.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
         // Le contrôle « Pause du chrono » lit le même instantané.

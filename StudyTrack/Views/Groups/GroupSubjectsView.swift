@@ -119,12 +119,6 @@ struct GroupSubjectsView: View {
             }
         } header: {
             Text("Matières du groupe")
-        } footer: {
-            if iAmAdmin {
-                Text("Les matières que le groupe suit. Chaque membre choisit ensuite celles qui le concernent, et seul l'avancement de ces matières est partagé.")
-            } else {
-                Text("Seul un administrateur peut modifier les matières du groupe. Tu peux choisir ci-dessous celles que tu suis.")
-            }
         }
     }
 
@@ -158,8 +152,6 @@ struct GroupSubjectsView: View {
             }
         } header: {
             Text("Mes matières dans ce groupe")
-        } footer: {
-            Text("Décoche les matières que tu ne suis pas : tu n'apparaîtras plus dans leur tableau d'avancement, et rien de ces cours ne sera partagé.")
         }
     }
 

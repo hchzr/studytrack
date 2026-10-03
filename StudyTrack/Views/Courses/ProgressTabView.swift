@@ -138,7 +138,7 @@ struct ProgressTabView: View {
                 }
                 if rows.count > 12 {
                     CarnetRule(inset: 52)
-                    Text("+ \(rows.count - 12) autres, dans les semaines ci-dessous")
+                    Text("+ \(rows.count - 12) autres")
                         .font(.footnote)
                         .foregroundStyle(Carnet.inkSecondary)
                         .padding(.horizontal, Carnet.rowInset)
@@ -234,7 +234,7 @@ struct ProgressTabView: View {
             CarnetSectionTitle("Semaine par semaine")
             if weeks.allSatisfy({ !$0.hasItems }) {
                 CarnetEmpty(icon: "calendar", title: "Rien de planifié",
-                            message: "Importe la théorie et les séries du cours : chaque élément est rangé dans sa semaine.",
+                            message: "Importe la théorie et les séries du cours.",
                             actionTitle: "Importer du contenu") {
                     app.router.openContentImport(courseID: course.id)
                 }

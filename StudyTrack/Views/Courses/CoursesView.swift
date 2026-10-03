@@ -207,7 +207,7 @@ struct CoursesView: View {
                 if courses.isEmpty {
                     CarnetEmpty(icon: "books.vertical",
                                 title: "Aucun cours",
-                                message: "Importe tes cours depuis Moodle (séries, vidéos, échéances) ou ton horaire IS-Academia.",
+                                message: "Depuis Moodle ou ton horaire IS-Academia.",
                                 actionTitle: "Importer depuis Moodle") {
                         app.router.openContentImport()
                     }

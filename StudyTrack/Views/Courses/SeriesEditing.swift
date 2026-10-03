@@ -95,9 +95,7 @@ struct SeriesDraftForm: View {
                 Label(problems.joined(separator: "\n"), systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Color.orange.accessibleInk)
             } else if draft.exercises.isEmpty {
-                Text("Aucun exercice. Ajoute-les avec le bouton ci-dessus.")
-            } else {
-                Text("Touche un exercice pour ses questions. Glisse vers la gauche pour supprimer, vers la droite pour « bonus ».")
+                Text("Aucun exercice.")
             }
         }
     }
@@ -233,7 +231,7 @@ struct ExerciseDraftEditor: View {
                     Text("Plan illisible. Exemples : « 1-4 », « 1(a-c) 2 3(a,b) », « + » pour une partie sans numéro.")
                         .foregroundStyle(Color.orange.accessibleInk)
                 } else {
-                    Text("Tape la structure comme sur la feuille : « 1(a-d) 2(a-e) » crée 1) avec (a)…(d) et 2) avec (a)…(e). Les énoncés déjà saisis sont gardés.")
+                    Text("Comme sur la feuille : « 1(a-d) 2 3(a,b) ».")
                 }
             }
 
@@ -328,9 +326,9 @@ struct ExerciseDraftEditor: View {
                     }
                 }
             } footer: {
-                Text(exercise.subQuestions.isEmpty
-                     ? "Sans sous-question, l'exercice se coche d'un bloc."
-                     : "Glisse une ligne vers la droite pour en faire un point de la question du dessus (ou la remonter), vers la gauche pour la supprimer. « Partie » : un travail demandé sans numéro (« Ensuite, … »).")
+                if exercise.subQuestions.isEmpty {
+                    Text("Sans sous-question, l'exercice se coche d'un bloc.")
+                }
             }
         }
         .carnetBackground()

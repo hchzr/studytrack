@@ -57,8 +57,6 @@ struct PastExamFormSheet: View {
                     }
                 } header: {
                     Text("Où j'en suis")
-                } footer: {
-                    Text("Pas de note : l'app suit le travail, pas les résultats. La sureté suffit à savoir quoi reprendre.")
                 }
 
                 Section("Notes") {

@@ -518,7 +518,7 @@ struct FocusTimerPanel: View {
                                    caption: "Bloc 1 · \(pomodoroSettings.focusMinutes) min",
                                    tint: tint)
             }
-            return DialContent(time: TimerText.clock(0), progress: 0, caption: "Prêt", tint: tint)
+            return DialContent(time: TimerText.clock(0), progress: 0, caption: "", tint: tint)
         case .working, .paused:
             let paused = phase == .paused
             if focus.isPomodoro {
@@ -600,6 +600,9 @@ struct FocusTimerPanel: View {
                                 isEnabled: focus.hasSession) {
                     confirmingDiscard = true
                 }
+                // Au repos, rien à abandonner : le bouton s'efface (sa place reste,
+                // pour que « Démarrer » ne bouge pas).
+                .opacity(focus.hasSession ? 1 : 0)
             }
 
             primaryButton(phase: phase)
@@ -609,8 +612,10 @@ struct FocusTimerPanel: View {
                             isEnabled: focus.hasSession && focus.elapsed() >= 1) {
                 finish()
             }
+            .opacity(focus.hasSession ? 1 : 0)
         }
         .frame(maxWidth: .infinity)
+        .animation(Motion.snappy, value: focus.hasSession)
     }
 
     @ViewBuilder
@@ -666,10 +671,6 @@ struct FocusTimerPanel: View {
                 adjustButton("+ 5 min", delta: 300)
                 adjustButton("+ 15 min", delta: 900)
             }
-            Text("Fais glisser le point autour de l'anneau, ou touche le temps pour le saisir.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))

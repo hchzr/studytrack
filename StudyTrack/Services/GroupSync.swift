@@ -35,10 +35,10 @@ enum GroupSync {
                         social: SocialService,
                         settings: SettingsStore) async -> String {
         guard social.isConfigured else {
-            return "Supabase non configuré — ouvrez Profil › Compte pour le connecter."
+            return "Groupes indisponibles dans cette version."
         }
         guard social.isSignedIn, social.userID != nil else {
-            return "Connecte-toi (Profil › Compte et groupes) pour synchroniser tes groupes."
+            return "Connecte-toi (Réglages › Compte et groupes) pour synchroniser tes groupes."
         }
 
         var summary: [String] = []

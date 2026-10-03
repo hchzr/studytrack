@@ -238,7 +238,7 @@ struct OnboardingView: View {
             if results.isEmpty {
                 EmptyCard(icon: "questionmark.circle",
                           title: "Aucune section trouvée",
-                          message: "Essaie un autre mot-clé, ou continue sans section et renseigne-la plus tard.")
+                          message: "Essaie un autre mot-clé.")
             } else {
                 ForEach(groupedResults(results), id: \.faculty) { group in
                     VStack(alignment: .leading, spacing: 10) {
@@ -319,7 +319,7 @@ struct OnboardingView: View {
                 VStack(spacing: Layout.control) {
                     EmptyCard(icon: "calendar.badge.plus",
                               title: "Importe ton horaire EPFL",
-                              message: "Le fichier .ics de ton horaire crée tes cours d'un coup, avec leurs heures de cours et d'exercices.",
+                              message: "Ton horaire .ics crée tes cours d'un coup.",
                               actionTitle: "Importer mon horaire") {
                         showingImport = true
                     }
@@ -346,10 +346,6 @@ struct OnboardingView: View {
                 Card(title: "Heures de cours (amphi)",
                      icon: "building.columns.fill") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Active l'interrupteur pour les cours qui ont réellement des heures d'amphi. Ça n'est pas le cas de tous : les cours sans amphi ne réservent alors aucune heure « cours » dans la charge attendue.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
 
                         HStack(spacing: 12) {
                             StatCard(icon: "building.columns.fill",
@@ -408,10 +404,6 @@ struct OnboardingView: View {
     private var accountsStep: some View {
         VStack(alignment: .leading, spacing: Layout.cardSpacing) {
             ConnectionsList()
-            Text("Ta connexion EPFL est mémorisée : quand Moodle expire, l'app rouvre la session sans rien te demander. Elle ne te sollicite que si ton compte doit vraiment être ressaisi.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -426,7 +418,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: Layout.block) {
                     Label("Depuis le site du cours", systemImage: "square.and.arrow.down.on.square")
                         .font(.headline)
-                    Text("Connecte-toi à Moodle ou Courseware dans l'app, ouvre un cours : vidéos, supports et séries sont lus semaine par semaine, et tu relis avant d'importer. Le polycopié d'Analyse de Botafogo s'importe sans connexion.")
+                    Text("Vidéos, supports et séries, lus sur Moodle ou Courseware.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -464,10 +456,6 @@ struct OnboardingView: View {
                     }
                 }
             }
-            Text("Tu peux passer cette étape : chaque cours a un bouton « + › Importer ». Section, semestre et cours restent modifiables depuis le profil.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

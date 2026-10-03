@@ -35,7 +35,7 @@ struct FocusJournalPanel: View {
             if today.isEmpty {
                 EmptyCard(icon: "clock.badge.questionmark",
                           title: "Rien d'enregistré aujourd'hui",
-                          message: "Lance le chrono, ou ajoute une session que tu as faite sans lui.",
+                          message: "Lance le chrono ou ajoute une session passée.",
                           actionTitle: "Ajouter une session passée",
                           action: onAddManual)
             } else {
@@ -280,15 +280,11 @@ struct PomodoroSettingsForm: View {
             }
         } header: {
             Text("Cycle")
-        } footer: {
-            Text("Le chrono compte le travail seulement : pendant une pause, il s'arrête, et la pause décompte à part.")
         }
 
         Section {
             Toggle("Relancer le bloc après la pause", isOn: $settings.pomodoroAutoStartFocus)
             Toggle("Démarrer en Pomodoro", isOn: $settings.pomodoroDefault)
-        } footer: {
-            Text("Sans relance automatique, le bloc suivant attend que tu appuies : une pause qui déborde ne se transforme pas en faux travail.")
         }
     }
 }

@@ -53,7 +53,7 @@ struct GroupSettingsView: View {
                 } header: {
                     CarnetFormHeader("Groupe")
                 } footer: {
-                    if !canEdit { Text("Seul·e l'administrateur·rice du groupe peut le renommer.") }
+                    if !canEdit { Text("Réservé aux administrateurs.") }
                 }
 
                 Section {
@@ -89,7 +89,7 @@ struct GroupSettingsView: View {
 
                 Section {
                     if group.subjectCodes.isEmpty {
-                        Text("Aucune matière : rien n'est comparé ni partagé.")
+                        Text("Aucune matière.")
                             .foregroundStyle(Carnet.inkSecondary)
                     } else {
                         FlowLayout(spacing: 6) {
@@ -117,8 +117,6 @@ struct GroupSettingsView: View {
                     }
                 } header: {
                     CarnetFormHeader("Matières")
-                } footer: {
-                    Text("Les matières grisées ne sont pas dans tes cours : elles ne sont pas comparées pour toi.")
                 }
 
                 Section {
@@ -147,8 +145,6 @@ struct GroupSettingsView: View {
                     }
                 } header: {
                     CarnetFormHeader("Ce que je partage")
-                } footer: {
-                    Text("S'applique à tous tes groupes. Ton temps et tes séries restent sur l'appareil si tu ne partages rien.")
                 }
 
                 Section {
@@ -192,7 +188,7 @@ struct GroupSettingsView: View {
                             titleVisibility: .visible) {
             Button("Supprimer", role: .destructive) { Task { await deleteGroup() } }
         } message: {
-            Text("Les membres, le planning et l'entraide du groupe sont effacés. Les sessions de chacun restent sur leur appareil.")
+            Text("Les membres, le planning et l'entraide du groupe sont effacés.")
         }
     }
 

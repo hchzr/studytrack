@@ -17,7 +17,7 @@ enum SupabaseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "Supabase n'est pas configuré (URL ou clé manquante)."
-        case .notSignedIn: return "Session expirée ou absente : reconnecte-toi dans Profil › Compte et groupes."
+        case .notSignedIn: return "Session expirée ou absente : reconnecte-toi dans Réglages › Compte et groupes."
         case .invalidURL: return "URL Supabase invalide."
         case .invalidResponse: return "Réponse invalide du serveur."
         case .server(let status, let message): return "Erreur serveur (\(status)) : \(message)"

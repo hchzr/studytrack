@@ -157,7 +157,7 @@ struct EPFLLifeView: View {
             VStack(alignment: .leading, spacing: Layout.block) {
                 let shown = showingEverything ? upcoming : Array(upcoming.prefix(6))
                 if shown.isEmpty {
-                    Text("Aucune échéance à venir. Actualise depuis la page de l'EPFL.")
+                    Text("Aucune échéance à venir.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -69,8 +69,6 @@ struct SchoolSetupView: View {
             .pickerStyle(.navigationLink)
         } header: {
             Text("Section")
-        } footer: {
-            Text("La section sert à filtrer les cours proposés à l'import et à regrouper tes matières.")
         }
     }
 
@@ -127,14 +125,14 @@ struct SchoolSetupView: View {
                         .foregroundStyle(Theme.accentInk)
                 }
             } else {
-                Text("Aucun semestre enregistré. Termine l'accueil guidé, ou importe ton horaire.")
+                Text("Aucun semestre.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } header: {
             Text("Dates du semestre")
         } footer: {
-            Text("Le semestre d'automne commence le lundi 7 septembre pour tout le monde : cette date vient du calendrier académique **publié par l'EPFL**. Corrige ici si ton semestre diffère.")
+            Text("Dates du calendrier académique de l'EPFL.")
         }
     }
 
@@ -157,8 +155,6 @@ struct SchoolSetupView: View {
             }
         } header: {
             Text("Cours (\(trackedCourses.count) suivis)")
-        } footer: {
-            Text("« Suivi » garde le cours dans ton semestre ; « Amphi » indique qu'il a de vraies heures de cours, qui comptent dans la charge attendue.")
         }
     }
 

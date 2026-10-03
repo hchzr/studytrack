@@ -67,7 +67,7 @@ struct CreateGroupView: View {
                         .buttonStyle(.plain)
                     }
                     if trackedCourses.isEmpty {
-                        Text("Tu n'as pas encore de cours suivis : ajoute un code à la main ci-dessous.")
+                        Text("Aucun cours suivi : ajoute un code ci-dessous.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -80,8 +80,6 @@ struct CreateGroupView: View {
                     }
                 } header: {
                     Text("Matières du groupe")
-                } footer: {
-                    Text("Chaque membre choisira ensuite celles qu'il ou elle suit. Tu pourras en ajouter plus tard.")
                 }
 
                 Section {
@@ -90,10 +88,6 @@ struct CreateGroupView: View {
                             ProgressView()
                             Text("Envoi au serveur…").font(.caption)
                         }
-                    } else {
-                        Text("Un code d'invitation et un QR code seront générés pour inviter vos camarades.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
                 if let message {
@@ -218,11 +212,6 @@ struct JoinGroupView: View {
                             .font(.caption)
                             .foregroundStyle(Color.orange.accessibleInk)
                     }
-                }
-                Section {
-                    Text("Le code se trouve dans la fiche du groupe, chez la personne qui l'a créé (ou dans le lien d'invitation qu'elle t'a envoyé).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .carnetBackground()

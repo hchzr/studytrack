@@ -48,7 +48,7 @@ struct SessionHistoryView: View {
                 if sessions.isEmpty {
                     ContentUnavailableView("Aucune session",
                                            systemImage: "clock",
-                                           description: Text("Lance un chrono ou ajoute une session manuelle : elle apparaîtra ici."))
+                                           description: nil)
                 } else {
                     Section {
                         LabeledContent("Total", value: DateUtils.hoursLabel(seconds: totalSeconds))

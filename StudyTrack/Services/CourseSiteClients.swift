@@ -690,7 +690,7 @@ enum ExpliqueSupplement {
             let exercises = (try? await client.exercises(slug: slug)) ?? []
             return Fetched(lectures: lectures, exercises: exercises)
         } catch ExpliqueClient.Failure.notSignedIn {
-            return Fetched(note: "Explique cité sur Moodle — connecte-toi à Explique (Profil › Comptes) pour ses vidéos", needsLogin: true)
+            return Fetched(note: "Explique cité sur Moodle — connecte-toi à Explique (Réglages › Connexions aux sites) pour ses vidéos", needsLogin: true)
         } catch {
             AppLog.record(.warning, "import", "Explique illisible", detail: error.localizedDescription)
             return Fetched(note: "Explique illisible")
@@ -861,7 +861,7 @@ enum MediaSpaceSupplement {
             do {
                 result.videos += try await client.entries(of: collection)
             } catch MediaSpaceClient.Failure.notSignedIn {
-                result.note = "Liste de vidéos MediaSpace citée — connecte-toi à MediaSpace (Profil › Comptes)"
+                result.note = "Liste de vidéos MediaSpace citée — connecte-toi à MediaSpace (Réglages › Connexions aux sites)"
                 result.needsLogin = true
                 return result
             } catch {

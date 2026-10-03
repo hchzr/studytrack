@@ -23,7 +23,7 @@ struct RevisionPlanView: View {
                     if plan.isEmpty && plan.days.allSatisfy(\.isEmpty) {
                         EmptyCard(icon: "checkmark.seal.fill",
                                   title: "Rien à planifier",
-                                  message: "Tout ce qui reste pour \(course.displayCode) est fait et corrigé. Le plan apparaîtra dès qu'il restera quelque chose.",
+                                  message: "Tout est fait et corrigé.",
                                   actionTitle: nil,
                                   action: nil)
                     } else {
@@ -35,7 +35,7 @@ struct RevisionPlanView: View {
                 } else {
                     EmptyCard(icon: "calendar.badge.questionmark",
                               title: "Aucune échéance",
-                              message: "Ajoute un midterm ou un examen à ce cours : le plan se calcule à partir de sa date.",
+                              message: "Ajoute un examen pour calculer le plan.",
                               actionTitle: nil,
                               action: nil)
                 }
@@ -95,10 +95,6 @@ struct RevisionPlanView: View {
                             .foregroundStyle(Theme.accentInk)
                     }
                 }
-                Text("Sert à dire si le plan tient dans tes journées. Rien n'est enregistré : c'est une simulation.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

@@ -152,10 +152,6 @@ struct WeekCourseRow: View {
                         axis("Théorie", done: week.watchedCount, total: week.videoCount, tint: tint)
                         axis("Exercices", done: week.doneCount, total: week.exerciseCount, tint: tint)
                     }
-                } else {
-                    Text("Rien de prévu cette semaine")
-                        .font(.footnote)
-                        .foregroundStyle(Carnet.inkTertiary)
                 }
                 if let exam = course.nextExam, DateUtils.daysBetween(Date(), exam.date) <= 14 {
                     Label("\(exam.kind.label) \(DateUtils.countdownLabel(to: exam.date).lowercased())",

@@ -75,7 +75,7 @@ struct ContentImportView: View {
                     Toggle("Mettre à jour tout seul", isOn: Binding(get: { app.settings.contentAutoRefresh },
                                                                    set: { app.settings.contentAutoRefresh = $0 }))
                 } footer: {
-                    Text(refreshFooter)
+                    if !refreshFooter.isEmpty { Text(refreshFooter) }
                 }
             }
             .carnetBackground()
@@ -189,8 +189,6 @@ struct ContentImportView: View {
             }
         } header: {
             Text("Moodle")
-        } footer: {
-            Text("Ton compte EPFL ne sert qu'à Moodle, dans l'app : on te le demande seulement si Moodle l'exige. L'EPFL n'offre pas d'accès API aux étudiant·e·s — l'app fait les mêmes demandes que la page du cours, et rien ne quitte ton téléphone.")
         }
     }
 
@@ -224,11 +222,8 @@ struct ContentImportView: View {
     }
 
     private var refreshFooter: String {
-        var text = "Une fois un cours importé, l'app relit Moodle et Botafogo au plus deux fois par jour, et ajoute ce qui est nouveau — la série de la semaine, par exemple. Rien n'est supprimé, et une semaine corrigée à la main n'est pas touchée."
-        if let last = app.settings.contentLastRefresh {
-            text += " Dernière vérification : \(DateUtils.relativeLabel(last)) \(DateUtils.time.string(from: last))."
-        }
-        return text
+        guard let last = app.settings.contentLastRefresh else { return "" }
+        return "Mis à jour \(DateUtils.relativeLabel(last).lowercased()) à \(DateUtils.time.string(from: last))."
     }
 
     private func sourceRow(icon: String, title: String, detail: String) -> some View {
@@ -559,7 +554,7 @@ struct SectionChoiceSheet: View {
                         }
                     }
                 } footer: {
-                    Text("Moodle a un cours par section d'étudiant·e·s. Ton choix est retenu : on ne te le redemandera pas.")
+                    Text("Choisis ta section.")
                 }
             }
             .carnetBackground()
@@ -629,8 +624,6 @@ struct BatchReviewView: View {
                         }
                     }
                 }
-            } footer: {
-                Text("Touche un cours pour vérifier ses semaines ou exclure un élément. Rien n'est supprimé à l'import, et ton avancement est gardé.")
             }
         }
         .carnetBackground()
@@ -732,8 +725,6 @@ struct CoursewareImportView: View {
             if needsLogin {
                 Section {
                     Button("Se connecter à Courseware") { needsLogin = true }
-                } footer: {
-                    Text("Une seule fois : la connexion est gardée pour les imports suivants.")
                 }
             }
             if let errorMessage {
@@ -1065,8 +1056,6 @@ struct BotafogoPicker: View {
                 }
             } header: {
                 Text("Polycopiés en ligne")
-            } footer: {
-                Text("Chaque section du polycopié devient un élément de théorie, et les enregistrements des cours s'ajoutent à leur semaine quand le site les publie. La matière est répartie sur le semestre selon son volume : ajuste avant d'importer.")
             }
             if let errorMessage {
                 Section {
@@ -1307,9 +1296,9 @@ struct ContentReviewView: View {
             }
             .padding(.vertical, Layout.tight)
         } footer: {
-            Text(draft.sections.contains(where: { $0.isIncluded && $0.weekIsInferred })
-                 ? "Les semaines marquées « proposée » n'étaient pas écrites sur la page : vérifie-les. Rien n'est supprimé à l'import, et ton avancement est gardé."
-                 : "Semaines lues sur la page. Rien n'est supprimé à l'import, et ton avancement est gardé.")
+            if draft.sections.contains(where: { $0.isIncluded && $0.weekIsInferred }) {
+                Text("Vérifie les semaines marquées « proposée ».")
+            }
         }
     }
 

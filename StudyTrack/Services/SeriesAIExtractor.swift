@@ -64,7 +64,7 @@ enum SeriesAIExtractor {
         var errorDescription: String? {
             switch self {
             case .unavailable:
-                return "Aucun modèle disponible : l'analyse IA est désactivée, ou aucun moteur n'est joignable (Profil › Import intelligent)."
+                return "Aucun modèle disponible : l'analyse IA est désactivée, ou aucun moteur n’est joignable (Réglages › IA de lecture)."
             case .remote(let detail):
                 return "Le service distant a refusé : \(detail)"
             case .sharedNotDeployed(let status):

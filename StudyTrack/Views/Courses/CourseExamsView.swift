@@ -102,7 +102,7 @@ struct CourseExamsView: View {
              trailing: course.pastExams.isEmpty ? nil : progress.label) {
             VStack(alignment: .leading, spacing: Layout.block) {
                 if course.pastExams.isEmpty {
-                    Text("Aucun sujet passé. Ajoute les annales de ton cours : ce sont les meilleurs exercices de révision.")
+                    Text("Aucun sujet passé.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -174,7 +174,7 @@ struct CourseExamsView: View {
              trailing: course.exams.isEmpty ? nil : "\(course.exams.count)") {
             VStack(alignment: .leading, spacing: 12) {
             if course.sortedExams.isEmpty {
-                Text("Aucune évaluation enregistrée. Ajoute le midterm et l'examen final pour les voir dans l'agenda et recevoir un rappel.")
+                Text("Aucune évaluation.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

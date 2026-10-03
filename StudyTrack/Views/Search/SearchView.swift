@@ -43,13 +43,24 @@ struct SearchView: View {
                 if index.isEmpty {
                     ContentUnavailableView("Rien à chercher",
                                            systemImage: "magnifyingglass",
-                                           description: Text("Ajoute des cours et des exercices : ils deviendront cherchables ici."))
+                                           description: nil)
                 } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // Avant de taper, il n'y a pas « aucun résultat » : il n'y a
-                    // pas encore de question.
-                    ContentUnavailableView("Chercher dans ton semestre",
-                                           systemImage: "magnifyingglass",
-                                           description: Text("Un code de cours, un numéro d'exercice (« 3.2 »), un mot d'un résumé ou d'une tâche."))
+                    // Avant de taper : tes cours, à un toucher — le plus souvent,
+                    // c'est l'un d'eux qu'on cherche.
+                    List {
+                        Section("Cours") {
+                            ForEach(courses.filter(\.isTracked)) { course in
+                                NavigationLink(value: SearchRoute.course(course.id, .exercises)) {
+                                    HStack(spacing: Layout.control) {
+                                        Circle().fill(Carnet.tint(course.colorHex)).frame(width: 8, height: 8)
+                                        Text(course.displayCode).font(.subheadline.weight(.semibold))
+                                        Text(course.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .adaptiveListColumn()
                 } else if hits.isEmpty {
                     ContentUnavailableView("Aucun résultat",
                                            systemImage: "magnifyingglass",
@@ -83,11 +94,6 @@ struct SearchView: View {
 
     private var resultsList: some View {
         List {
-            Section {
-                Text(SearchEngine.summary(hits, query: query))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             ForEach(SearchEngine.grouped(hits), id: \.kind) { group in
                 Section(group.kind.label) {
                     ForEach(group.hits) { hit in

@@ -36,9 +36,9 @@ struct PlanSessionSheet: View {
                 } header: {
                     Text("Calendrier")
                 } footer: {
-                    Text(app.calendar.hasAccess
-                         ? "L'événement est créé dans un calendrier « StudyTrack ». Supprimer la session ici le supprime aussi du calendrier."
-                         : "Autorise l'accès au calendrier depuis Profil ▸ Calendrier et horaire pour que la session y apparaisse aussi.")
+                    if !app.calendar.hasAccess {
+                        Text("Autorise le calendrier (Réglages › Horaire et calendrier) pour l'y voir aussi.")
+                    }
                 }
 
                 if let calendarProblem {

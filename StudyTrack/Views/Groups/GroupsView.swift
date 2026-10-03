@@ -219,7 +219,7 @@ struct GroupsView: View {
         VStack(alignment: .leading, spacing: 14) {
             CarnetEmpty(icon: "person.2",
                         title: "Travailler à plusieurs",
-                        message: "Vois qui travaille en ce moment et rejoins-le, compare où vous en êtes dans chaque série, demande de l'aide sur un exercice précis, planifie des sessions ensemble.",
+                        message: "Qui travaille, qui en est où, entraide et sessions.",
                         actionTitle: "Créer un groupe") {
                 showingCreate = true
             }
@@ -262,7 +262,9 @@ struct GroupsView: View {
                 next[local] = PresenceBoard.live(entries)
             }
             live = next
-            try? await Task.sleep(for: .seconds(120))
+            // Le temps réel prévient des changements ; ceci n'est qu'un filet,
+            // au rythme où une présence se renouvelle (5 min).
+            try? await Task.sleep(for: .seconds(PresenceEntry.heartbeat))
         }
     }
 

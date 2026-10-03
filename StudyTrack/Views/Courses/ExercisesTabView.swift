@@ -62,7 +62,7 @@ struct ExercisesTabView: View {
             if course.series.isEmpty {
                 EmptyCard(icon: TaskType.exercise.icon,
                           title: "Aucune série",
-                          message: "Importe les séries depuis Moodle (elles arrivent rangées par semaine), ou le PDF d'une série : exercices et questions (a)(b)(c) sont repérés tout seuls.",
+                          message: "Depuis Moodle, ou le PDF d'une série.",
                           actionTitle: "Importer depuis Moodle") {
                     app.router.openContentImport(courseID: course.id)
                 }
@@ -442,7 +442,6 @@ struct ExercisesTabView: View {
         if !series.bonusExercises.isEmpty { parts.append("\(series.bonusExercises.count) bonus") }
         let spent = ExerciseFlow.seconds(on: series, sessions: sessions)
         if spent >= 60 { parts.append(DateUtils.hoursLabel(seconds: spent)) }
-        if series.isComplete { parts.append("terminée") }
         return parts.joined(separator: " · ")
     }
 

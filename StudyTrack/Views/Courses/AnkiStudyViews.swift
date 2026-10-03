@@ -531,7 +531,7 @@ struct AnkiDeckBrowser: View {
                     reload()
                 }
             } message: { _ in
-                Text("Elle disparaîtra aussi d'Anki à la prochaine synchronisation, avec son historique de révision.")
+                Text("Elle disparaîtra aussi d'Anki.")
             }
         }
         .task(id: search) { reload() }
@@ -579,7 +579,7 @@ struct AnkiNoteEditor: View {
                 } header: {
                     CarnetFormHeader("Étiquettes")
                 } footer: {
-                    Text("Le HTML d'Anki est conservé ; un retour à la ligne devient <br>. Les formules s'écrivent \\( … \\).")
+                    Text("Formules : \\( … \\).")
                 }
                 .listRowBackground(Carnet.sheet)
                 if let error {

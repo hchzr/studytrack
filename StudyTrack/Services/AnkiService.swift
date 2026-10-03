@@ -20,7 +20,7 @@ enum AnkiService {
         var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "Adresse d'AnkiConnect vide (Profil › Anki)."
+                return "Adresse d'AnkiConnect vide (Réglages › Anki)."
             case .unreachable(let detail):
                 return "Anki est injoignable — \(detail)"
             case .http(let code):

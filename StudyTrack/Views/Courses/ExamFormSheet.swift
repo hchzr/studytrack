@@ -50,8 +50,6 @@ struct ExamFormSheet: View {
                     }
                 } header: {
                     Text("Pondération")
-                } footer: {
-                    Text("Le poids sert à hiérarchiser les échéances. Il n'est jamais inventé : laisse-le vide s'il n'est pas connu.")
                 }
 
                 Section("Notes") {
@@ -98,7 +96,7 @@ struct ExamFormSheet: View {
 
     private var reminderLabel: String {
         date > Date()
-            ? "Un rappel est envoyé 3 jours et 1 jour avant, si les notifications sont autorisées."
+            ? "Rappel 3 jours et 1 jour avant."
             : "Évaluation passée : aucun rappel."
     }
 

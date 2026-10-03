@@ -79,16 +79,14 @@ struct GroupHubView: View {
             }
             if !isOnline {
                 Text(group.remoteID == nil
-                     ? "Ce groupe n'existe que sur ton téléphone : partage-le pour travailler ensemble."
-                     : "Connecte-toi (Moi › Réglages › Compte et groupes) pour voir qui travaille.")
+                     ? "Groupe pas encore partagé."
+                     : "Connecte-toi (Réglages › Compte et groupes) pour voir qui travaille.")
                     .font(.subheadline)
                     .foregroundStyle(Carnet.inkSecondary)
             } else if let presenceError {
                 Text(presenceError).font(.footnote).foregroundStyle(Carnet.wrong)
             } else if live.isEmpty {
-                Text(app.presence.isSharing
-                     ? "Personne d'autre pour l'instant. Ta session est visible par le groupe."
-                     : "Personne ne travaille. Lance le chrono : le groupe te verra, et pourra te rejoindre.")
+                Text(app.presence.isSharing ? "Personne d'autre pour l'instant." : "Personne ne travaille en ce moment.")
                     .font(.subheadline)
                     .foregroundStyle(Carnet.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,7 +143,7 @@ struct GroupHubView: View {
             }
             CarnetSheet {
                 if members.isEmpty {
-                    CarnetRow(title: "Aucun membre", subtitle: "Invite tes camarades avec le code du groupe.")
+                    CarnetRow(title: "Aucun membre")
                 }
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
                     HStack(spacing: 12) {
@@ -276,16 +274,14 @@ struct GroupHubView: View {
             CarnetSheet {
                 if !isOnline {
                     CarnetRow(icon: "bubble.left.and.bubble.right", tint: Carnet.inkSecondary,
-                              title: "Pose tes questions au groupe",
-                              subtitle: "Disponible une fois le groupe partagé et ton compte connecté.")
+                              title: "Entraide disponible une fois le groupe partagé")
                 } else if let postsError {
                     CarnetRow(icon: "exclamationmark.triangle", tint: Carnet.wrong, title: "Entraide indisponible",
                               subtitle: postsError)
                 } else if questions.isEmpty {
                     Button { composing = true } label: {
                         CarnetRow(icon: "bubble.left.and.bubble.right", tint: Carnet.inkSecondary,
-                                  title: "Bloqué·e sur un exercice ?",
-                                  subtitle: "Demande au groupe : la question porte l'exercice, la réponse arrive ici.")
+                                  title: "Poser une question au groupe")
                     }
                     .buttonStyle(.plain)
                 }
@@ -305,12 +301,10 @@ struct GroupHubView: View {
     private func encryptionNote(_ state: GroupEncryption.State) -> some View {
         switch state {
         case .ready:
-            Label("Chiffré de bout en bout : le serveur ne lit pas vos messages.", systemImage: "lock.fill")
-                .font(.caption)
-                .foregroundStyle(Carnet.inkTertiary)
-                .padding(.horizontal, 6)
+            EmptyView()
         case .waitingForKey:
-            Label("Clé de chiffrement en route : elle arrive dès qu'un membre du groupe ouvre l'app.",
+            // Seul cas qui demande quelque chose : écrire attend la clé.
+            Label("En attente de la clé du groupe : elle arrive dès qu'un membre ouvre l'app.",
                   systemImage: "lock.badge.clock")
                 .font(.caption)
                 .foregroundStyle(Carnet.review.accessibleInk)
@@ -365,8 +359,7 @@ struct GroupHubView: View {
             }
             CarnetSheet {
                 if sessions.isEmpty {
-                    CarnetRow(icon: "calendar", tint: Carnet.inkSecondary, title: "Aucune session prévue",
-                              subtitle: "Propose un créneau : « Physique jeudi 18h, BC 01 ».")
+                    CarnetRow(icon: "calendar", tint: Carnet.inkSecondary, title: "Aucune session prévue")
                 }
                 ForEach(Array(sessions.prefix(4).enumerated()), id: \.element.id) { index, session in
                     NavigationLink(value: GroupPageRoute(groupID: group.id, page: .planning)) {

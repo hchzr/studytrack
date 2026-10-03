@@ -26,8 +26,7 @@ struct GroupInviteView: View {
                     codeCard
                     linkCard
                     shareButton
-                    hint
-                }
+                    }
                 .padding()
                 .adaptiveColumn()
             }
@@ -74,11 +73,6 @@ struct GroupInviteView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("Scanne ce code avec l'appareil photo : il ouvre StudyTrack avec le code déjà rempli.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
         }
@@ -139,14 +133,6 @@ struct GroupInviteView: View {
                 .padding(.vertical, 6)
         }
         .buttonStyle(.carnetPrimary)
-    }
-
-    private var hint: some View {
-        Text("Le lien ouvre directement l'app avec le code déjà rempli. Le code seul fonctionne aussi, partout.")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func copy(_ value: String, field: String) {

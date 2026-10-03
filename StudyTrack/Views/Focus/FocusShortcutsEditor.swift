@@ -28,7 +28,7 @@ struct FocusShortcutsEditor: View {
             List {
                 Section {
                     if shortcuts.isEmpty {
-                        Text("Aucun raccourci. Ajoute-en un ci-dessous, ou repars des valeurs proposées.")
+                        Text("Aucun raccourci.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -58,8 +58,6 @@ struct FocusShortcutsEditor: View {
                     }
                 } header: {
                     Text("Mes raccourcis")
-                } footer: {
-                    Text("Glisse pour changer l'ordre : les premiers sont les plus accessibles. Un raccourci lance le chrono immédiatement.")
                 }
 
                 Section {

@@ -52,7 +52,6 @@ struct GroupSubjectProgressView: View {
                 summaryCard
                 axisPicker
                 membersCard
-                explanationCard
             }
             .padding()
             .adaptiveColumn()
@@ -81,7 +80,7 @@ struct GroupSubjectProgressView: View {
                                 color: Theme.accent,
                                 countLabel: axis.countLabel(of: me))
             } else {
-                Text("Tu n'es pas identifié·e dans ce groupe : connecte-toi pour te comparer.")
+                Text("Connecte-toi pour te comparer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -99,7 +98,7 @@ struct GroupSubjectProgressView: View {
             }
 
             if comparison.reference.isEmpty {
-                Label("Ton cours n'a pas encore d'exercices ni de théorie enregistrés : la comparaison ne peut porter que sur les séries.",
+                Label("Seules les séries sont comparées pour ce cours.",
                       systemImage: "info.circle")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -207,22 +206,6 @@ struct GroupSubjectProgressView: View {
 
     // MARK: Explication
 
-    private var explanationCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Layout.inline) {
-                Label("D'où viennent ces chiffres", systemImage: "questionmark.circle")
-                    .font(.subheadline.weight(.semibold))
-                Text("Les numéros à faire viennent de **ton** cours : l'EPFL publie la même série à tout le monde, donc les exercices sont comparables. Ce que tu vois des autres est ce qu'ils ont coché de leur côté — rien n'est deviné.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("« Écart » se lit toujours par rapport à toi : « 3 éléments d'avance » veut dire qu'un membre a coché trois exercices ou vidéos de plus que toi.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
 }
 
 private extension GroupSubjectProgressView.Axis {

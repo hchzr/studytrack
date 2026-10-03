@@ -54,7 +54,7 @@ struct TasksView: View {
                     Section {
                         EmptyCard(icon: "checklist",
                                   title: "Aucune tâche",
-                                  message: "Synchronise Rappels, Todoist, Things, Notion ou un webhook depuis le profil, ou ajoute une tâche à la main.",
+                                  message: "Relie une app de tâches dans les réglages, ou ajoutes-en une.",
                                   actionTitle: "Ajouter une tâche") {
                             showingAdd = true
                         }
@@ -215,9 +215,9 @@ struct TasksView: View {
         try? context.save()
 
         if activeProviders.isEmpty {
-            statusMessage = "Aucun fournisseur configuré. Ouvre le profil pour connecter Rappels, Todoist, Things, Notion ou un webhook."
+            statusMessage = "Aucune app de tâches reliée (Réglages › Tâches)."
         } else if result.fetched == 0 {
-            statusMessage = "Aucune tâche récupérée. Vérifie les autorisations et les jetons dans le profil."
+            statusMessage = "Aucune tâche récupérée."
         } else {
             statusMessage = "\(result.fetched) tâche(s) · \(result.created) nouvelle(s) · \(result.updated) mise(s) à jour."
         }

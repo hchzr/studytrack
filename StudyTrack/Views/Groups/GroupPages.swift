@@ -81,9 +81,7 @@ struct GroupMembersView: View {
                 Text("\(group.members.count) membre\(group.members.count > 1 ? "s" : "") · \(group.members.filter(\.isAdmin).count) admin")
             } footer: {
                 if iAmAdmin {
-                    Text("Glisse une ligne vers la gauche pour nommer un administrateur ou retirer un membre. Le serveur a le dernier mot : un refus s'affiche ici.")
-                } else {
-                    Text("Seuls les administrateurs gèrent les membres.")
+                    Text("Glisse une ligne vers la gauche pour gérer un membre.")
                 }
             }
 
@@ -243,12 +241,6 @@ struct GroupStudyTimeView: View {
 
                 summary
                 membersCard
-                Card {
-                    Text("Le temps est calculé côté serveur à partir des sessions que chacun publie (Profil › Confidentialité › Partager mon avancement). Il compte **tout** le travail, pas seulement les matières du groupe — mais le code d'un cours hors groupe n'est jamais transmis.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
             .padding()
             .adaptiveColumn()
@@ -340,8 +332,6 @@ struct GroupPlanningView: View {
                 Section {
                     ContentUnavailableView {
                         Label("Rien de planifié", systemImage: "calendar.badge.plus")
-                    } description: {
-                        Text("Propose une séance de travail : chacun répond « je participe », « peut-être » ou « je ne peux pas ».")
                     } actions: {
                         Button("Planifier une session") { showingPlan = true }
                             .buttonStyle(.carnetPrimary)

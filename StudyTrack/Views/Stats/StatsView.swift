@@ -11,7 +11,6 @@ struct StatsView: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query private var terms: [AcademicTerm]
     @Query private var events: [LinkedCalendarEvent]
 
     @State private var period: Period = .week
@@ -20,7 +19,6 @@ struct StatsView: View {
     @State private var selectedDay: Date?
     @State private var selectedCourse: String?
     @State private var selectedVerdict: Int?
-    @State private var selectedHour: Int?
 
     enum Period: String, CaseIterable, Identifiable {
         case week, month, semester
@@ -181,21 +179,20 @@ struct StatsView: View {
         case 2: SplitCard(slices: splitSlices)
         case 3: CoursePieCard(slices: courseSlices)
         case 4: timeChart
-        case 5: CourseCategoryCard(bars: courseCategoryBars, categories: categoryOrder, colors: categoryColors)
-        case 6: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
-        case 7: PaceCard(rows: paceRows)
-        case 8: progressSection
-        case 9: correctionChart
-        default: HeatmapCard(cells: heatCells)
+        case 5: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
+        case 6: PaceCard(rows: paceRows)
+        case 7: progressSection
+        default: correctionChart
         }
     }
 
     private var visibleSections: [Int] {
         #if DEBUG
         // `-statsSkip 4` : les captures du simulateur ne défilent pas.
-        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...10) }
+        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...8) }
         #endif
-        return Array(0...10)
+        // La tendance semaine par semaine n'a de sens que sur le semestre.
+        return Array(0...8).filter { $0 != 5 || period == .semester }
     }
 
     // MARK: Données des graphiques
@@ -236,20 +233,6 @@ struct StatsView: View {
             .sorted { $0.seconds > $1.seconds }
     }
 
-    private var courseCategoryBars: [CourseCategoryBar] {
-        var totals: [String: [String: Int]] = [:]
-        for session in studySessions {
-            totals[session.course?.displayCode ?? "Sans cours", default: [:]][session.taskType.canonical.label, default: 0] += session.durationSeconds
-        }
-        for slot in lectures {
-            totals[slot.course?.displayCode ?? "Sans cours", default: [:]][Self.lectureCategory, default: 0] += slot.seconds
-        }
-        return totals.flatMap { course, byCategory in
-            byCategory.map { CourseCategoryBar(course: course, category: $0.key, seconds: $0.value) }
-        }
-    }
-
-    /// Tout le semestre, quelle que soit la période choisie.
     private var weeklyPoints: [WeekPoint] {
         let start = term.map { DateUtils.startOfWeek($0.startDate) } ?? DateUtils.addWeeks(-13, to: DateUtils.startOfWeek(Date()))
         var study: [Date: Int] = [:]
@@ -297,24 +280,6 @@ struct StatsView: View {
     }
 
     /// L'étude de la période, par jour de la semaine et par heure.
-    private var heatCells: [HeatCell] {
-        var grid = Array(repeating: Array(repeating: 0, count: 24), count: 7)
-        let calendar = Calendar.current
-        for session in studySessions {
-            var cursor = session.startedAt
-            var remaining = session.durationSeconds
-            while remaining > 0 {
-                let weekday = (calendar.component(.weekday, from: cursor) + 5) % 7
-                let hour = calendar.component(.hour, from: cursor)
-                let nextHour = calendar.date(bySetting: .minute, value: 0, of: cursor.addingTimeInterval(3600)) ?? cursor.addingTimeInterval(3600)
-                let chunk = min(remaining, max(60, Int(nextHour.timeIntervalSince(cursor))))
-                grid[weekday][hour] += chunk
-                remaining -= chunk
-                cursor = cursor.addingTimeInterval(TimeInterval(chunk))
-            }
-        }
-        return (0..<7).flatMap { day in (0..<24).map { HeatCell(weekday: day, hour: $0, seconds: grid[day][$0]) } }
-    }
 
     // MARK: Période
 
@@ -361,10 +326,18 @@ struct StatsView: View {
     private var totals: some View {
         HStack(spacing: 0) {
             total("Étude", seconds: studySeconds, detail: "\(studySessions.count) session\(studySessions.count > 1 ? "s" : "")")
-            Rectangle().fill(Carnet.rule).frame(width: 1, height: 48)
-            total("Amphi", seconds: lectureSeconds, detail: "\(lectures.count) cours")
-            Rectangle().fill(Carnet.rule).frame(width: 1, height: 48)
-            total("Total", seconds: studySeconds + lectureSeconds, detail: activeDaysLabel)
+            // Sans heures de cours sur la période, « Amphi 0 h » et un total égal
+            // à l'étude n'apprennent rien : la colonne disparaît.
+            if lectureSeconds > 0 {
+                Rectangle().fill(Carnet.rule).frame(width: 1, height: 48)
+                total("Amphi", seconds: lectureSeconds, detail: "\(lectures.count) cours")
+                Rectangle().fill(Carnet.rule).frame(width: 1, height: 48)
+                total("Total", seconds: studySeconds + lectureSeconds, detail: activeDaysLabel)
+            } else {
+                Rectangle().fill(Carnet.rule).frame(width: 1, height: 48)
+                total("Jours actifs", value: "\(Set(studySessions.map { DateUtils.startOfDay($0.startedAt) }).count)",
+                      detail: "sur la période")
+            }
         }
         .padding(.vertical, 16)
         .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
@@ -376,9 +349,13 @@ struct StatsView: View {
     }
 
     private func total(_ title: String, seconds: Int, detail: String) -> some View {
+        total(title, value: DateUtils.hoursLabel(seconds: seconds), detail: detail)
+    }
+
+    private func total(_ title: String, value: String, detail: String) -> some View {
         VStack(spacing: 3) {
             Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
-            Text(DateUtils.hoursLabel(seconds: seconds))
+            Text(value)
                 .font(Carnet.serif(.title2))
                 .foregroundStyle(Carnet.ink)
                 .contentTransition(.numericText())
@@ -397,11 +374,7 @@ struct StatsView: View {
         let selectedBin = selectedDay.map(bin)
         let selectedBars = bars.filter { $0.bin == selectedBin }
         return VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle(binsByWeek ? "Semaine par semaine" : "Jour par jour") {
-                if selectedBin == nil {
-                    Text("touche une barre")
-                }
-            }
+            CarnetSectionTitle(binsByWeek ? "Semaine par semaine" : "Jour par jour")
             VStack(alignment: .leading, spacing: 12) {
                 if let selectedBin {
                     selectionSummary(bin: selectedBin, bars: selectedBars)
