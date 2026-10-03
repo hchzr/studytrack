@@ -962,7 +962,11 @@ struct WebView: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.allowsBackForwardNavigationGestures = true
         model.attach(view)
-        view.load(URLRequest(url: SiteLinks.normalize(initialURL)))
+        if initialURL.isFileURL {
+            view.loadFileURL(initialURL, allowingReadAccessTo: initialURL.deletingLastPathComponent())
+        } else {
+            view.load(URLRequest(url: SiteLinks.normalize(initialURL)))
+        }
         return view
     }
 

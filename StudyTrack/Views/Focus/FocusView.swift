@@ -1,24 +1,23 @@
 import SwiftUI
 import SwiftData
 
-/// Focus : le chrono, et le journal de ce qu'il a compté.
+/// Focus : le chrono, et le bilan de ce qu'il a compté.
 ///
-/// Trois segments (« Chrono », « Manuel », « Journal ») obligeaient à choisir un
-/// mode avant d'agir, alors que la saisie manuelle est un geste rare et qu'elle
-/// appartient au journal. Il reste deux vues : le chrono, qui est l'écran, et le
-/// journal, qui en est la mémoire. Ajouter une session passée, ajuster le temps
-/// ou régler le Pomodoro sont des actions, rangées dans le menu de la barre.
+/// Le journal du chrono (le temps du jour, ses sessions) doublait le Bilan :
+/// deux écrans pour le même temps, sans lien entre eux. Les sessions vivent
+/// maintenant dans le Bilan, sous le graphique du temps, et le bouton de la
+/// barre y mène. Ajouter une session passée, ajuster le temps ou régler le
+/// Pomodoro sont des actions, rangées dans le menu de la barre.
 struct FocusView: View {
     /// Présenté en feuille par le dock : le bouton qui la ferme.
     var onClose: (() -> Void)? = nil
 
     @Environment(AppContainer.self) private var app
 
-    @State private var showingJournal = false
+    @State private var showingStats = false
     @State private var showingManual = false
     @State private var showingPomodoroSettings = false
     @State private var showingShortcutEditor = false
-    @State private var showingHistory = false
     /// Mode ajustement du temps compté, partagé avec le panneau du chrono.
     @State private var isAdjusting = false
 
@@ -38,16 +37,8 @@ struct FocusView: View {
             .carnetBackground()
             .navigationTitle("Chrono")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $showingJournal) {
-                ScrollView {
-                    FocusJournalPanel(onAddManual: { showingManual = true },
-                                      onShowHistory: { showingHistory = true })
-                        .padding(Carnet.screenPadding)
-                        .adaptiveColumn()
-                }
-                .background(Carnet.ground.ignoresSafeArea())
-                .navigationTitle("Journal")
-                .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showingStats) {
+                StatsView()
             }
             .toolbar {
                 if let onClose {
@@ -57,8 +48,8 @@ struct FocusView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingJournal = true } label: { Image(systemName: "list.bullet.rectangle") }
-                        .accessibilityLabel("Journal des sessions")
+                    Button { showingStats = true } label: { Image(systemName: "chart.bar.xaxis") }
+                        .accessibilityLabel("Bilan et sessions")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -84,11 +75,6 @@ struct FocusView: View {
                         } label: {
                             Label("Modifier les raccourcis", systemImage: "bolt")
                         }
-                        Button {
-                            showingHistory = true
-                        } label: {
-                            Label("Tout l'historique", systemImage: "clock.arrow.circlepath")
-                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -98,7 +84,6 @@ struct FocusView: View {
             .sheet(isPresented: $showingManual) { ManualSessionSheet() }
             .sheet(isPresented: $showingPomodoroSettings) { PomodoroSettingsSheet() }
             .sheet(isPresented: $showingShortcutEditor) { FocusShortcutsEditor() }
-            .sheet(isPresented: $showingHistory) { SessionHistoryView() }
             .task {
                 applyFocusMode(app.router.focusMode)
                 #if DEBUG
@@ -109,13 +94,13 @@ struct FocusView: View {
         }
     }
 
-    /// « Manuel » et « Journal » demandés depuis ailleurs (actions rapides).
+    /// « Manuel » et « Journal » (le bilan) demandés depuis ailleurs (actions rapides).
     private func applyFocusMode(_ requested: AppRouter.FocusMode?) {
         guard let requested else { return }
         switch requested {
-        case .timer: showingJournal = false
+        case .timer: showingStats = false
         case .manual: showingManual = true
-        case .journal: showingJournal = true
+        case .journal: showingStats = true
         }
         app.router.focusMode = nil
     }

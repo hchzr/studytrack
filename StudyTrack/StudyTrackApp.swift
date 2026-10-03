@@ -216,5 +216,9 @@ struct StudyTrackApp: App {
                 .tint(Theme.accent)
                 .toggleStyle(CarnetSwitchStyle())
         }
+        // Le réveil d'iOS pour relever les nouveautés Moodle, app fermée.
+        .backgroundTask(.appRefresh(MoodleWatcher.taskIdentifier)) {
+            await MoodleWatcher.runInBackground()
+        }
     }
 }

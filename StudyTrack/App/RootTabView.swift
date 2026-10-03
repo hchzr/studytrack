@@ -111,6 +111,7 @@ struct RootTabView: View {
             }
             if phase == .background {
                 Task { await CookieKeeper.save() }
+                MoodleWatcher.schedule(settings: app.settings)
             }
             if phase == .background, AnkiWebSync.shared.isSignedIn {
                 // Des révisions pas encore envoyées partent avant que l'app ne
@@ -150,6 +151,8 @@ struct RootTabView: View {
                     // La série de la semaine, publiée sur Moodle depuis la
                     // dernière fois, arrive toute seule elle aussi.
                     await ContentRefresher.refreshIfDue(context: context, settings: app.settings)
+                    // Ses énoncés, gardés pour le métro (si on l'a demandé).
+                    await OfflineLibrary.shared.sync(context: context, settings: app.settings)
                     // Ce que l'assistant a demandé pendant que l'app dormait.
                     await AssistantSync.sync(context: context, settings: app.settings)
                 }

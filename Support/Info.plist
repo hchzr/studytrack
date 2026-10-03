@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.hczr.studytrack.moodle-watch</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>fr</string>
 	<key>CFBundleDisplayName</key>
@@ -33,6 +37,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>GoogleClientID</key>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -49,20 +55,18 @@
 	<string>StudyTrack synchronise vos tâches avec l'app Rappels.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
-	<key>StudyTrackAppGroup</key>
-	<string>$(STUDYTRACK_APP_GROUP)</string>
-	<key>TodoistClientID</key>
-	<string>$(TODOIST_CLIENT_ID)</string>
-	<key>GoogleClientID</key>
-	<string>$(GOOGLE_CLIENT_ID)</string>
-	<key>TickTickClientID</key>
-	<string>$(TICKTICK_CLIENT_ID)</string>
 	<key>NotionClientID</key>
 	<string>$(NOTION_CLIENT_ID)</string>
+	<key>StudyTrackAppGroup</key>
+	<string>$(STUDYTRACK_APP_GROUP)</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SupabaseHost</key>
 	<string>$(SUPABASE_HOST)</string>
+	<key>TickTickClientID</key>
+	<string>$(TICKTICK_CLIENT_ID)</string>
+	<key>TodoistClientID</key>
+	<string>$(TODOIST_CLIENT_ID)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -89,6 +93,10 @@
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

@@ -193,6 +193,12 @@ struct ProfileView: View {
                             value: app.settings.aiExtractionEnabled ? "activée" : "désactivée")
             }
             NavigationLink {
+                OfflineSettingsView()
+            } label: {
+                settingsRow("Hors ligne", icon: "arrow.down.circle",
+                            value: app.settings.offlineEnabled ? OfflinePlan.label(bytes: OfflineLibrary.shared.usedBytes) : "désactivé")
+            }
+            NavigationLink {
                 subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
             } label: {
                 settingsRow("Chrono et Pomodoro", icon: "timer",
@@ -207,10 +213,12 @@ struct ProfileView: View {
     private func remindersAndDataSection(_ settings: SettingsStore) -> some View {
         Section {
             NavigationLink {
-                subpage("Rappels") { notificationsSection(settings) }
+                subpage("Notifications") {
+                    MoodleNewsSettingsSections()
+                    notificationsSection(settings)
+                }
             } label: {
-                settingsRow("Rappels", icon: "bell",
-                            value: settings.dailyReminderEnabled ? "chaque jour à \(settings.dailyReminderHour) h" : "désactivés")
+                settingsRow("Notifications", icon: "bell", value: notificationsSummary(settings))
             }
             NavigationLink {
                 subpage("Données") { dataSection }
@@ -231,6 +239,14 @@ struct ProfileView: View {
             }
             .foregroundStyle(Carnet.ink)
         }
+    }
+
+    /// « Moodle · 19 h », ce qui sonnera.
+    private func notificationsSummary(_ settings: SettingsStore) -> String {
+        var parts: [String] = []
+        if settings.moodleNewsEnabled { parts.append("Moodle") }
+        if settings.dailyReminderEnabled { parts.append("\(settings.dailyReminderHour) h") }
+        return parts.isEmpty ? "désactivées" : parts.joined(separator: " · ")
     }
 
     /// Une page de réglages au même style que l'accueil, avec le message en cours.

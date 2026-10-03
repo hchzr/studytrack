@@ -1,4 +1,5 @@
 import UIKit
+import UserNotifications
 
 /// Les raccourcis de l'**écran d'accueil d'iOS** — appui long sur l'icône.
 ///
@@ -33,7 +34,39 @@ enum ShortcutAction: String {
 /// SwiftUI n'expose pas `performActionFor` : il faut un délégué. Celui-ci ne fait
 /// que déposer l'intention sur le routeur, que les écrans observent — aucun travail
 /// de données ici, donc aucun risque d'agir avant que l'app soit prête.
-final class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Avant la fin du lancement : un tap sur une notification qui a lancé
+        // l'app arrive juste après.
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    /// Une nouveauté Moodle ouvre son cours, sur la bonne page.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        guard let raw = info["courseID"] as? String, let id = UUID(uuidString: raw) else { return }
+        let section: CourseDetailView.Section = (info["section"] as? String) == "theory" ? .theory : .exercises
+        await MainActor.run {
+            guard let container = AppRuntime.container else { return }
+            container.router.showingProfile = false
+            container.router.showingStats = false
+            container.router.showingFocus = false
+            container.router.showingAgenda = false
+            container.router.openCourse(id, section: section)
+        }
+    }
+
+    /// App ouverte : une nouveauté Moodle s'affiche quand même (bannière) ; les
+    /// autres rappels (chrono, échéances) gardent leur comportement d'avant —
+    /// l'écran les montre déjà.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        notification.request.content.categoryIdentifier == "moodle-news" ? [.banner, .list, .sound] : []
+    }
+
     func application(_ application: UIApplication,
                      performActionFor shortcutItem: UIApplicationShortcutItem,
                      completionHandler: @escaping (Bool) -> Void) {

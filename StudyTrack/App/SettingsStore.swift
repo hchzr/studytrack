@@ -45,6 +45,16 @@ final class SettingsStore {
         static let contentAutoRefresh = "settings.contentAutoRefresh"
         static let contentLastRefresh = "settings.contentLastRefresh"
         static let contentRefreshNews = "settings.contentRefreshNews"
+        static let moodleNewsEnabled = "settings.moodleNewsEnabled"
+        static let moodleNewsKinds = "settings.moodleNewsKinds"
+        static let moodleNewsMuted = "settings.moodleNewsMuted"
+        static let quietHoursEnabled = "settings.quietHoursEnabled"
+        static let quietHoursStart = "settings.quietHoursStart"
+        static let quietHoursEnd = "settings.quietHoursEnd"
+        static let offlineEnabled = "settings.offlineEnabled"
+        static let offlineSolutions = "settings.offlineSolutions"
+        static let offlineWifiOnly = "settings.offlineWifiOnly"
+        static let offlineLimitMB = "settings.offlineLimitMB"
         static let assistantToken = "settings.assistantToken"
         static let assistantLastSync = "settings.assistantLastSync"
     }
@@ -144,6 +154,35 @@ final class SettingsStore {
     /// jusqu'à ce qu'on le ferme ; vide quand il n'y a rien de neuf.
     var contentRefreshNews: String { didSet { defaults.set(contentRefreshNews, forKey: Key.contentRefreshNews) } }
 
+    // MARK: Nouveautés Moodle
+    /// Prévenir d'une série, d'un corrigé, d'un rendu publiés sur Moodle, même
+    /// app fermée (relevé en arrière-plan).
+    var moodleNewsEnabled: Bool { didSet { defaults.set(moodleNewsEnabled, forKey: Key.moodleNewsEnabled) } }
+    var moodleNewsKindsRaw: String { didSet { defaults.set(moodleNewsKindsRaw, forKey: Key.moodleNewsKinds) } }
+    var moodleNewsKinds: Set<MoodleNews.Kind> {
+        get { MoodleNews.Kind.decode(moodleNewsKindsRaw) }
+        set { moodleNewsKindsRaw = MoodleNews.Kind.encode(newValue) }
+    }
+    /// Les cours tus (identifiants, séparés par des virgules).
+    var moodleNewsMutedRaw: String { didSet { defaults.set(moodleNewsMutedRaw, forKey: Key.moodleNewsMuted) } }
+    var moodleNewsMuted: Set<UUID> {
+        get { Set(moodleNewsMutedRaw.split(separator: ",").compactMap { UUID(uuidString: String($0)) }) }
+        set { moodleNewsMutedRaw = newValue.map(\.uuidString).sorted().joined(separator: ",") }
+    }
+    /// Pas de nouvelle la nuit : elle attend la fin des heures calmes.
+    var quietHoursEnabled: Bool { didSet { defaults.set(quietHoursEnabled, forKey: Key.quietHoursEnabled) } }
+    var quietHoursStart: Int { didSet { defaults.set(quietHoursStart, forKey: Key.quietHoursStart) } }
+    var quietHoursEnd: Int { didSet { defaults.set(quietHoursEnd, forKey: Key.quietHoursEnd) } }
+
+    // MARK: Hors ligne
+    /// Garder les énoncés (et les corrigés) sur l'iPhone. Éteint par défaut :
+    /// c'est de la place.
+    var offlineEnabled: Bool { didSet { defaults.set(offlineEnabled, forKey: Key.offlineEnabled) } }
+    var offlineSolutions: Bool { didSet { defaults.set(offlineSolutions, forKey: Key.offlineSolutions) } }
+    var offlineWifiOnly: Bool { didSet { defaults.set(offlineWifiOnly, forKey: Key.offlineWifiOnly) } }
+    /// Plafond, en mégaoctets.
+    var offlineLimitMB: Int { didSet { defaults.set(offlineLimitMB, forKey: Key.offlineLimitMB) } }
+
     // MARK: Assistant IA (MCP)
     /// Jeton secret qui relie l'app à son serveur MCP. Vide = pas relié.
     var assistantToken: String { didSet { defaults.set(assistantToken, forKey: Key.assistantToken) } }
@@ -202,6 +241,16 @@ final class SettingsStore {
         self.contentAutoRefresh = defaults.object(forKey: Key.contentAutoRefresh) as? Bool ?? true
         self.contentLastRefresh = defaults.object(forKey: Key.contentLastRefresh) as? Date
         self.contentRefreshNews = defaults.string(forKey: Key.contentRefreshNews) ?? ""
+        self.moodleNewsEnabled = defaults.object(forKey: Key.moodleNewsEnabled) as? Bool ?? true
+        self.moodleNewsKindsRaw = defaults.string(forKey: Key.moodleNewsKinds) ?? MoodleNews.Kind.encode(MoodleNews.Kind.defaults)
+        self.moodleNewsMutedRaw = defaults.string(forKey: Key.moodleNewsMuted) ?? ""
+        self.quietHoursEnabled = defaults.object(forKey: Key.quietHoursEnabled) as? Bool ?? true
+        self.quietHoursStart = defaults.object(forKey: Key.quietHoursStart) as? Int ?? 22
+        self.quietHoursEnd = defaults.object(forKey: Key.quietHoursEnd) as? Int ?? 8
+        self.offlineEnabled = defaults.bool(forKey: Key.offlineEnabled)
+        self.offlineSolutions = defaults.object(forKey: Key.offlineSolutions) as? Bool ?? true
+        self.offlineWifiOnly = defaults.object(forKey: Key.offlineWifiOnly) as? Bool ?? true
+        self.offlineLimitMB = defaults.object(forKey: Key.offlineLimitMB) as? Int ?? 500
         self.assistantToken = defaults.string(forKey: Key.assistantToken) ?? ""
         self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true

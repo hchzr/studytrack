@@ -7,6 +7,10 @@ import Charts
 ///
 /// Chaque graphique se touche : glisser le doigt sur les barres montre le
 /// détail du jour, de la semaine ou du cours visé.
+///
+/// Le journal du chrono vit ici, sous le graphique du temps : toucher une
+/// barre montre les sessions de ce jour, qu'on corrige ou supprime d'un
+/// toucher. Un écran pour le temps, au lieu de deux qui se recoupaient.
 struct StatsView: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
@@ -17,6 +21,11 @@ struct StatsView: View {
     /// Décalage en semaines (période « Semaine ») : 0 = cette semaine.
     @State private var weekOffset = 0
     @State private var selectedDay: Date?
+    /// Le jour (ou la semaine) touché, gardé après avoir levé le doigt : les
+    /// sessions affichées dessous sont les siennes.
+    @State private var pinnedBin: Date?
+    @State private var editingSession: StudySession?
+    @State private var showingManual = false
     @State private var selectedCourse: String?
     @State private var selectedVerdict: Int?
 
@@ -166,8 +175,24 @@ struct StatsView: View {
         }
         .navigationTitle("Bilan")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingManual = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Ajouter une session passée")
+            }
+        }
+        .sheet(isPresented: $showingManual) { ManualSessionSheet() }
+        .sheet(item: $editingSession) { SessionEditSheet(session: $0) }
         .animation(Motion.snappy, value: period)
         .animation(Motion.snappy, value: weekOffset)
+        .animation(Motion.snappy, value: pinnedBin)
+        .onChange(of: selectedDay) { _, day in
+            guard let day else { return }
+            let picked = bin(day)
+            pinnedBin = picked
+        }
+        .onChange(of: period) { _, _ in pinnedBin = nil }
+        .onChange(of: weekOffset) { _, _ in pinnedBin = nil }
     }
 
     /// L'ordre de lecture : combien, réparti comment, quand, puis ce que ça a produit.
@@ -179,9 +204,10 @@ struct StatsView: View {
         case 2: SplitCard(slices: splitSlices)
         case 3: CoursePieCard(slices: courseSlices)
         case 4: timeChart
-        case 5: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
-        case 6: PaceCard(rows: paceRows)
-        case 7: progressSection
+        case 5: journal
+        case 6: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
+        case 7: PaceCard(rows: paceRows)
+        case 8: progressSection
         default: correctionChart
         }
     }
@@ -189,10 +215,10 @@ struct StatsView: View {
     private var visibleSections: [Int] {
         #if DEBUG
         // `-statsSkip 4` : les captures du simulateur ne défilent pas.
-        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...8) }
+        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...9) }
         #endif
         // La tendance semaine par semaine n'a de sens que sur le semestre.
-        return Array(0...8).filter { $0 != 5 || period == .semester }
+        return Array(0...9).filter { $0 != 6 || period == .semester }
     }
 
     // MARK: Données des graphiques
@@ -371,7 +397,7 @@ struct StatsView: View {
 
     private var timeChart: some View {
         let bars = timeBars
-        let selectedBin = selectedDay.map(bin)
+        let selectedBin = selectedDay.map(bin) ?? pinnedBin
         let selectedBars = bars.filter { $0.bin == selectedBin }
         return VStack(alignment: .leading, spacing: 10) {
             CarnetSectionTitle(binsByWeek ? "Semaine par semaine" : "Jour par jour")
@@ -428,6 +454,128 @@ struct StatsView: View {
             .padding(16)
             .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
         }
+    }
+
+    // MARK: Sessions (le journal)
+
+    /// Les sessions de la période — ou du jour touché sur le graphique.
+    private var journalSessions: [StudySession] {
+        let r = range
+        return sessions.filter { session in
+            guard session.startedAt >= r.start && session.startedAt < r.end else { return false }
+            return pinnedBin.map { bin(session.startedAt) == $0 } ?? true
+        }
+    }
+
+    private var journal: some View {
+        let shown = journalSessions
+        let groups = SessionStats.groupedByDay(shown)
+        // Sans jour choisi, les trois derniers jours actifs ; le reste est
+        // dans l'historique complet.
+        let visible = pinnedBin == nil ? Array(groups.prefix(3)) : groups
+        return VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Sessions") {
+                if let pinnedBin {
+                    Button {
+                        self.pinnedBin = nil
+                        Haptics.soft()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(binsByWeek ? "S. du \(DateUtils.shortDay.string(from: pinnedBin))" : DateUtils.relativeLabel(pinnedBin))
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Revenir à toute la période")
+                } else if !shown.isEmpty {
+                    Text("\(shown.count)")
+                }
+            }
+            if visible.isEmpty {
+                CarnetSheet(padding: 16) {
+                    HStack {
+                        Text(pinnedBin == nil ? "Aucune session sur la période." : "Aucune session ce jour-là.")
+                            .font(.subheadline)
+                            .foregroundStyle(Carnet.inkSecondary)
+                        Spacer()
+                        Button("Ajouter") { showingManual = true }
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+            } else {
+                CarnetSheet {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, group in
+                        dayHeader(group, first: index == 0)
+                        ForEach(group.sessions) { session in
+                            sessionRow(session)
+                            if session.id != group.sessions.last?.id { CarnetRule() }
+                        }
+                    }
+                    if groups.count > visible.count || pinnedBin == nil {
+                        CarnetRule(inset: 0)
+                        NavigationLink {
+                            SessionHistoryView(embedded: true)
+                        } label: {
+                            HStack {
+                                Text("Tout l'historique")
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                                    .foregroundStyle(Carnet.inkTertiary)
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(Carnet.ink)
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 48)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func dayHeader(_ group: SessionStats.DayGroup, first: Bool) -> some View {
+        HStack {
+            Text(DateUtils.relativeLabel(group.day))
+            Spacer()
+            Text(DateUtils.hoursLabel(seconds: group.totalSeconds)).monospacedDigit()
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Carnet.inkSecondary)
+        .textCase(nil)
+        .padding(.horizontal, 16)
+        .padding(.top, first ? 14 : 18)
+        .padding(.bottom, 4)
+    }
+
+    private func sessionRow(_ session: StudySession) -> some View {
+        Button {
+            editingSession = session
+        } label: {
+            CarnetRow(icon: session.taskType.icon,
+                      tint: session.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary,
+                      title: "\(session.course?.displayCode ?? "Sans cours") · \(session.taskType.label)",
+                      subtitle: sessionSubtitle(session)) {
+                Text(session.durationLabel)
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Carnet.ink)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityHint("Modifier la session")
+    }
+
+    /// « 14:20 · Exercice 3.2 · saisie ».
+    private func sessionSubtitle(_ session: StudySession) -> String {
+        var parts = [DateUtils.time.string(from: session.startedAt)]
+        if let target = session.targetLabel { parts.append(target) }
+        if session.isManual { parts.append("saisie") }
+        return parts.joined(separator: " · ")
     }
 
     private func axisLabel(_ date: Date) -> String {

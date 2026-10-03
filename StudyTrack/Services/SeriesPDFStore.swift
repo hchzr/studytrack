@@ -80,6 +80,11 @@ final class SeriesPDFStore {
         let remote = Self.documentURL(series)
         let task = Task<Entry, Error> { @MainActor in
             let local = Self.file(for: id)
+            // Gardé hors ligne : pas de réseau à attendre.
+            if !FileManager.default.fileExists(atPath: local.path), let remote,
+               let offline = OfflineLibrary.shared.localFile(for: remote) {
+                try? FileManager.default.copyItem(at: offline, to: local)
+            }
             if !FileManager.default.fileExists(atPath: local.path) {
                 guard let remote else { throw Failure.noDocument }
                 let downloaded = try await Self.download(remote)
@@ -114,13 +119,17 @@ final class SeriesPDFStore {
     /// L'adresse d'un PDF : un fichier, ou une activité Moodle qui en porte un.
     /// Une page web de série (Botafogo, proginsc) n'en est pas un.
     private static func documentURL(_ series: ExerciseSeries) -> URL? {
-        guard let url = URL(string: series.urlString), url.scheme?.hasPrefix("http") == true else { return nil }
+        documentURL(series.urlString)
+    }
+
+    static func documentURL(_ address: String) -> URL? {
+        guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else { return nil }
         if MoodleLinks.activityModule(of: url) != nil || MoodleLinks.isDocument(url.absoluteString) { return url }
         if url.host?.contains("dropbox.com") == true { return url }
         return nil
     }
 
-    private static func download(_ url: URL) async throws -> URL {
+    static func download(_ url: URL) async throws -> URL {
         if url.host?.contains("moodle") == true {
             return try await AuthenticatedDownloader.download(url)
         }

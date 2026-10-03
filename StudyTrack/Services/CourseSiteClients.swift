@@ -247,6 +247,9 @@ final class MoodleClient {
                                                         url: course.url.absoluteString) else {
             throw WebContentScraper.ScrapeError.empty
         }
+        // Ce qu'un import vient de lire n'a plus à être annoncé par la
+        // surveillance en arrière-plan.
+        MoodleWatcher.markSeen(snapshot, moodleID: course.id)
         // Les liens et devoirs, comme avant ; et **chaque série ou corrigé**,
         // quel que soit son module : une série publiée en page, en dossier ou en
         // fichier s'ouvrait sur la page Moodle qui porte le lien du PDF (AICC),

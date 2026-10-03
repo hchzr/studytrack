@@ -5435,6 +5435,74 @@ do {
     check(false, "GroupCrypto a levé : \(error)")
 }
 
+// MARK: Nouveautés Moodle (notifications)
+do {
+    func activity(_ id: String, _ name: String, _ module: String = "resource", visible: Bool = true) -> MoodleActivity {
+        MoodleActivity(id: id, name: name, module: module, url: "https://moodle.epfl.ch/mod/\(module)/view.php?id=\(id)",
+                       isVisible: visible)
+    }
+    func snapshot(_ week: [MoodleActivity]) -> MoodleCourseSnapshot {
+        MoodleCourseSnapshot(title: "Analyse I", url: "https://moodle.epfl.ch/course/view.php?id=1",
+                             sections: [MoodleSection(number: 0, title: "Général", activities: [activity("1", "Forum", "forum")]),
+                                        MoodleSection(number: 3, title: "Semaine 3", activities: week)])
+    }
+    let before = snapshot([activity("10", "Série 3"), activity("11", "Corrigé série 3", visible: false)])
+    let first = MoodleNews.diff(before, known: nil)
+    check(first.new.isEmpty && first.seen == ["10"], "premier relevé : tout est retenu, rien n'est annoncé (le forum et le caché exclus)")
+
+    let after = snapshot([activity("10", "Série 3"), activity("11", "Corrigé série 3"),
+                          activity("12", "Série 4"), activity("13", "Rendu 2", "assign"), activity("14", "Annonces", "forum")])
+    let second = MoodleNews.diff(after, known: first.seen)
+    check(second.new.map(\.id) == ["11", "12", "13"], "corrigé dévoilé, nouvelle série et nouveau rendu annoncés")
+    check(second.new.map(\.kind) == [.solution, .series, .deadline], "chaque nouveauté rangée : corrigé, série, rendu")
+    check(MoodleNews.diff(before, known: second.seen).new.isEmpty, "une activité cachée de nouveau n'est pas réannoncée")
+
+    check(MoodleNews.message(courseCode: "MATH-101", items: [second.new[1]])! == ("Nouvelle série · MATH-101", "Série 4"),
+          "une nouveauté : son genre en titre, son nom en texte")
+    let many = MoodleNews.message(courseCode: "MATH-101", items: second.new + [second.new[0]])!
+    check(many.title == "4 nouveautés · MATH-101" && many.body.hasSuffix(" · +1"), "plusieurs : le compte, trois noms, le reste")
+    check(MoodleNews.message(courseCode: "X", items: []) == nil, "rien de neuf, pas de notification")
+
+    check(MoodleNews.Kind.decode(nil) == MoodleNews.Kind.defaults, "par défaut : séries, corrigés, rendus")
+    check(MoodleNews.Kind.decode("") == [], "tout décoché reste tout décoché")
+    check(MoodleNews.Kind.decode(MoodleNews.Kind.encode([.lecture, .series])) == [.lecture, .series], "le choix se relit")
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    func at(_ day: Int, _ hour: Int) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: 30))!
+    }
+    check(MoodleNews.deliveryDate(now: at(3, 14), quietStart: 22, quietEnd: 8, calendar: calendar) == nil, "l'après-midi : tout de suite")
+    check(MoodleNews.deliveryDate(now: at(3, 23), quietStart: 22, quietEnd: 8, calendar: calendar)
+          == calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 8)), "23 h 30 : le lendemain à 8 h")
+    check(MoodleNews.deliveryDate(now: at(4, 3), quietStart: 22, quietEnd: 8, calendar: calendar)
+          == calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 8)), "3 h 30 : à 8 h le jour même")
+    check(MoodleNews.deliveryDate(now: at(3, 13), quietStart: 12, quietEnd: 14, calendar: calendar) != nil, "fenêtre en journée respectée")
+    check(MoodleNews.deliveryDate(now: at(3, 23), quietStart: 8, quietEnd: 8, calendar: calendar) == nil, "début = fin : pas d'heures calmes")
+}
+
+// MARK: Hors ligne : ordre et plafond
+do {
+    func C(key: String, week: Int, isSolution: Bool, current: Int = 4) -> OfflinePlan.Candidate {
+        OfflinePlan.Candidate(key: key, week: week, isSolution: isSolution, currentWeek: current)
+    }
+    let all = [C(key: "s1", week: 1, isSolution: false), C(key: "c1", week: 1, isSolution: true),
+               C(key: "s4", week: 4, isSolution: false), C(key: "c4", week: 4, isSolution: true),
+               C(key: "s5", week: 5, isSolution: false), C(key: "s3", week: 3, isSolution: false),
+               C(key: "s9", week: 9, isSolution: false), C(key: "s4", week: 4, isSolution: false)]
+    let ordered = OfflinePlan.order(all, includeSolutions: true).map(\.key)
+    check(ordered == ["s4", "c4", "s5", "s3", "s1", "c1", "s9"],
+          "semaine en cours puis suivante, l'énoncé avant le corrigé, le passé récent, le futur lointain ; sans doublon")
+    let mixed = OfflinePlan.order([C(key: "a3", week: 3, isSolution: false), C(key: "b6", week: 6, isSolution: false, current: 6)],
+                                  includeSolutions: true).map(\.key)
+    check(mixed == ["b6", "a3"], "deux cours : la semaine en cours de chacun passe avant le passé de l'autre")
+    check(!OfflinePlan.order(all, includeSolutions: false).contains { $0.isSolution }, "corrigés exclus si non voulus")
+    let sizes = ["s4": 40, "c4": 30, "s5": 20, "s3": 50, "s1": 5]
+    check(OfflinePlan.kept(ordered, sizes: sizes, limit: 100) == ["s4", "c4", "s5"],
+          "plafond : on s'arrête au premier qui dépasse, l'ordre reste respecté")
+    check(OfflinePlan.kept(ordered, sizes: [:], limit: 100).isEmpty, "rien de téléchargé, rien de gardé")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

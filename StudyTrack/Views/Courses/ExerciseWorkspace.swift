@@ -1136,7 +1136,9 @@ struct InAppBrowser: View {
 
     private var page: some View {
         NavigationStack {
-            WebView(model: model, initialURL: link.url, followsDocumentLinks: true)
+            // Un énoncé gardé hors ligne s'ouvre depuis l'iPhone, sans réseau.
+            WebView(model: model, initialURL: OfflineLibrary.shared.localFile(for: link.url) ?? link.url,
+                    followsDocumentLinks: true)
                 .overlay(alignment: .top) {
                     if model.isLoading {
                         ProgressView(value: model.progress).progressViewStyle(.linear).tint(Theme.accent)
@@ -1152,7 +1154,7 @@ struct InAppBrowser: View {
                     }
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         ShareLink(item: model.url ?? link.url) { Image(systemName: "square.and.arrow.up") }
-                        Link(destination: model.url ?? link.url) { Image(systemName: "safari") }
+                        Link(destination: model.url.flatMap { $0.isFileURL ? nil : $0 } ?? link.url) { Image(systemName: "safari") }
                             .accessibilityLabel("Ouvrir dans Safari")
                     }
                 }
