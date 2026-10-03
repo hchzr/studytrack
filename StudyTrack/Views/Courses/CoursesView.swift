@@ -469,7 +469,7 @@ struct CourseSidebarRow: View {
 
             Spacer(minLength: Layout.inline)
 
-            ProgressRing(progress: progress.overallPercent,
+            ProgressRing(progress: progress.completion,
                          color: Carnet.tint(course.colorHex),
                          size: 38,
                          lineWidth: 4)
@@ -520,7 +520,7 @@ struct CourseCardRow: View {
 
                     Spacer(minLength: Layout.inline)
 
-                    ProgressRing(progress: progress.overallPercent,
+                    ProgressRing(progress: progress.completion,
                                  color: Carnet.tint(course.colorHex),
                                  size: 52,
                                  lineWidth: 6)

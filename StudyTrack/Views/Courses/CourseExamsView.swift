@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Examens d'un cours : évaluations, plan de révision, annales.
+/// Examens d'un cours : évaluations et annales.
 ///
 /// Remplace l'ancien onglet « Agenda » du cours, qui mêlait évaluations,
 /// annales, sessions planifiées, séances d'amphi et tâches — un fourre-tout où
@@ -179,34 +179,6 @@ struct CourseExamsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                // Le plan se cale sur la **prochaine** échéance : c'est elle qui
-                // décide de ce qu'il faut avoir fini, et quand.
-                if let next = course.nextExam {
-                    NavigationLink {
-                        RevisionPlanView(course: course)
-                    } label: {
-                        HStack(spacing: Layout.control) {
-                            Image(systemName: "target")
-                                .foregroundStyle(Theme.accent.accessibleMark)
-                                .frame(width: 22)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Plan de révision")
-                                    .font(.subheadline.weight(.medium))
-                                Text("Jusqu'à \(next.title) · \(DateUtils.countdownLabel(to: next.date))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: Layout.inline)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Divider().padding(.vertical, Layout.snug)
-                }
-
                 VStack(spacing: 0) {
                     ForEach(course.sortedExams) { exam in
                         Button {

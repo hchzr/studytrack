@@ -8,11 +8,12 @@ import Charts
 /// Chaque graphique se touche : glisser le doigt sur les barres montre le
 /// détail du jour, de la semaine ou du cours visé.
 ///
-/// Le journal du chrono vit ici, sous le graphique du temps : toucher une
-/// barre montre les sessions de ce jour, qu'on corrige ou supprime d'un
+/// Le journal du chrono vit ici, en dernier : toucher une barre du graphique
+/// du temps limite les sessions à ce jour, qu'on corrige ou supprime d'un
 /// toucher. Un écran pour le temps, au lieu de deux qui se recoupaient.
 struct StatsView: View {
     @Environment(AppContainer.self) private var app
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
     @Query private var events: [LinkedCalendarEvent]
@@ -168,9 +169,13 @@ struct StatsView: View {
     // MARK: Corps
 
     var body: some View {
-        CarnetScroll(spacing: 26) {
-            ForEach(visibleSections, id: \.self) { index in
-                section(index)
+        CarnetScroll(spacing: 26, wide: true) {
+            if sizeClass == .regular {
+                wideLayout
+            } else {
+                ForEach(visibleSections, id: \.self) { index in
+                    section(index)
+                }
             }
         }
         .navigationTitle("Bilan")
@@ -195,7 +200,31 @@ struct StatsView: View {
         .onChange(of: weekOffset) { _, _ in pinnedBin = nil }
     }
 
-    /// L'ordre de lecture : combien, réparti comment, quand, puis ce que ça a produit.
+    /// Sur iPad, les cartes se répondent deux à deux : la répartition et les
+    /// matières face au temps jour par jour, le rythme face à l'avancement.
+    @ViewBuilder
+    private var wideLayout: some View {
+        periodBar
+        totals
+        CarnetColumns(spacing: 26) {
+            SplitCard(slices: splitSlices)
+            CoursePieCard(slices: courseSlices)
+        } trailing: {
+            timeChart
+        }
+        if period == .semester {
+            WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
+        }
+        CarnetColumns(spacing: 26) {
+            PaceCard(rows: paceRows)
+            correctionChart
+        } trailing: {
+            progressSection
+        }
+        journal
+    }
+
+    /// L'ordre de lecture : combien, réparti comment, quand, ce que ça a produit, puis le détail des sessions.
     @ViewBuilder
     private func section(_ index: Int) -> some View {
         switch index {
@@ -204,11 +233,11 @@ struct StatsView: View {
         case 2: SplitCard(slices: splitSlices)
         case 3: CoursePieCard(slices: courseSlices)
         case 4: timeChart
-        case 5: journal
-        case 6: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
-        case 7: PaceCard(rows: paceRows)
-        case 8: progressSection
-        default: correctionChart
+        case 5: WeeklyTrendCard(points: weeklyPoints, weekLabel: weekLabel)
+        case 6: PaceCard(rows: paceRows)
+        case 7: progressSection
+        case 8: correctionChart
+        default: journal
         }
     }
 
@@ -218,7 +247,7 @@ struct StatsView: View {
         if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...9) }
         #endif
         // La tendance semaine par semaine n'a de sens que sur le semestre.
-        return Array(0...9).filter { $0 != 6 || period == .semester }
+        return Array(0...9).filter { $0 != 5 || period == .semester }
     }
 
     // MARK: Données des graphiques

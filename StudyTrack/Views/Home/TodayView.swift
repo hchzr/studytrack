@@ -147,7 +147,7 @@ struct TodayView: View {
         @Bindable var router = app.router
         let state = derived()
         return NavigationStack {
-            CarnetScroll {
+            CarnetScroll(wide: true) {
                 content(state)
             }
             .navigationTitle("Aujourd'hui")
@@ -289,12 +289,16 @@ struct TodayView: View {
             // Un compte expiré que l'app n'a pas pu reconnecter seule.
             ConnectionBanner()
             importNews
-            WeekTimeCard(days: state.days, weekStart: state.weekStart,
-                         theory: state.theory, series: state.series, late: state.late) {
-                app.router.showingStats = true
+            // Sur iPad : le temps et l'horaire à gauche, les cours à droite.
+            CarnetColumns {
+                WeekTimeCard(days: state.days, weekStart: state.weekStart,
+                             theory: state.theory, series: state.series, late: state.late) {
+                    app.router.showingStats = true
+                }
+                todaySchedule(state)
+            } trailing: {
+                weekCourses(state)
             }
-            todaySchedule(state)
-            weekCourses(state)
         }
     }
 

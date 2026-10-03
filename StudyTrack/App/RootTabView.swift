@@ -23,6 +23,7 @@ struct RootTabView: View {
                         FocusView(onClose: { app.router.showingFocus = false })
                     case .agenda:
                         AgendaView()
+                            .carnetPageSheet()
                     case .me:
                         MeView(onClose: { app.router.showingProfile = false })
                     case .stats:
@@ -34,6 +35,7 @@ struct RootTabView: View {
                                     }
                                 }
                         }
+                        .carnetPageSheet()
                     }
                 }
             } else {

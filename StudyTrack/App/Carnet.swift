@@ -244,20 +244,72 @@ extension ButtonStyle where Self == CarnetSecondaryButtonStyle {
 /// Un écran de papier : défilement, marges, fond.
 struct CarnetScroll<Content: View>: View {
     var spacing: CGFloat = 22
+    /// Sur iPad, l'écran prend la largeur d'un tableau de bord (deux
+    /// colonnes, `CarnetColumns`) au lieu d'une colonne de lecture.
+    var wide = false
     @ViewBuilder var content: Content
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var gutter: CGFloat { sizeClass == .regular ? 28 : Carnet.screenPadding }
+    private var columnWidth: CGFloat { wide && sizeClass == .regular ? Layout.wideWidth : Layout.readableWidth }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: spacing) {
                 content
             }
-            .padding(.horizontal, Carnet.screenPadding)
+            .padding(.horizontal, gutter)
             .padding(.top, 4)
             .padding(.bottom, 32)
-            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: columnWidth)
             .frame(maxWidth: .infinity)
         }
         .background(Carnet.ground.ignoresSafeArea())
+    }
+}
+
+/// Deux colonnes côte à côte sur iPad, l'une sous l'autre sur iPhone.
+///
+/// Sur iPhone, les deux groupes se fondent dans la pile qui les contient :
+/// l'ordre de lecture reste celui de l'écran étroit.
+struct CarnetColumns<Leading: View, Trailing: View>: View {
+    var spacing: CGFloat = 22
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var trailing: Trailing
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        if sizeClass == .regular {
+            HStack(alignment: .top, spacing: spacing) {
+                // Chaque colonne à sa hauteur : sans `fixedSize`, une ligne
+                // qui s'étire (filet de couleur `maxHeight: .infinity`) prend
+                // la hauteur de la colonne voisine.
+                VStack(alignment: .leading, spacing: spacing) { leading }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: spacing) { trailing }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        } else {
+            leading
+            trailing
+        }
+    }
+}
+
+extension View {
+    /// Une feuille de la taille d'une page sur iPad (iOS 18+) : le bilan ou
+    /// l'agenda tenaient dans une fenêtre de formulaire, au milieu du vide.
+    @ViewBuilder
+    func carnetPageSheet() -> some View {
+        if #available(iOS 18.0, *) {
+            presentationSizing(.page)
+        } else {
+            self
+        }
     }
 }
 

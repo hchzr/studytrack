@@ -216,6 +216,26 @@ struct StudyTrackApp: App {
                 .tint(Theme.accent)
                 .toggleStyle(CarnetSwitchStyle())
         }
+        // Clavier de l'iPad : les onglets et les gestes de tous les jours.
+        .commands {
+            CommandMenu("Étude") {
+                Button("Aujourd'hui") { container.router.selectedTab = .today }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Cours") { container.router.selectedTab = .courses }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Groupes") { container.router.selectedTab = .groups }
+                    .keyboardShortcut("3", modifiers: .command)
+                Divider()
+                Button("Chrono") { container.router.openFocus() }
+                    .keyboardShortcut("t", modifiers: .command)
+                Button("Bilan") { container.router.showingStats = true }
+                    .keyboardShortcut("b", modifiers: .command)
+                Button("Agenda") { container.router.openAgenda() }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("Importer du contenu") { container.router.openContentImport() }
+                    .keyboardShortcut("i", modifiers: .command)
+            }
+        }
         // Le réveil d'iOS pour relever les nouveautés Moodle, app fermée.
         .backgroundTask(.appRefresh(MoodleWatcher.taskIdentifier)) {
             await MoodleWatcher.runInBackground()
