@@ -1,0 +1,89 @@
+import Foundation
+import CoreData
+import Observation
+import OSLog
+import SwiftData
+
+/// La base du Mac : le même schéma et le même conteneur iCloud que l'iPhone.
+///
+/// Le Mac n'importe rien de Moodle : il lit ce que l'iPhone a rangé, coche,
+/// chronomètre — et iCloud rapporte tout au téléphone.
+@MainActor
+@Observable
+final class MacStore {
+    static let cloudContainerID = "iCloud.com.hczr.studytrack.app"
+
+    let container: ModelContainer
+    let isCloudSynced: Bool
+
+    /// Ce que fait iCloud : la barre latérale le dit.
+    enum SyncState: Equatable {
+        case idle
+        case working(String)
+        case synced(Date)
+        case failed(String)
+    }
+    private(set) var syncState: SyncState = .idle
+
+    @ObservationIgnored private var pendingMerge: Task<Void, Never>?
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "sync")
+
+    init() {
+        let schema = StudyTrackSchema.current
+        let cloud = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
+                                       cloudKitDatabase: .private(Self.cloudContainerID))
+        if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+                                               configurations: [cloud]) {
+            self.container = container
+            isCloudSynced = true
+        } else {
+            let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+            self.container = (try? ModelContainer(for: schema, configurations: [local]))
+                ?? (try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]))
+            isCloudSynced = false
+        }
+        SyncDeduplicator.run(in: ModelContext(container))
+        observers.append(NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
+                                                                queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.remoteChangeArrived() }
+        })
+        observers.append(NotificationCenter.default.addObserver(forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                                                                object: nil, queue: .main) { [weak self] note in
+            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                    as? NSPersistentCloudKitContainer.Event else { return }
+            MainActor.assumeIsolated { self?.record(event) }
+        })
+    }
+
+    private func record(_ event: NSPersistentCloudKitContainer.Event) {
+        let kind: String
+        switch event.type {
+        case .setup: kind = "préparation"
+        case .import: kind = "réception"
+        case .export: kind = "envoi"
+        @unknown default: kind = "synchronisation"
+        }
+        if event.endDate == nil {
+            syncState = .working(kind)
+        } else if let error = event.error {
+            syncState = .failed(error.localizedDescription)
+            log.error("iCloud \(kind, privacy: .public) : échec \(String(describing: error), privacy: .public)")
+        } else {
+            syncState = .synced(event.endDate ?? Date())
+            let courses = (try? ModelContext(container).fetchCount(FetchDescriptor<Course>())) ?? -1
+            log.notice("iCloud \(kind, privacy: .public) : ok (\(courses) cours)")
+        }
+    }
+
+    /// iCloud importe par lots : on attend que ça se calme, puis on fusionne
+    /// les doublons (même règle que l'iPhone, même résultat des deux côtés).
+    private func remoteChangeArrived() {
+        pendingMerge?.cancel()
+        pendingMerge = Task { @MainActor [container] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            SyncDeduplicator.run(in: ModelContext(container))
+        }
+    }
+}
