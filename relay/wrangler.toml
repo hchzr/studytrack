@@ -19,3 +19,11 @@ new_sqlite_classes = ["Relay"]
 
 [observability]
 enabled = true
+
+[[durable_objects.bindings]]
+name = "APNS"
+class_name = "ApnsSender"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["ApnsSender"]

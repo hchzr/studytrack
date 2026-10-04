@@ -19,6 +19,7 @@ import { DurableObject } from "cloudflare:workers";
 
 export interface Env {
   RELAY: DurableObjectNamespace<Relay>;
+  APNS: DurableObjectNamespace<ApnsSender>;
   APNS_KEY: string; // contenu du .p8 (secret)
   APNS_KEY_ID: string;
   APNS_TEAM_ID: string;
@@ -170,6 +171,17 @@ export class Relay extends DurableObject<Env> {
       aps["attributes"] = live.attributes;
       aps["alert"] = { title: "Chrono", body: "Session en cours" };
     }
+    // Un seul expéditeur pour tout le compte Cloudflare : il garde le jeton
+    // d'APNs. Apple refuse (429) un jeton renouvelé plus d'une fois toutes
+    // les ~20 minutes — or chaque relais qui se réveille le refaisait.
+    const sender = this.env.APNS.get(this.env.APNS.idFromName("apns"));
+    return sender.push(token, sandbox, JSON.stringify({ aps }));
+  }
+}
+
+/** L'expéditeur APNs, unique : un jeton signé, réutilisé 50 minutes. */
+export class ApnsSender extends DurableObject<Env> {
+  async push(token: string, sandbox: boolean, body: string): Promise<number> {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
     const response = await fetch(`https://${host}/3/device/${token}`, {
       method: "POST",
@@ -179,7 +191,7 @@ export class Relay extends DurableObject<Env> {
         "apns-push-type": "liveactivity",
         "apns-priority": "10",
       },
-      body: JSON.stringify({ aps }),
+      body,
     });
     if (response.status !== 200) {
       console.log(`APNs ${response.status} ${await response.text()}`);
@@ -187,12 +199,10 @@ export class Relay extends DurableObject<Env> {
     return response.status;
   }
 
-  private cachedJWT?: { token: string; at: number };
-
-  /** Le jeton d'APNs (ES256), refait toutes les 50 minutes. */
   private async jwt(): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
-    if (this.cachedJWT && now - this.cachedJWT.at < 3000) return this.cachedJWT.token;
+    const cached = await this.ctx.storage.get<{ token: string; at: number }>("jwt");
+    if (cached && now - cached.at < 3000) return cached.token;
     const pem = this.env.APNS_KEY.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
     const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
     const key = await crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
@@ -200,7 +210,7 @@ export class Relay extends DurableObject<Env> {
     const unsigned = `${encode({ alg: "ES256", kid: this.env.APNS_KEY_ID })}.${encode({ iss: this.env.APNS_TEAM_ID, iat: now })}`;
     const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(unsigned));
     const token = `${unsigned}.${base64url(new Uint8Array(signature))}`;
-    this.cachedJWT = { token, at: now };
+    await this.ctx.storage.put("jwt", { token, at: now });
     return token;
   }
 }
