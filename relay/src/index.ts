@@ -144,10 +144,17 @@ export class Relay extends DurableObject<Env> {
       }
       if (!token) continue;
       const status = await this.sendAPNs(token, tokens.sandbox, event, live);
+      console.log(`îlot ${event} → ${device.slice(0, 8)} (${token === tokens.start ? "jeton de démarrage" : "jeton de mise à jour"}) : ${status}`);
       if (status === 410 || status === 400) {
         // Jeton mort (activité terminée, app supprimée) : on l'oublie.
         if (token === tokens.update) tokens.update = undefined;
         if (token === tokens.start) tokens.start = undefined;
+        await this.ctx.storage.put(key, tokens);
+      } else if (event === "end" && token === tokens.update) {
+        // L'activité est finie : son jeton ne sert plus. Garder le jeton
+        // envoyait la session suivante à une activité morte — Apple
+        // l'accepte (200), l'iPhone l'ignore. La suivante démarrera.
+        tokens.update = undefined;
         await this.ctx.storage.put(key, tokens);
       }
     }
