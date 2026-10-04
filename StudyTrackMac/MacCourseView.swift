@@ -17,7 +17,8 @@ struct MacCourseView: View {
     @State private var week = 0
     @State private var tab: Tab = .series
     @State private var selection: UUID?
-    @State private var showingInspector = true
+    /// Fermé tant que rien n'est choisi : la liste garde toute la largeur.
+    @State private var showingInspector = false
 
     @Environment(MacTimer.self) private var timer
     @Environment(\.modelContext) private var context
@@ -38,6 +39,9 @@ struct MacCourseView: View {
                 }
             }
             .listStyle(.inset)
+            .onChange(of: selection) { _, value in
+                if value != nil { showingInspector = true }
+            }
             .onChange(of: focusTarget, initial: true) { _, target in
                 guard let target else { return }
                 if course.theoryItems.contains(where: { $0.id == target }) { tab = .theory } else { tab = .series }
@@ -95,25 +99,33 @@ struct MacCourseView: View {
 
     // MARK: En-tête
 
+    /// Le titre sur toute la largeur, les chiffres dessous : un long nom de
+    /// cours (« Advanced information, computation, communication I ») ne doit
+    /// jamais être écrasé par les compteurs.
     private var header: some View {
         let progress = ProgressEngine.progress(for: course)
         let late = ProgressEngine.lateCount(for: course)
-        return HStack(alignment: .center, spacing: 24) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(course.name).font(.system(size: 26, weight: .regular, design: .serif))
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(course.name)
+                .font(.system(size: 26, weight: .regular, design: .serif))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .center, spacing: 22) {
                 Text([course.credits > 0 ? "\(course.credits.formatted()) ECTS" : nil,
                       course.currentWeek > 0 ? "semaine \(course.currentWeek)" : nil,
                       late > 0 ? "\(late) en retard" : "à jour"].compactMap { $0 }.joined(separator: " · "))
                     .foregroundStyle(late > 0 ? .red : .secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 12)
+                stat("Théorie", progress.watchedCount, progress.videoCount)
+                stat("Exercices", progress.doneCount, progress.exerciseCount)
+                ZStack {
+                    ProgressRingMini(value: progress.completion, tint: tint).scaleEffect(2.2)
+                    Text("\(Int((progress.completion * 100).rounded()))").font(.callout.weight(.semibold)).monospacedDigit()
+                }
+                .frame(width: 44, height: 44)
+                .help("\(Int((progress.completion * 100).rounded())) % du cours fait")
             }
-            Spacer()
-            stat("Théorie", progress.watchedCount, progress.videoCount)
-            stat("Exercices", progress.doneCount, progress.exerciseCount)
-            ZStack {
-                ProgressRingMini(value: progress.completion, tint: tint).scaleEffect(2.4)
-                Text("\(Int((progress.completion * 100).rounded()))").font(.callout.weight(.semibold)).monospacedDigit()
-            }
-            .frame(width: 48, height: 48)
         }
         .padding(.vertical, 8)
         .selectionDisabled()
