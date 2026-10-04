@@ -39,6 +39,14 @@ enum CloudRelay {
         var endedSession: Date?
         var updatedAt: Date
         var device: String
+        /// Les dernières sessions fermées par cet appareil (les plus récentes) :
+        /// un appareil resté endormi pendant plusieurs sessions reconnaît la
+        /// sienne parmi elles. Optionnel : les anciennes versions ne l'envoient pas.
+        var endedSessions: [Date]? = nil
+
+        func ended(_ session: Date) -> Bool {
+            ([endedSession].compactMap { $0 } + (endedSessions ?? [])).contains { abs($0.timeIntervalSince(session)) < 1 }
+        }
     }
 
     enum TimerDecision: Equatable {
@@ -70,12 +78,12 @@ enum CloudRelay {
         case (nil, let state?):
             return state.isRestorable(at: now) || state.isRunning ? .adopt(state) : .ignore
         case (let mine?, nil):
-            return same(remote.endedSession, mine.sessionStartedAt) ? .close : .ignore
+            return remote.ended(mine.sessionStartedAt) ? .close : .ignore
         case (let mine?, let state?):
             if same(mine.sessionStartedAt, state.sessionStartedAt) {
                 return mine == state ? .ignore : .adopt(state)
             }
-            let closedThere = same(remote.endedSession, mine.sessionStartedAt)
+            let closedThere = remote.ended(mine.sessionStartedAt)
                 || (same(shared, mine.sessionStartedAt) && state.sessionStartedAt > mine.sessionStartedAt)
             guard closedThere, state.isRestorable(at: now) || state.isRunning else { return .ignore }
             return .adopt(state)
@@ -88,6 +96,7 @@ enum CloudRelay {
 
     private static let sharedKey = "cloudRelay.sharedSession"
     private static let endedKey = "cloudRelay.lastEnded"
+    private static let endedListKey = "cloudRelay.endedSessions"
 
     /// La session que l'autre appareil connaît (dont il a publié un état).
     static var sharedSession: Date? {
@@ -96,6 +105,11 @@ enum CloudRelay {
     }
 
     /// Retient qu'une session est partagée : à appeler avec chaque état distant.
+    /// Une session adoptée d'un autre appareil est partagée par définition.
+    static func noteAdopted(_ state: FocusTimerState) {
+        sharedSession = state.sessionStartedAt
+    }
+
     static func noteShared(local: FocusTimerState?, remote: TimerSnapshot) {
         guard let mine = local, remote.device != deviceID,
               let theirs = remote.state, same(theirs.sessionStartedAt, mine.sessionStartedAt) else { return }
@@ -119,9 +133,15 @@ enum CloudRelay {
         // La dernière session fermée ici voyage avec chaque publication : si
         // une nouvelle session la suit de près, l'autre appareil saura quand
         // même que l'ancienne est finie.
-        if let ended { UserDefaults.standard.set(ended, forKey: endedKey) }
+        var recent = UserDefaults.standard.array(forKey: endedListKey) as? [Date] ?? []
+        if let ended {
+            UserDefaults.standard.set(ended, forKey: endedKey)
+            recent = Array(([ended] + recent).prefix(8))
+            UserDefaults.standard.set(recent, forKey: endedListKey)
+        }
         let lastEnded = ended ?? UserDefaults.standard.object(forKey: endedKey) as? Date
-        let snapshot = TimerSnapshot(state: state, endedSession: lastEnded, updatedAt: now, device: deviceID)
+        let snapshot = TimerSnapshot(state: state, endedSession: lastEnded, updatedAt: now, device: deviceID,
+                                     endedSessions: recent.isEmpty ? nil : recent)
         guard let data = try? encoder.encode(snapshot) else { return snapshot }
         store.set(data, forKey: timerKey)
         lastAppliedTimer = now

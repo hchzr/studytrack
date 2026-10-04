@@ -330,6 +330,7 @@ final class MacTimer {
         CloudRelay.lastAppliedTimer = remote.updatedAt
         switch decision {
         case .adopt(let remoteState):
+            CloudRelay.noteAdopted(remoteState)
             state = remoteState
             commit()
         case .close:

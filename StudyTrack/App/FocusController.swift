@@ -377,6 +377,7 @@ final class FocusController {
         CloudRelay.lastAppliedTimer = remote.updatedAt
         switch decision {
         case .adopt(let remoteState):
+            CloudRelay.noteAdopted(remoteState)
             state = remoteState
             lastEvent = nil
             commit(presence: false)

@@ -5511,6 +5511,15 @@ do {
           "ma session était partagée et l'autre appareil en a lancé une plus récente : il l'a fermée")
     check(CloudRelay.decide(local: session, remote: snap(next, at: 101), lastApplied: t0, device: "iphone", now: now) == .ignore,
           "session jamais partagée : une autre session ne l'écrase pas")
+    // L'iPhone a dormi pendant trois sessions du Mac : la sienne est dans la liste des fermées.
+    var several = snap(next, ended: t0.addingTimeInterval(50), at: 101)
+    several.endedSessions = [t0.addingTimeInterval(50), t0.addingTimeInterval(20), t0]
+    check(CloudRelay.decide(local: session, remote: several, lastApplied: t0, device: "iphone", now: now) == .adopt(next),
+          "plusieurs sessions fermées pendant que l'iPhone dormait : il reconnaît la sienne et suit")
+    var closedOld = snap(nil, ended: t0.addingTimeInterval(50), at: 101)
+    closedOld.endedSessions = [t0.addingTimeInterval(50), t0]
+    check(CloudRelay.decide(local: session, remote: closedOld, lastApplied: t0, device: "iphone", now: now) == .close,
+          "sa session figure parmi les fermées : il la ferme")
     check(CloudRelay.decide(local: next, remote: snap(session, at: 101), lastApplied: t0, device: "iphone", shared: t0.addingTimeInterval(100), now: now) == .ignore,
           "une session plus ancienne ne remplace jamais une plus récente")
 
