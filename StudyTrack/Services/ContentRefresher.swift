@@ -8,6 +8,9 @@ import SwiftData
 /// heures : chaque cours relié à Moodle (son adresse est dans ses sources) ou à
 /// Botafogo est relu, et ce qui est **nouveau** est ajouté.
 ///
+/// Un seul appareil s'en charge (`CloudRelay.refreshIsDue`) : la relecture est
+/// réclamée dans iCloud avant de commencer.
+///
 /// Prudente par construction :
 ///   • rien n'est supprimé (`ContentDraftWriter` n'efface jamais) ;
 ///   • une semaine corrigée à la main n'est pas réécrite (`updateWeeks: false`) ;
@@ -20,7 +23,16 @@ enum ContentRefresher {
 
     static func refreshIfDue(context: ModelContext, settings: SettingsStore, now: Date = Date()) async {
         guard settings.contentAutoRefresh, !running else { return }
-        if let last = settings.contentLastRefresh, now.timeIntervalSince(last) < interval { return }
+        // Un seul appareil relit : l'iPad ouvert une heure après l'iPhone ne
+        // relit pas Moodle (ni ne repaie l'IA) — ce qui a été ajouté arrive
+        // par iCloud. Sauf si la surveillance d'ici vient de trouver du neuf.
+        let forced = MoodleWatcher.hasPendingNews
+        guard forced || CloudRelay.refreshIsDue(localLast: settings.contentLastRefresh,
+                                                claim: CloudRelay.moodleRefreshClaim(),
+                                                device: CloudRelay.deviceID,
+                                                interval: interval, now: now) else { return }
+        CloudRelay.claimMoodleRefresh(now: now)
+        MoodleWatcher.hasPendingNews = false
         running = true
         defer { running = false }
 

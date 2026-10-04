@@ -123,6 +123,7 @@ final class AppContainer {
             AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)
         }
         focus.app = self
+        focus.startRelay()
     }
 
     /// Reconfigure le client social — utile après une connexion ou une déconnexion.

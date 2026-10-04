@@ -39,6 +39,13 @@ enum MoodleWatcher {
         var status: Status = .ok
     }
 
+    /// La surveillance a trouvé du neuf : la prochaine ouverture importe,
+    /// même si un autre appareil a relu Moodle récemment.
+    static var hasPendingNews: Bool {
+        get { UserDefaults.standard.bool(forKey: "moodleWatch.pendingNews") }
+        set { UserDefaults.standard.set(newValue, forKey: "moodleWatch.pendingNews") }
+    }
+
     static var lastCheck: Date? { UserDefaults.standard.object(forKey: lastCheckKey) as? Date }
     static var lastStatus: Status? { UserDefaults.standard.string(forKey: statusKey).flatMap(Status.init) }
 
@@ -116,7 +123,10 @@ enum MoodleWatcher {
         CookieKeeper.merge(jar.cookies ?? [])
         // Quelque chose a bougé : la prochaine ouverture importe sans attendre
         // les douze heures.
-        if anything { settings.contentLastRefresh = nil }
+        if anything {
+            settings.contentLastRefresh = nil
+            hasPendingNews = true
+        }
         remember(status: .ok)
         AppLog.record(.info, "import", "Relevé Moodle",
                       detail: "\(report.courses) cours · \(report.news.reduce(0) { $0 + $1.items.count }) nouveauté(s)")
@@ -196,12 +206,16 @@ enum MoodleWatcher {
 
     // MARK: Mémoire
 
+    /// Ce qui a été vu **sur tous les appareils** : une série annoncée sur
+    /// l'iPhone ne l'est pas une seconde fois sur l'iPad.
     private static func loadKnown() -> [String: [String]] {
-        UserDefaults.standard.dictionary(forKey: knownKey) as? [String: [String]] ?? [:]
+        let local = UserDefaults.standard.dictionary(forKey: knownKey) as? [String: [String]] ?? [:]
+        return CloudRelay.mergeKnown(local, CloudRelay.moodleKnown())
     }
 
     private static func saveKnown(_ known: [String: [String]]) {
         UserDefaults.standard.set(known, forKey: knownKey)
+        CloudRelay.publishMoodleKnown(known)
     }
 
     private static func remember(status: Status) {

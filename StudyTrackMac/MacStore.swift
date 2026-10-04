@@ -25,6 +25,8 @@ final class MacStore {
     }
     private(set) var syncState: SyncState = .idle
 
+    /// Appelé quand les données changent, ici ou ailleurs (widgets du bureau).
+    @ObservationIgnored var onDataChange: (() -> Void)?
     @ObservationIgnored private var pendingMerge: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "sync")
@@ -47,6 +49,10 @@ final class MacStore {
         observers.append(NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
                                                                 queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.remoteChangeArrived() }
+        })
+        observers.append(NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil,
+                                                                queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onDataChange?() }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSPersistentCloudKitContainer.eventChangedNotification,
                                                                 object: nil, queue: .main) { [weak self] note in
@@ -80,10 +86,11 @@ final class MacStore {
     /// les doublons (même règle que l'iPhone, même résultat des deux côtés).
     private func remoteChangeArrived() {
         pendingMerge?.cancel()
-        pendingMerge = Task { @MainActor [container] in
+        pendingMerge = Task { @MainActor [container, weak self] in
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             SyncDeduplicator.run(in: ModelContext(container))
+            self?.onDataChange?()
         }
     }
 }

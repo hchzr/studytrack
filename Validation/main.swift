@@ -5478,6 +5478,44 @@ do {
     check(false, "fusion iCloud : \(error)")
 }
 
+// MARK: Entre appareils : chrono partagé, Moodle relu une fois
+do {
+    let t0 = Date(timeIntervalSince1970: 2_000_000_000)
+    var session = FocusTimerState(sessionStartedAt: t0, courseID: nil, taskTypeRaw: TaskType.exercise.rawValue)
+    session.start(at: t0)
+    func snap(_ state: FocusTimerState?, ended: Date? = nil, at: TimeInterval, device: String = "mac") -> CloudRelay.TimerSnapshot {
+        CloudRelay.TimerSnapshot(state: state, endedSession: ended, updatedAt: t0.addingTimeInterval(at), device: device)
+    }
+    let now = t0.addingTimeInterval(120)
+    check(CloudRelay.decide(local: nil, remote: snap(session, at: 1), lastApplied: nil, device: "iphone", now: now) == .adopt(session),
+          "chrono démarré sur le Mac : l'iPhone le reprend")
+    check(CloudRelay.decide(local: nil, remote: snap(session, at: 1, device: "iphone"), lastApplied: nil, device: "iphone", now: now) == .ignore,
+          "son propre écho est ignoré")
+    check(CloudRelay.decide(local: nil, remote: snap(session, at: 1), lastApplied: t0.addingTimeInterval(5), device: "iphone", now: now) == .ignore,
+          "un état plus ancien que le dernier appliqué est ignoré")
+    var paused = session; paused.pause(at: t0.addingTimeInterval(60))
+    check(CloudRelay.decide(local: session, remote: snap(paused, at: 60), lastApplied: t0, device: "iphone", now: now) == .adopt(paused),
+          "pause sur le Mac : même session, l'iPhone suit")
+    check(CloudRelay.decide(local: session, remote: snap(nil, ended: t0, at: 90), lastApplied: t0, device: "iphone", now: now) == .close,
+          "terminée sur le Mac : l'iPhone ferme sans enregistrer une seconde fois")
+    var other = FocusTimerState(sessionStartedAt: t0.addingTimeInterval(30)); other.start(at: t0.addingTimeInterval(30))
+    check(CloudRelay.decide(local: other, remote: snap(session, at: 60), lastApplied: t0, device: "iphone", now: now) == .ignore,
+          "deux sessions différentes ne s'écrasent jamais")
+    check(CloudRelay.decide(local: other, remote: snap(nil, ended: t0, at: 90), lastApplied: t0, device: "iphone", now: now) == .ignore,
+          "la fin d'une autre session ne ferme pas la mienne")
+
+    let hour: TimeInterval = 3600
+    check(CloudRelay.refreshIsDue(localLast: nil, claim: nil, device: "a", interval: 12 * hour, now: t0), "jamais relu : à faire")
+    check(!CloudRelay.refreshIsDue(localLast: nil, claim: .init(at: t0.addingTimeInterval(-hour), device: "b"), device: "a", interval: 12 * hour, now: t0),
+          "relu par l'iPad il y a une heure : l'iPhone ne relit pas")
+    check(CloudRelay.refreshIsDue(localLast: nil, claim: .init(at: t0.addingTimeInterval(-13 * hour), device: "b"), device: "a", interval: 12 * hour, now: t0),
+          "relu ailleurs il y a 13 h : à refaire")
+    check(!CloudRelay.refreshIsDue(localLast: t0.addingTimeInterval(-hour), claim: nil, device: "a", interval: 12 * hour, now: t0),
+          "relu ici il y a une heure : pas encore")
+    let merged = CloudRelay.mergeKnown(["1": ["a", "b"]], ["1": ["b", "c"], "2": ["x"]])
+    check(merged == ["1": ["a", "b", "c"], "2": ["x"]], "activités vues : union de tous les appareils")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

@@ -2,63 +2,98 @@ import SwiftUI
 import SwiftData
 
 /// Un cours : ses séries et sa théorie, semaine par semaine. Cocher ici,
-/// c'est cocher sur l'iPhone.
+/// c'est cocher sur l'iPhone. Un exercice choisi s'ouvre dans l'inspecteur
+/// (énoncé, questions, correction, temps passé).
 struct MacCourseView: View {
     @Bindable var course: Course
+    @Binding var focusTarget: UUID?
 
     enum Tab: String, CaseIterable, Identifiable {
         case series = "Séries", theory = "Théorie"
         var id: String { rawValue }
     }
 
+    /// `0` = tout le semestre.
+    @State private var week = 0
+    @State private var tab: Tab = .series
+    @State private var selection: UUID?
+    @State private var showingInspector = true
+
     @Environment(MacTimer.self) private var timer
     @Environment(\.modelContext) private var context
-    @State private var tab: Tab = .series
-    @State private var onlyCurrentWeek = false
 
     private var tint: Color { Color(hex: course.colorHex) }
+    private var weeks: [Int] {
+        let all = Set(course.series.map(\.plannedWeek) + course.theoryItems.map(\.plannedWeek)).filter { $0 > 0 }
+        return all.sorted()
+    }
 
     var body: some View {
-        List {
-            Section {
-                header
+        ScrollViewReader { proxy in
+            List(selection: $selection) {
+                Section { header }
+                switch tab {
+                case .series: seriesSections
+                case .theory: theorySections
+                }
             }
-            switch tab {
-            case .series: seriesSections
-            case .theory: theorySections
+            .listStyle(.inset)
+            .onChange(of: focusTarget, initial: true) { _, target in
+                guard let target else { return }
+                if course.theoryItems.contains(where: { $0.id == target }) { tab = .theory } else { tab = .series }
+                week = 0
+                selection = target
+                showingInspector = true
+                focusTarget = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    withAnimation { proxy.scrollTo(target, anchor: .center) }
+                }
             }
         }
-        .listStyle(.inset)
         .navigationTitle(course.displayCode)
         .navigationSubtitle(course.name)
+        .inspector(isPresented: $showingInspector) {
+            inspector
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Affichage", selection: $tab) {
                     ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
+                .frame(width: 180)
             }
             ToolbarItem {
-                Toggle(isOn: $onlyCurrentWeek) {
-                    Label("Semaine \(course.currentWeek)", systemImage: "calendar")
+                Picker("Semaine", selection: $week) {
+                    Text("Tout le semestre").tag(0)
+                    Divider()
+                    ForEach(weeks, id: \.self) { value in
+                        Text(value == course.currentWeek ? "Semaine \(value) (en cours)" : "Semaine \(value)").tag(value)
+                    }
                 }
-                .help("Seulement la semaine en cours")
+                .help("Montrer une semaine")
             }
             ToolbarItem {
                 Button {
-                    timer.courseID = course.id
-                    timer.taskType = tab == .series ? .exercise : .theory
-                    if timer.phase == .idle { timer.start() }
+                    timer.start(courseID: course.id, taskType: tab == .series ? .exercise : .theory, targetID: selection)
                 } label: {
-                    Label("Chrono", systemImage: timer.phase == .idle ? "play.circle" : "timer")
+                    Label("Chrono", systemImage: "play.circle")
                 }
-                .help("Démarrer le chrono sur ce cours")
-                .disabled(timer.phase != .idle && timer.courseID == course.id)
+                .help("Démarrer le chrono sur ce cours (⌘T)")
+                .disabled(timer.phase != .idle)
+            }
+            ToolbarItem {
+                Button { showingInspector.toggle() } label: {
+                    Label("Inspecteur", systemImage: "sidebar.trailing")
+                }
+                .help("Afficher ou masquer l'inspecteur")
             }
         }
-        .onChange(of: tab) { _, _ in try? context.save() }
     }
+
+    // MARK: En-tête
 
     private var header: some View {
         let progress = ProgressEngine.progress(for: course)
@@ -74,11 +109,14 @@ struct MacCourseView: View {
             Spacer()
             stat("Théorie", progress.watchedCount, progress.videoCount)
             stat("Exercices", progress.doneCount, progress.exerciseCount)
-            Text("\(Int((progress.completion * 100).rounded())) %")
-                .font(.system(size: 30, weight: .regular, design: .serif))
-                .foregroundStyle(tint)
+            ZStack {
+                ProgressRingMini(value: progress.completion, tint: tint).scaleEffect(2.4)
+                Text("\(Int((progress.completion * 100).rounded()))").font(.callout.weight(.semibold)).monospacedDigit()
+            }
+            .frame(width: 48, height: 48)
         }
         .padding(.vertical, 8)
+        .selectionDisabled()
     }
 
     private func stat(_ title: String, _ done: Int, _ total: Int) -> some View {
@@ -92,43 +130,41 @@ struct MacCourseView: View {
 
     @ViewBuilder
     private var seriesSections: some View {
-        let series = course.sortedSeries.filter { !onlyCurrentWeek || $0.plannedWeek == course.currentWeek }
+        let series = course.sortedSeries.filter { week == 0 || $0.plannedWeek == week }
         if series.isEmpty {
-            Text(onlyCurrentWeek ? "Pas de série cette semaine." : "Aucune série.").foregroundStyle(.secondary)
+            Text(week == 0 ? "Aucune série." : "Pas de série en semaine \(week).").foregroundStyle(.secondary)
+                .selectionDisabled()
         }
         ForEach(series) { item in
             Section {
                 ForEach(item.sortedExercises) { exercise in
-                    ExerciseMacRow(exercise: exercise, tint: tint)
+                    ExerciseMacRow(exercise: exercise, isTimed: timer.phase != .idle && timer.targetID == exercise.id)
+                        .tag(exercise.id)
+                        .id(exercise.id)
+                        .contextMenu { exerciseMenu(exercise) }
                 }
             } header: {
-                HStack(spacing: 10) {
-                    Text(item.title.isEmpty ? "Série \(item.seriesNumber)" : item.title)
-                        .font(.system(.title3, design: .serif))
-                        .foregroundStyle(.primary)
-                    if item.plannedWeek > 0 {
-                        Text("S\(item.plannedWeek)").foregroundStyle(.secondary)
-                    }
-                    if let due = item.dueDate {
-                        Text("à rendre le \(DateUtils.shortDay.string(from: due))").foregroundStyle(.orange)
-                    }
-                    Spacer()
-                    Text("\(item.doneCount)/\(item.requiredExercises.count)").monospacedDigit().foregroundStyle(.secondary)
-                    if let url = web(item.urlString) {
-                        Link(destination: url) { Label("Énoncé", systemImage: "doc.richtext") }
-                    }
-                    if let url = web(item.solutionURLString) {
-                        if let date = item.solutionsAt, date > Date() {
-                            Label("Corrigé le \(DateUtils.shortDay.string(from: date))", systemImage: "lock")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Link(destination: url) { Label("Corrigé", systemImage: "checkmark.seal") }
-                        }
-                    }
-                }
-                .font(.callout)
-                .padding(.top, 10)
+                SeriesHeader(series: item)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func exerciseMenu(_ exercise: Exercise) -> some View {
+        Button(exercise.isDone ? "Marquer à faire" : "Marquer comme fait") { exercise.setDone(!exercise.isDone) }
+        Menu("Correction") {
+            ForEach(Correctness.allCases) { result in
+                Button(result.label) { exercise.correct(result) }
+            }
+            if exercise.correctness != nil {
+                Divider()
+                Button("Retirer la correction") { exercise.clearCorrection() }
+            }
+        }
+        Divider()
+        Button("Chronométrer cet exercice") { time(exercise.id, .exercise) }
+        if let url = web(exercise.statementURLString) ?? web(exercise.series?.urlString ?? "") {
+            Link("Ouvrir l'énoncé", destination: url)
         }
     }
 
@@ -136,26 +172,99 @@ struct MacCourseView: View {
 
     @ViewBuilder
     private var theorySections: some View {
-        let items = course.sortedTheoryItems.filter { !onlyCurrentWeek || $0.plannedWeek == course.currentWeek }
-        let weeks = Dictionary(grouping: items, by: \.plannedWeek)
+        let items = course.sortedTheoryItems.filter { week == 0 || $0.plannedWeek == week }
+        let grouped = Dictionary(grouping: items, by: \.plannedWeek)
         if items.isEmpty {
-            Text(onlyCurrentWeek ? "Pas de théorie cette semaine." : "Aucune théorie.").foregroundStyle(.secondary)
+            Text(week == 0 ? "Aucune théorie." : "Pas de théorie en semaine \(week).").foregroundStyle(.secondary)
+                .selectionDisabled()
         }
-        ForEach(weeks.keys.sorted { lhs, rhs in
-            // Les éléments sans semaine (documents) en dernier.
-            (lhs == 0 ? Int.max : lhs) < (rhs == 0 ? Int.max : rhs)
-        }, id: \.self) { week in
+        ForEach(grouped.keys.sorted { ($0 == 0 ? Int.max : $0) < ($1 == 0 ? Int.max : $1) }, id: \.self) { key in
             Section {
-                ForEach(weeks[week] ?? []) { item in
-                    TheoryMacRow(item: item, tint: tint)
+                ForEach(grouped[key] ?? []) { item in
+                    TheoryMacRow(item: item, tint: tint, isTimed: timer.phase != .idle && timer.targetID == item.id)
+                        .tag(item.id)
+                        .id(item.id)
+                        .contextMenu {
+                            Button(item.isWatched ? "Marquer non vu" : "Marquer comme vu") {
+                                item.watchedAt = item.isWatched ? nil : Date()
+                            }
+                            Button("Chronométrer") { time(item.id, .theory) }
+                            if let url = web(item.urlString) { Link("Ouvrir", destination: url) }
+                        }
                 }
             } header: {
-                Text(week > 0 ? "Semaine \(week)" : "Documents")
-                    .font(.system(.title3, design: .serif))
-                    .foregroundStyle(.primary)
-                    .padding(.top, 10)
+                HStack {
+                    Text(key > 0 ? "Semaine \(key)" : "Documents").font(.system(.title3, design: .serif))
+                    if key == course.currentWeek {
+                        Text("en cours").font(.caption.weight(.semibold)).foregroundStyle(tint)
+                    }
+                }
+                .foregroundStyle(.primary)
+                .padding(.top, 8)
             }
         }
+    }
+
+    // MARK: Inspecteur
+
+    @ViewBuilder
+    private var inspector: some View {
+        if let id = selection, let exercise = course.allExercises.first(where: { $0.id == id }) {
+            ExerciseInspector(exercise: exercise, tint: tint) { time(exercise.id, .exercise) }
+        } else if let id = selection, let item = course.theoryItems.first(where: { $0.id == id }) {
+            TheoryInspector(item: item, tint: tint) { time(item.id, .theory) }
+        } else {
+            ContentUnavailableView("Choisis un exercice", systemImage: "sidebar.trailing",
+                                   description: Text("L'énoncé, les questions, la correction et le temps passé s'affichent ici."))
+        }
+    }
+
+    /// Démarre — ou, si une session tourne, bascule dessus sans couper.
+    private func time(_ target: UUID, _ type: TaskType) {
+        if timer.phase == .idle {
+            timer.start(courseID: course.id, taskType: type, targetID: target)
+        } else {
+            timer.retarget(courseID: course.id, taskType: type, targetID: target)
+        }
+    }
+
+    private func web(_ string: String) -> URL? {
+        guard let url = URL(string: string), url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
+    }
+}
+
+private struct SeriesHeader: View {
+    let series: ExerciseSeries
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title)
+                .font(.system(.title3, design: .serif))
+                .foregroundStyle(.primary)
+            if series.plannedWeek > 0 {
+                Text("S\(series.plannedWeek)").foregroundStyle(.secondary)
+            }
+            if let due = series.dueDate {
+                Label("à rendre le \(DateUtils.shortDay.string(from: due))", systemImage: "tray.and.arrow.up")
+                    .foregroundStyle(due < Date() ? .red : .orange)
+            }
+            Spacer()
+            Text("\(series.doneCount)/\(series.requiredExercises.count)").monospacedDigit().foregroundStyle(.secondary)
+            if let url = web(series.urlString) {
+                Link(destination: url) { Label("Énoncé", systemImage: "doc.richtext") }
+            }
+            if let url = web(series.solutionURLString) {
+                if let date = series.solutionsAt, date > Date() {
+                    Label("Corrigé le \(DateUtils.shortDay.string(from: date))", systemImage: "lock")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Link(destination: url) { Label("Corrigé", systemImage: "checkmark.seal") }
+                }
+            }
+        }
+        .font(.callout)
+        .padding(.top, 10)
     }
 
     private func web(_ string: String) -> URL? {
@@ -166,18 +275,19 @@ struct MacCourseView: View {
 
 private struct ExerciseMacRow: View {
     @Bindable var exercise: Exercise
-    let tint: Color
+    let isTimed: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Toggle(isOn: Binding(get: { exercise.isDone }, set: { exercise.setDone($0) })) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
+            Toggle(isOn: Binding(get: { exercise.isDone }, set: { exercise.setDone($0) })) { EmptyView() }
+                .toggleStyle(.checkbox)
+                .labelsHidden()
             Text(exercise.exerciseNumber).monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 36, alignment: .leading)
             Text(exercise.title.isEmpty ? exercise.displayNumber : exercise.title)
-                .strikethrough(exercise.isDone && exercise.correctness == .correct, color: .secondary)
+                .foregroundStyle(exercise.isDone ? .secondary : .primary)
+            if let label = exercise.subQuestionLabel {
+                Text(label).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
             if exercise.isBonus {
                 Text("bonus").font(.caption).foregroundStyle(.secondary)
             }
@@ -185,26 +295,17 @@ private struct ExerciseMacRow: View {
                 Text("à refaire").font(.caption.weight(.semibold)).foregroundStyle(.red)
             }
             Spacer()
-            Menu {
-                ForEach(Correctness.allCases) { result in
-                    Button(result.label) { exercise.correct(result) }
-                }
-                if exercise.correctness != nil {
-                    Divider()
-                    Button("Retirer la correction") { exercise.clearCorrection() }
-                }
-            } label: {
-                if let correctness = exercise.correctness {
-                    Label(correctness.shortLabel, systemImage: "circle.fill")
-                        .foregroundStyle(correctness.color)
-                } else {
-                    Text(exercise.isDone ? "À corriger" : "Correction")
-                        .foregroundStyle(.secondary)
-                }
+            if isTimed {
+                Image(systemName: "timer").foregroundStyle(.secondary).help("Chronométré en ce moment")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .font(.callout)
+            if let correctness = exercise.correctness {
+                Label(correctness.shortLabel, systemImage: "circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption)
+                    .foregroundStyle(correctness.color)
+            } else if exercise.isDone {
+                Text("à corriger").font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 2)
     }
@@ -213,21 +314,22 @@ private struct ExerciseMacRow: View {
 private struct TheoryMacRow: View {
     @Bindable var item: TheoryItem
     let tint: Color
+    let isTimed: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             Toggle(isOn: Binding(get: { item.isWatched },
-                                 set: { item.watchedAt = $0 ? (item.watchedAt ?? Date()) : nil })) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
+                                 set: { item.watchedAt = $0 ? (item.watchedAt ?? Date()) : nil })) { EmptyView() }
+                .toggleStyle(.checkbox)
+                .labelsHidden()
             Image(systemName: item.kind.icon).foregroundStyle(tint).frame(width: 18)
             if !item.number.isEmpty {
                 Text(item.number).monospacedDigit().foregroundStyle(.secondary)
             }
             Text(item.title.isEmpty ? item.kind.label : item.title).lineLimit(2)
+                .foregroundStyle(item.isWatched ? .secondary : .primary)
             Spacer()
+            if isTimed { Image(systemName: "timer").foregroundStyle(.secondary) }
             if item.durationSeconds > 0 {
                 Text(item.durationLabel).foregroundStyle(.secondary).monospacedDigit()
             }
@@ -237,5 +339,125 @@ private struct TheoryMacRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Inspecteurs
+
+private struct ExerciseInspector: View {
+    @Bindable var exercise: Exercise
+    let tint: Color
+    var time: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(exercise.displayNumber).font(.caption.weight(.semibold)).foregroundStyle(tint)
+                    Text(exercise.title.isEmpty ? exercise.displayNumber : exercise.title)
+                        .font(.system(.title3, design: .serif))
+                    if !exercise.statement.isEmpty {
+                        Text(exercise.statement).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                }
+                Toggle("Fait", isOn: Binding(get: { exercise.isDone }, set: { exercise.setDone($0) }))
+            }
+
+            if exercise.hasSubQuestions {
+                Section("Questions · \(exercise.subQuestionLabel ?? "")") {
+                    ForEach(exercise.leafSubQuestions) { question in
+                        Toggle(isOn: Binding(get: { question.isDone }, set: { done in
+                            question.isDone = done
+                            question.doneAt = done ? Date() : nil
+                            exercise.refreshCompletion()
+                        })) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(question.path).monospacedDigit().foregroundStyle(.secondary)
+                                Text(question.text.isEmpty ? " " : question.text).lineLimit(3)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+
+            Section("Correction") {
+                Picker("Correction", selection: Binding(get: { exercise.correctness }, set: { value in
+                    if let value { exercise.correct(value) } else { exercise.clearCorrection() }
+                })) {
+                    Text("—").tag(Correctness?.none)
+                    ForEach(Correctness.allCases) { Text($0.shortLabel).tag(Correctness?.some($0)) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Toggle("À refaire", isOn: $exercise.redoRequired)
+                TextField("Remarque", text: Binding(get: { exercise.correctionNote ?? "" },
+                                                    set: { exercise.correctionNote = $0.isEmpty ? nil : $0 }),
+                          axis: .vertical)
+                    .lineLimit(2...5)
+            }
+
+            if !exercise.hint.isEmpty {
+                Section("Indication") {
+                    Text(exercise.hint).textSelection(.enabled)
+                }
+            }
+            if !exercise.solution.isEmpty, exercise.series?.solutionsAt.map({ $0 <= Date() }) ?? true {
+                Section("Solution") {
+                    DisclosureGroup("Afficher la solution") {
+                        Text(exercise.solution).textSelection(.enabled)
+                    }
+                }
+            }
+
+            Section {
+                let sessions = exercise.targetedSessions ?? []
+                LabeledContent("Temps passé", value: DateUtils.hoursLabel(seconds: sessions.reduce(0) { $0 + $1.durationSeconds }))
+                Button(action: time) { Label("Chronométrer cet exercice", systemImage: "play.circle") }
+                if let url = URL(string: exercise.statementURLString.isEmpty ? (exercise.series?.urlString ?? "") : exercise.statementURLString),
+                   url.scheme?.hasPrefix("http") == true {
+                    Link(destination: url) { Label("Ouvrir l'énoncé", systemImage: "doc.richtext") }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct TheoryInspector: View {
+    @Bindable var item: TheoryItem
+    let tint: Color
+    var time: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text([item.kind.label, item.number].filter { !$0.isEmpty }.joined(separator: " "))
+                        .font(.caption.weight(.semibold)).foregroundStyle(tint)
+                    Text(item.title.isEmpty ? item.kind.label : item.title).font(.system(.title3, design: .serif))
+                    if item.plannedWeek > 0 { Text("Semaine \(item.plannedWeek)").foregroundStyle(.secondary) }
+                }
+                Toggle("Vu", isOn: Binding(get: { item.isWatched },
+                                           set: { item.watchedAt = $0 ? (item.watchedAt ?? Date()) : nil }))
+            }
+            if let summary = item.summaryText, !summary.isEmpty {
+                Section("Résumé") { Text(summary).textSelection(.enabled) }
+            }
+            Section {
+                let sessions = item.targetedSessions ?? []
+                LabeledContent("Temps passé", value: DateUtils.hoursLabel(seconds: sessions.reduce(0) { $0 + $1.durationSeconds }))
+                Button(action: time) { Label("Chronométrer", systemImage: "play.circle") }
+                if let url = URL(string: item.urlString), url.scheme?.hasPrefix("http") == true {
+                    Link(destination: url) { Label("Ouvrir", systemImage: "arrow.up.right.square") }
+                }
+                ForEach(item.links, id: \.url) { link in
+                    if let url = URL(string: link.url) {
+                        Link(destination: url) { Label(link.title, systemImage: link.kind.icon) }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 }

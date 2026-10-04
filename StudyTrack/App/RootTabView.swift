@@ -141,6 +141,8 @@ struct RootTabView: View {
                     // Le chrono rattrape ce qui s'est passé app fermée : une fin
                     // de bloc, une pause écoulée.
                     app.focus.reload()
+                    NSUbiquitousKeyValueStore.default.synchronize()
+                    app.focus.applyRemote()
                     FocusTimerCommandHandler.consumePending(container: app)
                     // Les coches faites dans un widget pendant que l'app dormait.
                     if WidgetSnapshotWriter.applyPendingCompletions(context: context) > 0 {

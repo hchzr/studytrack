@@ -30,6 +30,10 @@ final class FocusController {
 
     @ObservationIgnored weak var app: AppContainer?
     @ObservationIgnored private var ticker: Task<Void, Never>?
+    /// Vrai pendant qu'on applique un état venu d'un autre appareil : on ne le
+    /// republie pas (sinon les appareils se le renverraient sans fin).
+    @ObservationIgnored private var applyingRemote = false
+    @ObservationIgnored private var relayObserver: NSObjectProtocol?
 
     init() {
         state = FocusTimerStore.load()
@@ -333,10 +337,69 @@ final class FocusController {
         }
     }
 
+    // MARK: Entre appareils
+
+    /// Reprend l'état publié par un autre appareil (le Mac a démarré, mis en
+    /// pause ou terminé la session). Rien n'est enregistré ici : c'est
+    /// l'appareil qui termine qui enregistre.
+    /// Écoute les autres appareils **au niveau de l'app**, pas d'une fenêtre :
+    /// lancée en arrière-plan (écran éteint, push iCloud), l'app suit quand
+    /// même le chrono du Mac.
+    func startRelay() {
+        guard relayObserver == nil else { return }
+        relayObserver = NotificationCenter.default.addObserver(forName: CloudRelay.changed, object: nil,
+                                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyRemote() }
+        }
+        NSUbiquitousKeyValueStore.default.synchronize()
+        applyRemote()
+    }
+
+    func applyRemote() {
+        guard let remote = CloudRelay.remoteTimer() else {
+            #if DEBUG
+            Self.traceRelay("\(Date()) aucun état distant")
+            #endif
+            return
+        }
+        let decision = CloudRelay.decide(local: state, remote: remote,
+                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
+        #if DEBUG
+        Self.traceRelay("\(Date()) \(decision) remote@\(remote.updatedAt) from \(remote.device.prefix(8)) state:\(remote.state != nil) local:\(state != nil) applied:\(String(describing: CloudRelay.lastAppliedTimer))")
+        #endif
+        guard decision != .ignore else { return }
+        applyingRemote = true
+        defer { applyingRemote = false }
+        CloudRelay.lastAppliedTimer = remote.updatedAt
+        switch decision {
+        case .adopt(let remoteState):
+            state = remoteState
+            lastEvent = nil
+            commit(presence: false)
+        case .close:
+            close()
+        case .ignore:
+            break
+        }
+    }
+
+    #if DEBUG
+    /// Trace des états reçus d'un autre appareil, lisible depuis le Mac
+    /// (`devicectl … appGroupDataContainer`) : vérifier le chrono partagé.
+    private static func traceRelay(_ line: String) {
+        guard let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.studytracker.app")?
+                .appendingPathComponent("Library/Caches/relay.log") else { return }
+        let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        try? (existing + line + "\n").write(to: url, atomically: true, encoding: .utf8)
+    }
+    #endif
+
     // MARK: Publication
 
     /// Ferme la session : plus d'état, plus d'îlot, plus de présence.
     private func close() {
+        let ended = state?.sessionStartedAt
+        if !applyingRemote, let ended { CloudRelay.publishTimer(nil, ended: ended) }
         state = nil
         lastEvent = nil
         FocusTimerStore.save(nil)
@@ -356,6 +419,8 @@ final class FocusController {
     ///   - activity: republier la Live Activity.
     private func commit(presence: Bool = true, activity: Bool = true) {
         FocusTimerStore.save(state)
+        // Le Mac (et l'iPad) suivent le même chrono.
+        if !applyingRemote { CloudRelay.publishTimer(state) }
         guard let app, let state else { updateTicker(); return }
         if activity {
             StudyActivityController.publish(state, container: app)

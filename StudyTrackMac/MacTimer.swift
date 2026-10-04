@@ -1,197 +1,296 @@
 import Foundation
 import Observation
+import OSLog
 import SwiftData
 import UserNotifications
 
-/// Le chrono du Mac, dans la barre des menus.
+/// Le chrono du Mac — **le même** que celui de l'iPhone.
 ///
-/// Une session terminée devient une `StudySession`, enregistrée dans la base
-/// partagée : iCloud la porte sur l'iPhone, où elle compte dans le bilan, les
-/// widgets et les groupes comme une session du téléphone.
-///
-/// L'état est gardé à chaque geste : quitter l'app (ou redémarrer le Mac)
-/// pendant une session ne la perd pas.
+/// Il repose sur le même état (`FocusTimerState`) : même Pomodoro, mêmes
+/// pauses, même temps réparti exercice par exercice. Chaque geste est publié
+/// par `CloudRelay` : démarré ici, le chrono tourne sur l'iPhone (et inversement),
+/// et c'est l'appareil qui le termine qui enregistre la session — une seule
+/// fois, synchronisée par iCloud.
 @MainActor
 @Observable
 final class MacTimer {
-    enum Phase: String, Codable { case idle, running, paused }
+    enum Phase: Equatable { case idle, running, paused, onBreak }
 
-    private struct Saved: Codable {
-        var phase: Phase
-        var courseID: UUID?
-        var taskTypeRaw: String
-        var sessionStart: Date?
-        var segmentStart: Date?
-        var accumulated: TimeInterval
-        var pomodoro: Bool
-    }
-
-    private(set) var phase: Phase = .idle
-    var courseID: UUID? { didSet { persist() } }
-    var taskType: TaskType = .exercise { didSet { persist() } }
-    var pomodoro = false { didSet { persist() } }
-    /// Minutes d'un bloc Pomodoro.
-    var pomodoroMinutes = 25
-
-    private var sessionStart: Date?
-    private var segmentStart: Date?
-    private var accumulated: TimeInterval = 0
-    /// Avance d'une seconde pendant que le chrono tourne ; la barre des menus
-    /// s'y abonne.
+    private(set) var state: FocusTimerState?
+    /// Ce qui sera chronométré au prochain démarrage.
+    var courseID: UUID?
+    var taskType: TaskType = .exercise
+    var targetID: UUID?
+    var pomodoro = false
+    /// Avance d'une seconde pendant qu'il se passe quelque chose.
     private(set) var now = Date()
+
+    @ObservationIgnored let settings: MacSettings
+    /// Appelé à chaque changement d'état (widgets du bureau).
+    @ObservationIgnored var onChange: (() -> Void)?
+    @ObservationIgnored weak var container: ModelContainer?
     @ObservationIgnored private var ticker: Timer?
+    @ObservationIgnored private var applyingRemote = false
+    @ObservationIgnored private var observer: NSObjectProtocol?
+    @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "timer")
 
-    private static let key = "mac.timer"
-    private static let pomodoroNotification = "mac.pomodoro"
-
-    init() {
-        restore()
+    init(settings: MacSettings) {
+        self.settings = settings
+        pomodoro = settings.pomodoroDefault
+        state = FocusTimerStore.load()
+        if let state, !state.isRestorable(), !state.isRunning {
+            self.state = nil
+            FocusTimerStore.save(nil)
+        }
+        syncSelection()
+        tick()
+        observer = NotificationCenter.default.addObserver(forName: CloudRelay.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyRemote() }
+        }
+        NSUbiquitousKeyValueStore.default.synchronize()
+        applyRemote()
     }
 
-    var elapsed: TimeInterval {
-        accumulated + (phase == .running ? max(0, now.timeIntervalSince(segmentStart ?? now)) : 0)
+    // MARK: Lecture
+
+    var phase: Phase {
+        guard let state else { return .idle }
+        if state.currentBreak != nil { return .onBreak }
+        return state.isRunning ? .running : .paused
     }
 
-    /// Ce qui reste du bloc Pomodoro (`nil` hors Pomodoro).
-    var pomodoroRemaining: TimeInterval? {
-        guard pomodoro, phase != .idle else { return nil }
-        return max(0, TimeInterval(pomodoroMinutes * 60) - elapsed)
+    var elapsed: TimeInterval { state?.elapsed(at: now) ?? 0 }
+
+    /// Ce qui s'affiche en grand : le temps compté, ce qui reste du bloc en
+    /// Pomodoro, ou ce qui reste de la pause.
+    var displayTime: TimeInterval {
+        guard let state else { return 0 }
+        if let pause = state.currentBreak { return max(0, pause.endsAt.timeIntervalSince(now)) }
+        if state.pomodoro {
+            let block = settings.pomodoro.blockDuration
+            let into = elapsed.truncatingRemainder(dividingBy: block)
+            return max(0, block - into)
+        }
+        return elapsed
+    }
+
+    var statusLabel: String? {
+        guard let state else { return nil }
+        if let pause = state.currentBreak { return pause.kind.label }
+        if !state.isRunning { return "En pause" }
+        if state.pomodoro {
+            let block = Int(elapsed / settings.pomodoro.blockDuration) + 1
+            return "Bloc \(block)"
+        }
+        return nil
     }
 
     // MARK: Gestes
 
-    func start() {
-        guard phase == .idle else { return }
-        let date = Date()
-        sessionStart = date
-        segmentStart = date
-        accumulated = 0
-        now = date
-        phase = .running
-        persist()
-        tick()
-        schedulePomodoro()
+    func start(courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "") {
+        if let courseID { self.courseID = courseID }
+        if let taskType { self.taskType = taskType }
+        if targetID != nil || courseID != nil { self.targetID = targetID }
+        if var current = state {
+            current.switchContext(courseID: self.courseID, taskTypeRaw: self.taskType.rawValue, targetID: self.targetID)
+            if !label.isEmpty { current.contextLabel = label }
+            current.start()
+            state = current
+        } else {
+            var fresh = FocusTimerState(sessionStartedAt: Date(), courseID: self.courseID,
+                                        taskTypeRaw: self.taskType.rawValue, targetID: self.targetID,
+                                        contextLabel: label, pomodoro: pomodoro)
+            fresh.start()
+            state = fresh
+        }
+        commit()
     }
 
     func pause() {
-        guard phase == .running else { return }
-        now = Date()
-        accumulated = elapsed
-        segmentStart = nil
-        phase = .paused
-        persist()
-        tick()
-        cancelPomodoro()
+        guard var current = state, current.isRunning else { return }
+        current.pause()
+        state = current
+        commit()
     }
 
     func resume() {
-        guard phase == .paused else { return }
-        segmentStart = Date()
-        now = Date()
-        phase = .running
-        persist()
-        tick()
-        schedulePomodoro()
+        guard var current = state else { return }
+        current.start()
+        state = current
+        commit()
     }
 
+    /// Le geste principal : démarrer, mettre en pause, reprendre.
     func toggle() {
         switch phase {
         case .idle: start()
         case .running: pause()
-        case .paused: resume()
+        case .paused, .onBreak: resume()
         }
     }
 
-    /// Termine et enregistre. Moins d'une minute ne compte pas : c'était un
-    /// faux départ, pas une session.
+    func skipBreak() {
+        guard var current = state, current.currentBreak != nil else { return }
+        current.skipBreak()
+        state = current
+        commit()
+    }
+
+    /// Change ce qui est chronométré sans couper le chrono : le temps déjà
+    /// compté reste à la cible précédente.
+    func retarget(courseID: UUID?, taskType: TaskType, targetID: UUID? = nil) {
+        self.courseID = courseID
+        self.taskType = taskType
+        self.targetID = targetID
+        guard var current = state else { return }
+        current.switchContext(courseID: courseID, taskTypeRaw: taskType.rawValue, targetID: targetID)
+        state = current
+        commit()
+    }
+
+    /// Termine et enregistre — une session par cible, comme sur l'iPhone.
+    /// Moins d'une minute : un faux départ, rien n'est enregistré.
     @discardableResult
-    func stop(context: ModelContext) -> StudySession? {
-        guard phase != .idle else { return nil }
-        now = Date()
-        let seconds = Int(elapsed)
-        let start = sessionStart ?? Date().addingTimeInterval(-elapsed)
-        reset()
-        guard seconds >= 60 else { return nil }
-        let course = courseID.flatMap { id in
-            (try? context.fetch(FetchDescriptor<Course>(predicate: #Predicate { $0.id == id })))?.first
+    func finish() -> Int? {
+        guard let current = state else { return nil }
+        let seconds = Int(current.elapsed())
+        defer { close() }
+        guard seconds >= 60, let container else { return nil }
+        let context = ModelContext(container)
+        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
+        var start = current.sessionStartedAt
+        for (index, part) in current.allocatedSeconds().enumerated() {
+            let course = courses.first { $0.id == part.segment.courseID }
+            let exercise = course?.allExercises.first { $0.id == part.segment.targetID }
+            let theory = course?.theoryItems.first { $0.id == part.segment.targetID }
+            let session = StudySession(course: course, taskType: part.segment.taskType, startedAt: start,
+                                       durationSeconds: part.seconds, isManual: false,
+                                       note: index == 0 ? current.note : "",
+                                       exercise: exercise, theoryItem: theory)
+            context.insert(session)
+            start = start.addingTimeInterval(TimeInterval(part.seconds))
         }
-        let session = StudySession(course: course, taskType: taskType, startedAt: start, durationSeconds: seconds)
-        context.insert(session)
         try? context.save()
-        return session
+        return seconds
     }
 
     func discard() {
-        reset()
+        close()
     }
 
-    private func reset() {
-        phase = .idle
-        sessionStart = nil
-        segmentStart = nil
-        accumulated = 0
-        persist()
+    private func close() {
+        let ended = state?.sessionStartedAt
+        if !applyingRemote, let ended {
+            CloudRelay.publishTimer(nil, ended: ended)
+            log.notice("chrono publié : terminé")
+        }
+        state = nil
+        FocusTimerStore.save(nil)
+        cancelNotifications()
         tick()
-        cancelPomodoro()
+        onChange?()
+    }
+
+    private func commit() {
+        FocusTimerStore.save(state)
+        if !applyingRemote {
+            CloudRelay.publishTimer(state)
+            log.notice("chrono publié : \(self.state == nil ? "aucun" : (self.state!.isRunning ? "en cours" : "en pause"), privacy: .public)")
+        }
+        syncSelection()
+        scheduleNotifications()
+        now = Date()
+        tick()
+        onChange?()
+    }
+
+    /// Le cours et le travail affichés suivent la session en cours.
+    private func syncSelection() {
+        guard let state else { return }
+        courseID = state.courseID
+        taskType = state.taskType
+        targetID = state.targetID
+        pomodoro = state.pomodoro
+    }
+
+    // MARK: Entre appareils
+
+    /// L'état publié par l'iPhone (ou un autre Mac).
+    func applyRemote() {
+        guard let remote = CloudRelay.remoteTimer() else { return }
+        let decision = CloudRelay.decide(local: state, remote: remote,
+                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
+        log.notice("chrono distant de \(remote.device.prefix(8), privacy: .public) : \(String(describing: decision), privacy: .public)")
+        guard decision != .ignore else { return }
+        applyingRemote = true
+        defer { applyingRemote = false }
+        CloudRelay.lastAppliedTimer = remote.updatedAt
+        switch decision {
+        case .adopt(let remoteState):
+            state = remoteState
+            commit()
+        case .close:
+            close()
+        case .ignore:
+            break
+        }
     }
 
     // MARK: Battement
 
-    /// Une seconde, seulement quand le chrono tourne : au repos, rien ne
-    /// réveille le processeur.
+    /// Une seconde, seulement quand il y a quelque chose qui avance.
     private func tick() {
         ticker?.invalidate()
         ticker = nil
-        guard phase == .running else { return }
+        guard let state, state.isRunning || state.currentBreak != nil else { return }
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.now = Date() }
+            MainActor.assumeIsolated { self?.beat() }
         }
         timer.tolerance = 0.2
         RunLoop.main.add(timer, forMode: .common)
         ticker = timer
     }
 
-    // MARK: Pomodoro
-
-    private func schedulePomodoro() {
-        cancelPomodoro()
-        guard pomodoro, let remaining = pomodoroRemaining, remaining > 1 else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Bloc terminé"
-        content.body = "\(pomodoroMinutes) min de travail. Une pause ?"
-        content.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: Self.pomodoroNotification,
-                                                                     content: content, trigger: trigger))
+    private func beat() {
+        now = Date()
+        guard var current = state else { return }
+        let events = current.advance(settings: settings.pomodoro, to: now)
+        guard !events.isEmpty else { return }
+        state = current
+        commit()
     }
 
-    private func cancelPomodoro() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.pomodoroNotification])
-    }
+    // MARK: Notifications
 
-    // MARK: Mémoire
-
-    private func persist() {
-        let saved = Saved(phase: phase, courseID: courseID, taskTypeRaw: taskType.rawValue,
-                          sessionStart: sessionStart, segmentStart: segmentStart,
-                          accumulated: accumulated, pomodoro: pomodoro)
-        if let data = try? JSONEncoder().encode(saved) {
-            UserDefaults.standard.set(data, forKey: Self.key)
+    private func scheduleNotifications() {
+        cancelNotifications()
+        guard let state else { return }
+        let center = UNUserNotificationCenter.current()
+        if let pause = state.currentBreak {
+            let content = UNMutableNotificationContent()
+            content.title = "Fin de la pause"
+            content.body = "On s'y remet quand tu es prêt·e."
+            content.sound = .default
+            let interval = pause.endsAt.timeIntervalSinceNow
+            if interval > 1 {
+                center.add(UNNotificationRequest(identifier: "mac.break", content: content,
+                                                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)))
+            }
+        } else if state.pomodoro, state.isRunning, let end = state.blockEndDate(settings: settings.pomodoro) {
+            let content = UNMutableNotificationContent()
+            content.title = "Bloc terminé"
+            content.body = "\(settings.focusMinutes) min de travail. Pause de \(settings.shortBreakMinutes) min."
+            content.sound = .default
+            let interval = end.timeIntervalSinceNow
+            if interval > 1 {
+                center.add(UNNotificationRequest(identifier: "mac.block", content: content,
+                                                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)))
+            }
         }
     }
 
-    private func restore() {
-        guard let data = UserDefaults.standard.data(forKey: Self.key),
-              let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
-        phase = saved.phase
-        courseID = saved.courseID
-        taskType = TaskType(rawValue: saved.taskTypeRaw) ?? .exercise
-        sessionStart = saved.sessionStart
-        segmentStart = saved.segmentStart
-        accumulated = saved.accumulated
-        pomodoro = saved.pomodoro
-        now = Date()
-        tick()
+    private func cancelNotifications() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["mac.break", "mac.block"])
     }
 }
 
