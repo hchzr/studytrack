@@ -55,6 +55,7 @@ final class MacTimer {
     @ObservationIgnored private var applyingRemote = false
     @ObservationIgnored private var observer: NSObjectProtocol?
     @ObservationIgnored private var baseObserver: NSObjectProtocol?
+    @ObservationIgnored private var lastLoggedRemote: Date?
 
     private var relayContext: ModelContext? { container.map { ModelContext($0) } }
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "timer")
@@ -307,16 +308,19 @@ final class MacTimer {
     /// L'état publié par l'iPhone (ou un autre Mac).
     func applyRemote() {
         guard !isolated, let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
+        CloudRelay.noteShared(local: state, remote: remote)
         let decision = CloudRelay.decide(local: state, remote: remote,
-                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
+                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID,
+                                         shared: CloudRelay.sharedSession)
         let fmt = ISO8601DateFormatter()
-        if decision != .ignore { log.notice("""
+        let differs = remote.state.map { r in self.state.map { abs($0.sessionStartedAt.timeIntervalSince(r.sessionStartedAt)) >= 1 } ?? false } ?? false
+        if decision != .ignore || (differs && remote.updatedAt != lastLoggedRemote) { lastLoggedRemote = remote.updatedAt; log.notice("""
             chrono distant de \(remote.device.prefix(8), privacy: .public) à \(fmt.string(from: remote.updatedAt), privacy: .public) \
             (session \(remote.state.map { fmt.string(from: $0.sessionStartedAt) } ?? "aucune", privacy: .public), \
             \(remote.state?.isRunning == true ? "en cours" : "arrêté", privacy: .public)) ; \
             ici session \(self.state.map { fmt.string(from: $0.sessionStartedAt) } ?? "aucune", privacy: .public), \
             dernier appliqué \(CloudRelay.lastAppliedTimer.map { fmt.string(from: $0) } ?? "-", privacy: .public) → \
-            \(decision == .close ? "ferme" : "adopte", privacy: .public)
+            \(decision == .ignore ? "ignore (autre session)" : (decision == .close ? "ferme" : "adopte"), privacy: .public)
             """) }
         guard decision != .ignore else { return }
         applyingRemote = true

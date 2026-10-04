@@ -53,8 +53,16 @@ enum CloudRelay {
     /// Une **même** session (même début) suit l'appareil qui a agi en dernier.
     /// Deux sessions **différentes** ne s'écrasent jamais : chacune sera
     /// enregistrée par son appareil.
+    ///
+    /// Une **nouvelle** session venue d'ailleurs remplace pourtant la mienne
+    /// quand l'autre appareil l'a fermée : terminer puis relancer aussitôt
+    /// écrase la balise « terminée » avant qu'elle n'arrive — seule la
+    /// nouvelle session parvient. On le sait par `endedSession` (que chaque
+    /// publication porte désormais), ou parce que ma session était **partagée**
+    /// (`shared` : vue chez l'autre appareil) et que la sienne est plus récente.
     static func decide(local: FocusTimerState?, remote: TimerSnapshot,
-                       lastApplied: Date?, device: String, now: Date = Date()) -> TimerDecision {
+                       lastApplied: Date?, device: String, shared: Date? = nil,
+                       now: Date = Date()) -> TimerDecision {
         guard remote.device != device, remote.updatedAt > (lastApplied ?? .distantPast) else { return .ignore }
         switch (local, remote.state) {
         case (nil, nil):
@@ -62,11 +70,36 @@ enum CloudRelay {
         case (nil, let state?):
             return state.isRestorable(at: now) || state.isRunning ? .adopt(state) : .ignore
         case (let mine?, nil):
-            return remote.endedSession.map { abs($0.timeIntervalSince(mine.sessionStartedAt)) < 1 } == true ? .close : .ignore
+            return same(remote.endedSession, mine.sessionStartedAt) ? .close : .ignore
         case (let mine?, let state?):
-            guard abs(mine.sessionStartedAt.timeIntervalSince(state.sessionStartedAt)) < 1 else { return .ignore }
-            return mine == state ? .ignore : .adopt(state)
+            if same(mine.sessionStartedAt, state.sessionStartedAt) {
+                return mine == state ? .ignore : .adopt(state)
+            }
+            let closedThere = same(remote.endedSession, mine.sessionStartedAt)
+                || (same(shared, mine.sessionStartedAt) && state.sessionStartedAt > mine.sessionStartedAt)
+            guard closedThere, state.isRestorable(at: now) || state.isRunning else { return .ignore }
+            return .adopt(state)
         }
+    }
+
+    private static func same(_ a: Date?, _ b: Date) -> Bool {
+        a.map { abs($0.timeIntervalSince(b)) < 1 } ?? false
+    }
+
+    private static let sharedKey = "cloudRelay.sharedSession"
+    private static let endedKey = "cloudRelay.lastEnded"
+
+    /// La session que l'autre appareil connaît (dont il a publié un état).
+    static var sharedSession: Date? {
+        get { UserDefaults.standard.object(forKey: sharedKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: sharedKey) }
+    }
+
+    /// Retient qu'une session est partagée : à appeler avec chaque état distant.
+    static func noteShared(local: FocusTimerState?, remote: TimerSnapshot) {
+        guard let mine = local, remote.device != deviceID,
+              let theirs = remote.state, same(theirs.sessionStartedAt, mine.sessionStartedAt) else { return }
+        sharedSession = mine.sessionStartedAt
     }
 
     private static let timerKey = "timer"
@@ -83,7 +116,12 @@ enum CloudRelay {
     @discardableResult
     static func publishTimer(_ state: FocusTimerState?, ended: Date? = nil, now: Date = Date(),
                              context: ModelContext? = nil) -> TimerSnapshot {
-        let snapshot = TimerSnapshot(state: state, endedSession: ended, updatedAt: now, device: deviceID)
+        // La dernière session fermée ici voyage avec chaque publication : si
+        // une nouvelle session la suit de près, l'autre appareil saura quand
+        // même que l'ancienne est finie.
+        if let ended { UserDefaults.standard.set(ended, forKey: endedKey) }
+        let lastEnded = ended ?? UserDefaults.standard.object(forKey: endedKey) as? Date
+        let snapshot = TimerSnapshot(state: state, endedSession: lastEnded, updatedAt: now, device: deviceID)
         guard let data = try? encoder.encode(snapshot) else { return snapshot }
         store.set(data, forKey: timerKey)
         lastAppliedTimer = now

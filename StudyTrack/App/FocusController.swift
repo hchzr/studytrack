@@ -367,8 +367,10 @@ final class FocusController {
 
     func applyRemote() {
         guard let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
+        CloudRelay.noteShared(local: state, remote: remote)
         let decision = CloudRelay.decide(local: state, remote: remote,
-                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
+                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID,
+                                         shared: CloudRelay.sharedSession)
         guard decision != .ignore else { return }
         applyingRemote = true
         defer { applyingRemote = false }

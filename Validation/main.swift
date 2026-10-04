@@ -5503,6 +5503,16 @@ do {
           "deux sessions différentes ne s'écrasent jamais")
     check(CloudRelay.decide(local: other, remote: snap(nil, ended: t0, at: 90), lastApplied: t0, device: "iphone", now: now) == .ignore,
           "la fin d'une autre session ne ferme pas la mienne")
+    // Terminer puis relancer aussitôt sur l'iPhone : seule la nouvelle session arrive.
+    var next = FocusTimerState(sessionStartedAt: t0.addingTimeInterval(100)); next.start(at: t0.addingTimeInterval(100))
+    check(CloudRelay.decide(local: session, remote: snap(next, ended: t0, at: 101), lastApplied: t0, device: "iphone", now: now) == .adopt(next),
+          "nouvelle session après avoir terminé la mienne ailleurs : elle remplace la mienne")
+    check(CloudRelay.decide(local: session, remote: snap(next, at: 101), lastApplied: t0, device: "iphone", shared: t0, now: now) == .adopt(next),
+          "ma session était partagée et l'autre appareil en a lancé une plus récente : il l'a fermée")
+    check(CloudRelay.decide(local: session, remote: snap(next, at: 101), lastApplied: t0, device: "iphone", now: now) == .ignore,
+          "session jamais partagée : une autre session ne l'écrase pas")
+    check(CloudRelay.decide(local: next, remote: snap(session, at: 101), lastApplied: t0, device: "iphone", shared: t0.addingTimeInterval(100), now: now) == .ignore,
+          "une session plus ancienne ne remplace jamais une plus récente")
 
     let viaKVS = snap(nil, ended: t0, at: 10)
     let viaBase = snap(session, at: 20, device: "iphone")
