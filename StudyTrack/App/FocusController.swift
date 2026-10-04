@@ -366,17 +366,9 @@ final class FocusController {
     }
 
     func applyRemote() {
-        guard let remote = CloudRelay.remoteTimer(context: relayContext) else {
-            #if DEBUG
-            Self.traceRelay("\(Date()) aucun état distant")
-            #endif
-            return
-        }
+        guard let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
         let decision = CloudRelay.decide(local: state, remote: remote,
                                          lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
-        #if DEBUG
-        Self.traceRelay("\(Date()) \(decision) remote@\(remote.updatedAt) from \(remote.device.prefix(8)) state:\(remote.state != nil) local:\(state != nil) applied:\(String(describing: CloudRelay.lastAppliedTimer))")
-        #endif
         guard decision != .ignore else { return }
         applyingRemote = true
         defer { applyingRemote = false }
@@ -392,17 +384,6 @@ final class FocusController {
             break
         }
     }
-
-    #if DEBUG
-    /// Trace des états reçus d'un autre appareil, lisible depuis le Mac
-    /// (`devicectl … appGroupDataContainer`) : vérifier le chrono partagé.
-    private static func traceRelay(_ line: String) {
-        guard let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.studytracker.app")?
-                .appendingPathComponent("Library/Caches/relay.log") else { return }
-        let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-        try? (existing + line + "\n").write(to: url, atomically: true, encoding: .utf8)
-    }
-    #endif
 
     // MARK: Publication
 
