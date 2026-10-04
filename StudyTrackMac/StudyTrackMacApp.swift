@@ -34,7 +34,14 @@ struct StudyTrackMacApp: App {
         _timer = State(initialValue: timer)
         MacAppDelegate.timer = timer
         // La voie instantanée du chrono partagé (moins d'une seconde).
-        if store.isCloudSynced { TimerLink.shared.startFromBundle(containerID: MacStore.cloudContainerID) }
+        if store.isCloudSynced {
+            // Chaque geste du Mac emporte l'état de l'îlot : le relais le pousse
+            // à l'écran verrouillé de l'iPhone, même app fermée.
+            TimerLink.shared.livePayload = { [container = store.container] snapshot in
+                MacLivePayload.make(snapshot, container: container, settings: settings.pomodoro)
+            }
+            TimerLink.shared.startFromBundle(containerID: MacStore.cloudContainerID)
+        }
         MacAppDelegate.settings = settings
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         #if DEBUG
@@ -266,4 +273,21 @@ private final class DockItem: NSMenuItem {
     required init(coder: NSCoder) { fatalError() }
 
     @MainActor @objc private func fire() { handler() }
+}
+
+/// L'état de l'îlot de l'iPhone, construit par le Mac à chaque geste.
+enum MacLivePayload {
+    @MainActor
+    static func make(_ snapshot: CloudRelay.TimerSnapshot, container: ModelContainer, settings: PomodoroSettings) -> Data? {
+        guard let state = snapshot.state else {
+            return LiveActivityBuilder.push(event: "end", state: ActivityTimerState(countingSince: nil, frozenTotal: 0),
+                                            attributes: nil)
+        }
+        let context = ModelContext(container)
+        let course = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first { $0.id == state.courseID }
+        let exercise = LiveActivityBuilder.exercise(for: state, course: course)
+        let content = LiveActivityBuilder.state(timer: state, settings: settings, exercise: exercise, course: course)
+        return LiveActivityBuilder.push(event: "update", state: content,
+                                        attributes: LiveActivityBuilder.attributes(for: state, course: course))
+    }
 }

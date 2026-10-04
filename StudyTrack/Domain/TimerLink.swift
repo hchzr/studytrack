@@ -5,53 +5,58 @@ import os
 import CloudKit
 #endif
 
-/// La voie **instantanée** du chrono partagé : une diffusion Supabase Realtime
+/// La voie **instantanée** du chrono partagé : le relais Cloudflare (`relay/`)
 /// entre les appareils ouverts du même compte iCloud.
 ///
 /// Pourquoi : la base iCloud ne pousse ses changements que quand le système
 /// le décide (de quelques secondes à plusieurs minutes), et le magasin
 /// clé-valeur met jusqu'à une minute. Un « play » sur l'iPhone doit se voir
-/// sur le Mac **tout de suite**. Ici, une WebSocket : moins d'une seconde.
+/// sur le Mac **tout de suite** : ici, une WebSocket, ~70 ms.
 ///
 /// - Le canal se déduit de l'identifiant iCloud de l'utilisateur·rice (le même
 ///   sur ses appareils, opaque, propre au conteneur) : rien à appairer.
 /// - Le contenu est chiffré (AES-GCM, clé déduite du même identifiant) : le
-///   serveur relaie des octets illisibles.
+///   relais transporte des octets illisibles. Seul l'état de l'îlot, joint par
+///   le Mac pour l'écran verrouillé de l'iPhone, voyage en clair jusqu'à Apple.
+/// - Le relais garde le dernier état : un appareil qui se connecte le reçoit.
 /// - Les autres voies (clé-valeur, base) restent : un appareil fermé ou hors
 ///   ligne rattrape par elles.
 @MainActor
 final class TimerLink {
     static let shared = TimerLink()
 
+    enum TokenKind: String { case update, start }
+
+    /// Construit l'état de l'îlot à joindre à une publication (le Mac) :
+    /// le relais le pousse aux iPhone verrouillés.
+    var livePayload: ((CloudRelay.TimerSnapshot) -> Data?)?
+
     private let log = Logger(subsystem: "com.hczr.studytrack", category: "timerlink")
     private var endpoint: URL?
-    private var topic = ""
     private var key: SymmetricKey?
     private var socket: URLSessionWebSocketTask?
     private var heartbeat: Task<Void, Never>?
     private var reconnect: Task<Void, Never>?
     private var attempts = 0
-    private var ref = 0
-    private var joined = false
-    private var pending: [CloudRelay.TimerSnapshot] = []
-    /// Le dernier état publié ici : renvoyé à un appareil qui arrive.
-    private var lastSent: CloudRelay.TimerSnapshot?
+    private var connected = false
+    private var suspended = false
+    private var pending: CloudRelay.TimerSnapshot?
+    /// Les jetons APNs de l'îlot, renvoyés à chaque connexion.
+    private var tokens: [TokenKind: String?] = [:]
 
     // MARK: Démarrage
 
     /// Démarre avec la configuration de l'app (Info.plist) et l'identité
     /// iCloud — retenue, pour ne pas attendre CloudKit à chaque lancement.
     func startFromBundle(containerID: String) {
-        let info = Bundle.main
-        let host = info.object(forInfoDictionaryKey: "SupabaseHost") as? String ?? ""
-        let anon = info.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String ?? ""
-        guard !host.isEmpty, !host.hasPrefix("$("), !anon.isEmpty, !anon.hasPrefix("$(") else {
-            log.notice("lien du chrono : pas de configuration Supabase")
+        let host = Bundle.main.object(forInfoDictionaryKey: "TimerRelayHost") as? String ?? ""
+        guard !host.isEmpty, !host.hasPrefix("$(") else {
+            log.notice("lien du chrono : pas de relais configuré")
             return
         }
         let cacheKey = "timerLink.identity"
         if let cached = UserDefaults.standard.string(forKey: cacheKey) {
-            start(host: host, anonKey: anon, identity: cached)
+            start(host: host, identity: cached)
             return
         }
         #if !NO_CLOUDKIT
@@ -59,7 +64,7 @@ final class TimerLink {
             do {
                 let record = try await CKContainer(identifier: containerID).userRecordID()
                 UserDefaults.standard.set(record.recordName, forKey: cacheKey)
-                self.start(host: host, anonKey: anon, identity: record.recordName)
+                self.start(host: host, identity: record.recordName)
             } catch {
                 self.log.error("lien du chrono : identité iCloud introuvable (\(error.localizedDescription, privacy: .public))")
             }
@@ -67,19 +72,14 @@ final class TimerLink {
         #endif
     }
 
-    /// - Parameters:
-    ///   - host: le domaine du projet Supabase.
-    ///   - anonKey: la clé publique du projet.
-    ///   - identity: l'identifiant iCloud de l'utilisateur·rice.
-    func start(host: String, anonKey: String, identity: String) {
-        guard endpoint == nil, !host.isEmpty, !anonKey.isEmpty, !identity.isEmpty else { return }
+    func start(host: String, identity: String) {
+        guard endpoint == nil, !host.isEmpty, !identity.isEmpty else { return }
         var components = URLComponents()
         components.scheme = "wss"
         components.host = host
-        components.path = "/realtime/v1/websocket"
-        components.queryItems = [URLQueryItem(name: "apikey", value: anonKey), URLQueryItem(name: "vsn", value: "1.0.0")]
+        components.path = "/v1/" + Self.channel(for: identity)
+        components.queryItems = [URLQueryItem(name: "device", value: CloudRelay.deviceID)]
         endpoint = components.url
-        topic = "realtime:" + Self.channel(for: identity)
         key = Self.key(for: identity)
         CloudRelay.onPublish = { [weak self] snapshot in self?.send(snapshot) }
         connect()
@@ -112,62 +112,93 @@ final class TimerLink {
     // MARK: Envoi
 
     func send(_ snapshot: CloudRelay.TimerSnapshot) {
-        lastSent = snapshot
-        guard joined else {
-            pending = [snapshot]
-            if socket == nil { connect() }
+        guard connected else {
+            pending = snapshot
+            if socket == nil, !suspended { connect() }
             return
         }
-        broadcast(event: "timer", snapshot: snapshot)
+        guard let key, let sealed = Self.seal(snapshot, key: key) else { return }
+        var message: [String: Any] = ["t": "timer", "d": sealed, "u": snapshot.updatedAt.timeIntervalSince1970]
+        if let data = livePayload?(snapshot), let live = try? JSONSerialization.jsonObject(with: data) {
+            message["live"] = live
+        }
+        write(message)
     }
 
-    private func broadcast(event: String, snapshot: CloudRelay.TimerSnapshot?) {
-        var inner: [String: Any] = [:]
-        if let snapshot, let key, let sealed = Self.seal(snapshot, key: key) { inner["d"] = sealed }
-        write(["topic": topic, "event": "broadcast", "ref": nextRef(),
-               "payload": ["type": "broadcast", "event": event, "payload": inner]])
+    /// Le jeton APNs de l'îlot de cet iPhone (`nil` : l'activité est finie).
+    func registerAPNs(kind: TokenKind, token: String?) {
+        tokens[kind] = .some(token)
+        if connected { writeToken(kind, token) }
+    }
+
+    private func writeToken(_ kind: TokenKind, _ token: String?) {
+        #if DEBUG
+        let sandbox = true
+        #else
+        let sandbox = false
+        #endif
+        write(["t": "apns", "kind": kind.rawValue, "token": token ?? NSNull(), "sandbox": sandbox])
     }
 
     // MARK: Connexion
 
     /// L'app passe en arrière-plan : on ferme proprement, sans se reconnecter.
     func suspend() {
+        suspended = true
         reconnect?.cancel()
         heartbeat?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
-        joined = false
+        connected = false
     }
 
-    /// À l'app qui revient au premier plan : la socket a pu mourir en veille.
+    /// L'app revient au premier plan (ou le Mac sort de veille).
     func resume() {
+        suspended = false
         guard endpoint != nil else { return }
-        if socket == nil || !joined {
-            reconnect?.cancel()
-            attempts = 0
-            connect()
-        } else {
-            // Demander l'état des autres : on a pu manquer un geste.
-            broadcast(event: "hello", snapshot: nil)
-        }
+        reconnect?.cancel()
+        attempts = 0
+        connect()
     }
 
     private func connect() {
-        guard let endpoint else { return }
+        guard let endpoint, !suspended else { return }
         socket?.cancel(with: .goingAway, reason: nil)
-        joined = false
+        connected = false
         let task = URLSession.shared.webSocketTask(with: endpoint)
         socket = task
         task.resume()
         listen(task)
-        write(["topic": topic, "event": "phx_join", "ref": nextRef(),
-               "payload": ["config": ["broadcast": ["self": false], "private": false]]])
+        // La connexion est prête quand le premier ping revient.
+        task.sendPing { [weak self] error in
+            Task { @MainActor in
+                guard let self, task === self.socket else { return }
+                if let error {
+                    self.log.notice("lien du chrono : connexion impossible (\(error.localizedDescription, privacy: .public))")
+                    self.scheduleReconnect()
+                } else {
+                    self.didConnect()
+                }
+            }
+        }
+    }
+
+    private func didConnect() {
+        connected = true
+        attempts = 0
+        log.notice("lien du chrono ouvert")
+        for (kind, token) in tokens { writeToken(kind, token ?? nil) }
+        if let pending {
+            self.pending = nil
+            send(pending)
+        }
         heartbeat?.cancel()
         heartbeat = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(25))
+                try? await Task.sleep(for: .seconds(30))
                 guard let self, !Task.isCancelled else { return }
-                self.write(["topic": "phoenix", "event": "heartbeat", "payload": [:], "ref": self.nextRef()])
+                // « ping » texte : le relais répond « pong » sans se réveiller.
+                self.socket?.send(.string("ping")) { _ in }
             }
         }
     }
@@ -189,43 +220,19 @@ final class TimerLink {
     }
 
     private func handle(_ text: String) {
-        guard let data = text.data(using: .utf8),
+        guard text != "pong", let data = text.data(using: .utf8),
               let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let event = message["event"] as? String else { return }
-        switch event {
-        case "phx_reply":
-            guard !joined, (message["topic"] as? String) == topic,
-                  let payload = message["payload"] as? [String: Any], payload["status"] as? String == "ok" else { return }
-            joined = true
-            attempts = 0
-            log.notice("lien du chrono ouvert")
-            for snapshot in pending { broadcast(event: "timer", snapshot: snapshot) }
-            pending = []
-            broadcast(event: "hello", snapshot: nil)
-        case "broadcast":
-            guard let payload = message["payload"] as? [String: Any],
-                  let kind = payload["event"] as? String else { return }
-            let inner = payload["payload"] as? [String: Any]
-            if kind == "hello" {
-                // Un appareil arrive : il reçoit notre dernier état, daté d'origine.
-                if let lastSent { broadcast(event: "timer", snapshot: lastSent) }
-                return
-            }
-            guard kind == "timer", let sealed = inner?["d"] as? String, let key,
-                  let snapshot = Self.open(sealed, key: key) else { return }
-            CloudRelay.receivedFromLink(snapshot)
-        case "phx_error", "phx_close":
-            scheduleReconnect()
-        default:
-            break
-        }
+              message["t"] as? String == "timer", let sealed = message["d"] as? String, let key,
+              let snapshot = Self.open(sealed, key: key) else { return }
+        CloudRelay.receivedFromLink(snapshot)
     }
 
     private func scheduleReconnect() {
-        joined = false
+        connected = false
         socket = nil
         heartbeat?.cancel()
         reconnect?.cancel()
+        guard !suspended else { return }
         attempts += 1
         let delay = min(30.0, pow(2.0, Double(min(attempts, 5))))
         reconnect = Task { [weak self] in
@@ -239,10 +246,5 @@ final class TimerLink {
         guard let socket, let data = try? JSONSerialization.data(withJSONObject: object),
               let text = String(data: data, encoding: .utf8) else { return }
         socket.send(.string(text)) { _ in }
-    }
-
-    private func nextRef() -> String {
-        ref += 1
-        return String(ref)
     }
 }

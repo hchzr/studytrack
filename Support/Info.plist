@@ -61,6 +61,8 @@
 	<string>$(STUDYTRACK_APP_GROUP)</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>TimerRelayHost</key>
+	<string>$(TIMER_RELAY_HOST)</string>
 	<key>SupabaseHost</key>
 	<string>$(SUPABASE_HOST)</string>
 	<key>TickTickClientID</key>

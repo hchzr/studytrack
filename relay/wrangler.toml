@@ -1,0 +1,21 @@
+# Relais du chrono partagé (voir src/index.ts et HANDOFF §4.24).
+name = "studytrack-relay"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+APNS_KEY_ID = "5JQ549T39X"
+APNS_TEAM_ID = "5GGDH5F3NG"
+APNS_BUNDLE_ID = "com.hczr.studytrack.app"
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "Relay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Relay"]
+
+[observability]
+enabled = true

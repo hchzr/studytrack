@@ -69,9 +69,12 @@ enum StudyActivityController {
         }
 
         do {
+            // `.token` : le Mac peut ensuite mettre l'îlot à jour par APNs
+            // (via le relais), app de l'iPhone endormie.
             let created = try Activity.request(attributes: attributes,
                                                content: content(state),
-                                               pushType: nil)
+                                               pushType: .token)
+            observe(created)
             lastError = nil
             // Trace de vérification : c'est la seule façon de savoir, depuis un
             // terminal, si le **système** accepte l'activité — le simulateur ne
@@ -92,11 +95,42 @@ enum StudyActivityController {
     /// Toutes, et pas seulement celle dont ce processus se souvient : c'est la
     /// seule façon de garantir qu'aucun îlot ne survive à un chrono éteint.
     static func end() {
+        TimerLink.shared.registerAPNs(kind: .update, token: nil)
         let running = live
         for activity in running {
             Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
         lastError = nil
+    }
+
+    // MARK: Jetons APNs
+
+    private static var observed: Set<String> = []
+
+    /// Au lancement : suit les jetons des activités vivantes (y compris une
+    /// activité démarrée par APNs pendant que l'app dormait) et le jeton de
+    /// démarrage à distance (iOS 17.2+), et les donne au relais.
+    static func observePushTokens() {
+        for activity in live { observe(activity) }
+        Task { @MainActor in
+            for await activity in Activity<StudyActivityAttributes>.activityUpdates { observe(activity) }
+        }
+        if #available(iOS 17.2, *) {
+            Task { @MainActor in
+                for await token in Activity<StudyActivityAttributes>.pushToStartTokenUpdates {
+                    TimerLink.shared.registerAPNs(kind: .start, token: token.hexString)
+                }
+            }
+        }
+    }
+
+    private static func observe(_ activity: Activity<StudyActivityAttributes>) {
+        guard observed.insert(activity.id).inserted else { return }
+        Task { @MainActor in
+            for await token in activity.pushTokenUpdates {
+                TimerLink.shared.registerAPNs(kind: .update, token: token.hexString)
+            }
+        }
     }
 
     /// À appeler au lancement : l'activité doit refléter le chrono, ni plus ni moins.
@@ -173,84 +207,28 @@ enum StudyActivityController {
 
     /// L'exercice visé, s'il en existe un : seul porteur de sous-questions.
     static func exercise(for state: FocusTimerState, course: Course?) -> Exercise? {
-        guard let course, let targetID = state.targetID else { return nil }
-        return course.allExercises.first { $0.id == targetID }
+        LiveActivityBuilder.exercise(for: state, course: course)
     }
 
     /// Ce qui ne change pas de la session : cours, type de travail, cible.
     static func attributes(for state: FocusTimerState,
                            course: Course?) -> StudyActivityAttributes {
-        StudyActivityAttributes(courseCode: course?.displayCode ?? "Sans cours",
-                               courseName: course?.name ?? "Session libre",
-                               taskLabel: state.taskType.label,
-                               taskIcon: state.taskType.icon,
-                               target: targetLabel(state, course: course))
+        let value = LiveActivityBuilder.attributes(for: state, course: course)
+        return StudyActivityAttributes(courseCode: value.courseCode, courseName: value.courseName,
+                                       taskLabel: value.taskLabel, taskIcon: value.taskIcon, target: value.target)
     }
 
     static func targetLabel(_ state: FocusTimerState, course: Course?) -> String? {
-        guard let course, let targetID = state.targetID else { return nil }
-        // Le numéro seul : « Exercices · 3.4 » se lit, « Exercices · Exercice
-        // 3.4 » bégaie — et l'îlot n'a pas la place de bégayer.
-        if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
-            return exercise.exerciseNumber
-        }
-        if let item = course.theoryItems.first(where: { $0.id == targetID }) {
-            return item.number
-        }
-        return nil
+        LiveActivityBuilder.targetLabel(state, course: course)
     }
 
-    /// Construit l'état à publier depuis le chrono et sa cible.
-    ///
-    /// Une seule fonction pour tous les appelants — le contrôleur du chrono et
-    /// les commandes de l'écran verrouillé. Avant, chacun composait son
-    /// `ContentState` : mettre en pause depuis l'îlot effaçait donc le compte de
-    /// sous-questions et l'anneau, que seul l'écran savait remplir.
-    ///
-    /// - Parameters:
-    ///   - timer: le chrono persisté, cycle Pomodoro compris.
-    ///   - settings: les durées du cycle.
-    ///   - exercise: la cible, quand c'est un exercice — seul porteur de
-    ///     sous-questions.
+    /// Construit l'état à publier (voir `LiveActivityBuilder`, partagé avec le Mac).
     static func makeState(timer: FocusTimerState,
                           settings: PomodoroSettings,
                           exercise: Exercise?,
                           course: Course? = nil,
                           now: Date = Date()) -> StudyActivityAttributes.ContentState {
-        let elapsed = timer.elapsed(at: now)
-        var block: ActivityPomodoro?
-        if timer.pomodoro {
-            if let pause = timer.currentBreak {
-                let completed = Int((timer.accumulated / settings.blockDuration).rounded())
-                block = .onBreak(kind: pause.kind.rawValue,
-                                 startedAt: pause.startedAt,
-                                 endsAt: pause.endsAt,
-                                 completedBlocks: completed)
-            } else {
-                let status = PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes)
-                block = ActivityPomodoro.make(blockNumber: status.blockNumber,
-                                              elapsedInBlock: status.elapsedInBlock,
-                                              remaining: status.remaining,
-                                              completedBlocks: status.completedBlocks,
-                                              running: timer.isRunning,
-                                              now: now)
-            }
-        }
-        // `hasSubQuestions` et non `leafSubQuestions.isEmpty` : un exercice sans
-        // sous-questions ne doit pas publier « 0/0 », qui allumerait le bouton
-        // « question suivante » sur une cible qui n'en a aucune.
-        let leaves = exercise?.hasSubQuestions == true ? exercise?.leafSubQuestions : nil
-        var state = ActivityTimerState.make(elapsed: elapsed,
-                     running: timer.isRunning,
-                     questionsDone: leaves.map { $0.filter(\.isDone).count },
-                     questionsTotal: leaves.map(\.count),
-                     pomodoro: block,
-                     title: course?.displayCode ?? "Session libre",
-                     subtitle: ActivityTimerState.subtitle(task: timer.taskType.label,
-                                                           target: targetLabel(timer, course: course)),
-                     now: now)
-        state.colorHex = course?.colorHex
-        return state
+        LiveActivityBuilder.state(timer: timer, settings: settings, exercise: exercise, course: course, now: now)
     }
 
     /// Lance une activité d'essai, pour vérifier l'îlot sans attendre un chrono.
@@ -266,25 +244,14 @@ enum StudyActivityController {
              state: StudyActivityAttributes.ContentState.make(elapsed: 90, running: true))
     }
 
-    /// Combien de temps une pause reste « fraîche » sur l'écran verrouillé.
-    ///
-    /// Un chrono qui tourne n'est jamais périmé : le système le fait avancer seul.
-    /// Une pause, si — une session oubliée la veille ne doit pas se présenter comme
-    /// une information du moment. `reconcile` ne passe qu'au lancement de l'app :
-    /// d'ici là, c'est le système qui la grise.
-    static let pausedFreshness: TimeInterval = 2 * 3600
+    static let pausedFreshness = LiveActivityBuilder.pausedFreshness
 
     private static func content(_ state: StudyActivityAttributes.ContentState)
         -> ActivityContent<StudyActivityAttributes.ContentState> {
-        // Pendant une pause Pomodoro, l'activité est périmée à la fin de la
-        // pause : le compte à rebours est arrivé à zéro, et seule l'app peut
-        // dire la suite.
-        let stale: Date?
-        if let breakEnd = state.pomodoro?.breakEndsAt {
-            stale = breakEnd
-        } else {
-            stale = state.isRunning ? nil : Date().addingTimeInterval(pausedFreshness)
-        }
-        return ActivityContent(state: state, staleDate: stale)
+        ActivityContent(state: state, staleDate: LiveActivityBuilder.staleDate(for: state))
     }
+}
+
+private extension Data {
+    var hexString: String { map { String(format: "%02x", $0) }.joined() }
 }

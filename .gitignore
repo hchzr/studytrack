@@ -21,3 +21,6 @@ supabase/.temp/
 
 # Build artefacts (Mac)
 build-mac/
+
+# Clés privées (APNs, etc.) : jamais dans git
+*.p8

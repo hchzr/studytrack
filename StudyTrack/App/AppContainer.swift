@@ -126,6 +126,9 @@ final class AppContainer {
         focus.startRelay()
         // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
         if isCloudSynced { TimerLink.shared.startFromBundle(containerID: Self.cloudContainerID) }
+        // Les jetons APNs de l'îlot vont au relais : le Mac peut alors le
+        // mettre à jour sur l'écran verrouillé.
+        StudyActivityController.observePushTokens()
     }
 
     /// Reconfigure le client social — utile après une connexion ou une déconnexion.
