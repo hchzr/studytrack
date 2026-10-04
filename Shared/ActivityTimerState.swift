@@ -45,6 +45,10 @@ struct ActivityTimerState: Codable, Hashable {
     var subtitle: String?
     /// La couleur du cours (« #4F46E5 »), pour l'îlot et l'écran verrouillé.
     var colorHex: String? = nil
+    /// Le début de la session affichée : un iPhone réveillé avec un état
+    /// périmé (la session d'avant) ne doit pas écraser l'activité d'une session
+    /// plus récente, démarrée sur le Mac et poussée par APNs.
+    var sessionStartedAt: Date? = nil
 
     init(countingSince: Date?,
          frozenTotal: TimeInterval,

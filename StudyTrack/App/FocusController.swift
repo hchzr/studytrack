@@ -100,7 +100,7 @@ final class FocusController {
                 context.insert(session)
                 try? context.save()
             }
-            StudyActivityController.end()
+            StudyActivityController.end(session: saved.sessionStartedAt)
             updateTicker()
             return
         }
@@ -396,7 +396,7 @@ final class FocusController {
         state = nil
         lastEvent = nil
         FocusTimerStore.save(nil)
-        StudyActivityController.end()
+        StudyActivityController.end(session: ended)
         app?.notifications.cancelPomodoro()
         if let app {
             app.presence.stop(context: ModelContext(app.modelContainer), social: app.social)

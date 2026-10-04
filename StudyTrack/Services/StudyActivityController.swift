@@ -58,6 +58,10 @@ enum StudyActivityController {
         // Une seule activité à la fois : on reprend celle qui existe, même si elle
         // a été créée par une exécution précédente de l'app.
         if let existing = live.first {
+            if LiveActivityBuilder.isNewer(existing.content.state, than: state.sessionStartedAt) {
+                activityTrace.notice("activité d'une session plus récente (poussée par un autre appareil) : laissée telle quelle")
+                return
+            }
             Task { await existing.update(content(state)) }
             // Une activité en double a pu s'installer avant cette correction :
             // on nettoie les suivantes.
@@ -94,12 +98,15 @@ enum StudyActivityController {
     ///
     /// Toutes, et pas seulement celle dont ce processus se souvient : c'est la
     /// seule façon de garantir qu'aucun îlot ne survive à un chrono éteint.
-    static func end() {
-        TimerLink.shared.registerAPNs(kind: .update, token: nil)
-        let running = live
-        for activity in running {
+    /// - Parameter session: la session qui se termine ici. Une activité d'une
+    ///   session **plus récente** (démarrée ailleurs, poussée par APNs) reste.
+    static func end(session: Date? = nil) {
+        var ended = false
+        for activity in live where !LiveActivityBuilder.isNewer(activity.content.state, than: session) {
+            ended = true
             Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
+        if ended || live.isEmpty { TimerLink.shared.registerAPNs(kind: .update, token: nil) }
         lastError = nil
     }
 
@@ -140,8 +147,13 @@ enum StudyActivityController {
     /// toujours, y compris après que le chrono a été arrêté.
     static func reconcile(with state: FocusTimerState?) {
         let stillRunning = state?.isRestorable() == true
-        if !stillRunning, !live.isEmpty {
-            end()
+        guard !stillRunning else { return }
+        // Une activité qui tourne pour une session venue d'ailleurs (poussée
+        // par APNs pendant que l'app dormait) reste : le relais la terminera.
+        for activity in live {
+            let shown = activity.content.state
+            if shown.sessionStartedAt != nil, shown.isRunning || shown.pomodoro?.isOnBreak == true { continue }
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
     }
 

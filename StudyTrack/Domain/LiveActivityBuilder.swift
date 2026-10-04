@@ -82,7 +82,15 @@ enum LiveActivityBuilder {
                                                                                   target: targetLabel(timer, course: course)),
                                             now: now)
         state.colorHex = course?.colorHex
+        state.sessionStartedAt = timer.sessionStartedAt
         return state
+    }
+
+    /// L'activité montre-t-elle une session **plus récente** que celle d'ici ?
+    /// Alors l'état d'ici est périmé : on n'y touche pas.
+    static func isNewer(_ shown: ActivityTimerState, than session: Date?) -> Bool {
+        guard let shown = shown.sessionStartedAt, let session else { return false }
+        return shown.timeIntervalSince(session) > 1
     }
 
     /// Combien de temps une pause reste « fraîche » sur l'écran verrouillé.
