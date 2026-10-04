@@ -124,6 +124,8 @@ final class AppContainer {
         }
         focus.app = self
         focus.startRelay()
+        // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
+        if isCloudSynced { TimerLink.shared.startFromBundle(containerID: Self.cloudContainerID) }
     }
 
     /// Reconfigure le client social — utile après une connexion ou une déconnexion.

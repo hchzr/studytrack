@@ -142,6 +142,7 @@ struct RootTabView: View {
                     // de bloc, une pause écoulée.
                     app.focus.reload()
                     NSUbiquitousKeyValueStore.default.synchronize()
+                    TimerLink.shared.resume()
                     app.focus.applyRemote()
                     FocusTimerCommandHandler.consumePending(container: app)
                     // Les coches faites dans un widget pendant que l'app dormait.

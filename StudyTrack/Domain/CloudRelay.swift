@@ -113,7 +113,7 @@ enum CloudRelay {
 
     /// Publie par les deux voies : le magasin clé-valeur, et la balise de cet
     /// appareil dans la base (`context`), bien plus rapide.
-    @discardableResult
+    @discardableResult @MainActor
     static func publishTimer(_ state: FocusTimerState?, ended: Date? = nil, now: Date = Date(),
                              context: ModelContext? = nil) -> TimerSnapshot {
         // La dernière session fermée ici voyage avec chaque publication : si
@@ -126,6 +126,7 @@ enum CloudRelay {
         store.set(data, forKey: timerKey)
         lastAppliedTimer = now
         store.synchronize()
+        onPublish?(snapshot)
         if let context {
             let device = deviceID
             let mine = (try? context.fetch(FetchDescriptor<RelayBeacon>(predicate: #Predicate { $0.device == device }))) ?? []
@@ -139,10 +140,27 @@ enum CloudRelay {
         return snapshot
     }
 
+    // MARK: Voie instantanée (`TimerLink`)
+
+    /// Appelé à chaque publication : la voie instantanée l'envoie.
+    @MainActor static var onPublish: ((TimerSnapshot) -> Void)?
+    /// Le dernier état reçu par la voie instantanée (en mémoire).
+    @MainActor private(set) static var linked: TimerSnapshot?
+
+    /// Un état arrive par la voie instantanée : retenu, puis les chronos
+    /// relisent (même notification que le magasin clé-valeur).
+    @MainActor static func receivedFromLink(_ snapshot: TimerSnapshot) {
+        guard snapshot.device != deviceID else { return }
+        if let linked, linked.updatedAt >= snapshot.updatedAt { return }
+        linked = snapshot
+        NotificationCenter.default.post(name: changed, object: nil)
+    }
+
     /// L'état le plus récent publié par un **autre** appareil, quelle que soit
     /// la voie par laquelle il est arrivé.
+    @MainActor
     static func remoteTimer(context: ModelContext? = nil) -> TimerSnapshot? {
-        var candidates: [TimerSnapshot] = []
+        var candidates: [TimerSnapshot] = linked.map { [$0] } ?? []
         if let data = store.data(forKey: timerKey), let snapshot = try? decoder.decode(TimerSnapshot.self, from: data) {
             candidates.append(snapshot)
         }

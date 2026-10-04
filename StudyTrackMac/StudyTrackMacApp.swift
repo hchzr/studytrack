@@ -33,6 +33,8 @@ struct StudyTrackMacApp: App {
         _store = State(initialValue: store)
         _timer = State(initialValue: timer)
         MacAppDelegate.timer = timer
+        // La voie instantanée du chrono partagé (moins d'une seconde).
+        if store.isCloudSynced { TimerLink.shared.startFromBundle(containerID: MacStore.cloudContainerID) }
         MacAppDelegate.settings = settings
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         #if DEBUG
@@ -204,6 +206,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         MiniTimerPanel.shared.update()
+        // Au réveil du Mac, la socket du chrono partagé est morte : on la relance.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { TimerLink.shared.resume() }
+        }
         hotKey = GlobalHotKey { Self.timer?.toggle() }
         updateHotKey()
         withObservationTracking({ _ = Self.settings?.globalShortcut }, onChange: { [weak self] in

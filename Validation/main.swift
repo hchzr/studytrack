@@ -5514,6 +5514,18 @@ do {
     check(CloudRelay.decide(local: next, remote: snap(session, at: 101), lastApplied: t0, device: "iphone", shared: t0.addingTimeInterval(100), now: now) == .ignore,
           "une session plus ancienne ne remplace jamais une plus récente")
 
+    // Voie instantanée : même canal et même clé sur chaque appareil, contenu illisible sans la clé.
+    check(TimerLink.channel(for: "_abc") == TimerLink.channel(for: "_abc") && TimerLink.channel(for: "_abc") != TimerLink.channel(for: "_abd"),
+          "le canal se déduit de l'identité iCloud, pareil partout")
+    check(!TimerLink.channel(for: "_abc").contains("abc"), "le nom du canal ne révèle pas l'identité")
+    let sealedSnap = snap(paused, ended: t0, at: 42)
+    if let sealed = TimerLink.seal(sealedSnap, key: TimerLink.key(for: "_abc")) {
+        check(TimerLink.open(sealed, key: TimerLink.key(for: "_abc")) == sealedSnap, "chiffré puis déchiffré : le même état")
+        check(TimerLink.open(sealed, key: TimerLink.key(for: "_autre")) == nil, "une autre clé ne lit rien")
+    } else {
+        check(false, "chiffrement du lien")
+    }
+
     let viaKVS = snap(nil, ended: t0, at: 10)
     let viaBase = snap(session, at: 20, device: "iphone")
     let mine = snap(session, at: 30, device: "mac-self")
