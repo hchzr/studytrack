@@ -94,7 +94,7 @@ struct ChronoDot: View {
         } label: {
             ZStack {
                 if focus.hasSession, let state = focus.state {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                    TimelineView(.periodic(from: FocusTimerState.tickAnchor(state), by: 1)) { context in
                         running(state: state, now: context.date)
                     }
                 } else {
@@ -158,7 +158,7 @@ struct FocusMiniPlayer: View {
         if let state = focus.state {
             let course = courses.first { $0.id == state.courseID }
             let tint = course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            TimelineView(.periodic(from: FocusTimerState.tickAnchor(state), by: 1)) { context in
                 let phase = focus.phase(at: context.date)
                 HStack(spacing: 10) {
                     Button {

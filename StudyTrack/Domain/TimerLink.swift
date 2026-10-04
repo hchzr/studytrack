@@ -130,6 +130,15 @@ final class TimerLink {
 
     // MARK: Connexion
 
+    /// L'app passe en arrière-plan : on ferme proprement, sans se reconnecter.
+    func suspend() {
+        reconnect?.cancel()
+        heartbeat?.cancel()
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+        joined = false
+    }
+
     /// À l'app qui revient au premier plan : la socket a pu mourir en veille.
     func resume() {
         guard endpoint != nil else { return }

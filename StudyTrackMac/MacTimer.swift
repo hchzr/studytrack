@@ -123,11 +123,13 @@ final class MacTimer {
     /// Pomodoro, ou ce qui reste de la pause.
     var displayTime: TimeInterval {
         guard let state else { return 0 }
-        if let pause = state.currentBreak { return max(0, pause.endsAt.timeIntervalSince(now)) }
+        // Comptes à rebours arrondis au-dessus, comme sur l'iPhone (« 25:00 »
+        // au départ, « 00:01 » à la dernière seconde) : sinon une seconde d'écart.
+        if let pause = state.currentBreak { return max(0, pause.endsAt.timeIntervalSince(now)).rounded(.up) }
         if state.pomodoro {
             let block = settings.pomodoro.blockDuration
             let into = elapsed.truncatingRemainder(dividingBy: block)
-            return max(0, block - into)
+            return max(0, block - into).rounded(.up)
         }
         return elapsed
     }
@@ -344,10 +346,15 @@ final class MacTimer {
         ticker?.invalidate()
         ticker = nil
         guard let state, state.isRunning || state.currentBreak != nil else { return }
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+        // Sur les frontières de seconde de la session (`tickAnchor`), comme
+        // l'iPhone : les deux affichages changent ensemble.
+        let anchor = state.tickAnchor
+        let phase = Date().timeIntervalSince(anchor).truncatingRemainder(dividingBy: 1)
+        let first = Date().addingTimeInterval(phase >= 0 ? 1 - phase : -phase)
+        let timer = Timer(fire: first, interval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.beat() }
         }
-        timer.tolerance = 0.2
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         ticker = timer
     }

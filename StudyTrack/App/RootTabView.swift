@@ -116,6 +116,10 @@ struct RootTabView: View {
                 Task { await AssistantSync.sync(context: context, settings: app.settings, force: false) }
             }
             if phase == .background {
+                // La liaison instantanée du chrono se ferme : iOS la couperait de
+                // toute façon, et une connexion ouverte pour rien compte dans le
+                // quota Supabase. Elle se rouvre au retour (`resume`).
+                TimerLink.shared.suspend()
                 Task { await CookieKeeper.save() }
                 MoodleWatcher.schedule(settings: app.settings)
             }

@@ -994,7 +994,7 @@ private struct ExerciseStepBar: View {
 
     /// Démarrer, mettre en pause, ou faire venir ici un chrono qui tourne ailleurs.
     private var timerButton: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+        TimelineView(.periodic(from: FocusTimerState.tickAnchor(app.focus.state), by: 1)) { timeline in
             let focus = app.focus
             let state = focus.state
             let onThis = focus.hasSession && state?.targetID == exercise.id

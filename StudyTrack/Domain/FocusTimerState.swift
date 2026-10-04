@@ -216,3 +216,31 @@ enum FocusTimerStore {
         }
     }
 }
+
+extension FocusTimerState {
+    /// L'instant de référence des secondes affichées.
+    ///
+    /// Le temps compté change de seconde à des instants précis (quand
+    /// `elapsed` passe un entier ; une pause, à `breakEndsAt` moins un nombre
+    /// entier de secondes). Rafraîchir **sur ces frontières** — et non toutes
+    /// les secondes depuis l'ouverture de l'écran — fait changer l'iPhone et le
+    /// Mac à la même seconde. Les 50 ms évitent de tomber pile sur la frontière
+    /// (et d'afficher la seconde d'avant par arrondi).
+    var tickAnchor: Date {
+        let anchor: Date
+        if let end = breakEndsAt {
+            anchor = end
+        } else if let since = runningSince {
+            anchor = since.addingTimeInterval(-accumulated)
+        } else {
+            anchor = sessionStartedAt
+        }
+        return anchor.addingTimeInterval(0.05)
+    }
+
+    /// Pour un `TimelineView(.periodic(from:by:))` : l'ancre de la session, ou maintenant.
+    static func tickAnchor(_ state: FocusTimerState?) -> Date {
+        state?.tickAnchor ?? Date()
+    }
+}
+

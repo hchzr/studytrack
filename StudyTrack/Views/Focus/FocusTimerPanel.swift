@@ -108,7 +108,7 @@ struct FocusTimerPanel: View {
             // Le cadran et ses boutons se redessinent chaque seconde tant qu'il y a
             // quelque chose qui s'écoule : un travail compté ou une pause qui
             // décompte. À l'arrêt, rien ne bat.
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            TimelineView(.periodic(from: FocusTimerState.tickAnchor(focus.state), by: 1)) { timeline in
                 dialSection(now: focus.isRunning || focus.phase().isBreak ? timeline.date : Date())
             }
 
