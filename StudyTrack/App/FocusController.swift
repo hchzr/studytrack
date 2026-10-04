@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import SwiftData
 import Observation
 
@@ -34,6 +35,10 @@ final class FocusController {
     /// republie pas (sinon les appareils se le renverraient sans fin).
     @ObservationIgnored private var applyingRemote = false
     @ObservationIgnored private var relayObserver: NSObjectProtocol?
+    @ObservationIgnored private var baseObserver: NSObjectProtocol?
+
+    /// Le contexte où vit la balise du chrono (voie rapide entre appareils).
+    private var relayContext: ModelContext? { app.map { ModelContext($0.modelContainer) } }
 
     init() {
         state = FocusTimerStore.load()
@@ -351,12 +356,17 @@ final class FocusController {
                                                                queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyRemote() }
         }
+        // La voie rapide : la balise d'un autre appareil arrive par la base.
+        baseObserver = NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
+                                                              queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyRemote() }
+        }
         NSUbiquitousKeyValueStore.default.synchronize()
         applyRemote()
     }
 
     func applyRemote() {
-        guard let remote = CloudRelay.remoteTimer() else {
+        guard let remote = CloudRelay.remoteTimer(context: relayContext) else {
             #if DEBUG
             Self.traceRelay("\(Date()) aucun état distant")
             #endif
@@ -399,7 +409,7 @@ final class FocusController {
     /// Ferme la session : plus d'état, plus d'îlot, plus de présence.
     private func close() {
         let ended = state?.sessionStartedAt
-        if !applyingRemote, let ended { CloudRelay.publishTimer(nil, ended: ended) }
+        if !applyingRemote, let ended { CloudRelay.publishTimer(nil, ended: ended, context: relayContext) }
         state = nil
         lastEvent = nil
         FocusTimerStore.save(nil)
@@ -419,8 +429,11 @@ final class FocusController {
     ///   - activity: republier la Live Activity.
     private func commit(presence: Bool = true, activity: Bool = true) {
         FocusTimerStore.save(state)
-        // Le Mac (et l'iPad) suivent le même chrono.
-        if !applyingRemote { CloudRelay.publishTimer(state) }
+        // Le Mac (et l'iPad) suivent le même chrono. Seule une session se
+        // publie : « pas de chrono » ne part que de `close()`, avec la session
+        // terminée — sinon un réglage touché au repos (cours, Pomodoro)
+        // effaçait la session tout juste démarrée ailleurs.
+        if !applyingRemote, let state { CloudRelay.publishTimer(state, context: relayContext) }
         guard let app, let state else { updateTicker(); return }
         if activity {
             StudyActivityController.publish(state, container: app)

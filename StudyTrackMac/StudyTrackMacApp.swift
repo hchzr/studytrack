@@ -18,6 +18,7 @@ struct StudyTrackMacApp: App {
         let store = MacStore()
         let timer = MacTimer(settings: settings)
         timer.container = store.container
+        timer.applyRemote()
         // Les widgets du bureau suivent le chrono et les données.
         timer.onChange = { MacWidgetWriter.schedule(container: store.container, timer: timer) }
         store.onDataChange = { MacWidgetWriter.schedule(container: store.container, timer: timer) }

@@ -5504,6 +5504,11 @@ do {
     check(CloudRelay.decide(local: other, remote: snap(nil, ended: t0, at: 90), lastApplied: t0, device: "iphone", now: now) == .ignore,
           "la fin d'une autre session ne ferme pas la mienne")
 
+    let viaKVS = snap(nil, ended: t0, at: 10)
+    let viaBase = snap(session, at: 20, device: "iphone")
+    let mine = snap(session, at: 30, device: "mac-self")
+    check(CloudRelay.newest([viaKVS, viaBase, mine], excluding: "mac-self") == viaBase,
+          "deux voies (clé-valeur, base) : le plus récent des autres appareils fait foi")
     let hour: TimeInterval = 3600
     check(CloudRelay.refreshIsDue(localLast: nil, claim: nil, device: "a", interval: 12 * hour, now: t0), "jamais relu : à faire")
     check(!CloudRelay.refreshIsDue(localLast: nil, claim: .init(at: t0.addingTimeInterval(-hour), device: "b"), device: "a", interval: 12 * hour, now: t0),

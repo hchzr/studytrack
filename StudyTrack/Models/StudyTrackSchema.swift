@@ -41,7 +41,8 @@ enum SchemaV1: VersionedSchema {
             GroupItemCompletion.self,
             AcademicMilestone.self,
             PastExam.self,
-            SubQuestion.self
+            SubQuestion.self,
+            RelayBeacon.self
         ]
     }
 }

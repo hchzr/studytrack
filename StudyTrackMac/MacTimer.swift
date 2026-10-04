@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import Observation
 import OSLog
 import SwiftData
@@ -32,6 +33,9 @@ final class MacTimer {
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var applyingRemote = false
     @ObservationIgnored private var observer: NSObjectProtocol?
+    @ObservationIgnored private var baseObserver: NSObjectProtocol?
+
+    private var relayContext: ModelContext? { container.map { ModelContext($0) } }
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "timer")
 
     init(settings: MacSettings) {
@@ -45,6 +49,9 @@ final class MacTimer {
         syncSelection()
         tick()
         observer = NotificationCenter.default.addObserver(forName: CloudRelay.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyRemote() }
+        }
+        baseObserver = NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyRemote() }
         }
         NSUbiquitousKeyValueStore.default.synchronize()
@@ -181,7 +188,7 @@ final class MacTimer {
     private func close() {
         let ended = state?.sessionStartedAt
         if !applyingRemote, let ended {
-            CloudRelay.publishTimer(nil, ended: ended)
+            CloudRelay.publishTimer(nil, ended: ended, context: relayContext)
             log.notice("chrono publié : terminé")
         }
         state = nil
@@ -193,9 +200,9 @@ final class MacTimer {
 
     private func commit() {
         FocusTimerStore.save(state)
-        if !applyingRemote {
-            CloudRelay.publishTimer(state)
-            log.notice("chrono publié : \(self.state == nil ? "aucun" : (self.state!.isRunning ? "en cours" : "en pause"), privacy: .public)")
+        if !applyingRemote, let state {
+            CloudRelay.publishTimer(state, context: relayContext)
+            log.notice("chrono publié : \(state.isRunning ? "en cours" : "en pause", privacy: .public)")
         }
         syncSelection()
         scheduleNotifications()
@@ -217,7 +224,7 @@ final class MacTimer {
 
     /// L'état publié par l'iPhone (ou un autre Mac).
     func applyRemote() {
-        guard let remote = CloudRelay.remoteTimer() else { return }
+        guard let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
         let decision = CloudRelay.decide(local: state, remote: remote,
                                          lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
         log.notice("chrono distant de \(remote.device.prefix(8), privacy: .public) : \(String(describing: decision), privacy: .public)")
