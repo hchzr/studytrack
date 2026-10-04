@@ -1,0 +1,254 @@
+import SwiftUI
+import SwiftData
+
+/// ⌘K : tout l'app au clavier. Taper un cours, une série, un exercice, une
+/// action ; ↩ ouvre, ⌘↩ chronomètre, Échap ferme.
+struct CommandPalette: View {
+    enum Destination {
+        case page(MacRootView.Page)
+        case target(course: UUID, item: UUID?)
+    }
+
+    var navigate: (Destination) -> Void
+    var dismiss: () -> Void
+
+    @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
+    @Environment(\.openSettings) private var openSettings
+    @Query(sort: \Course.code) private var courses: [Course]
+    @State private var query = ""
+    @State private var selected = 0
+    @FocusState private var focused: Bool
+
+    struct Item: Identifiable {
+        var id: String
+        var title: String
+        var subtitle: String = ""
+        var icon: String
+        var tint: Color = .secondary
+        var section: String
+        var shortcut: String?
+        var run: () -> Void
+        /// ⌘↩ : chronométrer cet élément.
+        var time: (() -> Void)?
+    }
+
+    private var tracked: [Course] { courses.filter(\.isTracked) }
+
+    var body: some View {
+        let items = results
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                TextField("Chercher un cours, un exercice, une action…", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 20))
+                    .focused($focused)
+                    .onSubmit { run(items, timing: false) }
+                    .onKeyPress(.downArrow) { move(1, in: items); return .handled }
+                    .onKeyPress(.upArrow) { move(-1, in: items); return .handled }
+                    .onKeyPress(.escape) { dismiss(); return .handled }
+                    .onKeyPress(keys: [.return], phases: .down) { press in
+                        guard press.modifiers.contains(.command) else { return .ignored }
+                        run(items, timing: true)
+                        return .handled
+                    }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            Divider()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if items.isEmpty {
+                            Text("Rien pour « \(query) ».")
+                                .foregroundStyle(.secondary)
+                                .padding(18)
+                        }
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index == 0 || items[index - 1].section != item.section {
+                                Text(item.section)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 18)
+                                    .padding(.top, index == 0 ? 8 : 12)
+                                    .padding(.bottom, 4)
+                            }
+                            PaletteRow(item: item, selected: index == selected)
+                                .id(index)
+                                .onTapGesture { selected = index; run(items, timing: false) }
+                                .onHover { if $0 { selected = index } }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+                }
+                .onChange(of: selected) { _, value in proxy.scrollTo(value) }
+            }
+            .frame(height: 360)
+            Divider()
+            HStack(spacing: 14) {
+                hint("↩", "ouvrir")
+                hint("⌘↩", "chronométrer")
+                hint("↑↓", "choisir")
+                Spacer()
+                hint("Échap", "fermer")
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+        }
+        .frame(width: 620)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
+        .onAppear { focused = true }
+        .onChange(of: query) { _, _ in selected = 0 }
+    }
+
+    private func hint(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(key)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func move(_ delta: Int, in items: [Item]) {
+        guard !items.isEmpty else { return }
+        selected = (selected + delta + items.count) % items.count
+    }
+
+    private func run(_ items: [Item], timing: Bool) {
+        guard items.indices.contains(selected) else { return }
+        let item = items[selected]
+        if timing, let time = item.time { time() } else { item.run() }
+        dismiss()
+    }
+
+    // MARK: Résultats
+
+    private var results: [Item] {
+        let needle = query.trimmingCharacters(in: .whitespaces)
+        let actions = actionItems.filter { needle.isEmpty || matches($0.title, needle) }
+        guard !needle.isEmpty else {
+            return actions + tracked.map(courseItem)
+        }
+        let hits = SearchEngine.search(needle, in: SearchIndexBuilder.documents(courses: tracked))
+            .filter { [.course, .series, .exercise, .theory, .exam].contains($0.kind) }
+            .prefix(40)
+        let found: [Item] = hits.compactMap { hit in
+            guard let target = resolve(hit) else { return nil }
+            let course = tracked.first { $0.id == target.course }
+            var item = Item(id: hit.document.id, title: hit.document.title,
+                            subtitle: [hit.document.courseCode, hit.document.subtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
+                            icon: hit.kind.icon, tint: MacTargets.tint(course), section: hit.kind.label,
+                            run: { navigate(.target(course: target.course, item: target.item)) })
+            if let id = target.item, let course {
+                let type: TaskType = course.theoryItems.contains { $0.id == id } ? .theory : .exercise
+                item.time = { time(course.id, type, id) }
+            } else {
+                item.time = { time(target.course, .exercise, nil) }
+            }
+            return item
+        }
+        return actions + found.sorted { $0.section < $1.section }
+    }
+
+    private var actionItems: [Item] {
+        var items: [Item] = []
+        switch timer.phase {
+        case .idle:
+            items.append(Item(id: "a.start", title: "Démarrer le chrono", icon: "play.fill", section: "Chrono", shortcut: "⌘T") { timer.start() })
+        case .running:
+            items.append(Item(id: "a.pause", title: "Mettre en pause", icon: "pause.fill", section: "Chrono", shortcut: "⌘T") { timer.pause() })
+        case .paused:
+            items.append(Item(id: "a.resume", title: "Reprendre", icon: "play.fill", section: "Chrono", shortcut: "⌘T") { timer.resume() })
+        case .onBreak:
+            items.append(Item(id: "a.skip", title: "Écourter la pause", icon: "forward.fill", section: "Chrono") { timer.skipBreak() })
+        }
+        if timer.phase != .idle {
+            items.append(Item(id: "a.finish", title: "Terminer et enregistrer", icon: "checkmark", section: "Chrono", shortcut: "⇧⌘T") { timer.finish() })
+        }
+        items.append(Item(id: "a.float", title: settings.floatingTimer ? "Masquer le chrono flottant" : "Afficher le chrono flottant",
+                          icon: "pip", section: "Chrono") {
+            settings.floatingTimer.toggle()
+            MiniTimerPanel.shared.update()
+        })
+        items.append(Item(id: "p.today", title: "Aujourd'hui", icon: "sun.max", section: "Aller à", shortcut: "⌘1") { navigate(.page(.today)) })
+        items.append(Item(id: "p.focus", title: "Chrono", icon: "timer", section: "Aller à", shortcut: "⌘2") { navigate(.page(.focus)) })
+        items.append(Item(id: "p.stats", title: "Bilan", icon: "chart.bar.xaxis", section: "Aller à", shortcut: "⌘3") { navigate(.page(.stats)) })
+        items.append(Item(id: "a.settings", title: "Réglages…", icon: "gearshape", section: "Aller à", shortcut: "⌘,") { openSettings() })
+        return items
+    }
+
+    private func courseItem(_ course: Course) -> Item {
+        Item(id: "c.\(course.id)", title: course.name, subtitle: course.displayCode, icon: "book.closed.fill",
+             tint: Color(hex: course.colorHex), section: "Cours",
+             run: { navigate(.page(.course(course.id))) },
+             time: { time(course.id, .exercise, nil) })
+    }
+
+    private func time(_ course: UUID, _ type: TaskType, _ target: UUID?) {
+        if timer.phase == .idle {
+            timer.start(courseID: course, taskType: type, targetID: target)
+        } else {
+            timer.retarget(courseID: course, taskType: type, targetID: target)
+        }
+    }
+
+    private func matches(_ text: String, _ needle: String) -> Bool {
+        text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    /// `exercise.<uuid>` → le cours et l'élément.
+    private func resolve(_ hit: SearchHit) -> (course: UUID, item: UUID?)? {
+        let parts = hit.document.id.split(separator: ".", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let id = UUID(uuidString: parts[1]) else { return nil }
+        switch hit.kind {
+        case .course: return (id, nil)
+        case .series:
+            return tracked.first { $0.series.contains { $0.id == id } }
+                .map { ($0.id, $0.series.first { $0.id == id }?.sortedExercises.first?.id) }
+        case .exercise:
+            return tracked.first { $0.allExercises.contains { $0.id == id } }.map { ($0.id, id) }
+        case .theory:
+            return tracked.first { $0.theoryItems.contains { $0.id == id } }.map { ($0.id, id) }
+        case .exam:
+            return tracked.first { $0.exams.contains { $0.id == id } }.map { ($0.id, nil) }
+        default: return nil
+        }
+    }
+}
+
+private struct PaletteRow: View {
+    let item: CommandPalette.Item
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: item.icon)
+                .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(item.tint))
+                .frame(width: 20)
+            Text(item.title).lineLimit(1)
+            if !item.subtitle.isEmpty {
+                Text(item.subtitle)
+                    .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.75)) : AnyShapeStyle(.secondary))
+                    .lineLimit(1)
+            }
+            Spacer()
+            if let shortcut = item.shortcut {
+                Text(shortcut).font(.callout)
+                    .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.75)) : AnyShapeStyle(.tertiary))
+            }
+        }
+        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        .padding(.horizontal, 10)
+        .frame(height: 34)
+        .background(selected ? AnyShapeStyle(Color(nsColor: .selectedContentBackgroundColor)) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+    }
+}

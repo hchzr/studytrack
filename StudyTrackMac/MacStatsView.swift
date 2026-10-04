@@ -66,77 +66,40 @@ struct MacStatsView: View {
             .sorted { $0.seconds > $1.seconds }
     }
 
+    @Environment(MacSettings.self) private var settings
+
     var body: some View {
         let total = studySessions.reduce(0) { $0 + $1.durationSeconds }
-        let days = Set(studySessions.map { DateUtils.startOfDay($0.startedAt) }).count
+        let dayTotals = Dictionary(grouping: studySessions, by: { DateUtils.startOfDay($0.startedAt) })
+            .mapValues { $0.reduce(0) { $0 + $1.durationSeconds } }
+        let days = dayTotals.count
+        let goalDays = dayTotals.values.filter { $0 >= settings.dailyGoalSeconds }.count
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                HStack(spacing: 32) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(rangeTitle).font(MacStyle.title(26))
+                    Spacer()
+                }
+                HStack(spacing: 36) {
                     figure(DateUtils.hoursLabel(seconds: total), "d'étude")
-                    figure("\(studySessions.count)", studySessions.count > 1 ? "sessions" : "session")
+                    figure(days > 0 ? DateUtils.hoursLabel(seconds: total / days) : "—", "par jour actif")
                     figure("\(days)", days > 1 ? "jours actifs" : "jour actif")
+                    figure("\(goalDays)", "objectif atteint")
                     Spacer()
                 }
 
-                HStack(alignment: .top, spacing: 18) {
-                    card("Jour par jour") {
-                        Chart(bars) { bar in
-                            BarMark(x: .value("Jour", bar.day, unit: .day), y: .value("Heures", bar.hours))
-                                .foregroundStyle(by: .value("Travail", bar.category))
-                                .cornerRadius(3)
-                        }
-                        .chartXScale(domain: range.start...range.end)
-                        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) { value in
-                            AxisGridLine()
-                            AxisValueLabel { if let h = value.as(Double.self) { Text("\(Int(h)) h") } }
-                        } }
-                        .frame(height: 220)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 18) {
+                        dayChart.frame(minWidth: 420)
+                        subjectCard.frame(width: 340)
                     }
-                    card("Par matière") {
-                        if slices.isEmpty {
-                            Text("Rien sur cette période.").foregroundStyle(.secondary).frame(height: 220)
-                        } else {
-                            HStack(spacing: 18) {
-                                Chart(slices) { slice in
-                                    SectorMark(angle: .value("Temps", slice.seconds), innerRadius: .ratio(0.6), angularInset: 1.5)
-                                        .foregroundStyle(slice.color)
-                                        .cornerRadius(3)
-                                }
-                                .frame(width: 170, height: 170)
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(slices) { slice in
-                                        HStack {
-                                            Circle().fill(slice.color).frame(width: 8, height: 8)
-                                            Text(slice.code)
-                                            Spacer()
-                                            Text(DateUtils.hoursLabel(seconds: slice.seconds)).monospacedDigit().foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(height: 220)
-                        }
+                    VStack(spacing: 18) {
+                        dayChart
+                        subjectCard
                     }
-                    .frame(maxWidth: 420)
                 }
 
-                card("Sessions") {
-                    let shown = Array(studySessions.prefix(40))
-                    if shown.isEmpty {
-                        Text("Aucune session sur la période.").foregroundStyle(.secondary)
-                    }
-                    ForEach(shown) { session in
-                        Button { editing = session } label: {
-                            HStack {
-                                Text(DateUtils.relativeLabel(session.startedAt)).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
-                                SessionRow(session: session)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if session.id != shown.last?.id { Divider() }
-                    }
-                }
+                sessionsCard
             }
             .padding(28)
             .frame(maxWidth: 1100, alignment: .leading)
@@ -149,38 +112,149 @@ struct MacStatsView: View {
                     ForEach(Period.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
+                .frame(width: 180)
             }
-            if period == .week {
-                ToolbarItemGroup {
-                    Button { weekOffset -= 1 } label: { Image(systemName: "chevron.left") }
-                        .help("Semaine précédente")
-                    Button { weekOffset += 1 } label: { Image(systemName: "chevron.right") }
-                        .disabled(weekOffset >= 0)
-                        .help("Semaine suivante")
-                }
+            ToolbarItemGroup(placement: .navigation) {
+                Button { weekOffset -= 1 } label: { Label("Semaine précédente", systemImage: "chevron.left") }
+                    .disabled(period != .week)
+                    .help("Semaine précédente")
+                Button { weekOffset += 1 } label: { Label("Semaine suivante", systemImage: "chevron.right") }
+                    .disabled(period != .week || weekOffset >= 0)
+                    .help("Semaine suivante")
             }
         }
         .onChange(of: period) { _, _ in weekOffset = 0 }
         .sheet(item: $editing) { SessionEditor(session: $0) }
     }
 
+    private static let categories = TaskType.reportCategories.filter { $0 != .lecture }
+
+    private var rangeTitle: String {
+        if period == .month { return "30 derniers jours" }
+        if weekOffset == 0 { return "Cette semaine" }
+        if weekOffset == -1 { return "La semaine dernière" }
+        let r = range
+        return "\(DateUtils.shortDay.string(from: r.start)) – \(DateUtils.shortDay.string(from: DateUtils.addDays(-1, to: r.end)))"
+    }
+
+    private var dayChart: some View {
+        let goal = Double(settings.dailyGoalSeconds) / 3600
+        return card("Jour par jour") {
+            Chart {
+                ForEach(bars) { bar in
+                    BarMark(x: .value("Jour", bar.day, unit: .day), y: .value("Heures", bar.hours))
+                        .foregroundStyle(by: .value("Travail", bar.category))
+                        .cornerRadius(3)
+                }
+                RuleMark(y: .value("Objectif", goal))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(.secondary)
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("objectif").font(.caption2).foregroundStyle(.secondary)
+                    }
+            }
+            .chartXScale(domain: range.start...range.end)
+            // Une couleur par travail, toujours la même (celles de l'iPhone).
+            .chartForegroundStyleScale(domain: Self.categories.map(\.label), range: Self.categories.map(\.tint))
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day, count: period == .week ? 1 : 5)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: period == .week ? .dateTime.weekday(.abbreviated) : .dateTime.day().month(.abbreviated))
+                }
+            }
+            .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine()
+                AxisValueLabel { if let h = value.as(Double.self) { Text("\(Int(h)) h") } }
+            } }
+            .frame(height: 220)
+        }
+    }
+
+    private var subjectCard: some View {
+        card("Par matière") {
+            if slices.isEmpty {
+                Text("Rien sur cette période.").foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 220)
+            } else {
+                HStack(alignment: .center, spacing: 16) {
+                    Chart(slices) { slice in
+                        SectorMark(angle: .value("Temps", slice.seconds), innerRadius: .ratio(0.62), angularInset: 1.5)
+                            .foregroundStyle(slice.color)
+                            .cornerRadius(3)
+                    }
+                    .frame(width: 130, height: 130)
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(slices) { slice in
+                            HStack(spacing: 6) {
+                                Circle().fill(slice.color).frame(width: 8, height: 8)
+                                Text(slice.code).lineLimit(1).fixedSize()
+                                Spacer(minLength: 6)
+                                Text(DateUtils.hoursLabel(seconds: slice.seconds))
+                                    .monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            }
+                            .font(.callout)
+                        }
+                    }
+                }
+                .frame(minHeight: 220)
+            }
+        }
+    }
+
+    private var sessionsCard: some View {
+        card("Sessions") {
+            let groups = SessionStats.groupedByDay(Array(studySessions.prefix(80)))
+            if groups.isEmpty {
+                Text("Aucune session sur la période.").foregroundStyle(.secondary)
+            }
+            ForEach(groups) { group in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(dayLabel(group.day)).font(.callout.weight(.semibold))
+                    Spacer()
+                    Text(DateUtils.hoursLabel(seconds: group.totalSeconds)).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                .padding(.top, 8)
+                VStack(spacing: 0) {
+                    ForEach(group.sessions) { session in
+                        SessionRow(session: session)
+                            .padding(.horizontal, 8)
+                            .hoverRow()
+                            .onTapGesture(count: 2) { editing = session }
+                            .contextMenu {
+                                Button("Modifier…") { editing = session }
+                                Divider()
+                                Button("Supprimer", role: .destructive) {
+                                    context.delete(session)
+                                    try? context.save()
+                                }
+                            }
+                    }
+                }
+            }
+            Text("Double-clic pour corriger une session.").font(.caption).foregroundStyle(.tertiary)
+        }
+    }
+
+    @Environment(\.modelContext) private var context
+
+    private func dayLabel(_ day: Date) -> String {
+        let cal = Calendar.current
+        let label = cal.isDateInToday(day) || cal.isDateInYesterday(day) ? DateUtils.relativeLabel(day) : DateUtils.fullDayLabel(day)
+        return label.prefix(1).uppercased() + label.dropFirst()
+    }
+
     private func figure(_ value: String, _ caption: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(size: 30, weight: .regular, design: .serif)).monospacedDigit()
-            Text(caption).foregroundStyle(.secondary)
+            Text(value).font(MacStyle.clock(28, weight: .regular))
+            Text(caption).font(.callout).foregroundStyle(.secondary)
         }
     }
 
     private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.system(.title3, design: .serif))
+            SectionTitle(title: title)
             content()
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.separator))
+        .macCard()
     }
 }
 

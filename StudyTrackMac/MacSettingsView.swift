@@ -7,7 +7,7 @@ struct MacSettingsView: View {
             GeneralSettings()
                 .tabItem { Label("Général", systemImage: "gearshape") }
             PomodoroSettingsPane()
-                .tabItem { Label("Pomodoro", systemImage: "timer") }
+                .tabItem { Label("Chrono", systemImage: "timer") }
             SyncSettings()
                 .tabItem { Label("iCloud", systemImage: "icloud") }
         }
@@ -32,6 +32,11 @@ private struct GeneralSettings: View {
                 Text("Le chrono reste dans la barre des menus, même fenêtre fermée.")
             }
             Section {
+                Toggle("Garder l'icône dans le Dock, fenêtre fermée", isOn: $settings.keepInDock)
+            } footer: {
+                Text("Sinon StudyTrack ne vit que dans la barre des menus quand sa fenêtre est fermée.")
+            }
+            Section {
                 Toggle("Afficher le temps dans la barre des menus", isOn: $settings.showTimeInMenuBar)
                 Toggle("Raccourci global ⌃⌥Espace", isOn: $settings.globalShortcut)
             } footer: {
@@ -39,7 +44,7 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 300)
+        .frame(height: 380)
     }
 }
 
@@ -50,16 +55,28 @@ private struct PomodoroSettingsPane: View {
         @Bindable var settings = settings
         Form {
             Section {
+                Stepper("Objectif du jour : \(DateUtils.hoursLabel(seconds: settings.dailyGoalSeconds))",
+                        value: $settings.dailyGoalMinutes, in: 30...600, step: 30)
+                Toggle("Chrono flottant pendant les sessions", isOn: Binding(
+                    get: { settings.floatingTimer },
+                    set: { settings.floatingTimer = $0; MiniTimerPanel.shared.update() }))
+                Toggle("Son à la fin d'un bloc et d'une pause", isOn: $settings.sounds)
+            } header: {
+                Text("Chrono")
+            }
+            Section {
                 Toggle("Démarrer en Pomodoro", isOn: $settings.pomodoroDefault)
                 Stepper("Bloc de travail : \(settings.focusMinutes) min", value: $settings.focusMinutes, in: 5...120, step: 5)
                 Stepper("Pause courte : \(settings.shortBreakMinutes) min", value: $settings.shortBreakMinutes, in: 1...30)
                 Stepper("Pause longue : \(settings.longBreakMinutes) min", value: $settings.longBreakMinutes, in: 5...60, step: 5)
                 Stepper("Pause longue tous les \(settings.longBreakEvery) blocs", value: $settings.longBreakEvery, in: 2...8)
                 Toggle("Relancer le bloc après la pause", isOn: $settings.autoStartFocus)
+            } header: {
+                Text("Pomodoro")
             }
         }
         .formStyle(.grouped)
-        .frame(height: 300)
+        .frame(height: 380)
     }
 }
 
@@ -81,6 +98,6 @@ private struct SyncSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 300)
+        .frame(height: 380)
     }
 }

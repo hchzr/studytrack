@@ -19,6 +19,14 @@ final class MacSettings {
     var showTimeInMenuBar: Bool { didSet { defaults.set(showTimeInMenuBar, forKey: "mac.showTimeInMenuBar") } }
     /// ⌃⌥Espace démarre ou met en pause, depuis n'importe quelle app.
     var globalShortcut: Bool { didSet { defaults.set(globalShortcut, forKey: "mac.globalShortcut") } }
+    /// L'objectif d'étude du jour, en minutes (l'anneau du chrono, Aujourd'hui).
+    var dailyGoalMinutes: Int { didSet { defaults.set(dailyGoalMinutes, forKey: "mac.dailyGoalMinutes") } }
+    /// La petite fenêtre du chrono, au-dessus des autres, pendant une session.
+    var floatingTimer: Bool { didSet { defaults.set(floatingTimer, forKey: "mac.floatingTimer") } }
+    /// Un son discret à la fin d'un bloc et d'une pause.
+    var sounds: Bool { didSet { defaults.set(sounds, forKey: "mac.sounds") } }
+    /// L'icône reste dans le Dock fenêtre fermée (sinon : barre des menus seule).
+    var keepInDock: Bool { didSet { defaults.set(keepInDock, forKey: "mac.keepInDock") } }
 
     init() {
         focusMinutes = defaults.object(forKey: "mac.focusMinutes") as? Int ?? 25
@@ -29,7 +37,13 @@ final class MacSettings {
         pomodoroDefault = defaults.bool(forKey: "mac.pomodoroDefault")
         showTimeInMenuBar = defaults.object(forKey: "mac.showTimeInMenuBar") as? Bool ?? true
         globalShortcut = defaults.object(forKey: "mac.globalShortcut") as? Bool ?? true
+        dailyGoalMinutes = defaults.object(forKey: "mac.dailyGoalMinutes") as? Int ?? 180
+        floatingTimer = defaults.object(forKey: "mac.floatingTimer") as? Bool ?? true
+        sounds = defaults.object(forKey: "mac.sounds") as? Bool ?? true
+        keepInDock = defaults.bool(forKey: "mac.keepInDock")
     }
+
+    var dailyGoalSeconds: Int { max(15, dailyGoalMinutes) * 60 }
 
     var pomodoro: PomodoroSettings {
         PomodoroSettings(focusMinutes: focusMinutes, shortBreakMinutes: shortBreakMinutes,

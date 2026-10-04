@@ -39,8 +39,29 @@ struct MacCourseView: View {
                 }
             }
             .listStyle(.inset)
+            // Au clavier : Espace coche, ↩ chronomètre ce qui est choisi.
+            .onKeyPress(.space) {
+                guard let id = selection else { return .ignored }
+                toggle(id)
+                return .handled
+            }
+            .onKeyPress(.return) {
+                guard let id = selection else { return .ignored }
+                time(id, course.theoryItems.contains { $0.id == id } ? .theory : .exercise)
+                return .handled
+            }
             .onChange(of: selection) { _, value in
                 if value != nil { showingInspector = true }
+            }
+            .onAppear {
+                // On arrive sur la semaine en cours, pas sur la série 1.
+                guard focusTarget == nil, course.currentWeek > 0,
+                      let current = course.sortedSeries.first(where: { $0.plannedWeek >= course.currentWeek && !$0.exercises.isEmpty }),
+                      let first = current.sortedExercises.first else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(120))
+                    proxy.scrollTo(first.id, anchor: .top)
+                }
             }
             .onChange(of: focusTarget, initial: true) { _, target in
                 guard let target else { return }
@@ -56,7 +77,6 @@ struct MacCourseView: View {
             }
         }
         .navigationTitle(course.displayCode)
-        .navigationSubtitle(course.name)
         .inspector(isPresented: $showingInspector) {
             inspector
                 .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
@@ -67,26 +87,7 @@ struct MacCourseView: View {
                     ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 180)
-            }
-            ToolbarItem {
-                Picker("Semaine", selection: $week) {
-                    Text("Tout le semestre").tag(0)
-                    Divider()
-                    ForEach(weeks, id: \.self) { value in
-                        Text(value == course.currentWeek ? "Semaine \(value) (en cours)" : "Semaine \(value)").tag(value)
-                    }
-                }
-                .help("Montrer une semaine")
-            }
-            ToolbarItem {
-                Button {
-                    timer.start(courseID: course.id, taskType: tab == .series ? .exercise : .theory, targetID: selection)
-                } label: {
-                    Label("Chrono", systemImage: "play.circle")
-                }
-                .help("Démarrer le chrono sur ce cours (⌘T)")
-                .disabled(timer.phase != .idle)
+                .frame(width: 150)
             }
             ToolbarItem {
                 Button { showingInspector.toggle() } label: {
@@ -116,6 +117,16 @@ struct MacCourseView: View {
                       late > 0 ? "\(late) en retard" : "à jour"].compactMap { $0 }.joined(separator: " · "))
                     .foregroundStyle(late > 0 ? .red : .secondary)
                     .lineLimit(1)
+                Picker("Semaine", selection: $week) {
+                    Text("Tout le semestre").tag(0)
+                    Divider()
+                    ForEach(weeks, id: \.self) { value in
+                        Text(value == course.currentWeek ? "Semaine \(value) (en cours)" : "Semaine \(value)").tag(value)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+                .help("Montrer une semaine")
                 Spacer(minLength: 12)
                 stat("Théorie", progress.watchedCount, progress.videoCount)
                 stat("Exercices", progress.doneCount, progress.exerciseCount)
@@ -156,7 +167,7 @@ struct MacCourseView: View {
                         .contextMenu { exerciseMenu(exercise) }
                 }
             } header: {
-                SeriesHeader(series: item)
+                SeriesHeader(series: item, tint: tint)
             }
         }
     }
@@ -231,6 +242,15 @@ struct MacCourseView: View {
         }
     }
 
+    private func toggle(_ id: UUID) {
+        if let exercise = course.allExercises.first(where: { $0.id == id }) {
+            exercise.setDone(!exercise.isDone)
+        } else if let item = course.theoryItems.first(where: { $0.id == id }) {
+            item.watchedAt = item.isWatched ? nil : Date()
+        }
+        try? context.save()
+    }
+
     /// Démarre — ou, si une session tourne, bascule dessus sans couper.
     private func time(_ target: UUID, _ type: TaskType) {
         if timer.phase == .idle {
@@ -248,6 +268,7 @@ struct MacCourseView: View {
 
 private struct SeriesHeader: View {
     let series: ExerciseSeries
+    let tint: Color
 
     var body: some View {
         HStack(spacing: 10) {
@@ -262,6 +283,10 @@ private struct SeriesHeader: View {
                     .foregroundStyle(due < Date() ? .red : .orange)
             }
             Spacer()
+            ProgressView(value: Double(series.doneCount), total: Double(max(series.requiredExercises.count, 1)))
+                .frame(width: 60)
+                .controlSize(.small)
+                .tint(tint)
             Text("\(series.doneCount)/\(series.requiredExercises.count)").monospacedDigit().foregroundStyle(.secondary)
             if let url = web(series.urlString) {
                 Link(destination: url) { Label("Énoncé", systemImage: "doc.richtext") }

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import CoreData
 import Observation
 import OSLog
@@ -25,6 +25,27 @@ final class MacTimer {
     var pomodoro = false
     /// Avance d'une seconde pendant qu'il se passe quelque chose.
     private(set) var now = Date()
+    /// La session qu'on vient de terminer ici : le récapitulatif propose de
+    /// cocher ce qui a été fait, et d'annuler un « Terminer » de trop.
+    private(set) var recap: Recap?
+
+    struct Recap: Identifiable, Equatable {
+        struct Part: Identifiable, Equatable {
+            var sessionID: UUID
+            var courseID: UUID?
+            var taskType: TaskType
+            var targetID: UUID?
+            var seconds: Int
+            var id: UUID { sessionID }
+        }
+        var id = UUID()
+        var startedAt: Date
+        var endedAt: Date
+        var totalSeconds: Int
+        var parts: [Part]
+        /// Moins d'une minute : rien n'a été enregistré.
+        var discarded: Bool { parts.isEmpty }
+    }
 
     @ObservationIgnored let settings: MacSettings
     /// Appelé à chaque changement d'état (widgets du bureau).
@@ -38,9 +59,14 @@ final class MacTimer {
     private var relayContext: ModelContext? { container.map { ModelContext($0) } }
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "timer")
 
-    init(settings: MacSettings) {
+    /// Un chrono d'aperçu (débogage) : ni sauvegardé, ni partagé.
+    @ObservationIgnored private var isolated = false
+
+    init(settings: MacSettings, isolated: Bool = false) {
         self.settings = settings
+        self.isolated = isolated
         pomodoro = settings.pomodoroDefault
+        if isolated { return }
         state = FocusTimerStore.load()
         if let state, !state.isRestorable(), !state.isRunning {
             self.state = nil
@@ -68,6 +94,30 @@ final class MacTimer {
 
     var elapsed: TimeInterval { state?.elapsed(at: now) ?? 0 }
 
+    /// La phase fine (bloc prêt après une pause, etc.), déduite de l'état.
+    var focusPhase: FocusPhase { state?.phase(settings: settings.pomodoro, at: now) ?? .idle }
+
+    var pomodoroStatus: PomodoroStatus? {
+        guard let state, state.pomodoro else { return nil }
+        return PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes)
+    }
+
+    /// Le temps passé sur la cible actuelle (depuis « Passer à… »).
+    var targetElapsed: TimeInterval { state?.currentTargetElapsed(at: now) ?? 0 }
+
+    /// Ce que dessine l'anneau : le bloc ou la pause qui s'écoule ; l'heure
+    /// entamée en session libre.
+    var ringProgress: Double {
+        guard let state else { return 0 }
+        if let pause = state.currentBreak {
+            let total = pause.endsAt.timeIntervalSince(pause.startedAt)
+            return total > 0 ? min(1, max(0, 1 - pause.endsAt.timeIntervalSince(now) / total)) : 0
+        }
+        if case .readyForBlock = focusPhase { return 1 }
+        let block = state.pomodoro ? settings.pomodoro.blockDuration : 3600
+        return elapsed.truncatingRemainder(dividingBy: block) / block
+    }
+
     /// Ce qui s'affiche en grand : le temps compté, ce qui reste du bloc en
     /// Pomodoro, ou ce qui reste de la pause.
     var displayTime: TimeInterval {
@@ -84,6 +134,7 @@ final class MacTimer {
     var statusLabel: String? {
         guard let state else { return nil }
         if let pause = state.currentBreak { return pause.kind.label }
+        if case .readyForBlock(let block) = focusPhase { return "Bloc \(block) prêt" }
         if !state.isRunning { return "En pause" }
         if state.pomodoro {
             let block = Int(elapsed / settings.pomodoro.blockDuration) + 1
@@ -98,6 +149,7 @@ final class MacTimer {
         if let courseID { self.courseID = courseID }
         if let taskType { self.taskType = taskType }
         if targetID != nil || courseID != nil { self.targetID = targetID }
+        recap = nil
         if var current = state {
             current.switchContext(courseID: self.courseID, taskTypeRaw: self.taskType.rawValue, targetID: self.targetID)
             if !label.isEmpty { current.contextLabel = label }
@@ -160,12 +212,21 @@ final class MacTimer {
     @discardableResult
     func finish() -> Int? {
         guard let current = state else { return nil }
+        if isolated {
+            close()
+            recap = Recap(startedAt: current.sessionStartedAt, endedAt: Date(), totalSeconds: Int(current.elapsed()), parts: [])
+            return nil
+        }
         let seconds = Int(current.elapsed())
         defer { close() }
-        guard seconds >= 60, let container else { return nil }
+        guard seconds >= 60, let container else {
+            recap = Recap(startedAt: current.sessionStartedAt, endedAt: Date(), totalSeconds: seconds, parts: [])
+            return nil
+        }
         let context = ModelContext(container)
         let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
         var start = current.sessionStartedAt
+        var parts: [Recap.Part] = []
         for (index, part) in current.allocatedSeconds().enumerated() {
             let course = courses.first { $0.id == part.segment.courseID }
             let exercise = course?.allExercises.first { $0.id == part.segment.targetID }
@@ -175,11 +236,29 @@ final class MacTimer {
                                        note: index == 0 ? current.note : "",
                                        exercise: exercise, theoryItem: theory)
             context.insert(session)
+            parts.append(Recap.Part(sessionID: session.id, courseID: course?.id, taskType: part.segment.taskType,
+                                    targetID: part.segment.targetID, seconds: part.seconds))
             start = start.addingTimeInterval(TimeInterval(part.seconds))
         }
         try? context.save()
+        recap = Recap(startedAt: current.sessionStartedAt, endedAt: Date(), totalSeconds: seconds, parts: parts)
         return seconds
     }
+
+    /// « Annuler » dans le récapitulatif : les sessions enregistrées partent.
+    func undoRecap() {
+        guard let recap, let container else { self.recap = nil; return }
+        let context = ModelContext(container)
+        let ids = Set(recap.parts.map(\.sessionID))
+        let since = recap.startedAt.addingTimeInterval(-1)
+        let sessions = (try? context.fetch(FetchDescriptor<StudySession>(
+            predicate: #Predicate { $0.startedAt >= since }))) ?? []
+        for session in sessions where ids.contains(session.id) { context.delete(session) }
+        try? context.save()
+        self.recap = nil
+    }
+
+    func dismissRecap() { recap = nil }
 
     func discard() {
         close()
@@ -187,18 +266,19 @@ final class MacTimer {
 
     private func close() {
         let ended = state?.sessionStartedAt
-        if !applyingRemote, let ended {
+        if !applyingRemote, !isolated, let ended {
             CloudRelay.publishTimer(nil, ended: ended, context: relayContext)
             log.notice("chrono publié : terminé")
         }
         state = nil
-        FocusTimerStore.save(nil)
+        if !isolated { FocusTimerStore.save(nil) }
         cancelNotifications()
         tick()
         onChange?()
     }
 
     private func commit() {
+        if isolated { now = Date(); tick(); return }
         FocusTimerStore.save(state)
         if !applyingRemote, let state {
             CloudRelay.publishTimer(state, context: relayContext)
@@ -224,7 +304,7 @@ final class MacTimer {
 
     /// L'état publié par l'iPhone (ou un autre Mac).
     func applyRemote() {
-        guard let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
+        guard !isolated, let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
         let decision = CloudRelay.decide(local: state, remote: remote,
                                          lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
         log.notice("chrono distant de \(remote.device.prefix(8), privacy: .public) : \(String(describing: decision), privacy: .public)")
@@ -265,6 +345,12 @@ final class MacTimer {
         guard !events.isEmpty else { return }
         state = current
         commit()
+        if settings.sounds, let last = events.last {
+            switch last {
+            case .blockEnded: NSSound(named: "Glass")?.play()
+            case .breakEnded: NSSound(named: "Hero")?.play()
+            }
+        }
     }
 
     // MARK: Notifications
