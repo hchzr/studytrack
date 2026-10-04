@@ -56,16 +56,9 @@ struct MacRootView: View {
             }
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if timer.phase != .idle, page != .focus {
-                        SidebarSessionCard { page = .focus }
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    SyncFooter()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .animation(.smooth(duration: 0.3), value: timer.phase == .idle)
+                SyncFooter()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
             }
         } detail: {
             Group {
@@ -221,38 +214,6 @@ private struct ToolbarTimer: View {
             }
             .padding(.horizontal, 8)
         }
-    }
-}
-
-/// Au pied de la barre latérale, pendant une session : où on en est.
-private struct SidebarSessionCard: View {
-    @Environment(MacTimer.self) private var timer
-    @Query(sort: \Course.code) private var courses: [Course]
-    var open: () -> Void
-
-    var body: some View {
-        let course = courses.first { $0.id == timer.courseID }
-        let tint = timer.phase == .onBreak ? MacStyle.breakTint : MacTargets.tint(course)
-        Button(action: open) {
-            HStack(spacing: 10) {
-                TimerRing(progress: timer.ringProgress, tint: tint, lineWidth: 3, draining: timer.phase == .onBreak)
-                    .frame(width: 28, height: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(timer.displayTime.clockLabel)
-                        .font(MacStyle.clock(17, weight: .regular))
-                        .foregroundStyle(timer.phase == .paused ? .secondary : .primary)
-                    Text(timer.statusLabel ?? MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(10)
-            .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

@@ -108,7 +108,7 @@ final class FocusController {
         state = saved
         if !events.isEmpty {
             lastEvent = events.last
-            commit(presence: false)
+            commit(presence: false, publish: false)
         }
         updateTicker()
     }
@@ -126,7 +126,7 @@ final class FocusController {
         case .breakEnded: Haptics.tap()
         case nil: break
         }
-        commit()
+        commit(publish: false)
     }
 
     // MARK: Gestes
@@ -230,7 +230,7 @@ final class FocusController {
         let events = current.advance(settings: settings)
         state = current
         if !events.isEmpty { lastEvent = events.last }
-        commit(presence: false)
+        commit(presence: false, publish: false)
     }
 
     /// Change le cours, le type, la cible ou la note de la session ouverte.
@@ -327,7 +327,7 @@ final class FocusController {
         next.doneAt = Date()
         exercise.refreshCompletion()
         try? context.save()
-        commit(presence: false)
+        commit(presence: false, publish: false)
     }
 
     /// Exécute une commande venue de l'écran verrouillé, de l'îlot ou du dock.
@@ -408,13 +408,19 @@ final class FocusController {
     /// - Parameters:
     ///   - presence: annoncer aux groupes (démarrage, pause, changement de cours).
     ///   - activity: republier la Live Activity.
-    private func commit(presence: Bool = true, activity: Bool = true) {
+    private func commit(presence: Bool = true, activity: Bool = true, publish: Bool = true) {
         FocusTimerStore.save(state)
         // Le Mac (et l'iPad) suivent le même chrono. Seule une session se
         // publie : « pas de chrono » ne part que de `close()`, avec la session
         // terminée — sinon un réglage touché au repos (cours, Pomodoro)
         // effaçait la session tout juste démarrée ailleurs.
-        if !applyingRemote, let state { CloudRelay.publishTimer(state, context: relayContext) }
+        //
+        // Et seuls les **gestes** se publient (`publish`). La fin d'un bloc ou
+        // d'une pause se déduit des dates, pareil sur chaque appareil : la
+        // republier, c'était dater de « maintenant » un état périmé (l'iPhone
+        // qui se réveille rattrape les blocs de SA dernière version) et
+        // écraser le « play » donné entre-temps sur le Mac.
+        if publish, !applyingRemote, let state { CloudRelay.publishTimer(state, context: relayContext) }
         guard let app, let state else { updateTicker(); return }
         if activity {
             StudyActivityController.publish(state, container: app)

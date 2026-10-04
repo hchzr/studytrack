@@ -277,10 +277,12 @@ final class MacTimer {
         onChange?()
     }
 
-    private func commit() {
+    /// `publish` : seuls les gestes partent aux autres appareils ; la fin d'un
+    /// bloc ou d'une pause se déduit des dates, pareil partout (voir l'iPhone).
+    private func commit(publish: Bool = true) {
         if isolated { now = Date(); tick(); return }
         FocusTimerStore.save(state)
-        if !applyingRemote, let state {
+        if publish, !applyingRemote, let state {
             CloudRelay.publishTimer(state, context: relayContext)
             log.notice("chrono publié : \(state.isRunning ? "en cours" : "en pause", privacy: .public)")
         }
@@ -307,7 +309,15 @@ final class MacTimer {
         guard !isolated, let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
         let decision = CloudRelay.decide(local: state, remote: remote,
                                          lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID)
-        log.notice("chrono distant de \(remote.device.prefix(8), privacy: .public) : \(String(describing: decision), privacy: .public)")
+        let fmt = ISO8601DateFormatter()
+        if decision != .ignore { log.notice("""
+            chrono distant de \(remote.device.prefix(8), privacy: .public) à \(fmt.string(from: remote.updatedAt), privacy: .public) \
+            (session \(remote.state.map { fmt.string(from: $0.sessionStartedAt) } ?? "aucune", privacy: .public), \
+            \(remote.state?.isRunning == true ? "en cours" : "arrêté", privacy: .public)) ; \
+            ici session \(self.state.map { fmt.string(from: $0.sessionStartedAt) } ?? "aucune", privacy: .public), \
+            dernier appliqué \(CloudRelay.lastAppliedTimer.map { fmt.string(from: $0) } ?? "-", privacy: .public) → \
+            \(decision == .close ? "ferme" : "adopte", privacy: .public)
+            """) }
         guard decision != .ignore else { return }
         applyingRemote = true
         defer { applyingRemote = false }
@@ -344,7 +354,7 @@ final class MacTimer {
         let events = current.advance(settings: settings.pomodoro, to: now)
         guard !events.isEmpty else { return }
         state = current
-        commit()
+        commit(publish: false)
         if settings.sounds, let last = events.last {
             switch last {
             case .blockEnded: NSSound(named: "Glass")?.play()
