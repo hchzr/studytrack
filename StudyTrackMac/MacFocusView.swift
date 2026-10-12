@@ -264,7 +264,7 @@ struct SubQuestionChecklist: View {
                             .foregroundStyle(question.isDone ? tint : (onDark ? StudyPalette.inkTertiary : Carnet.inkTertiary))
                         Text(question.path).monospacedDigit()
                             .foregroundStyle(onDark ? StudyPalette.inkSecondary : Carnet.inkSecondary)
-                        Text(question.text.isEmpty ? " " : question.text)
+                        MacMathText(question.text.isEmpty ? " " : question.text, size: 13)
                             .lineLimit(2)
                             .foregroundStyle(onDark ? StudyPalette.ink : Carnet.ink)
                             .strikethrough(question.isDone, color: onDark ? StudyPalette.inkTertiary : Carnet.inkTertiary)

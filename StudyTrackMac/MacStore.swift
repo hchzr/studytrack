@@ -39,17 +39,27 @@ final class MacStore {
         if CommandLine.arguments.contains("-memoryStore") {
             container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
             isCloudSynced = false
+            if CommandLine.arguments.contains("-previewSeed") {
+                let container = self.container
+                Task { @MainActor in Self.seedPreview(container.mainContext) }
+            }
             return
         }
         #endif
-        let cloud = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
-                                       cloudKitDatabase: .private(Self.cloudContainerID))
+        // Hors du bac à sable, la base a son dossier (voir `MacSandboxMigration`).
+        let cloud = MacSandboxMigration.isSandboxed
+            ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
+                                 cloudKitDatabase: .private(Self.cloudContainerID))
+            : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL,
+                                 cloudKitDatabase: .private(Self.cloudContainerID))
         if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
                                                configurations: [cloud]) {
             self.container = container
             isCloudSynced = true
         } else {
-            let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+            let local = MacSandboxMigration.isSandboxed
+                ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+                : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL, cloudKitDatabase: .none)
             self.container = (try? ModelContainer(for: schema, configurations: [local]))
                 ?? (try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]))
             isCloudSynced = false
@@ -102,4 +112,37 @@ final class MacStore {
             self?.onDataChange?()
         }
     }
+
+    #if DEBUG
+    /// Un cours d'essai pour les captures (`-memoryStore -previewSeed`) : la
+    /// vraie Série 3 d'Analyse I (le PDF du dépôt) et le vrai site Botafogo.
+    private static func seedPreview(_ context: ModelContext) {
+        let course = Course(code: "MATH-101", name: "Analyse I (classe inversée)", colorHex: "#4F46E5")
+        course.contentSources = ["https://botafogo.epfl.ch/analyse-1-flipped/"]
+        context.insert(course)
+        let pdf = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Analyse I Serie 03.pdf")
+        let series = ExerciseSeries(course: course, seriesNumber: 3, title: "Série 3", plannedWeek: course.currentWeek,
+                                    dueDate: Date().addingTimeInterval(3 * 86400), urlString: pdf.absoluteString)
+        context.insert(series)
+        for n in 1...6 {
+            let exercise = Exercise(series: series, exerciseNumber: "3.\(n)", sortOrder: n)
+            exercise.statement = n == 2 ? "Montrer que la suite $x_n = \\frac{an+b}{cn+d}$ est croissante si et seulement si $ad - bc \\ge 0$." : ""
+            context.insert(exercise)
+            if n <= 2 {
+                for (i, label) in ["a", "b", "c"].enumerated() {
+                    let question = SubQuestion(exercise: exercise, label: label, text: ["Calculer $x_{n+1} - x_n$.", "Étudier son signe.", "Conclure."][i],
+                                               isDone: n == 1, sortOrder: i)
+                    context.insert(question)
+                }
+            }
+            if n == 1 { exercise.setDone(true); exercise.correct(.correct) }
+        }
+        for (i, title) in ["Suites réelles : définitions", "Suites monotones et bornées", "Limites et opérations"].enumerated() {
+            context.insert(TheoryItem(course: course, sectionNumber: 3, number: "3.\(i + 1)", title: title, kind: .video,
+                                      durationSeconds: 900, plannedWeek: course.currentWeek, sortOrder: i))
+        }
+        try? context.save()
+    }
+    #endif
 }

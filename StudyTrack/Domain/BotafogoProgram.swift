@@ -40,6 +40,23 @@ struct BotafogoNode: Decodable, Equatable {
     }
 
     func meta(_ key: String) -> String? { metadata?[key] }
+
+    /// Le nom à montrer : « seance-HY-03 » → « Séance 3 », « week-HY-02 » →
+    /// « La semaine » ; les autres gardent leur nom.
+    var displayName: String {
+        let raw = (name ?? meta("title") ?? url ?? "").trimmingCharacters(in: .whitespaces)
+        let number = raw.range(of: #"\d+$"#, options: .regularExpression).flatMap { Int(raw[$0]) }
+        let slug = raw.range(of: #"^[a-z]+(-[A-Za-z0-9]+)+$"#, options: .regularExpression) != nil
+        switch type {
+        case "session" where slug || raw.isEmpty: return number.map { "Séance \($0)" } ?? "Séance"
+        case "weekContent" where slug || raw.isEmpty: return "La semaine"
+        case "lecture" where slug || raw.isEmpty: return number.map { "Cours \($0)" } ?? "Cours"
+        default:
+            if raw.hasPrefix("seance-") { return number.map { "Séance \($0)" } ?? "Séance" }
+            if raw.hasPrefix("week-") { return "La semaine" }
+            return raw
+        }
+    }
 }
 
 /// Une valeur scalaire de JSON, lue comme texte.

@@ -49,6 +49,8 @@ final class MacSettings {
     /// Sortir avant la fin demande d'appuyer longuement : une seconde de
     /// réflexion contre le réflexe.
     var studyHoldToLeave: Bool { didSet { defaults.set(studyHoldToLeave, forKey: "mac.studyHoldToLeave") } }
+    /// Fermer les apps non permises (sinon : seulement les couvrir d'un voile).
+    var studyCloseApps: Bool { didSet { defaults.set(studyCloseApps, forKey: "mac.studyCloseApps") } }
     /// Pomodoro pendant le mode étude.
     var studyPomodoro: Bool { didSet { defaults.set(studyPomodoro, forKey: "mac.studyPomodoro") } }
 
@@ -66,11 +68,14 @@ final class MacSettings {
         sounds = defaults.object(forKey: "mac.sounds") as? Bool ?? true
         keepInDock = defaults.bool(forKey: "mac.keepInDock")
         menuBarSeconds = defaults.bool(forKey: "mac.menuBarSeconds")
-        studySites = defaults.stringArray(forKey: "mac.studySites") ?? StudyMode.defaultSites
+        // Les sites ajoutés depuis (GeoGebra, Desmos…) rejoignent une liste déjà enregistrée.
+        let savedSites = defaults.stringArray(forKey: "mac.studySites") ?? StudyMode.defaultSites
+        studySites = savedSites + StudyMode.defaultSites.filter { !savedSites.contains($0) && StudyMode.addedLater.contains($0) }
         studyApps = defaults.stringArray(forKey: "mac.studyApps") ?? StudyMode.defaultMacApps
         studyMinutes = defaults.object(forKey: "mac.studyMinutes") as? Int ?? 50
         studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
+        studyCloseApps = defaults.object(forKey: "mac.studyCloseApps") as? Bool ?? true
     }
 
     var dailyGoalSeconds: Int { max(15, dailyGoalMinutes) * 60 }

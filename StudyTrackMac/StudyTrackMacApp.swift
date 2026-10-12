@@ -15,6 +15,13 @@ struct StudyTrackMacApp: App {
     @State private var menuClock: MenuBarClock
 
     init() {
+        #if DEBUG
+        // `-cloudCheck` : iCloud marche-t-il hors du bac à sable ? Une base
+        // jetable, le premier événement CloudKit, puis on quitte.
+        if CommandLine.arguments.contains("-cloudCheck") { CloudCheck.run() }
+        #endif
+        // Avant tout : les réglages et la base du bac à sable, repris une fois.
+        MacSandboxMigration.run()
         let settings = MacSettings()
         let store = MacStore()
         #if DEBUG
@@ -71,7 +78,17 @@ struct StudyTrackMacApp: App {
                 try? await Task.sleep(for: .seconds(3))
                 if action == "start" { timer.start(taskType: .exercise, label: "Test du chrono partagé") }
                 if action == "discard" { timer.discard() }
-                if action == "study" { timer.enterStudy(minutes: 25, label: "Test du mode étude") }
+                if action == "study" {
+                    let context = ModelContext(store.container)
+                    let course = (try? context.fetch(FetchDescriptor<Course>()))?.first
+                    let exercise = course?.sortedSeries.first?.sortedExercises.dropFirst().first
+                    timer.enterStudy(minutes: 25, courseID: course?.id, taskType: .exercise, targetID: exercise?.id,
+                                     label: "Test du mode étude")
+                    if let index = CommandLine.arguments.firstIndex(of: "-studyPane"), index + 1 < CommandLine.arguments.count,
+                       let pane = StudyDesk.Pane(rawValue: CommandLine.arguments[index + 1]) {
+                        StudyModeController.shared.desk.pane = pane
+                    }
+                }
             }
         }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
@@ -336,3 +353,35 @@ enum MacLivePayload {
                                         attributes: LiveActivityBuilder.attributes(for: state, course: course))
     }
 }
+
+#if DEBUG
+import CoreData
+
+enum CloudCheck {
+    static func run() -> Never {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cloudcheck-\(UUID().uuidString).store")
+        let schema = StudyTrackSchema.current
+        let configuration = ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .private(MacStore.cloudContainerID))
+        var container: ModelContainer?
+        do {
+            container = try ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self, configurations: [configuration])
+            FileHandle.standardError.write(Data("CLOUD container ok (sandbox: \(MacSandboxMigration.isSandboxed))\n".utf8))
+        } catch {
+            FileHandle.standardError.write(Data("CLOUD container FAILED: \(error)\n".utf8))
+            exit(1)
+        }
+        let observer = NotificationCenter.default.addObserver(forName: NSPersistentCloudKitContainer.eventChangedNotification, object: nil, queue: nil) { note in
+            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event,
+                  event.endDate != nil else { return }
+            FileHandle.standardError.write(Data("CLOUD event \(event.type.rawValue) succeeded=\(event.succeeded) error=\(String(describing: event.error))\n".utf8))
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(40))
+        let courses = container.map { (try? ModelContext($0).fetchCount(FetchDescriptor<Course>())) ?? -1 } ?? -1
+        FileHandle.standardError.write(Data("CLOUD courses imported: \(courses)\n".utf8))
+        NotificationCenter.default.removeObserver(observer)
+        container = nil
+        for suffix in ["", "-shm", "-wal"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }
+        exit(0)
+    }
+}
+#endif

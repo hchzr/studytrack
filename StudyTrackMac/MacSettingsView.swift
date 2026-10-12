@@ -120,10 +120,26 @@ private struct StudySettingsPane: View {
             Section {
                 Stepper("Durée proposée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
                 Toggle("Maintenir pour terminer avant l'heure", isOn: $settings.studyHoldToLeave)
+                Toggle("Fermer les apps non permises", isOn: $settings.studyCloseApps)
             } header: {
                 Text("Session")
             } footer: {
-                Text("Pendant le mode étude, les autres apps sont couvertes d'un voile et les sites non permis refusés. ⌘Q demande confirmation.")
+                Text("Au début du mode étude, les apps non permises se ferment (elles demandent d'enregistrer d'abord) ; celles qu'on rouvre se ferment aussitôt. Sans cette option, elles sont seulement couvertes d'un voile. ⌘Q demande confirmation.")
+            }
+
+            Section {
+                LabeledContent("Claude Code") {
+                    if let path = ClaudeChat.executable?.path {
+                        Text("trouvé · \(path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("introuvable").foregroundStyle(Carnet.wrong)
+                    }
+                }
+            } header: {
+                Text("Claude")
+            } footer: {
+                Text("Claude, dans le mode étude, passe par ton abonnement : StudyTrack fait parler Claude Code, connecté une fois à ton compte (tape `claude` dans le Terminal). Ni clé d'API, ni coût en plus ; sans outils ni accès à tes fichiers.")
             }
 
             Section {

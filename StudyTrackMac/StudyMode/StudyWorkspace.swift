@@ -1,0 +1,363 @@
+import SwiftUI
+import SwiftData
+
+/// Le bureau du mode étude : une barre en haut (ce qui reste, sur quoi, les
+/// gestes), une colonne d'outils à gauche, l'outil choisi au centre. Tout est
+/// natif — la série en PDF, le cours (StudyTrack, Moodle, Botafogo), Claude
+/// par l'abonnement, la calculatrice ; le navigateur reste pour le reste.
+struct StudyWorkspace: View {
+    @Bindable var screen: StudyModeController.Screen
+    @Bindable var browser: StudyBrowserModel
+    @Bindable var desk: StudyDesk
+    let courses: [Course]
+
+    @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
+
+    private var course: Course? { courses.first { $0.id == timer.courseID } }
+    private var tint: Color { MacTargets.tint(course) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            StudyTopBar(course: course, tint: tint)
+            Rectangle().fill(Carnet.rule).frame(height: 1)
+            HStack(spacing: 0) {
+                StudyRail(desk: desk, browser: browser, course: course)
+                Rectangle().fill(Carnet.rule).frame(width: 1)
+                pane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Carnet.ground.opacity(desk.pane == .desk ? 0 : 1))
+            }
+        }
+        .overlay(alignment: .top) { blockedToast }
+        .background(paneShortcuts)
+    }
+
+    @ViewBuilder
+    private var pane: some View {
+        switch desk.pane {
+        case .desk:
+            StudyDeskHome(course: course, tint: tint, desk: desk, open: open)
+        case .exercise:
+            ExercisePane(course: course, desk: desk, openWeb: openWeb)
+        case .course:
+            CoursePane(course: course, desk: desk, openWeb: openWeb)
+        case .claude:
+            ClaudePane(course: course, desk: desk)
+        case .calc:
+            CalcPane(desk: desk, openWeb: openWeb)
+        case .web:
+            if browser.tabs.isEmpty {
+                StudyWebHome(course: course, open: open)
+            } else {
+                StudyBrowserPane(browser: browser, tint: tint) { desk.pane = .desk }
+                    .padding(14)
+            }
+        }
+    }
+
+    private func openWeb(_ url: URL, _ title: String) {
+        browser.open(url, title: title)
+        desk.pane = .web
+    }
+
+    /// Un outil : un site → l'onglet Web, une app → l'app, sinon le bon onglet.
+    private func open(_ tool: StudyMode.Tool) {
+        switch tool.kind {
+        case .web(let url):
+            if tool.id == "claude" { desk.pane = .claude; return }
+            openWeb(url, tool.title)
+        case .app(let bundleID, _):
+            StudyModeController.shared.openApp(bundleID: bundleID)
+        }
+    }
+
+    /// ⌘1 à ⌘6 : les outils.
+    private var paneShortcuts: some View {
+        ZStack {
+            ForEach(StudyDesk.Pane.allCases) { pane in
+                Button("") { desk.pane = pane }
+                    .keyboardShortcut(pane.shortcut, modifiers: [.command])
+            }
+        }
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var blockedToast: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let name = screen.blockedName, let at = screen.blockedAt, context.date.timeIntervalSince(at) < 4 {
+                Label("\(name) est fermé pendant le mode étude", systemImage: "hand.raised.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(StudyPalette.ground)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(StudyPalette.ink, in: Capsule())
+                    .padding(.top, 60)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+}
+
+// MARK: - Barre du haut
+
+private struct StudyTopBar: View {
+    let course: Course?
+    var tint: Color
+    @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
+
+    var body: some View {
+        HStack(spacing: 16) {
+            HStack(spacing: 10) {
+                StudyTimeline { date in
+                    TimerRing(progress: StudyMode.progress(timer.state, at: date), tint: tint, lineWidth: 3)
+                        .frame(width: 26, height: 26)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    StudyTimeline { date in
+                        Text(StudyMode.remaining(timer.state, at: date).rounded(.up).clockLabel)
+                            .font(Carnet.clock(22))
+                            .foregroundStyle(StudyPalette.ink)
+                    }
+                    Text("jusqu'à \(DateUtils.time.string(from: timer.state?.studyUntil ?? Date()))")
+                        .font(.caption2).foregroundStyle(StudyPalette.inkTertiary)
+                }
+            }
+            Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                if let course { CourseTag(code: course.displayCode, tint: tint) }
+                Text(MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID))
+                    .font(Carnet.serif(.headline))
+                    .foregroundStyle(StudyPalette.ink)
+                    .lineLimit(1)
+            }
+            HStack(spacing: 5) {
+                Image(systemName: timer.phase == .onBreak ? "cup.and.saucer" : "timer")
+                TimerClockText(font: .callout.monospacedDigit())
+            }
+            .font(.callout)
+            .foregroundStyle(StudyPalette.inkSecondary)
+            Spacer()
+            Button {
+                if timer.phase == .onBreak { timer.skipBreak() } else { timer.toggle() }
+            } label: {
+                Image(systemName: timer.phase == .running ? "pause.fill" : (timer.phase == .onBreak ? "forward.fill" : "play.fill"))
+            }
+            .buttonStyle(RoundButtonStyle(size: 34, prominent: true, tint: StudyPalette.ink))
+            .help(timer.phase == .running ? "Pause (le mode étude reste fermé)" : "Reprendre")
+            Button { timer.extendStudy(minutes: 25) } label: { Label("25 min", systemImage: "plus") }
+                .buttonStyle(.paper)
+            HoldButton(title: "Terminer", systemImage: "checkmark", hold: settings.studyHoldToLeave ? 1.5 : 0) {
+                timer.finish()
+            }
+            Menu {
+                Button("Mes cours (fenêtre StudyTrack)") {
+                    NSApp.setActivationPolicy(.regular)
+                    NotificationCenter.default.post(name: .macOpenMainWindow, object: nil)
+                }
+                Divider()
+                Button("Sortir du mode étude, garder la session") { timer.leaveStudy() }
+                Button("Abandonner la session", role: .destructive) { timer.discard() }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(StudyPalette.inkSecondary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(StudyPalette.raised.opacity(0.6))
+    }
+}
+
+// MARK: - Colonne d'outils
+
+private struct StudyRail: View {
+    var desk: StudyDesk
+    var browser: StudyBrowserModel
+    let course: Course?
+    @Environment(MacSettings.self) private var settings
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(StudyDesk.Pane.allCases) { pane in
+                RailButton(title: pane.title, icon: pane.icon, selected: desk.pane == pane,
+                           badge: pane == .web && !browser.tabs.isEmpty ? "\(browser.tabs.count)" : nil) {
+                    desk.pane = pane
+                }
+                .help("\(pane.title) (⌘\(String(pane.shortcut.character)))")
+            }
+            Spacer()
+            Rectangle().fill(StudyPalette.rule).frame(width: 34, height: 1)
+            ForEach(apps, id: \.self) { bundleID in
+                Button {
+                    StudyModeController.shared.openApp(bundleID: bundleID)
+                } label: {
+                    VStack(spacing: 3) {
+                        if let icon = StudyModeController.icon(for: bundleID) {
+                            Image(nsImage: icon).resizable().frame(width: 30, height: 30)
+                        }
+                        Text(StudyModeController.name(for: bundleID)).font(.system(size: 9)).foregroundStyle(StudyPalette.inkTertiary)
+                            .lineLimit(1)
+                    }
+                    .frame(width: 64)
+                }
+                .buttonStyle(.plain)
+                .help("Ouvrir \(StudyModeController.name(for: bundleID)) (permise pendant le mode étude)")
+            }
+        }
+        .padding(.vertical, 14)
+        .frame(width: 76)
+        .background(StudyPalette.raised.opacity(0.4))
+    }
+
+    /// Les apps permises et installées (sauf le Finder et la Calculette : le
+    /// bureau a les siennes).
+    private var apps: [String] {
+        settings.studyApps.filter {
+            $0 != "com.apple.finder" && $0 != "com.apple.calculator" && StudyModeController.isInstalled($0)
+        }
+    }
+}
+
+private struct RailButton: View {
+    let title: String
+    let icon: String
+    let selected: Bool
+    var badge: String?
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: selected ? .semibold : .regular))
+                    .frame(width: 44, height: 34)
+                    .background(selected ? StudyPalette.ink : (hovering ? StudyPalette.raisedMore : .clear),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .foregroundStyle(selected ? StudyPalette.ground : StudyPalette.ink)
+                    .overlay(alignment: .topTrailing) {
+                        if let badge {
+                            Text(badge).font(.system(size: 9, weight: .bold)).padding(3)
+                                .background(Carnet.wrong, in: Circle()).foregroundStyle(.white).offset(x: 4, y: -4)
+                        }
+                    }
+                Text(title).font(.system(size: 10, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? StudyPalette.ink : StudyPalette.inkSecondary)
+            }
+            .frame(width: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - Bureau
+
+/// L'accueil du bureau : le grand cadran, l'exercice, la suite — et les
+/// raccourcis vers chaque outil.
+private struct StudyDeskHome: View {
+    let course: Course?
+    var tint: Color
+    var desk: StudyDesk
+    var open: (StudyMode.Tool) -> Void
+    @Environment(MacTimer.self) private var timer
+
+    var body: some View {
+        ScrollView {
+            HStack(alignment: .top, spacing: 40) {
+                VStack(spacing: 26) {
+                    StudyDial(tint: tint, size: 360)
+                    StudyTargetCard(course: course, tint: tint)
+                        .frame(maxWidth: 520)
+                }
+                .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Ton bureau").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
+                    shortcut(.exercise, "La série en PDF, l'exercice en cours, ses questions")
+                    shortcut(.course, "Le cours semaine par semaine, Moodle et Botafogo, lus ici")
+                    shortcut(.claude, "Un tuteur qui connaît l'exercice — par ton abonnement")
+                    shortcut(.calc, "Calculs, fonctions, dérivées, intégrales, graphes")
+                    shortcut(.web, "Les autres sites permis (Courseware, GeoGebra…)")
+                    Text("⌘1 à ⌘6 pour passer d'un outil à l'autre. Le reste du Mac est fermé jusqu'à la fin.")
+                        .font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+                }
+                .frame(width: 400)
+            }
+            .padding(40)
+        }
+    }
+
+    private func shortcut(_ pane: StudyDesk.Pane, _ detail: String) -> some View {
+        Button { desk.pane = pane } label: {
+            HStack(spacing: 14) {
+                Image(systemName: pane.icon)
+                    .font(.title3)
+                    .frame(width: 42, height: 42)
+                    .background(StudyPalette.raisedMore, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .foregroundStyle(StudyPalette.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pane.title).font(.body.weight(.medium)).foregroundStyle(StudyPalette.ink)
+                    Text(detail).font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                }
+                Spacer()
+                Text("⌘\(String(pane.shortcut.character))").font(.caption.monospacedDigit()).foregroundStyle(StudyPalette.inkTertiary)
+            }
+            .padding(12)
+            .background(StudyPalette.raised.opacity(0.9), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(StudyPalette.rule))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// L'onglet Web vide : les sites permis du cours, à ouvrir.
+private struct StudyWebHome: View {
+    let course: Course?
+    var open: (StudyMode.Tool) -> Void
+    @Environment(MacSettings.self) private var settings
+
+    var body: some View {
+        let tools = StudyTools.tools(for: course, settings: settings).filter { !$0.isApp }
+            + [StudyMode.Tool(id: "geogebra", title: "GeoGebra", subtitle: "Géométrie, calcul formel", icon: "compass.drawing",
+                              kind: .web(URL(string: "https://www.geogebra.org/calculator")!))]
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Sites permis").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                ForEach(tools.filter(isAllowed)) { tool in
+                    Button { open(tool) } label: {
+                        HStack(spacing: 12) {
+                            StudyToolIcon(tool: tool, size: 36)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(tool.title).foregroundStyle(StudyPalette.ink)
+                                Text(tool.subtitle).font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(12)
+                        .background(StudyPalette.raised.opacity(0.9), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(StudyPalette.rule))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Les autres sites sont refusés pendant le mode étude. Réglages › Mode étude pour en ajouter.")
+                .font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+            Spacer()
+        }
+        .padding(32)
+    }
+
+    private func isAllowed(_ tool: StudyMode.Tool) -> Bool {
+        guard case .web(let url) = tool.kind else { return false }
+        return StudyMode.isAllowed(url: url, sites: settings.studySites)
+    }
+}

@@ -80,7 +80,12 @@ enum StudyMode {
         "login.microsoftonline.com", "login.live.com", "msauth.net", "msftauth.net",
         "accounts.google.com", "appleid.apple.com",
         "kaltura.com", "switch.ch",
+        "geogebra.org", "desmos.com", "wolframalpha.com",
     ]
+
+    /// Les sites ajoutés à la liste par défaut après coup : ils rejoignent une
+    /// liste déjà enregistrée (sans rétablir ceux qu'on a retirés).
+    static let addedLater: Set<String> = ["geogebra.org", "desmos.com", "wolframalpha.com"]
 
     /// `https://www.Moodle.epfl.ch/my/` → `moodle.epfl.ch`. Ce que l'utilisateur·rice
     /// tape dans les réglages, ramené à un domaine ; `nil` si ce n'en est pas un.

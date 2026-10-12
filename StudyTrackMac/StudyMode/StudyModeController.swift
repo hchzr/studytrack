@@ -47,10 +47,15 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     let screen = Screen()
     let browser = StudyBrowserModel()
+    let desk = StudyDesk()
 
     private var window: NSWindow?
     private var shields: [NSWindow] = []
     private var activationObserver: NSObjectProtocol?
+    private var launchObserver: NSObjectProtocol?
+    /// Les apps à qui l'on a demandé de quitter, et quand : pendant quelques
+    /// secondes, on les laisse afficher « Enregistrer les modifications ? ».
+    private var quitting: [pid_t: Date] = [:]
     private var blocking = false
     private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "study")
     #if DEBUG
@@ -87,6 +92,11 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// Lancer : le chrono démarre (ou se verrouille), l'iPhone suit.
     func begin(minutes: Int, pomodoro: Bool) {
         guard let timer else { return }
+        // Le vrai blocage : ce qui n'est pas permis se ferme (proprement — une
+        // app avec un document non enregistré le demande d'abord).
+        if settings?.studyCloseApps ?? true {
+            for app in runningBlockedApps() { ask(app, toQuit: true, force: false) }
+        }
         if timer.phase == .idle { timer.pomodoro = pomodoro }
         timer.enterStudy(minutes: minutes, courseID: screen.courseID, taskType: screen.taskType,
                          targetID: screen.targetID, label: screen.label)
@@ -142,7 +152,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             window.hasShadow = false
             window.appearance = NSAppearance(named: .darkAqua)
             window.delegate = self
-            var root = AnyView(StudyModeView(screen: screen, browser: browser)
+            var root = AnyView(StudyModeView(screen: screen, browser: browser, desk: desk)
                 .environment(timer)
                 .environment(settings))
             if let container { root = AnyView(root.modelContainer(container)) }
@@ -159,6 +169,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         window?.orderOut(nil)
         NSApp.presentationOptions = []
         browser.closeAll()
+        desk.closeAll()
+        desk.pane = .desk
     }
 
     /// Dock et barre des menus cachés tant que StudyTrack est au premier plan.
@@ -184,6 +196,14 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated { self?.check(app) }
         }
+        // Une app non permise qui se lance pendant la session se ferme aussitôt :
+        // elle n'a encore rien à perdre.
+        launchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { self?.launched(app) }
+        }
         check(NSWorkspace.shared.frontmostApplication)
         log.notice("mode étude : blocage actif")
     }
@@ -192,22 +212,58 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard blocking else { return }
         blocking = false
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        if let launchObserver { NSWorkspace.shared.notificationCenter.removeObserver(launchObserver) }
         activationObserver = nil
+        launchObserver = nil
+        quitting.removeAll()
         hideShields()
         log.notice("mode étude : blocage levé")
     }
 
+    /// Les apps ouvertes qui ne sont pas permises (pour les annoncer, puis les fermer).
+    func runningBlockedApps() -> [NSRunningApplication] {
+        NSWorkspace.shared.runningApplications.filter(isBlocked)
+    }
+
+    private func isBlocked(_ app: NSRunningApplication) -> Bool {
+        StudyMode.shouldBlock(bundleID: app.bundleIdentifier,
+                              isRegular: app.activationPolicy == .regular,
+                              own: Bundle.main.bundleIdentifier ?? "",
+                              allowed: settings?.studyApps ?? StudyMode.defaultMacApps)
+    }
+
+    /// Demande à une app de quitter ; `force` : la forcer si elle n'a pas
+    /// quitté au bout de deux secondes (une app tout juste lancée).
+    private func ask(_ app: NSRunningApplication, toQuit: Bool, force: Bool) {
+        quitting[app.processIdentifier] = Date()
+        app.terminate()
+        guard force else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if !app.isTerminated { app.forceTerminate() }
+        }
+    }
+
+    private func launched(_ app: NSRunningApplication?) {
+        guard blocking, let app, isBlocked(app) else { return }
+        screen.blockedName = app.localizedName
+        screen.blockedAt = Date()
+        log.notice("mode étude : \(app.bundleIdentifier ?? "?", privacy: .public) lancée, fermée")
+        if settings?.studyCloseApps ?? true {
+            ask(app, toQuit: true, force: true)
+        }
+    }
+
     /// Une app vient au premier plan : permise, on la laisse ; sinon le voile.
     private func check(_ app: NSRunningApplication?) {
-        guard blocking, let app, let settings else { return }
-        let blocked = StudyMode.shouldBlock(bundleID: app.bundleIdentifier,
-                                            isRegular: app.activationPolicy == .regular,
-                                            own: Bundle.main.bundleIdentifier ?? "",
-                                            allowed: settings.studyApps)
-        guard blocked else {
+        guard blocking, let app else { return }
+        guard isBlocked(app) else {
             hideShields()
             return
         }
+        // On vient de lui demander de quitter : elle demande peut-être
+        // d'enregistrer un document — on la laisse répondre.
+        if let asked = quitting[app.processIdentifier], Date().timeIntervalSince(asked) < 20 { return }
         screen.blockedName = app.localizedName
         screen.blockedAt = Date()
         log.notice("mode étude : \(app.bundleIdentifier ?? "?", privacy: .public) arrêtée")
@@ -216,6 +272,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // Puis masquer l'app, quand le système le permet (ses fenêtres partent,
         // son icône reste), et revenir à l'écran d'étude, qui le dit. Sinon le
         // voile reste, jusqu'à ce qu'on choisisse quoi faire.
+        if settings?.studyCloseApps ?? true {
+            ask(app, toQuit: true, force: false)
+        }
         if app.hide() {
             present()
         }

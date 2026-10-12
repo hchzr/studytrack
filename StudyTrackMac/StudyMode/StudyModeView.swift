@@ -22,6 +22,7 @@ enum StudyPalette {
 struct StudyModeView: View {
     @Bindable var screen: StudyModeController.Screen
     var browser: StudyBrowserModel
+    var desk: StudyDesk
 
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
@@ -44,7 +45,7 @@ struct StudyModeView: View {
                     // La session a été terminée ailleurs : l'écran va se fermer.
                     ProgressView().controlSize(.large)
                 } else {
-                    StudySessionView(screen: screen, browser: browser, courses: tracked)
+                    StudyWorkspace(screen: screen, browser: browser, desk: desk, courses: tracked)
                         .transition(.opacity)
                 }
             }
@@ -239,97 +240,6 @@ private struct StudyToolStrip: View {
 
 // MARK: - La session
 
-private struct StudySessionView: View {
-    @Bindable var screen: StudyModeController.Screen
-    @Bindable var browser: StudyBrowserModel
-    let courses: [Course]
-
-    @Environment(MacTimer.self) private var timer
-    @Environment(MacSettings.self) private var settings
-
-    private var course: Course? { courses.first { $0.id == timer.courseID } }
-    private var tint: Color { MacTargets.tint(course) }
-    private var browsing: Bool { !browser.tabs.isEmpty }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            topBar
-                .padding(.horizontal, 28)
-                .padding(.top, 18)
-            HStack(alignment: .top, spacing: 26) {
-                VStack(spacing: 26) {
-                    StudyDial(tint: tint, size: browsing ? 300 : 400)
-                    StudyTargetCard(course: course, tint: tint)
-                        .frame(maxWidth: browsing ? 380 : 520)
-                    StudyControls(tint: tint)
-                }
-                .frame(width: browsing ? 400 : nil)
-                .frame(maxWidth: browsing ? nil : .infinity)
-                .padding(.top, browsing ? 10 : 30)
-
-                if browsing {
-                    StudyBrowserPane(browser: browser, tint: tint) { browser.closeAll() }
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    StudyToolGrid(course: course, browser: browser)
-                        .frame(width: 440)
-                        .padding(.top, 30)
-                        .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
-            .frame(maxHeight: .infinity, alignment: .top)
-        }
-        .overlay(alignment: .top) { blockedToast }
-        .animation(.smooth(duration: 0.35), value: browsing)
-    }
-
-    private var topBar: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "lock.fill").font(.caption)
-                Kicker("Mode étude", color: StudyPalette.inkSecondary)
-            }
-            .foregroundStyle(StudyPalette.inkSecondary)
-            StudyTimeline { date in
-                Text("jusqu'à \(DateUtils.time.string(from: timer.state?.studyUntil ?? date)) · il est \(DateUtils.time.string(from: date))")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(StudyPalette.inkTertiary)
-            }
-            Spacer()
-            Label("Mac et iPhone fermés au reste", systemImage: "iphone.and.arrow.forward")
-                .font(.caption)
-                .foregroundStyle(StudyPalette.inkTertiary)
-                .help("L'iPhone se verrouille quand il reçoit la session (il faut avoir choisi ses apps permises dans StudyTrack sur l'iPhone, une fois)")
-            Button {
-                NSApp.setActivationPolicy(.regular)
-                NotificationCenter.default.post(name: .macOpenMainWindow, object: nil)
-            } label: {
-                Label("Mes cours", systemImage: "books.vertical")
-            }
-            .buttonStyle(PaperButtonStyle())
-            .help("La fenêtre de StudyTrack, par-dessus l'écran du mode étude")
-        }
-    }
-
-    @ViewBuilder
-    private var blockedToast: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            if let name = screen.blockedName, let at = screen.blockedAt, context.date.timeIntervalSince(at) < 4 {
-                Label("\(name) est fermé pendant le mode étude", systemImage: "hand.raised.fill")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(StudyPalette.ground)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(StudyPalette.ink, in: Capsule())
-                    .padding(.top, 18)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-    }
-}
-
 /// Le temps du mode étude : ce qui reste (wall clock, même en pause).
 struct StudyTimeline<Content: View>: View {
     @Environment(MacTimer.self) private var timer
@@ -345,7 +255,7 @@ struct StudyTimeline<Content: View>: View {
 }
 
 /// Le grand cadran : ce qui reste du mode étude, le temps de travail dessous.
-private struct StudyDial: View {
+struct StudyDial: View {
     @Environment(MacTimer.self) private var timer
     var tint: Color
     var size: CGFloat
@@ -380,7 +290,7 @@ private struct StudyDial: View {
 }
 
 /// Ce qu'on travaille : la cible, ses questions, la suite.
-private struct StudyTargetCard: View {
+struct StudyTargetCard: View {
     let course: Course?
     var tint: Color
     @Environment(MacTimer.self) private var timer
@@ -417,49 +327,6 @@ private struct StudyTargetCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(StudyPalette.raised.opacity(0.9), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(StudyPalette.rule))
-    }
-}
-
-/// Pause, prolonger, terminer (en appuyant longuement).
-private struct StudyControls: View {
-    var tint: Color
-    @Environment(MacTimer.self) private var timer
-    @Environment(MacSettings.self) private var settings
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Button {
-                if timer.phase == .onBreak { timer.skipBreak() } else { timer.toggle() }
-            } label: {
-                Image(systemName: timer.phase == .running ? "pause.fill" : (timer.phase == .onBreak ? "forward.fill" : "play.fill"))
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(RoundButtonStyle(size: 52, prominent: true, tint: StudyPalette.ink))
-            .help(timer.phase == .running ? "Pause (le mode étude reste fermé)" : "Reprendre")
-            .keyboardShortcut(.space, modifiers: [])
-
-            Button { timer.extendStudy(minutes: 25) } label: {
-                Label("25 min", systemImage: "plus")
-            }
-            .buttonStyle(PaperButtonStyle(large: true))
-            .help("Prolonger le mode étude de 25 minutes")
-
-            HoldButton(title: "Terminer", systemImage: "checkmark", hold: settings.studyHoldToLeave ? 1.5 : 0) {
-                timer.finish()
-            }
-            .help(settings.studyHoldToLeave ? "Maintenir pour terminer et enregistrer : tout se rouvre" : "Terminer et enregistrer")
-
-            Menu {
-                Button("Sortir du mode étude, garder la session") { timer.leaveStudy() }
-                Button("Abandonner la session", role: .destructive) { timer.discard() }
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .foregroundStyle(StudyPalette.inkSecondary)
-        }
     }
 }
 
@@ -563,69 +430,6 @@ struct StudyToolIcon: View {
             .foregroundStyle(StudyPalette.ink)
             .frame(width: size, height: size)
             .background(StudyPalette.raisedMore, in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
-    }
-}
-
-private struct StudyToolGrid: View {
-    let course: Course?
-    var browser: StudyBrowserModel
-    @Environment(MacSettings.self) private var settings
-
-    var body: some View {
-        let tools = StudyTools.tools(for: course, settings: settings)
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Tes outils").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(tools) { tool in
-                    StudyToolTile(tool: tool) { open(tool) }
-                }
-            }
-            Text("Les sites s'ouvrent ici, les apps à côté. Le reste du Mac est fermé jusqu'à la fin.")
-                .font(.caption)
-                .foregroundStyle(StudyPalette.inkTertiary)
-        }
-    }
-
-    private func open(_ tool: StudyMode.Tool) {
-        switch tool.kind {
-        case .web(let url): browser.open(url, title: tool.title)
-        case .app(let bundleID, _): StudyModeController.shared.openApp(bundleID: bundleID)
-        }
-    }
-}
-
-private struct StudyToolTile: View {
-    let tool: StudyMode.Tool
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                StudyToolIcon(tool: tool, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tool.title).font(.body.weight(.medium)).foregroundStyle(StudyPalette.ink).lineLimit(1)
-                    Text(tool.subtitle).font(.caption).foregroundStyle(StudyPalette.inkSecondary).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: isApp ? "arrow.up.forward.app" : "arrow.right")
-                    .font(.caption)
-                    .foregroundStyle(StudyPalette.inkTertiary)
-                    .opacity(hovering ? 1 : 0)
-            }
-            .padding(12)
-            .background(hovering ? StudyPalette.raisedMore : StudyPalette.raised.opacity(0.9),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(StudyPalette.rule))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-    }
-
-    private var isApp: Bool {
-        if case .app = tool.kind { return true }
-        return false
     }
 }
 

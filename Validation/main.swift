@@ -5626,6 +5626,110 @@ do {
     check(tools.contains { $0.id == "claude" } && tools.contains { $0.id == "goodnotes" }, "outils : Claude et GoodNotes toujours là")
 }
 
+// MARK: Calculatrice du mode étude (MathEngine)
+do {
+    func calc(_ text: String, _ env: inout MathEngine.Environment) -> Double? { try? env.run(text) }
+    var env = MathEngine.Environment()
+    func near(_ a: Double?, _ b: Double, _ eps: Double = 1e-9) -> Bool { a.map { abs($0 - b) < eps } ?? false }
+    check(near(calc("1 + 2 * 3", &env), 7), "priorités : 1 + 2·3 = 7")
+    check(near(calc("2^3^2", &env), 512), "puissance à droite : 2^3^2 = 512")
+    check(near(calc("-2^2", &env), -4), "−2² = −4 (l'exposant d'abord)")
+    check(near(calc("(1+2)(3+4)", &env), 21), "multiplication implicite entre parenthèses")
+    check(near(calc("2pi", &env), 2 * .pi), "2π implicite")
+    check(near(calc("5!", &env), 120), "factorielle")
+    check(near(calc("sin(pi/6)", &env), 0.5, 1e-12), "sin(π/6) = 1/2")
+    check(near(calc("1e-3 * 2", &env), 0.002), "notation scientifique")
+    check(near(calc("2e", &env), 2 * M_E), "2e = 2·e (pas une notation scientifique)")
+    check(near(calc("ans + 1", &env), 2 * M_E + 1), "ans reprend le dernier résultat")
+    check(near(calc("binom(5, 2)", &env), 10), "coefficient binomial")
+    check(near(calc("max(3; 7; 2)", &env), 7), "le point-virgule sépare aussi les arguments")
+    check(near(calc("a = 3", &env), 3) && near(calc("2a + 1", &env), 7), "variable nommée puis réutilisée")
+    check(near(calc("a(a+1)", &env), 12), "a(a+1) : un produit, pas un appel")
+    check(calc("f(x) = x^2 - 2", &env) == nil, "définir une fonction ne rend pas de valeur")
+    check(near(calc("f(3)", &env), 7), "appeler une fonction définie")
+    check(near(calc("f'(3)", &env), 6, 1e-6), "dérivée numérique : f'(3) = 6")
+    check(near(calc("f''(1)", &env), 2, 1e-3), "dérivée seconde : f''(1) = 2")
+    check(near(calc("int(f, 0, 3)", &env), 3, 1e-9), "intégrale de Simpson : ∫₀³ (x² − 2) dx = 3")
+    check(near(calc("root(f, 0, 2)", &env), 2.squareRoot(), 1e-10), "racine par dichotomie : √2")
+    check(MathEngine.roots("f", from: -3, to: 3, in: env).count == 2, "deux racines de x² − 2 sur [−3, 3]")
+    check(calc("g(x) = 1/x", &env) == nil && MathEngine.roots("g", from: -1, to: 1, in: env).isEmpty,
+          "une asymptote n'est pas une racine")
+    check(MathEngine.sample("g", from: -1, to: 1, count: 5, in: env).count == 4, "le tracé saute la valeur indéfinie")
+    check((try? env.run("sqrt(-1)")) == nil, "racine d'un négatif : erreur, pas NaN")
+    check((try? env.run("1/0")) == nil, "division par zéro : erreur")
+    check((try? env.run("2 +")) == nil && (try? env.run("zz + 1")) == nil, "syntaxe incomplète et nom inconnu refusés")
+    check((try? env.run("pi = 3")) == nil, "une constante ne se redéfinit pas")
+    env.degrees = true
+    check(near(calc("sin(30)", &env), 0.5, 1e-12), "mode degrés")
+    check(MathEngine.format(0.1 + 0.2) == "0.3" && MathEngine.format(42) == "42" && MathEngine.format(-0.0) == "0",
+          "affichage : arrondi propre")
+    check(MathEngine.format(6.02e23).contains("10^23"), "affichage : notation scientifique")
+}
+
+// MARK: Claude dans le mode étude (ClaudeTutor, RichMarkup)
+do {
+    let args = ClaudeTutor.arguments(systemPrompt: "P")
+    check(args.contains("--safe-mode") && args.contains("--strict-mcp-config") && args.contains("--no-session-persistence"),
+          "Claude : sans configuration, sans MCP, sans session gardée")
+    if let i = args.firstIndex(of: "--tools") { check(args[i + 1] == "", "Claude : aucun outil") } else { check(false, "Claude : --tools présent") }
+    check(!args.contains("--model"), "Claude : le modèle de l'abonnement par défaut")
+    check(!args.contains { $0.contains("api-key") }, "Claude : jamais de clé d'API")
+
+    let line = ClaudeTutor.userLine(text: "Aide", attachments: [.init(kind: .pdf, data: Data([1, 2, 3]), name: "Série 3")])
+    if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+       let message = object["message"] as? [String: Any], let content = message["content"] as? [[String: Any]] {
+        check(object["type"] as? String == "user" && content.count == 2, "message : pièce jointe puis texte")
+        check(content[0]["type"] as? String == "document" && content.last?["text"] as? String == "Aide", "message : le PDF est un document")
+    } else {
+        check(false, "message JSON lisible")
+    }
+    check(ClaudeTutor.parse(line: #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Bon"}}}"#) == .text("Bon"),
+          "flux : un morceau de texte")
+    check(ClaudeTutor.parse(line: #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}}"#) == .thinking,
+          "flux : Claude réfléchit")
+    check(ClaudeTutor.parse(line: #"{"type":"result","subtype":"success","is_error":false}"#) == .finished(error: nil), "flux : réponse finie")
+    check(ClaudeTutor.parse(line: #"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"limite"}"#) == .finished(error: "limite"),
+          "flux : une erreur se dit")
+    check(ClaudeTutor.parse(line: #"{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.33}}}}"#) == .usage(0.33),
+          "flux : l'usage de l'abonnement")
+    check(ClaudeTutor.parse(line: #"{"type":"system","subtype":"init"}"#) == nil && ClaudeTutor.parse(line: "pas du json") == nil, "flux : le bruit est ignoré")
+    check(ClaudeTutor.systemPrompt(mode: .tutor).contains("indices gradués"), "tuteur : indices avant la solution")
+    let preamble = ClaudeTutor.contextPreamble(.init(courseCode: "MATH-101", exercise: "Série 3 · Ex 2", statement: "Montrer que…", questions: ["1. a", "1. b"], doneQuestions: 1))
+    check(preamble.contains("MATH-101") && preamble.contains("(1/2 faites)"), "contexte : cours, exercice, avancement")
+    check(ClaudeTutor.contextPreamble(.init()).isEmpty, "contexte vide : rien d'ajouté")
+
+    let blocks = RichMarkup.blocks("""
+    ## Idée
+    On pose $u_n$ et
+    on conclut.
+
+    - premier
+      - sous-point
+    1. étape
+    $$\\sum_{k=1}^n k = \\frac{n(n+1)}{2}$$
+    ```
+    let x = 1
+    ```
+    """)
+    check(blocks == [.heading("Idée", level: 2), .paragraph("On pose $u_n$ et on conclut."), .bullet("premier", depth: 0),
+                     .bullet("sous-point", depth: 1), .numbered("étape", number: 1),
+                     .math("\\sum_{k=1}^n k = \\frac{n(n+1)}{2}"), .code("let x = 1")],
+          "réponse : titres, paragraphes, listes, formule isolée, code")
+    check(RichMarkup.blocks("$$\na^2\n$$") == [.math("a^2")], "formule isolée sur plusieurs lignes")
+    check(RichMarkup.inlines("Le **point** clé : $x_n$, `f` et *vite*.") ==
+          [.text("Le "), .bold("point"), .text(" clé : "), .math("x_n"), .text(", "), .code("f"), .text(" et "), .italic("vite"), .text(".")],
+          "en ligne : gras, formule, code, italique")
+    check(RichMarkup.inlines("nom_de_variable et 5\\$") == [.text("nom_de_variable et 5$")], "pas d'italique dans un mot, dollar échappé")
+}
+
+// MARK: Botafogo : noms et macros
+do {
+    check(MathMarkup.plain("$x \\in \\bR$") == "x ∈ ℝ", "macro Botafogo \\bR → ℝ")
+    check(BotafogoNode(type: "session", name: "seance-HY-03").displayName == "Séance 3", "séance : nom lisible")
+    check(BotafogoNode(type: "weekContent", name: "week-HY-02").displayName == "La semaine", "contenu de semaine : nom lisible")
+    check(BotafogoNode(type: "series", name: "Suites réelles").displayName == "Suites réelles", "une série garde son nom")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

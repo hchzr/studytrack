@@ -249,7 +249,9 @@ final class MoodleClient {
         }
         // Ce qu'un import vient de lire n'a plus à être annoncé par la
         // surveillance en arrière-plan.
+        #if os(iOS)
         MoodleWatcher.markSeen(snapshot, moodleID: course.id)
+        #endif
         // Les liens et devoirs, comme avant ; et **chaque série ou corrigé**,
         // quel que soit son module : une série publiée en page, en dossier ou en
         // fichier s'ouvrait sur la page Moodle qui porte le lien du PDF (AICC),
@@ -288,6 +290,18 @@ final class MoodleClient {
         }
         let raw = String(decoding: try JSONSerialization.data(withJSONObject: merged), as: UTF8.self)
         return await finish(snapshot, found: raw)
+    }
+
+    /// Le plan seul (sections et activités), sans ouvrir chaque activité : ce
+    /// que le mode étude du Mac affiche, en une seconde.
+    func outline(courseID: Int, title: String = "") async throws -> MoodleCourseSnapshot {
+        let json = try await call("core_courseformat_get_state", args: ["courseid": courseID])
+        let state = (try? JSONDecoder().decode(String.self, from: Data(json.utf8))) ?? json
+        guard let snapshot = MoodleStateParser.snapshot(fromStateJSON: state, title: title,
+                                                        url: "https://moodle.epfl.ch/course/view.php?id=\(courseID)") else {
+            throw WebContentScraper.ScrapeError.empty
+        }
+        return snapshot
     }
 
     /// Ouvre un lot d'activités dans la session Moodle (JSON `{id: trouvaille}`).
@@ -989,6 +1003,9 @@ enum MoocImport {
 /// 4. les règles construisent le brouillon (un élément de théorie par semaine) ;
 /// 5. MOOC, Explique et listes MediaSpace (lus avant l'analyse, avec les autres
 ///    sources) complètent chaque semaine.
+// L'import complet (modèle, réglages) n'existe que sur l'iPhone ; le Mac ne
+// garde de ce fichier que les clients des sites (mode étude).
+#if os(iOS)
 @MainActor
 enum CourseImportPipeline {
     struct Outcome {
@@ -1092,3 +1109,4 @@ enum CourseImportPipeline {
         return Outcome(draft: draft, notes: notes, botafogoTitle: nil)
     }
 }
+#endif
