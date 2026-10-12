@@ -41,9 +41,10 @@ enum StudySite: String, Identifiable {
     }
 }
 
-/// La seule page web du bureau : la connexion EPFL, dans une petite feuille
-/// qui se ferme toute seule une fois connecté·e. Les cookies vont dans le
-/// magasin WebKit par défaut, celui des lecteurs natifs.
+/// La seule page web du bureau : **une** connexion EPFL (Microsoft), dans
+/// une petite feuille qui se ferme toute seule. On passe par la page de
+/// Moodle et son bouton « EPFL – Entra ID » (cliqué pour toi) ; une fois de
+/// retour sur Moodle, `EPFLConnect` ouvre les autres sites sans rien afficher.
 struct SignInSheet: View {
     let site: StudySite
     var done: () -> Void
@@ -52,51 +53,99 @@ struct SignInSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Connexion à \(site.title)").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(site == .mediaspace ? "Vidéos du cours" : "Connexion EPFL").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
+                    Text(site == .mediaspace ? "Ton mot de passe SWITCH edu-ID, une fois." : "Une fois pour Moodle, Courseware et Ed.")
+                        .font(.caption).foregroundStyle(Carnet.inkSecondary)
+                }
                 Spacer()
                 Button("Annuler") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             .padding(12)
-            SignInWebView(start: site.start) { url in
-                guard site.isSignedIn(url) else { return }
+            SignInWebView(site: site) {
                 done()
                 dismiss()
             }
         }
-        .frame(width: 520, height: 640)
+        .frame(width: 520, height: 680)
     }
 }
 
+/// La page de connexion. Elle est surveillée à chaque chargement **et** chaque
+/// seconde : les pages de Microsoft changent sans recharger.
 private struct SignInWebView: NSViewRepresentable {
-    let start: URL
-    var changed: (URL) -> Void
+    let site: StudySite
+    var finished: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(changed: changed) }
+    private var start: URL {
+        site == .mediaspace ? URL(string: "https://mediaspace.epfl.ch/user/login")! : URL(string: "https://moodle.epfl.ch/login/index.php")!
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(site: site, finished: finished) }
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: configuration)
+        view.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         view.navigationDelegate = context.coordinator
+        context.coordinator.watch(view)
         view.load(URLRequest(url: start))
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        let changed: (URL) -> Void
-        /// La première page chargée (souvent déjà le site, avant la redirection
-        /// vers la connexion) ne compte pas.
-        private var loads = 0
-        init(changed: @escaping (URL) -> Void) { self.changed = changed }
+    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) { coordinator.stop() }
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            loads += 1
-            guard let url = webView.url else { return }
-            // Moodle montre son menu utilisateur une fois connecté·e : on vérifie.
-            webView.evaluateJavaScript("!!document.querySelector('#user-menu-toggle, .usermenu .userbutton, a[href*=\"logout\"]')") { [changed] value, _ in
-                if (value as? Bool) == true || self.loads > 1 { changed(url) }
+    @MainActor
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let site: StudySite
+        let finished: () -> Void
+        private var timer: Timer?
+        private weak var view: WKWebView?
+        private var done = false
+
+        init(site: StudySite, finished: @escaping () -> Void) {
+            self.site = site
+            self.finished = finished
+        }
+
+        func watch(_ view: WKWebView) {
+            self.view = view
+            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.check() }
+            }
+        }
+
+        func stop() { timer?.invalidate() }
+
+        nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            Task { @MainActor in self.check() }
+        }
+
+        private func check() {
+            guard !done, let view, let url = view.url else { return }
+            // Les étapes qu'on fait pour toi : choisir l'EPFL, remplir ton adresse.
+            if url.host == "wayf.switch.ch" { view.evaluateJavaScript(EPFLConnect.chooseWAYFEPFL); return }
+            if url.host?.contains("eduid.ch") == true {
+                Task { await EPFLConnect.answerEduID(view, email: EPFLConnect.shared.email) }
+                return
+            }
+            let home = site == .mediaspace ? "mediaspace.epfl.ch" : "moodle.epfl.ch"
+            guard url.host == home else { return }
+            if site != .mediaspace, url.path.hasPrefix("/login") {
+                view.evaluateJavaScript(EPFLConnect.clickEntra)
+                return
+            }
+            let signedIn = site == .mediaspace ? EPFLConnect.mediaspaceSignedIn : EPFLConnect.moodleSignedIn
+            view.evaluateJavaScript(signedIn) { [weak self] value, _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.done, (value as? Bool) == true else { return }
+                    self.done = true
+                    self.stop()
+                    self.finished()
+                }
             }
         }
     }

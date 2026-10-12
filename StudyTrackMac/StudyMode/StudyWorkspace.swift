@@ -34,6 +34,11 @@ struct StudyWorkspace: View {
         .sheet(item: $desk.signIn) { site in
             SignInSheet(site: site) { desk.signedIn(site) }
         }
+        // En entrant dans le bureau : chaque site, sans rien afficher, avec la
+        // session Microsoft déjà là (rien ne se passe si elle n'y est pas).
+        .task {
+            if !EPFLConnect.shared.allConnected { await EPFLConnect.shared.connectAll() }
+        }
     }
 
     @ViewBuilder

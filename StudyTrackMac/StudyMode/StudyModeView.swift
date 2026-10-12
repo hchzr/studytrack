@@ -152,11 +152,20 @@ private struct StudySetupView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Stepper(value: $minutes, in: 15...240, step: 5) {
-                        Text(StudyMode.durations.contains(minutes) ? "Autre" : "\(minutes) min")
-                            .foregroundStyle(StudyPalette.inkSecondary)
-                    }
-                    .padding(.leading, 6)
+                    // Une durée libre, en minutes, ou une heure de fin.
+                    TextField("min", value: Binding(get: { minutes },
+                                                    set: { minutes = min(max($0, StudyMode.minuteRange.lowerBound), StudyMode.minuteRange.upperBound) }),
+                              format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 56)
+                        .padding(.leading, 6)
+                    Stepper("", value: $minutes, in: StudyMode.minuteRange, step: 5).labelsHidden()
+                    Text("min, jusqu'à").foregroundStyle(StudyPalette.inkSecondary)
+                    DatePicker("Jusqu'à", selection: Binding(get: { Date().addingTimeInterval(Double(minutes) * 60) },
+                                                             set: { minutes = StudyMode.minutes(until: $0) }),
+                               displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .datePickerStyle(.field)
                 }
             }
 

@@ -5691,10 +5691,16 @@ do {
     let projectFile = ClaudeProject.File(mcpServers: ["notion": .init(url: "https://mcp.notion.com/mcp")])
     let project = ClaudeTutor.arguments(.init(profile: .project, sessionID: "S", systemPrompt: "P", mcpConfigPath: "/tmp/mcp.json",
                                               allowedTools: ClaudeProject.allowedTools(file: projectFile, studyTrack: false),
-                                              tools: ClaudeProject.tools(file: projectFile)))
+                                              tools: ClaudeProject.tools(file: projectFile), deniedServers: ["rea"]))
     check(!project.contains("--safe-mode") && !project.contains("--disable-slash-commands"), "projet EPFL : compétences et commandes chargées")
-    if let i = project.firstIndex(of: "--setting-sources") { check(project[i + 1] == "project,local", "projet EPFL : les réglages du dossier seulement") } else { check(false, "projet : --setting-sources") }
-    check(project.contains("--strict-mcp-config") && project.contains("/tmp/mcp.json"), "projet EPFL : seulement les MCP du fichier")
+    check(!project.contains("--setting-sources") && !project.contains("--strict-mcp-config"), "projet : les connecteurs du compte se chargent")
+    if let i = project.firstIndex(of: "--settings") { check(project[i + 1] == #"{"deniedMcpServers":[{"serverName":"rea"}]}"#, "projet : serveurs locaux écartés") } else { check(false, "projet : --settings") }
+    check(project.contains("/tmp/mcp.json"), "projet : les serveurs du fichier en plus")
+    let listed = ClaudeProject.servers(mcpList: "Checking MCP server health…\n\nclaude.ai Claude Docs: https://api.anthropic.com/v1/pages/mcp - ✔ Connected\nclaude.ai Notion: https://mcp.notion.com/mcp - ✔ Connected\nrea: npx -y rea-agents@6.4.0 mcp - ✔ Connected\n")
+    check(listed.connectors == ["claude.ai Claude Docs", "claude.ai Notion"] && listed.local == ["rea"], "mcp list : connecteurs et serveurs locaux")
+    check(ClaudeProject.toolPrefix(server: "claude.ai Claude Docs") == "mcp__claude_ai_Claude_Docs", "préfixe d'outils d'un connecteur")
+    check(ClaudeProject.allowedTools(file: ClaudeProject.File(), studyTrack: false, connectors: ["claude.ai Notion"]) == ["Read", "Glob", "Skill", "mcp__claude_ai_Notion"],
+          "les connecteurs du compte sont permis")
     if let i = project.firstIndex(of: "--allowedTools") { check(project[i + 1] == "Read,Glob,Skill,mcp__notion", "projet EPFL : outils permis") } else { check(false, "projet : --allowedTools") }
     if let i = project.firstIndex(of: "--tools") { check(project[i + 1] == "Read,Glob,Skill", "projet EPFL : ni terminal ni écriture") } else { check(false, "projet : --tools") }
     check(project.contains("--append-system-prompt") && !project.contains("--system-prompt"), "projet EPFL : la consigne s'ajoute à celle de Claude Code")
@@ -5919,6 +5925,35 @@ do {
     check(MoodleActivityContent.decode(#"{"module":"page","needsLogin":true}"#)?.needsLogin == true, "Moodle : page de connexion reconnue")
     check(BotafogoFigure.imagePath(script: "/media/jsxgraph/jsx_suite_divergente.js") == "/media/jsxgraph/jsx_suite_divergente.png",
           "Botafogo : l'image fixe d'une figure interactive")
+}
+
+// MARK: Moodle : la page du cours
+do {
+    let json = #"{"title":"PHYS-101","sections":[{"number":0,"title":"General","summary":"<p>Bienvenue</p>","activities":[{"id":1,"module":"label","name":"Organisation","url":"","html":"<p>Chaque semaine…</p>"}]},{"number":6,"title":"12 October- 18 October","activities":[{"id":2,"module":"resource","name":"Problem Set 6: Momentum","url":"https://moodle.epfl.ch/mod/resource/view.php?id=2"},{"id":3,"module":"url","name":"Lecture 6a recording","url":"https://moodle.epfl.ch/mod/url/view.php?id=3","completed":true}]}]}"#
+    if let page = MoodleCoursePage.decode(json) {
+        check(page.sections.count == 2 && page.sections[1].activities[0].isSeries && page.sections[1].activities[1].isVideo
+              && page.sections[1].activities[1].completed, "Moodle : sections, série, vidéo, achèvement")
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14))!
+        check(page.currentSection(today: today, calendar: calendar)?.number == 6, "Moodle : la semaine en cours d'après le titre")
+        check(MoodleCoursePage.range(of: "7 septembre - 13 septembre", year: 2026, calendar: calendar) != nil
+              && MoodleCoursePage.range(of: "General", year: 2026, calendar: calendar) == nil, "Moodle : dates en français, titre sans dates")
+    } else {
+        check(false, "Moodle : page du cours lisible")
+    }
+    check(MoodleCoursePage.decode(#"{"title":"x","sections":[]}"#) == nil, "Moodle : page vide refusée")
+}
+
+// MARK: Mode étude : durée libre
+do {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 16, minute: 10))!
+    let at = { (h: Int, m: Int) in calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: h, minute: m))! }
+    check(StudyMode.minutes(until: at(18, 30), now: now, calendar: calendar) == 140, "jusqu'à 18 h 30 : 2 h 20")
+    check(StudyMode.minutes(until: at(16, 12), now: now, calendar: calendar) == 5, "trop court : 5 min au moins")
+    check(StudyMode.minutes(until: at(1, 0), now: now, calendar: calendar) == 530, "1 h du matin : demain")
+    check(StudyMode.minutes(until: at(16, 0), now: now, calendar: calendar) == 720, "heure passée de peu : bornée à 12 h")
 }
 
 // MARK: Ed Discussion

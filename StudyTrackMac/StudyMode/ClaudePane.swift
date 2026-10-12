@@ -78,7 +78,7 @@ struct ClaudePane: View {
         .task(id: settingsKey) {
             // Le dossier du projet, son CLAUDE.md, ses compétences : une fois par
             // réglage, pas à chaque rendu.
-            config = ClaudeProjectSetup.config(settings: settings, courses: courses)
+            config = await ClaudeProjectSetup.config(settings: settings, courses: courses)
         }
         .onChange(of: config) { _, _ in
             takePending()

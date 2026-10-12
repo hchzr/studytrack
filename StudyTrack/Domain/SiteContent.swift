@@ -661,3 +661,126 @@ private extension String {
         self == "-" || range(of: #"^\d+\.$"#, options: .regularExpression) != nil
     }
 }
+
+// MARK: - Moodle : la page du cours
+
+/// La page d'un cours Moodle (`/course/view.php`), lue dans la session : ce que
+/// le plan (`core_courseformat_get_state`) n'a pas — le texte de chaque
+/// section, les étiquettes, la description des activités, l'achèvement, la
+/// semaine en cours. Observé sur PHYS-101 (format `topics`) et MATH-111
+/// (format `weeks`, 16 sections résumées, 139 marques d'achèvement).
+struct MoodleCoursePage: Codable, Equatable {
+    struct Activity: Codable, Equatable, Identifiable {
+        var id: Int
+        var module: String
+        var name: String
+        var url: String
+        /// La description affichée sous l'activité, ou le contenu d'une étiquette.
+        var html: String = ""
+        var dates: [String] = []
+        var completed: Bool = false
+
+        init(id: Int, module: String, name: String, url: String, html: String = "", dates: [String] = [], completed: Bool = false) {
+            self.id = id; self.module = module; self.name = name; self.url = url; self.html = html; self.dates = dates; self.completed = completed
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(Int.self, forKey: .id)
+            module = try c.decodeIfPresent(String.self, forKey: .module) ?? ""
+            name = BotafogoParser.decode(try c.decodeIfPresent(String.self, forKey: .name) ?? "")
+            url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+            html = try c.decodeIfPresent(String.self, forKey: .html) ?? ""
+            dates = try c.decodeIfPresent([String].self, forKey: .dates) ?? []
+            completed = try c.decodeIfPresent(Bool.self, forKey: .completed) ?? false
+        }
+
+        /// Ce qu'on montre sous le nom (« PDF », « Vidéo », « Devoir »…).
+        var kindLabel: String {
+            switch module {
+            case "resource": return "Document"
+            case "folder": return "Dossier"
+            case "url": return "Lien"
+            case "page": return "Page"
+            case "assign": return "Devoir"
+            case "forum": return "Forum"
+            case "quiz": return "Quiz"
+            case "lti": return "Outil externe"
+            case "label": return ""
+            default: return module.capitalized
+            }
+        }
+
+        /// Une série d'exercices (ou son corrigé), d'après le nom.
+        var isSeries: Bool {
+            let n = name.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            return ["serie", "series", "problem set", "exercice", "exercise", "corrige", "solution"].contains { n.contains($0) }
+        }
+
+        var isVideo: Bool {
+            let n = name.lowercased()
+            return n.contains("recording") || n.contains("vidéo") || n.contains("video") || n.contains("enregistrement")
+                || url.contains("mediaspace") || url.contains("kaltura")
+        }
+    }
+
+    struct Section: Codable, Equatable, Identifiable {
+        var id: Int { number }
+        var number: Int
+        var title: String
+        var summary: String = ""
+        var isCurrent: Bool = false
+        var activities: [Activity] = []
+
+        init(number: Int, title: String, summary: String = "", isCurrent: Bool = false, activities: [Activity] = []) {
+            self.number = number; self.title = title; self.summary = summary; self.isCurrent = isCurrent; self.activities = activities
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            number = try c.decodeIfPresent(Int.self, forKey: .number) ?? 0
+            title = BotafogoParser.decode(try c.decodeIfPresent(String.self, forKey: .title) ?? "")
+            summary = try c.decodeIfPresent(String.self, forKey: .summary) ?? ""
+            isCurrent = try c.decodeIfPresent(Bool.self, forKey: .isCurrent) ?? false
+            activities = try c.decodeIfPresent([Activity].self, forKey: .activities) ?? []
+        }
+    }
+
+    var title: String
+    var sections: [Section]
+
+    static func decode(_ json: String) -> MoodleCoursePage? {
+        guard let page = try? JSONDecoder().decode(MoodleCoursePage.self, from: Data(json.utf8)), !page.sections.isEmpty else { return nil }
+        return page
+    }
+
+    /// La section à ouvrir d'abord : celle que Moodle marque « en cours »,
+    /// sinon celle dont les dates (« 12 October - 18 October ») contiennent
+    /// aujourd'hui, sinon la première qui a du contenu.
+    func currentSection(today: Date = Date(), calendar: Calendar = .current) -> Section? {
+        if let marked = sections.first(where: \.isCurrent) { return marked }
+        if let dated = sections.first(where: { Self.range(of: $0.title, year: calendar.component(.year, from: today), calendar: calendar)?.contains(today) == true }) {
+            return dated
+        }
+        return sections.first { !$0.activities.isEmpty }
+    }
+
+    /// « 12 October- 18 October », « 7 septembre - 13 septembre » → l'intervalle.
+    static func range(of title: String, year: Int, calendar: Calendar = .current) -> ClosedRange<Date>? {
+        let months = ["january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8,
+                      "september": 9, "october": 10, "november": 11, "december": 12,
+                      "janvier": 1, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6, "juillet": 7, "aout": 8,
+                      "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12]
+        let text = title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+        guard let regex = try? NSRegularExpression(pattern: #"(\d{1,2})\s*([a-z]+)"#) else { return nil }
+        let found = regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match -> DateComponents? in
+            guard let d = Range(match.range(at: 1), in: text), let m = Range(match.range(at: 2), in: text),
+                  let month = months[String(text[m])], let day = Int(text[d]) else { return nil }
+            return DateComponents(year: year, month: month, day: day)
+        }
+        guard found.count >= 2, let start = calendar.date(from: found[0]), var end = calendar.date(from: found[1]) else { return nil }
+        if end < start { end = calendar.date(byAdding: .year, value: 1, to: end) ?? end }
+        end = calendar.date(byAdding: .day, value: 1, to: end).map { $0.addingTimeInterval(-1) } ?? end
+        return start...end
+    }
+}

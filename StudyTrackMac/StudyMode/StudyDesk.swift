@@ -99,6 +99,8 @@ final class StudyDesk {
     }
 
     private(set) var documents: [String: Load] = [:]
+    /// Les documents déjà retentés après une reconnexion silencieuse.
+    @ObservationIgnored private var retried: Set<String> = []
 
     func document(_ address: String) -> Load? { documents[address] }
 
@@ -126,16 +128,24 @@ final class StudyDesk {
             do {
                 let file = try await AuthenticatedDownloader.download(url)
                 guard PDFDocument(url: file) != nil else {
-                    // Une page de connexion à la place du PDF.
-                    documents[address] = .needsLogin
-                    return
+                    throw URLError(.userAuthenticationRequired)
                 }
                 try? FileManager.default.removeItem(at: cached)
                 try FileManager.default.copyItem(at: file, to: cached)
                 documents[address] = .ready(cached)
             } catch {
-                let text = error.localizedDescription.lowercased()
-                documents[address] = text.contains("connect") || text.contains("login") ? .needsLogin : .failed(error.localizedDescription)
+                // Une page HTML à la place du PDF, sur un site EPFL : la session a
+                // expiré. On se reconnecte sans rien afficher, puis on réessaie une fois.
+                if url.host?.hasSuffix("epfl.ch") == true, !retried.contains(address) {
+                    retried.insert(address)
+                    await EPFLConnect.shared.connect(.moodle)
+                    if EPFLConnect.shared.state(.moodle) == .connected {
+                        documents[address] = nil
+                        loadPDF(address)
+                        return
+                    }
+                }
+                documents[address] = url.host?.hasSuffix("epfl.ch") == true ? .needsLogin : .failed("Document introuvable.")
             }
         }
     }
@@ -161,6 +171,7 @@ final class StudyDesk {
 
     let moodle = MoodleClient()
     var moodleOutlines: [Int: MoodleCourseSnapshot] = [:]
+    var moodlePages: [Int: MoodleCoursePage] = [:]
     var moodleError: [Int: String] = [:]
 
     // MARK: Courseware et MediaSpace
@@ -193,21 +204,25 @@ final class StudyDesk {
     private(set) var signInRevision = 0
 
     func signedIn(_ site: StudySite) {
-        if site == .ed {
+        if site == .mediaspace {
+            Task { await EPFLConnect.shared.connect(.mediaspace); signInRevision += 1 }
+            return
+        }
+        // Connecté·e à Microsoft par Moodle : les autres sites suivent, sans rien
+        // afficher (`EPFLConnect`).
+        moodleError = [:]
+        for (address, load) in documents where load == .needsLogin { documents[address] = nil }
+        Task {
+            try? await moodle.prepare(force: true)
+            signInRevision += 1
+            await EPFLConnect.shared.connectAll()
             ed.reset()
             edCourses = nil
             edNeedsLogin = false
             edThreads = [:]
-            Task { await loadEdCourses() }
-        }
-        if site == .moodle {
-            moodleError = [:]
-            Task { try? await moodle.prepare(force: true); signInRevision += 1 }
-        } else {
+            await loadEdCourses()
             signInRevision += 1
         }
-        // Les PDF qui attendaient la connexion.
-        for (address, load) in documents where load == .needsLogin { documents[address] = nil }
     }
 
     func closeAll() {

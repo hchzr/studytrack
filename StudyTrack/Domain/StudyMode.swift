@@ -15,6 +15,19 @@ enum StudyMode {
     /// Les durées proposées au lancement, en minutes.
     static let durations = [25, 50, 90, 120]
 
+    /// Les bornes d'une durée choisie à la main (5 min à 12 h).
+    static let minuteRange = 5...720
+
+    /// « Jusqu'à 18 h 30 » → la durée en minutes depuis maintenant. Une heure
+    /// déjà passée aujourd'hui vise demain ; bornée à `minuteRange`.
+    static func minutes(until time: Date, now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let parts = calendar.dateComponents([.hour, .minute], from: time)
+        var target = calendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: 0, of: now) ?? now
+        if target <= now { target = calendar.date(byAdding: .day, value: 1, to: target) ?? target }
+        let minutes = Int((target.timeIntervalSince(now) / 60).rounded(.up))
+        return min(max(minutes, minuteRange.lowerBound), minuteRange.upperBound)
+    }
+
     // MARK: Pendant la session
 
     /// Le mode étude est-il en vigueur à `now` ?

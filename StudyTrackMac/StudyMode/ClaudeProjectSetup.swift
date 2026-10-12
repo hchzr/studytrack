@@ -22,8 +22,9 @@ enum ClaudeProjectSetup {
 
     /// La configuration à utiliser : le projet si le réglage est allumé, sinon
     /// le mode isolé.
-    static func config(settings: MacSettings, courses: [Course]) -> ClaudeChat.Config {
+    static func config(settings: MacSettings, courses: [Course]) async -> ClaudeChat.Config {
         guard settings.claudeProject else { return .isolated }
+        let servers = await accountServers()
         let folder = folder(settings)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = file(settings: settings) ?? ClaudeProject.File()
@@ -33,10 +34,54 @@ enum ClaudeProjectSetup {
         let mcpFile = supportFolder.appendingPathComponent("claude-mcp.json")
         try? ClaudeProject.mcpConfig(file: file, studyTrackURL: studyTrack).write(to: mcpFile, atomically: true, encoding: .utf8)
         return ClaudeChat.Config(profile: .project, folder: folder, mcpConfigPath: mcpFile.path,
-                                 allowedTools: ClaudeProject.allowedTools(file: file, studyTrack: studyTrack != nil),
+                                 allowedTools: ClaudeProject.allowedTools(file: file, studyTrack: studyTrack != nil,
+                                                                          connectors: servers.connectors),
                                  tools: ClaudeProject.tools(file: file),
-                                 permissions: ClaudeProject.permissionSummary(file: file, studyTrack: studyTrack != nil),
+                                 deniedServers: servers.local.filter { file.mcpServers[$0] == nil },
+                                 permissions: ClaudeProject.permissionSummary(file: file, studyTrack: studyTrack != nil,
+                                                                              connectors: servers.connectors),
                                  file: file)
+    }
+
+    // MARK: Connecteurs du compte
+
+    private static let serversKey = "mac.claude.accountServers"
+    private static var refreshedThisLaunch = false
+
+    /// Les connecteurs du compte Claude (et les serveurs locaux à écarter),
+    /// lus par `claude mcp list` : gardés d'un lancement à l'autre, relus une
+    /// fois par lancement (la commande vérifie chaque serveur : quelques
+    /// secondes). Changer de compte Claude est ainsi suivi sans réglage.
+    static func accountServers() async -> (connectors: [String], local: [String]) {
+        let cached = UserDefaults.standard.string(forKey: serversKey).map(ClaudeProject.servers(mcpList:))
+        if let cached, refreshedThisLaunch { return cached }
+        refreshedThisLaunch = true
+        guard let output = await runClaude(["mcp", "list"]) else { return cached ?? ([], []) }
+        UserDefaults.standard.set(output, forKey: serversKey)
+        return ClaudeProject.servers(mcpList: output)
+    }
+
+    private static func runClaude(_ arguments: [String]) async -> String? {
+        guard let executable = ClaudeChat.executable else { return nil }
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = executable
+            process.arguments = arguments
+            process.currentDirectoryURL = FileManager.default.temporaryDirectory
+            var environment = ProcessInfo.processInfo.environment
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            environment["PATH"] = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+            environment.removeValue(forKey: "ANTHROPIC_API_KEY")
+            process.environment = environment
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            process.terminationHandler = { _ in
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: String(decoding: data, as: UTF8.self))
+            }
+            do { try process.run() } catch { continuation.resume(returning: nil) }
+        }
     }
 
     /// Hors du dossier du projet : le fichier MCP porte l'adresse secrète du
@@ -72,14 +117,32 @@ enum ClaudeProjectSetup {
         let skills = folder.appendingPathComponent(".claude/skills", isDirectory: true)
         let synced = manager.homeDirectoryForCurrentUser.appendingPathComponent(".claude/skills/synced", isDirectory: true)
         let buckets = (try? manager.contentsOfDirectory(at: synced, includingPropertiesForKeys: nil)) ?? []
+        // Le compte où Claude Code est connecté a ses compétences à lui : on ne
+        // relie que celles qu'il n'a pas (sinon elles seraient en double), et
+        // l'on retire un lien posé avant un changement de compte.
+        let own = currentOrganization().flatMap { org in buckets.first { $0.lastPathComponent.hasPrefix(org) } }
         for name in names {
             let target = skills.appendingPathComponent(name)
-            if (try? manager.destinationOfSymbolicLink(atPath: target.path)) != nil || manager.fileExists(atPath: target.path) { continue }
+            let linked = (try? manager.destinationOfSymbolicLink(atPath: target.path)) != nil
+            if let own, manager.fileExists(atPath: own.appendingPathComponent("\(name)/SKILL.md").path) {
+                if linked { try? manager.removeItem(at: target) }
+                continue
+            }
+            if linked || manager.fileExists(atPath: target.path) { continue }
             guard let source = buckets.map({ $0.appendingPathComponent(name) })
                 .first(where: { manager.fileExists(atPath: $0.appendingPathComponent("SKILL.md").path) }) else { continue }
             try? manager.createDirectory(at: skills, withIntermediateDirectories: true)
             try? manager.createSymbolicLink(at: target, withDestinationURL: source)
         }
+    }
+
+    /// L'organisation claude.ai du compte de Claude Code (`~/.claude.json`).
+    private static func currentOrganization() -> String? {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let account = object["oauthAccount"] as? [String: Any] else { return nil }
+        return account["organizationUuid"] as? String
     }
 
     /// Les compétences du fichier présentes dans le projet.

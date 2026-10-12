@@ -40,6 +40,7 @@ final class ClaudeChat: Identifiable {
         var mcpConfigPath: String?
         var allowedTools: [String] = []
         var tools: [String] = ClaudeProject.baseTools
+        var deniedServers: [String] = []
         /// Ce qui est permis, en clair.
         var permissions: String
         /// Le fichier du projet (`studytrack.json`) : boutons, modèles, compétences.
@@ -265,7 +266,8 @@ final class ClaudeChat: Identifiable {
         process.arguments = ClaudeTutor.arguments(.init(profile: config.profile, sessionID: sessionID.uuidString.lowercased(),
                                                         resume: resume, systemPrompt: ClaudeTutor.systemPrompt(mode: mode),
                                                         mcpConfigPath: config.mcpConfigPath, allowedTools: config.allowedTools,
-                                                        tools: config.tools, model: Self.debugModel ?? requestedModel))
+                                                        tools: config.tools, deniedServers: config.deniedServers,
+                                                        model: Self.debugModel ?? requestedModel))
         runningModel = requestedModel
         try? FileManager.default.createDirectory(at: config.folder, withIntermediateDirectories: true)
         process.currentDirectoryURL = config.folder

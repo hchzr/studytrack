@@ -20,6 +20,11 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
+        #if os(macOS)
+        // Sans « Safari » dans l'agent, Moodle sert une page de cours sans ses
+        // sections (vu sur le Mac : 0 section, alors que Chrome en lit 16).
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+        #endif
         super.init()
         webView.navigationDelegate = self
     }
@@ -492,17 +497,25 @@ final class MoodleClient {
     private func call(_ method: String, args: [String: Any]) async throws -> String {
         try await prepare()
         let argsJSON = String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self)
-        let raw = try await session.run(#"""
+        // Tout dans un `try` : une page de connexion à la place du JSON (session
+        // expirée) faisait lever `response.json()`, et WebKit ne disait que
+        // « Une exception JavaScript s'est produite » (vu sur MATH-111).
+        var raw = try await session.run(#"""
+        try {
         if (!(window.M && M.cfg && M.cfg.sesskey)) { return JSON.stringify({ error: true, errorcode: 'nosesskey' }); }
         const response = await fetch('/lib/ajax/service.php?sesskey=' + M.cfg.sesskey + '&info=' + method, {
           method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify([{ index: 0, methodname: method, args: JSON.parse(args) }])
         });
-        const body = await response.json();
+        const text = await response.text();
+        let body;
+        try { body = JSON.parse(text); } catch (e) { return JSON.stringify({ error: true, errorcode: 'requireloginerror' }); }
         const first = Array.isArray(body) ? body[0] : body;
         if (!first || first.error) { return JSON.stringify({ error: true, errorcode: (first && (first.errorcode || (first.exception && first.exception.errorcode))) || 'inconnu', message: first && (first.message || (first.exception && first.exception.message)) }); }
         return JSON.stringify({ data: first.data });
+        } catch (e) { return JSON.stringify({ error: true, errorcode: 'exception', message: String(e && e.message || e) }); }
         """#, arguments: ["method": method, "args": argsJSON])
+        if raw.isEmpty { raw = #"{"error":true,"errorcode":"requireloginerror"}"# }
         struct Reply: Decodable {
             var error: Bool?
             var errorcode: String?
@@ -537,6 +550,55 @@ final class MoodleClient {
         return content
     }
 
+    /// La page du cours, lue comme un·e étudiant·e la voit : sections et leur
+    /// texte, étiquettes, descriptions, achèvement, semaine en cours
+    /// (`MoodleCoursePage`, pur). Le plan seul (`outline`) reste le secours.
+    func coursePage(courseID: Int) async throws -> MoodleCoursePage {
+        try await prepare()
+        let raw = try await session.run(#"""
+        try {
+        const r = await fetch('/course/view.php?id=' + courseid, { credentials: 'include' });
+        if (/\/(login|enrol)\//.test(r.url)) return JSON.stringify({ needsLogin: true });
+        const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+        const abs = (root) => { root.querySelectorAll('[href]').forEach(a => { try { a.setAttribute('href', new URL(a.getAttribute('href'), r.url).href); } catch (e) {} });
+          root.querySelectorAll('[src]').forEach(a => { try { a.setAttribute('src', new URL(a.getAttribute('src'), r.url).href); } catch (e) {} }); return root; };
+        const clean = t => (t || '').replace(/\s+/g, ' ').trim();
+        const title = clean((doc.querySelector('.page-header-headings h1, h1') || {}).textContent);
+        const sections = [...doc.querySelectorAll('li.section, li.course-section')].filter(s => !s.closest('.activity')).map((s, i) => {
+          const number = parseInt(s.getAttribute('data-number') || s.getAttribute('data-sectionid') || i, 10);
+          const titleNode = s.querySelector('h3.sectionname a, h3.sectionname');
+          const name = clean(s.getAttribute('data-sectionname') || (titleNode ? titleNode.textContent : s.getAttribute('aria-label')));
+          const summaryNode = s.querySelector(':scope .summarytext, :scope > .content > .summary, :scope .course-description-item.summarytext');
+          const summary = summaryNode ? abs(summaryNode.cloneNode(true)).innerHTML : '';
+          const activities = [...s.querySelectorAll('li.activity')].filter(a => a.closest('li.section, li.course-section') === s).map(a => {
+            const module = ((a.className.match(/modtype_(\w+)/) || [])[1] || '');
+            const id = parseInt((a.id || '').replace('module-', '') || a.getAttribute('data-id') || '0', 10);
+            const link = a.querySelector('a.aalink, a[href*="/mod/"]');
+            let name = clean(a.getAttribute('data-activityname') || (a.querySelector('[data-activityname]') || { getAttribute: () => '' }).getAttribute('data-activityname'));
+            if (!name) { const n = a.querySelector('.instancename'); if (n) { const c = n.cloneNode(true); c.querySelectorAll('.accesshide, .sr-only, .visually-hidden').forEach(e => e.remove()); name = clean(c.textContent); } }
+            const body = a.querySelector('.activity-altcontent, .contentwithoutlink, .activity-description, .description');
+            const html = body ? abs(body.cloneNode(true)).innerHTML : '';
+            const dates = [...a.querySelectorAll('[data-region="activity-dates"] div, .activity-dates div')].map(d => clean(d.textContent)).filter(Boolean);
+            const done = a.querySelector('[data-action="toggle-manual-completion"]');
+            const completed = done ? done.getAttribute('data-toggletype') === 'manual:undo'
+              : /\b(Done|Terminé|Fait)\b/.test(clean((a.querySelector('[data-region="completion-info"], .activity-completion') || {}).textContent));
+            return { id, module, name, url: link ? link.href : '', html, dates, completed };
+          }).filter(x => x.id && (x.name || x.html));
+          return { number: isNaN(number) ? i : number, title: name || (i === 0 ? 'Général' : 'Section ' + i), summary, isCurrent: s.classList.contains('current'), activities };
+        });
+        return JSON.stringify({ title, sections });
+        } catch (e) { return JSON.stringify({ error: String(e && e.message || e) }); }
+        """#, arguments: ["courseid": courseID])
+        #if DEBUG
+        if CommandLine.arguments.contains("-moodleTrace") {
+            FileHandle.standardError.write(Data("MOODLE page \(courseID): \(raw.prefix(300))\n".utf8))
+        }
+        #endif
+        if raw.contains(#""needsLogin":true"#) { throw HiddenSiteSession.SiteError.notSignedIn }
+        guard let page = MoodleCoursePage.decode(raw) else { throw WebContentScraper.ScrapeError.empty }
+        return page
+    }
+
     /// Les messages d'une discussion de forum.
     func discussion(id: Int) async throws -> MoodleActivityContent {
         try await prepare()
@@ -547,6 +609,7 @@ final class MoodleClient {
     }
 
     nonisolated static let activityScript = #"""
+    try {
     const clean = t => (t || '').replace(/\s+/g, ' ').trim();
     const load = async (path) => {
       const r = await fetch(path, { credentials: 'include' });
@@ -621,6 +684,7 @@ final class MoodleClient {
       out.files = files(main(doc));
     }
     return JSON.stringify(out);
+    } catch (e) { return JSON.stringify({ module, needsLogin: true }); }
     """#
 
     /// Trouve le cours Moodle d'un cours de l'app : le lien déjà retenu, sinon

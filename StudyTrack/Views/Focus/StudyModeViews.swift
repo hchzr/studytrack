@@ -15,6 +15,7 @@ struct StudyModeEntry: View {
 
     @Environment(AppContainer.self) private var app
     @State private var showingSetup = false
+    @State private var showingCustom = false
     /// Bloquer le reste (apps, sites) pendant le mode étude. Retenu d'une fois sur l'autre.
     @AppStorage("studyMode.blocking") private var blocking = true
 
@@ -34,6 +35,7 @@ struct StudyModeEntry: View {
                             enter(minutes)
                         }
                     }
+                    Button("Autre durée…", systemImage: "clock") { showingCustom = true }
                 }
                 Toggle("Bloquer le reste", isOn: $blocking)
                 if blocking, !StudyLock.shared.isAuthorized {
@@ -46,6 +48,13 @@ struct StudyModeEntry: View {
             .buttonStyle(.carnetSecondaryWide)
             .sheet(isPresented: $showingSetup) {
                 NavigationStack { StudyModeSettingsView() }
+            }
+            .sheet(isPresented: $showingCustom) {
+                StudyCustomDuration { minutes in
+                    showingCustom = false
+                    enter(minutes)
+                }
+                .presentationDetents([.height(320)])
             }
         }
     }
@@ -349,5 +358,37 @@ struct StudyModeSettingsView: View {
             lock.sites = sites
         }
         newSite = ""
+    }
+}
+
+/// Une durée choisie à la main : en minutes, ou jusqu'à une heure.
+private struct StudyCustomDuration: View {
+    var start: (Int) -> Void
+    @State private var minutes = 75
+    @State private var byEnd = false
+    @State private var end = Date().addingTimeInterval(75 * 60)
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Choisir", selection: $byEnd) {
+                    Text("Durée").tag(false)
+                    Text("Heure de fin").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if byEnd {
+                    DatePicker("Jusqu'à", selection: $end, displayedComponents: .hourAndMinute)
+                } else {
+                    Stepper("\(minutes) min", value: $minutes, in: StudyMode.minuteRange, step: 5)
+                }
+            }
+            .navigationTitle("Mode étude")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Commencer") { start(byEnd ? StudyMode.minutes(until: end) : minutes) }
+                }
+            }
+        }
     }
 }

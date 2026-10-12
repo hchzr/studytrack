@@ -91,6 +91,15 @@ struct StudyTrackMacApp: App {
                 }
             }
         }
+        // `-epflConnect` : la connexion silencieuse à chaque site, avec le résultat.
+        if CommandLine.arguments.contains("-epflConnect") {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                if CommandLine.arguments.contains("-epflOnlyMedia") { await EPFLConnect.shared.connect(.mediaspace) } else { await EPFLConnect.shared.connectAll() }
+                let states = EPFLConnect.Site.allCases.map { "\($0.rawValue)=\(EPFLConnect.shared.state($0))" }.joined(separator: " ")
+                FileHandle.standardError.write(Data("EPFL \(states) email=\(EPFLConnect.shared.email != nil)\n".utf8))
+            }
+        }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
         if let index = CommandLine.arguments.firstIndex(of: "-debugPage"), index + 1 < CommandLine.arguments.count {
             let page = CommandLine.arguments[index + 1]
@@ -259,6 +268,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Les sites de l'EPFL, sans rien afficher : la session Microsoft garde
+        // la connexion, mais celle de chaque site s'efface à la fermeture.
+        if !CommandLine.arguments.contains("-epflConnect") {
+            Task { @MainActor in await EPFLConnect.shared.connectAll() }
+        }
         MiniTimerPanel.shared.update()
         // Au réveil du Mac, la socket du chrono partagé est morte : on la relance.
         // À l'endormissement, on la ferme : pas de tentatives de reconnexion

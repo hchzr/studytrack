@@ -126,11 +126,17 @@ final class MacStore {
     private static func seedPreview(_ context: ModelContext) {
         let course = Course(code: "MATH-101", name: "Analyse I (classe inversée)", colorHex: "#4F46E5")
         course.contentSources = ["https://botafogo.epfl.ch/analyse-1-flipped/"]
+        // `-seedMoodle 15221` : relier le cours d'essai à un vrai cours Moodle.
+        if let index = CommandLine.arguments.firstIndex(of: "-seedMoodle"), index + 1 < CommandLine.arguments.count {
+            course.contentSources.append("https://moodle.epfl.ch/course/view.php?id=\(CommandLine.arguments[index + 1])")
+        }
         context.insert(course)
         let pdf = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Analyse I Serie 03.pdf")
+        // `-seedSeriesURL <adresse>` : l'énoncé d'une vraie série (un PDF Moodle).
+        let address = CommandLine.arguments.firstIndex(of: "-seedSeriesURL").flatMap { $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil }
         let series = ExerciseSeries(course: course, seriesNumber: 3, title: "Série 3", plannedWeek: course.currentWeek,
-                                    dueDate: Date().addingTimeInterval(3 * 86400), urlString: pdf.absoluteString)
+                                    dueDate: Date().addingTimeInterval(3 * 86400), urlString: address ?? pdf.absoluteString)
         context.insert(series)
         for n in 1...6 {
             let exercise = Exercise(series: series, exerciseNumber: "3.\(n)", sortOrder: n)

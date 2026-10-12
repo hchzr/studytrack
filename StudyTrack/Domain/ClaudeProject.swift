@@ -191,6 +191,32 @@ enum ClaudeProject {
 
     """
 
+    // MARK: Les connecteurs du compte
+
+    /// `claude mcp list` → les connecteurs de claude.ai du compte connecté
+    /// (« claude.ai Notion ») et les serveurs locaux de l'utilisateur·rice
+    /// (« rea »). Les premiers servent tels quels ; les seconds sont écartés
+    /// (`deniedMcpServers`) : un seul serveur d'outils de rétro-ingénierie
+    /// portait le contexte de 15 000 à 215 000 jetons (mesuré).
+    static func servers(mcpList output: String) -> (connectors: [String], local: [String]) {
+        var connectors: [String] = []
+        var local: [String] = []
+        for line in output.components(separatedBy: .newlines) {
+            guard let colon = line.range(of: ": "), line.contains(" - ") else { continue }
+            let name = String(line[..<colon.lowerBound]).trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, !name.contains("…") else { continue }
+            if name.hasPrefix("claude.ai ") { connectors.append(name) } else { local.append(name) }
+        }
+        return (connectors, local)
+    }
+
+    /// Le préfixe des outils d'un serveur : « claude.ai Claude Docs » →
+    /// `mcp__claude_ai_Claude_Docs` (observé : `mcp__claude_ai_Claude_Docs__guide`).
+    /// Les jokers (`mcp__claude_ai_*`) ne sont pas acceptés par Claude Code (vérifié).
+    static func toolPrefix(server: String) -> String {
+        "mcp__" + String(server.map { $0.isLetter || $0.isNumber || $0 == "-" ? $0 : "_" })
+    }
+
     /// Les outils toujours là en projet : lire et lancer une compétence.
     static let baseTools = ["Read", "Glob", "Skill"]
 
@@ -205,9 +231,11 @@ enum ClaudeProject {
         return result
     }
 
-    /// Les règles `--allowedTools` : la base, les serveurs du fichier, ses règles.
-    static func allowedTools(file: File, studyTrack: Bool) -> [String] {
-        var result = baseTools + file.mcpServers.keys.sorted().map { "mcp__" + $0 } + (studyTrack ? ["mcp__studytrack"] : [])
+    /// Les règles `--allowedTools` : la base, les connecteurs du compte, les
+    /// serveurs du fichier, ses règles.
+    static func allowedTools(file: File, studyTrack: Bool, connectors: [String] = []) -> [String] {
+        var result = baseTools + connectors.map(toolPrefix(server:))
+            + file.mcpServers.keys.sorted().map { "mcp__" + $0 } + (studyTrack ? ["mcp__studytrack"] : [])
         for rule in file.allowedTools where !result.contains(rule) { result.append(rule) }
         return result
     }
@@ -231,9 +259,10 @@ enum ClaudeProject {
     }
 
     /// Ce que Claude a le droit de faire, en clair (affiché dans la conversation).
-    static func permissionSummary(file: File, studyTrack: Bool) -> String {
+    static func permissionSummary(file: File, studyTrack: Bool, connectors: [String] = []) -> String {
         var parts = ["lecture", "compétences"]
         if file.allowedTools.contains(where: { $0.hasPrefix("Write") || $0.hasPrefix("Edit") }) { parts.append("écriture limitée") }
+        parts += connectors.map { String($0.dropFirst("claude.ai ".count)) }
         parts += file.mcpServers.keys.sorted().map { ClaudeTutor.toolLabel("mcp__" + $0) }
         if studyTrack { parts.append("StudyTrack") }
         return parts.joined(separator: ", ")

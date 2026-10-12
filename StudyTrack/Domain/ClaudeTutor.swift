@@ -45,6 +45,8 @@ enum ClaudeTutor {
         var allowedTools: [String] = []
         /// Projet : les outils chargés (`--tools`).
         var tools: [String] = ClaudeProject.baseTools
+        /// Projet : les serveurs MCP locaux écartés (`deniedMcpServers`).
+        var deniedServers: [String] = []
         var model: String?
     }
 
@@ -69,12 +71,16 @@ enum ClaudeTutor {
                 "--system-prompt", launch.systemPrompt,
             ]
         case .project:
-            // Les réglages et compétences **du projet** (`.claude/skills` du
-            // dossier : epfl-serie, epfl-memoire) ; ni plugins, ni crochets, ni
-            // compétences de l'utilisateur·rice — mesuré : ~8 000 jetons de
-            // contexte au lieu de ~15 000. Les serveurs MCP : seulement ceux du
-            // fichier (`--strict-mcp-config`).
-            args += ["--setting-sources", "project,local", "--strict-mcp-config"]
+            // Les réglages de l'utilisateur·rice se chargent : ce sont eux qui
+            // apportent les connecteurs de son compte claude.ai (Notion,
+            // Todoist, Agenda…, vérifié : avec `--setting-sources project`, aucun).
+            // Ses serveurs locaux sont écartés par leur nom.
+            if !launch.deniedServers.isEmpty {
+                let denied = launch.deniedServers.map { ["serverName": $0] }
+                if let data = try? JSONSerialization.data(withJSONObject: ["deniedMcpServers": denied], options: [.sortedKeys]) {
+                    args += ["--settings", String(decoding: data, as: UTF8.self)]
+                }
+            }
             if let path = launch.mcpConfigPath { args += ["--mcp-config", path] }
             // Ni terminal ni web : lire, lancer une compétence, et l'écriture
             // que le fichier du projet permet (ses fichiers de mémoire).

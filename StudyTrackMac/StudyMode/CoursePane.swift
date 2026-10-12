@@ -41,6 +41,7 @@ struct CoursePane: View {
         case file(title: String, address: String)
         case edx(EdXOutline.Unit)
         case edThread(id: Int, title: String)
+        case moodleSection(Int)
     }
 
     /// Le cours Ed de ce cours (par son code), une fois les cours Ed lus.
@@ -96,6 +97,8 @@ struct CoursePane: View {
                 #if DEBUG
                 .onAppear {
                     if CommandLine.arguments.contains("-botafogo") { source = .botafogo }
+                    if let index = CommandLine.arguments.firstIndex(of: "-courseSource"), index + 1 < CommandLine.arguments.count,
+                       let chosen = Source(rawValue: CommandLine.arguments[index + 1]) { source = chosen }
                 }
                 .onChange(of: book.ready) { _, ready in
                     // `-botafogo` : ouvrir la première série du programme.
@@ -209,27 +212,15 @@ struct CoursePane: View {
     @ViewBuilder
     private func moodleList(_ course: Course) -> some View {
         if let id = moodleID {
-            if let outline = desk.moodleOutlines[id] {
-                List {
-                    ForEach(outline.sections.filter { !$0.activities.isEmpty }, id: \.number) { section in
-                        Section {
-                            ForEach(section.activities.filter(\.isVisible), id: \.id) { activity in
-                                Button { openActivity(activity) } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: Self.icon(for: activity.module)).foregroundStyle(Carnet.tint(course.colorHex)).frame(width: 18)
-                                        Text(activity.name).foregroundStyle(Carnet.ink).lineLimit(2)
-                                        Spacer(minLength: 0)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        } header: {
-                            Text(MoodleCourseAnalyzer.sectionTitle(section)).font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
-                        }
+            if let page = desk.moodlePages[id] {
+                MoodleCourseList(page: page, tint: Carnet.tint(course.colorHex),
+                                 selectedSection: { if case .moodleSection(let n)? = reading { return n }; return nil }(),
+                                 selectedActivity: { if case .moodle(_, let a, _)? = reading { return a }; return nil }(),
+                                 openSection: { reading = .moodleSection($0.number) },
+                                 openActivity: { openMoodle($0) })
+                    .onAppear {
+                        if reading == nil, let current = page.currentSection() { reading = .moodleSection(current.number) }
                     }
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
             } else if let error = desk.moodleError[id] {
                 VStack(spacing: 12) {
                     Text(error).foregroundStyle(Carnet.inkSecondary).multilineTextAlignment(.center)
@@ -246,16 +237,43 @@ struct CoursePane: View {
         }
     }
 
+    /// La page du cours d'abord (texte des semaines, achèvement) ; le plan seul
+    /// en secours ; une reconnexion silencieuse si Moodle demande la connexion.
     private func loadMoodle(_ id: Int, course: Course) {
         desk.moodleError[id] = nil
         Task { @MainActor in
-            do {
-                desk.moodleOutlines[id] = try await desk.moodle.outline(courseID: id, title: course.name)
-            } catch {
-                desk.moodleError[id] = (error as? HiddenSiteSession.SiteError).map { _ in
-                    "Connecte-toi à Moodle."
-                } ?? error.localizedDescription
+            await EPFLConnect.shared.ensure(.moodle)
+            try? await desk.moodle.prepare(force: true)
+            for attempt in 0..<2 {
+                do {
+                    desk.moodlePages[id] = try await desk.moodle.coursePage(courseID: id)
+                    return
+                } catch HiddenSiteSession.SiteError.notSignedIn where attempt == 0 {
+                    await EPFLConnect.shared.connect(.moodle)
+                    try? await desk.moodle.prepare(force: true)
+                    continue
+                } catch {
+                    if let outline = try? await desk.moodle.outline(courseID: id, title: course.name) {
+                        desk.moodlePages[id] = MoodleCoursePage(snapshot: outline)
+                        return
+                    }
+                    desk.moodleError[id] = "Connecte-toi à Moodle."
+                    return
+                }
             }
+            desk.moodleError[id] = "Connecte-toi à Moodle."
+        }
+    }
+
+    /// Une activité de la page du cours, ouverte au bon endroit.
+    private func openMoodle(_ activity: MoodleCoursePage.Activity) {
+        switch activity.module {
+        case "resource":
+            reading = .pdf(title: activity.name, address: activity.url)
+        case "lti" where activity.name.lowercased().contains("ed"):
+            source = .ed
+        default:
+            reading = .moodle(module: activity.module, id: activity.id, title: activity.name)
         }
     }
 
@@ -484,6 +502,12 @@ struct CoursePane: View {
                 FileReader(title: title, address: address, desk: desk)
             }
             .id(address)
+        case .moodleSection(let number)?:
+            if let id = moodleID, let section = desk.moodlePages[id]?.sections.first(where: { $0.number == number }) {
+                MoodleSectionPage(section: section, tint: Carnet.tint(course.colorHex), desk: desk,
+                                  openActivity: { openMoodle($0) }, openLink: { openLink($0, title: $1) }, openWeb: openWeb)
+                    .id("section\(number)")
+            }
         case .edThread(let id, let title)?:
             VStack(spacing: 0) {
                 plainHeader(title)
