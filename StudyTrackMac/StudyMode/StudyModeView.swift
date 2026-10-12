@@ -57,6 +57,7 @@ struct StudyModeView: View {
         .animation(.smooth(duration: 0.35), value: timer.studyIsOver)
         .onAppear {
             browser.sites = { [weak settings] in settings?.studySites ?? StudyMode.defaultSites }
+            browser.locks = { [weak timer] in timer?.studyLocks ?? true }
         }
     }
 
@@ -173,8 +174,18 @@ private struct StudySetupView: View {
                 .disabled(timer.phase != .idle)
             }
 
-            field("Ouverts") {
-                StudyToolStrip(course: course)
+            field("Blocage") {
+                Toggle(isOn: Bindable(screen).locks) {
+                    Text("Bloquer le reste").foregroundStyle(StudyPalette.ink)
+                }
+                .toggleStyle(.switch)
+                .tint(Carnet.correct)
+            }
+
+            if screen.locks {
+                field("Ouverts") {
+                    StudyToolStrip(course: course)
+                }
             }
 
             HStack(spacing: 12) {

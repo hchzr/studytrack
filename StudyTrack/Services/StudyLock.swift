@@ -94,7 +94,7 @@ final class StudyLock {
 
     /// Pose ou lève le bouclier selon l'état du chrono.
     func sync(_ state: FocusTimerState?, now: Date = Date()) {
-        if StudyMode.isActive(state, at: now), let until = state?.studyUntil {
+        if StudyMode.locks(state, at: now), let until = state?.studyUntil {
             shield(until: until)
         } else {
             release()

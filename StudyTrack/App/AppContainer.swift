@@ -118,6 +118,7 @@ final class AppContainer {
         DataRepair.run(in: repairContext)
         // Les doublons arrivés d'un autre appareil (ou laissés par une
         // synchronisation interrompue) sont fusionnés dès l'ouverture.
+        PreviewSeedCleanup.run(in: repairContext)
         let merged = SyncDeduplicator.run(in: repairContext)
         if merged.total > 0 {
             AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)

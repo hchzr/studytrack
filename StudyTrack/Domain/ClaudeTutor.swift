@@ -43,13 +43,10 @@ enum ClaudeTutor {
         var mcpConfigPath: String?
         /// Projet : les outils utilisables sans demander (`--allowedTools`).
         var allowedTools: [String] = []
+        /// Projet : les outils chargés (`--tools`).
+        var tools: [String] = ClaudeProject.baseTools
         var model: String?
     }
-
-    /// Les outils de Claude Code gardés en mode projet : lire un fichier (le
-    /// PDF de la série, le `CLAUDE.md`) et lancer une compétence. Ni terminal,
-    /// ni écriture de fichier, ni web.
-    static let projectTools = ["Read", "Skill"]
 
     /// Les arguments de `claude` pour une conversation de tuteur.
     static func arguments(_ launch: Launch) -> [String] {
@@ -79,7 +76,9 @@ enum ClaudeTutor {
             // fichier (`--strict-mcp-config`).
             args += ["--setting-sources", "project,local", "--strict-mcp-config"]
             if let path = launch.mcpConfigPath { args += ["--mcp-config", path] }
-            args += ["--tools", projectTools.joined(separator: ",")]
+            // Ni terminal ni web : lire, lancer une compétence, et l'écriture
+            // que le fichier du projet permet (ses fichiers de mémoire).
+            args += ["--tools", launch.tools.joined(separator: ",")]
             if !launch.allowedTools.isEmpty { args += ["--allowedTools", launch.allowedTools.joined(separator: ",")] }
             // Ce qui n'est pas permis d'avance est refusé : en `-p`, personne
             // ne peut répondre à une demande d'autorisation.
@@ -443,7 +442,7 @@ enum ClaudeTutor {
     /// propose de noter (rien n'est écrit sans confirmation).
     static let verdictFence = "studytrack"
 
-    private static let verdictInstruction = """
+    static let verdictInstruction = """
     Termine par un bloc de code ```\(verdictFence) avec une ligne par exercice corrigé, au format \
     « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). \
     StudyTrack le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.

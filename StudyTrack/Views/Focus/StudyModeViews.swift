@@ -15,6 +15,8 @@ struct StudyModeEntry: View {
 
     @Environment(AppContainer.self) private var app
     @State private var showingSetup = false
+    /// Bloquer le reste (apps, sites) pendant le mode étude. Retenu d'une fois sur l'autre.
+    @AppStorage("studyMode.blocking") private var blocking = true
 
     var body: some View {
         if app.focus.isStudying {
@@ -33,7 +35,8 @@ struct StudyModeEntry: View {
                         }
                     }
                 }
-                if !StudyLock.shared.isAuthorized {
+                Toggle("Bloquer le reste", isOn: $blocking)
+                if blocking, !StudyLock.shared.isAuthorized {
                     Button("Réglages", systemImage: "gearshape") { showingSetup = true }
                 }
             } label: {
@@ -48,9 +51,9 @@ struct StudyModeEntry: View {
     }
 
     private func enter(_ minutes: Int) {
-        app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID)
+        app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: blocking)
         app.router.showingStudyMode = true
-        if !StudyLock.shared.isAuthorized { showingSetup = true }
+        if blocking, !StudyLock.shared.isAuthorized { showingSetup = true }
     }
 }
 

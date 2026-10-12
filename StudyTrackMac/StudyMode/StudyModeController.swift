@@ -38,6 +38,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         var taskType: TaskType = .exercise
         var targetID: UUID?
         var label = ""
+        /// Bloquer le reste pendant cette session (le réglage, par défaut).
+        var locks = true
         /// L'app arrêtée en dernier, pour le dire.
         var blockedName: String?
         var blockedAt: Date?
@@ -80,6 +82,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         screen.taskType = taskType ?? timer.taskType
         screen.targetID = targetID ?? (courseID == nil ? timer.targetID : nil)
         screen.label = label
+        screen.locks = settings?.studyBlocking ?? true
         showWindow()
     }
 
@@ -94,12 +97,13 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard let timer else { return }
         // Le vrai blocage : ce qui n'est pas permis se ferme (proprement — une
         // app avec un document non enregistré le demande d'abord).
-        if settings?.studyCloseApps ?? true {
+        let locks = screen.locks
+        if locks, settings?.studyCloseApps ?? true {
             for app in runningBlockedApps() { ask(app, toQuit: true, force: false) }
         }
         if timer.phase == .idle { timer.pomodoro = pomodoro }
         timer.enterStudy(minutes: minutes, courseID: screen.courseID, taskType: screen.taskType,
-                         targetID: screen.targetID, label: screen.label)
+                         targetID: screen.targetID, label: screen.label, locks: locks)
         screen.stage = .session
         log.notice("mode étude : \(minutes) min")
     }
@@ -121,7 +125,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
                 screen.stage = .session
                 showWindow()
             }
-            startBlocking()
+            if timer.studyLocks { startBlocking() } else { stopBlocking() }
         } else {
             stopBlocking()
             if timer.studyIsOver {

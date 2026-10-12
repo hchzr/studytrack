@@ -46,6 +46,10 @@ struct FocusTimerState: Codable, Equatable {
     var studyUntil: Date?
     /// Le début du mode étude (l'anneau de l'écran se remplit de là à `studyUntil`).
     var studySince: Date?
+    /// Le mode étude bloque-t-il le reste (apps, sites) ? `false` : un simple
+    /// écran de travail, rien n'est fermé. `nil` vaut oui — les états publiés
+    /// avant ce champ, et un appareil plus ancien qui l'ignore, bloquent.
+    var studyLocks: Bool?
 
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,

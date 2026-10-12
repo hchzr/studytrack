@@ -13,7 +13,7 @@ struct CoursePane: View {
     var openWeb: (URL, String) -> Void
 
     enum Source: String, CaseIterable, Identifiable {
-        case studytrack, moodle, courseware, botafogo
+        case studytrack, moodle, courseware, botafogo, ed
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -21,6 +21,7 @@ struct CoursePane: View {
             case .moodle: return "Moodle"
             case .courseware: return "Courseware"
             case .botafogo: return "Botafogo"
+            case .ed: return "Ed"
             }
         }
     }
@@ -39,6 +40,13 @@ struct CoursePane: View {
         case video(title: String, address: String)
         case file(title: String, address: String)
         case edx(EdXOutline.Unit)
+        case edThread(id: Int, title: String)
+    }
+
+    /// Le cours Ed de ce cours (par son code), une fois les cours Ed lus.
+    private var edCourse: EdDiscussion.Course? {
+        guard let course, let courses = desk.edCourses else { return nil }
+        return EdDiscussion.match(code: course.code, in: courses)
     }
 
     private var moodleID: Int? {
@@ -60,6 +68,7 @@ struct CoursePane: View {
         Source.allCases.filter {
             $0 == .studytrack || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
                 || ($0 == .botafogo && botafogoURL != nil)
+                || ($0 == .ed && (edCourse != nil || desk.edNeedsLogin))
         }
     }
 
@@ -80,6 +89,7 @@ struct CoursePane: View {
                     case .moodle: moodleList(course)
                     case .courseware: coursewareList
                     case .botafogo: botafogoList
+                    case .ed: edList
                     }
                 }
                 .frame(width: 320)
@@ -98,6 +108,9 @@ struct CoursePane: View {
                 reader(course)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            // Les cours Ed, une fois : la source « Ed » n'apparaît que pour un
+            // cours qui y est (ou pour se connecter).
+            .task { await desk.loadEdCourses() }
         } else {
             ContentUnavailableView("Pas de cours", systemImage: "books.vertical",
                                    description: Text("Choisis-en un pour la session."))
@@ -253,6 +266,49 @@ struct CoursePane: View {
             reading = .moodle(module: activity.module, id: id, title: activity.name)
         } else {
             openLink(activity.link, title: activity.name)
+        }
+    }
+
+    // MARK: Ed
+
+    @ViewBuilder
+    private var edList: some View {
+        if let ed = edCourse {
+            if let threads = desk.edThreads[ed.id] {
+                List {
+                    ForEach(threads) { thread in
+                        Button { reading = .edThread(id: thread.id, title: thread.title) } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: thread.isPinned == true ? "pin.fill"
+                                      : (thread.type == "announcement" ? "megaphone" : (thread.isAnswered == true ? "checkmark.bubble" : "bubble.left")))
+                                    .foregroundStyle(Carnet.tint(course?.colorHex ?? "")).frame(width: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(thread.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                    Text([thread.category, thread.replyCount.map { "\($0) rép." }].compactMap { $0 }.joined(separator: " · "))
+                                        .font(.caption).foregroundStyle(Carnet.inkTertiary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+            } else {
+                ProgressView()
+                    .frame(maxHeight: .infinity)
+                    .task(id: desk.signInRevision) {
+                        do { desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id) }
+                        catch HiddenSiteSession.SiteError.notSignedIn { desk.edNeedsLogin = true }
+                        catch {}
+                    }
+            }
+        } else {
+            VStack(spacing: 12) {
+                Text("Connecte-toi à Ed.").foregroundStyle(Carnet.inkSecondary)
+                Button("Se connecter") { desk.signIn = .ed }.buttonStyle(.ink)
+            }
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -428,6 +484,12 @@ struct CoursePane: View {
                 FileReader(title: title, address: address, desk: desk)
             }
             .id(address)
+        case .edThread(let id, let title)?:
+            VStack(spacing: 0) {
+                plainHeader(title)
+                EdThreadReader(id: id, title: title, desk: desk, open: { openLink($0, title: $1) }, openWeb: openWeb)
+            }
+            .id("ed\(id)")
         case .edx(let unit)?:
             VStack(spacing: 0) {
                 plainHeader(unit.title)

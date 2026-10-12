@@ -37,7 +37,12 @@ final class MacStore {
         // `-memoryStore` : une base vide en mémoire, sans iCloud (essais,
         // captures à côté de l'app réelle, sans toucher à ses données).
         if CommandLine.arguments.contains("-memoryStore") {
-            container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+            // `cloudKitDatabase: .none` est indispensable : par défaut (`.automatic`),
+            // une base « en mémoire » d'une app qui a le droit iCloud se
+            // synchronise quand même — le cours d'essai de `-previewSeed` est
+            // ainsi parti dans le vrai iCloud (`PreviewSeedCleanup` le retire).
+            container = try! ModelContainer(for: schema, configurations: [
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
             isCloudSynced = false
             if CommandLine.arguments.contains("-previewSeed") {
                 let container = self.container
@@ -61,10 +66,11 @@ final class MacStore {
                 ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
                 : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL, cloudKitDatabase: .none)
             self.container = (try? ModelContainer(for: schema, configurations: [local]))
-                ?? (try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]))
+                ?? (try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)]))
             isCloudSynced = false
         }
         SyncDeduplicator.run(in: ModelContext(container))
+        PreviewSeedCleanup.run(in: ModelContext(container))
         observers.append(NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
                                                                 queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.remoteChangeArrived() }
@@ -109,6 +115,7 @@ final class MacStore {
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             SyncDeduplicator.run(in: ModelContext(container))
+        PreviewSeedCleanup.run(in: ModelContext(container))
             self?.onDataChange?()
         }
     }

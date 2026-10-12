@@ -133,7 +133,8 @@ enum SiteHTML {
             }
             switch name {
             case "p", "div", "section", "article", "blockquote", "dl", "dt", "dd", "figure", "figcaption", "center", "main", "header", "footer":
-                if cell == nil { flush() }
+                // `<li><p>texte</p></li>` : la puce attend son texte.
+                if cell == nil, !paragraph.trimmingCharacters(in: .whitespaces).isBareListMarker { flush() }
             case "br":
                 if pre != nil { pre! += "\n" } else if cell != nil { cell! += " " } else { paragraph += "\n" }
             case "h1", "h2", "h3", "h4", "h5", "h6":
@@ -520,5 +521,143 @@ enum BotafogoFigure {
         let trimmed = script.split(separator: "?").first.map(String.init) ?? script
         guard trimmed.lowercased().hasSuffix(".js") else { return trimmed + ".png" }
         return String(trimmed.dropLast(3)) + ".png"
+    }
+}
+
+// MARK: - Ed Discussion
+
+/// Ed Discussion (edstem.org, région EU), lu en natif. Observé dans le code de
+/// la page (`edcdn.net`) : l'API est `https://eu.edstem.org/api`, le jeton est
+/// gardé dans le `localStorage` de la page (`authToken`) et envoyé dans l'en-tête
+/// `X-Token` ; sans lui, `/api/user` répond 401. Les routes des fils
+/// (`courses/<id>/threads`, `threads/<id>?view=1`) sont celles du client
+/// public `edapi` — déduites, pas observées dans le code chargé à la connexion.
+enum EdDiscussion {
+    struct Course: Codable, Equatable, Identifiable {
+        var id: Int
+        var code: String
+        var name: String
+    }
+
+    struct Thread: Codable, Equatable, Identifiable {
+        var id: Int
+        var number: Int?
+        var title: String
+        var category: String?
+        var type: String?
+        var isPinned: Bool?
+        var isAnswered: Bool?
+        var replyCount: Int?
+        var createdAt: String?
+        /// Le texte en clair (aperçu), sans mise en forme.
+        var document: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id, number, title, category, type, document
+            case isPinned = "is_pinned", isAnswered = "is_answered", replyCount = "reply_count", createdAt = "created_at"
+        }
+    }
+
+    /// Un message (le fil lui-même, une réponse, un commentaire), avec ses réponses.
+    struct Post: Equatable {
+        var author: String
+        var date: String
+        /// Le contenu au format d'Ed (XML `<document>`).
+        var content: String
+        var isAnswer: Bool
+        var isEndorsed: Bool
+        var replies: [Post]
+    }
+
+    /// `GET /api/user` → les cours où l'on est inscrit·e.
+    static func courses(userJSON: Data) -> [Course] {
+        guard let object = try? JSONSerialization.jsonObject(with: userJSON) as? [String: Any],
+              let rows = object["courses"] as? [[String: Any]] else { return [] }
+        return rows.compactMap { row in
+            let course = row["course"] as? [String: Any] ?? row
+            guard let id = course["id"] as? Int else { return nil }
+            return Course(id: id, code: course["code"] as? String ?? "", name: course["name"] as? String ?? "")
+        }
+    }
+
+    /// `GET /api/courses/<id>/threads` → les fils.
+    static func threads(json: Data) -> [Thread] {
+        struct Reply: Decodable { var threads: [Thread] }
+        return (try? JSONDecoder().decode(Reply.self, from: json))?.threads ?? []
+    }
+
+    /// `GET /api/threads/<id>?view=1` → le fil, ses réponses et leurs
+    /// commentaires, avec le nom des auteurs (`users`).
+    static func thread(json: Data) -> Post? {
+        guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
+              let thread = object["thread"] as? [String: Any] else { return nil }
+        var names: [Int: String] = [:]
+        for user in object["users"] as? [[String: Any]] ?? [] {
+            if let id = user["id"] as? Int { names[id] = user["name"] as? String ?? "" }
+        }
+        func post(_ raw: [String: Any], answer: Bool) -> Post {
+            let author = (raw["user_id"] as? Int).flatMap { names[$0] } ?? ((raw["is_anonymous"] as? Bool) == true ? "Anonyme" : "")
+            let replies = (raw["comments"] as? [[String: Any]] ?? []).map { post($0, answer: false) }
+            return Post(author: author.isEmpty ? "Anonyme" : author, date: raw["created_at"] as? String ?? "",
+                        content: raw["content"] as? String ?? "", isAnswer: answer,
+                        isEndorsed: (raw["is_endorsed"] as? Bool) == true, replies: replies)
+        }
+        var root = post(thread, answer: false)
+        let answers = (thread["answers"] as? [[String: Any]] ?? []).map { post($0, answer: true) }
+        root.replies = answers + root.replies
+        return root
+    }
+
+    /// Le cours Ed d'un cours de l'app : le code (« CS-101 ») dans le code Ed
+    /// (« CS-101 Fall 2026 », « cs101 »), le plus récent s'il y en a plusieurs.
+    static func match(code: String, in courses: [Course]) -> Course? {
+        func key(_ text: String) -> String { text.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let base = key(code.split(separator: "(").first.map(String.init) ?? code)
+        guard !base.isEmpty else { return nil }
+        return courses.filter { key($0.code).hasPrefix(base) || key($0.name).contains(base) }.max { $0.id < $1.id }
+    }
+
+    /// Le format des messages d'Ed (`<document><paragraph>…<math>…</math>`) →
+    /// des blocs, par le même chemin que le HTML (formules gardées en `\( \)`).
+    static func blocks(_ document: String) -> [SiteBlock] {
+        var text = document
+        // Les formules d'abord : leur contenu ne doit pas passer pour des balises.
+        text = replace(text, #"<math>(.*?)</math>"#) { "\\(" + $0[1] + "\\)" }
+        text = replace(text, #"<heading level="(\d)">"#) { "<h\($0[1])>" }
+        text = replace(text, #"</heading>"#) { _ in "</h3>" }
+        text = replace(text, #"<list style="number"[^>]*>"#) { _ in "<ol>" }
+        text = replace(text, #"<list(\s[^>]*)?>"#) { _ in "<ul>" }
+        text = replace(text, #"</list>"#) { _ in "</ul>" }
+        text = replace(text, #"<snippet[^>]*>"#) { _ in "<pre>" }
+        text = replace(text, #"</snippet>"#) { _ in "</pre>" }
+        text = replace(text, #"<web-snippet[^>]*>.*?</web-snippet>"#) { _ in "" }
+        let tags = [("paragraph", "p"), ("bold", "b"), ("italic", "i"), ("underline", "span"), ("list-item", "li"),
+                    ("callout", "blockquote"), ("spoiler", "div"), ("document", "div"), ("pre", "pre")]
+        for (ed, html) in tags {
+            text = replace(text, "<\(ed)(\\s[^>]*)?>") { _ in "<\(html)>" }
+            text = text.replacingOccurrences(of: "</\(ed)>", with: "</\(html)>")
+        }
+        return SiteHTML.blocks(text, base: URL(string: "https://edstem.org/"))
+    }
+
+    private static func replace(_ text: String, _ pattern: String, _ transform: ([String]) -> String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return text }
+        var result = ""
+        var cursor = text.startIndex
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            result += text[cursor..<range.lowerBound]
+            let groups = (0..<match.numberOfRanges).map { Range(match.range(at: $0), in: text).map { String(text[$0]) } ?? "" }
+            result += transform(groups)
+            cursor = range.upperBound
+        }
+        return result + text[cursor...]
+    }
+}
+
+private extension String {
+    /// « - » ou « 3. » seuls : une puce sans encore de texte.
+    var isBareListMarker: Bool {
+        self == "-" || range(of: #"^\d+\.$"#, options: .regularExpression) != nil
     }
 }

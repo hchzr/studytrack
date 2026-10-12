@@ -364,12 +364,12 @@ final class FocusController {
 
     /// Entre en mode étude : démarre la session si besoin. Publié comme un
     /// geste : le Mac ouvre son écran plein, et se ferme au reste lui aussi.
-    func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil) {
+    func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil, locks: Bool = true) {
         if !hasSession {
             start(courseID: courseID, taskType: taskType, targetID: targetID)
         }
         guard var current = state else { return }
-        StudyMode.enter(&current, minutes: minutes)
+        StudyMode.enter(&current, minutes: minutes, locks: locks)
         if !current.isRunning, current.currentBreak == nil { current.start() }
         state = current
         commit(presence: false)

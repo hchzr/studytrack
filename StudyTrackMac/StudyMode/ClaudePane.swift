@@ -13,6 +13,14 @@ struct ClaudePane: View {
     let course: Course?
     let courses: [Course]
     var desk: StudyDesk
+    /// La fenêtre principale n'a que la conversation « EPFL » (le système).
+    var onlySystem = false
+
+    /// La conversation de la série, ou celle du système entier (brief, plan,
+    /// revue, synchronisation), quand le fichier du projet a des boutons pour lui.
+    enum Scope: String { case series, system }
+    /// La « série » de la conversation du système.
+    static let systemID = UUID(uuidString: "00000000-0000-0000-0000-0000000E9F10")!
 
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
@@ -21,7 +29,15 @@ struct ClaudePane: View {
     @State private var previews: [NSImage] = []
     @State private var attachSeries = true
     @State private var config: ClaudeChat.Config?
+    @State private var scopeChoice: Scope = .series
+    /// Le modèle d'une commande préparée (capture, fichier), pour l'envoi.
+    @State private var pendingModel: String?
     @FocusState private var focused: Bool
+
+    private var file: ClaudeProject.File? { config?.file }
+    private var hasSystem: Bool { !(file?.commands(.system).isEmpty ?? true) }
+    private var scope: Scope { onlySystem ? .system : (hasSystem ? scopeChoice : .series) }
+    private var chatID: UUID? { scope == .system ? Self.systemID : series?.id }
 
     private var exercise: Exercise? { course?.allExercises.first { $0.id == timer.targetID } }
 
@@ -43,7 +59,7 @@ struct ClaudePane: View {
     var body: some View {
         Group {
             if let config {
-                let chat = desk.chat(series: series?.id, config: config)
+                let chat = desk.chat(series: chatID, config: config)
                 VStack(spacing: 0) {
                     header(chat)
                     Rectangle().fill(Carnet.rule).frame(height: 1)
@@ -69,7 +85,7 @@ struct ClaudePane: View {
             #if DEBUG
             // `-claudeAsk "…"` : une vraie question, pour vérifier la chaîne entière.
             if let index = CommandLine.arguments.firstIndex(of: "-claudeAsk"), index + 1 < CommandLine.arguments.count,
-               let config, desk.chat(series: series?.id, config: config).messages.isEmpty {
+               let config, desk.chat(series: chatID, config: config).messages.isEmpty {
                 send(CommandLine.arguments[index + 1])
             }
             #endif
@@ -78,11 +94,13 @@ struct ClaudePane: View {
     }
 
     private var settingsKey: String {
-        "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeNotion)|\(settings.claudeStudyTrackMCP)"
+        // Le fichier du projet relu quand il change (sa date).
+        let modified = (try? FileManager.default.attributesOfItem(atPath: ClaudeProjectSetup.fileURL(settings: settings).path))?[.modificationDate] as? Date
+        return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeStudyTrackMCP)|\(modified?.timeIntervalSince1970 ?? 0)"
     }
 
     private var chat: ClaudeChat? {
-        config.map { desk.chat(series: series?.id, config: $0) }
+        config.map { desk.chat(series: chatID, config: $0) }
     }
 
     // MARK: En-tête
@@ -91,11 +109,20 @@ struct ClaudePane: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Image(systemName: "sparkle").foregroundStyle(Carnet.ink)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(series.map(name) ?? "Claude").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
-                    if let course { Text(course.displayCode).font(.caption).foregroundStyle(Carnet.inkSecondary) }
+                if hasSystem, !onlySystem {
+                    Picker("Conversation", selection: $scopeChoice) {
+                        Text("Série").tag(Scope.series)
+                        Text("EPFL").tag(Scope.system)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                if let series {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(scope == .system ? "EPFL" : (series.map(name) ?? "Claude")).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+                    if scope == .series, let course { Text(course.displayCode).font(.caption).foregroundStyle(Carnet.inkSecondary) }
+                }
+                if scope == .series, let series {
                     Menu {
                         ForEach(series.sortedExercises) { item in
                             Button {
@@ -112,12 +139,14 @@ struct ClaudePane: View {
                     .help("Changer d'exercice")
                 }
                 Spacer()
-                Picker("Mode", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
-                    ForEach(ClaudeTutor.Mode.allCases) { Text($0.label).tag($0) }
+                if scope == .series {
+                    Picker("Mode", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
+                        ForEach(ClaudeTutor.Mode.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 200)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 200)
                 if let usage = chat.usage {
                     Text("\(Int(usage * 100)) %")
                         .font(.caption.monospacedDigit())
@@ -148,11 +177,15 @@ struct ClaudePane: View {
                   systemImage: chat.config.profile == .project ? "folder" : "lock")
             Text("·")
             Text("permis : \(chat.config.permissions)")
+            if let models = file?.models, let model = scope == .series ? models.tutor : models.system {
+                Text("·")
+                Text(model)
+            }
             if let info = chat.info {
-                if chat.config.profile == .project {
+                if scope == .series, let skill = file?.seriesSkill {
                     Text("·")
-                    Text(info.hasSkill(ClaudeProject.seriesSkill) ? "epfl-serie" : "sans epfl-serie")
-                        .foregroundStyle(info.hasSkill(ClaudeProject.seriesSkill) ? Carnet.inkTertiary : Carnet.wrong)
+                    Text(info.hasSkill(skill) ? skill : "sans \(skill)")
+                        .foregroundStyle(info.hasSkill(skill) ? Carnet.inkTertiary : Carnet.wrong)
                 }
                 ForEach(info.mcpServers, id: \.name) { server in
                     Text("·")
@@ -207,18 +240,85 @@ struct ClaudePane: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(series == nil ? "Une question ?" : "On attaque ?")
+            Text(scope == .system ? "On fait quoi ?" : (series == nil ? "Une question ?" : "On attaque ?"))
                 .font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
-            Text("Montre ta copie avec « Capturer ».")
-                .foregroundStyle(Carnet.inkSecondary)
-            FlowChips(spacing: 8) {
-                ForEach(ClaudeTutor.QuickAction.allCases) { action in
-                    Button { send(action.prompt) } label: { Label(action.label, systemImage: action.icon) }
-                        .buttonStyle(.paper)
-                }
+            if scope == .series {
+                Text("Montre ta copie avec « Capturer ».")
+                    .foregroundStyle(Carnet.inkSecondary)
             }
+            FlowChips(spacing: 8) { actionButtons(disabled: false, includeGeneric: true) }
         }
         .padding(.top, 20)
+    }
+
+    /// Les boutons : en série, les gestes du tuteur puis ceux du fichier du
+    /// projet (ou « Post-mortem » / « Rapport » sans fichier) ; dans la
+    /// conversation EPFL, les commandes du système (brief, semaine…).
+    @ViewBuilder
+    private func actionButtons(disabled: Bool, includeGeneric: Bool) -> some View {
+        if scope == .series {
+            if includeGeneric {
+                ForEach(ClaudeTutor.QuickAction.allCases) { action in
+                    Button {
+                        // Vérifier une copie, rédiger une solution : il faut de la
+                        // rigueur → le modèle « système » ; les indices restent légers.
+                        if action == .check || action == .solution {
+                            send(action.prompt, model: .some(file?.model(for: nil, scope: .system)))
+                        } else {
+                            send(action.prompt)
+                        }
+                    } label: { Label(action.label, systemImage: action.icon) }
+                        .buttonStyle(.paper)
+                        .disabled(disabled)
+                }
+            }
+            if let commands = file?.commands(.series), !commands.isEmpty {
+                ForEach(commands) { command in
+                    Button { run(command) } label: { Label(command.label, systemImage: command.icon) }
+                        .buttonStyle(.paper)
+                        .disabled(disabled)
+                }
+            } else if let series {
+                Button {
+                    send(ClaudeTutor.postMortemPrompt(useSkill: usesSkill), label: "Post-mortem",
+                         model: file?.model(for: nil, scope: .system))
+                } label: { Label("Post-mortem", systemImage: "checklist") }
+                    .buttonStyle(.paper)
+                    .disabled(disabled || series.doneCount == 0)
+                Button { send(ClaudeTutor.reportPrompt, label: "Rapport", model: file?.model(for: nil, scope: .system)) } label: {
+                    Label("Rapport", systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.paper)
+                .disabled(disabled)
+            }
+        } else {
+            ForEach(file?.commands(.system) ?? []) { command in
+                Button { run(command) } label: { Label(command.label, systemImage: command.icon) }
+                    .buttonStyle(.paper)
+                    .disabled(disabled)
+            }
+        }
+    }
+
+    /// Les valeurs d'une commande du fichier : le cours, la série, l'exercice.
+    private var placeholders: ClaudeProject.Placeholders {
+        ClaudeProject.Placeholders(code: course?.displayCode ?? "", course: course.map { ClaudeProject.shortCourseName($0.name) } ?? "",
+                                   seriesNumber: series.map { "\($0.seriesNumber)" } ?? "", seriesTitle: series.map(name) ?? "",
+                                   exercise: exercise?.exerciseNumber ?? "")
+    }
+
+    private func run(_ command: ClaudeProject.File.Command) {
+        var prompt = ClaudeProject.expand(command.prompt, placeholders)
+        if command.verdicts == true { prompt += "\n\n" + ClaudeTutor.verdictInstruction }
+        let model = file?.model(for: command, scope: command.scope)
+        if command.capture == true || command.attach == true {
+            // D'abord la copie ou le fichier ; l'envoi reste à l'étudiant·e.
+            draft = prompt
+            pendingModel = model
+            if command.capture == true { capture() } else { pick() }
+            return
+        }
+        send(prompt, label: command.label, model: model)
     }
 
     private var notInstalled: some View {
@@ -237,29 +337,9 @@ struct ClaudePane: View {
 
     private func composer(_ chat: ClaudeChat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !chat.messages.isEmpty || series != nil {
+            if !chat.messages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        if !chat.messages.isEmpty {
-                            ForEach(ClaudeTutor.QuickAction.allCases) { action in
-                                Button { send(action.prompt) } label: { Label(action.label, systemImage: action.icon) }
-                                    .buttonStyle(.paper)
-                                    .disabled(chat.isAnswering)
-                            }
-                        }
-                        if let series {
-                            if !chat.messages.isEmpty { Rectangle().fill(Carnet.rule).frame(width: 1, height: 20) }
-                            Button {
-                                send(ClaudeTutor.postMortemPrompt(useSkill: usesSkill(chat)), label: "Post-mortem")
-                            } label: { Label("Post-mortem", systemImage: "checklist") }
-                                .buttonStyle(.paper)
-                                .disabled(chat.isAnswering || series.doneCount == 0)
-                                .help(series.isComplete ? "" : "Mieux après la correction")
-                            Button { send(ClaudeTutor.reportPrompt, label: "Rapport") } label: { Label("Rapport", systemImage: "doc.text.magnifyingglass") }
-                                .buttonStyle(.paper)
-                                .disabled(chat.isAnswering || chat.messages.isEmpty)
-                        }
-                    }
+                    HStack(spacing: 8) { actionButtons(disabled: chat.isAnswering, includeGeneric: true) }
                 }
             }
             if !attachments.isEmpty {
@@ -301,7 +381,7 @@ struct ClaudePane: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Carnet.inkSecondary)
                     .help("Capturer ta copie")
-                TextField(chat.mode == .tutor ? "Où tu bloques ?" : "Ta question", text: $draft, axis: .vertical)
+                TextField(scope == .system ? "Ta demande" : (chat.mode == .tutor ? "Où tu bloques ?" : "Ta question"), text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(1...8)
@@ -348,27 +428,36 @@ struct ClaudePane: View {
         }
     }
 
-    private func usesSkill(_ chat: ClaudeChat) -> Bool {
-        guard chat.config.profile == .project else { return false }
-        return chat.info?.hasSkill(ClaudeProject.seriesSkill) ?? ClaudeProjectSetup.linkedSkills(settings: settings).contains(ClaudeProject.seriesSkill)
+    /// La compétence de série du fichier du projet, si elle est là.
+    private var seriesSkill: String? {
+        guard let chat, chat.config.profile == .project, let skill = file?.seriesSkill else { return nil }
+        let loaded = chat.info?.hasSkill(skill) ?? ClaudeProjectSetup.linkedSkills(settings: settings).contains(skill)
+        return loaded ? skill : nil
     }
 
-    private func send(_ text: String, label: String? = nil) {
+    private var usesSkill: Bool { seriesSkill != nil }
+
+    /// - Parameter model: `nil` → le modèle par défaut de la conversation
+    ///   (`tutor` en série, `system` dans la conversation EPFL).
+    private func send(_ text: String, label: String? = nil, model: String?? = nil) {
         guard let chat else { return }
         var files = attachments
         var pdfAttached = false
-        if attachSeries, !chat.opened, let address = seriesAddress,
+        if scope == .series, attachSeries, !chat.opened, let address = seriesAddress,
            case .ready(let url)? = desk.document(address), let data = try? Data(contentsOf: url) {
             files.insert(.init(kind: .pdf, data: data, name: series.map(name) ?? "Série"), at: 0)
             pdfAttached = true
         }
-        let situation = ClaudeChat.Situation(series: series.map { seriesContext($0, pdfAttached: pdfAttached) },
-                                             exerciseID: exercise?.id, exercise: context,
-                                             skill: usesSkill(chat) ? ClaudeProject.seriesSkill : nil)
-        chat.send(text, label: label, attachments: files, images: previews, situation: situation)
+        let situation = scope == .series
+            ? ClaudeChat.Situation(series: series.map { seriesContext($0, pdfAttached: pdfAttached) },
+                                   exerciseID: exercise?.id, exercise: context, skill: seriesSkill)
+            : ClaudeChat.Situation(series: nil, exerciseID: nil, exercise: ClaudeTutor.Context(), skill: nil)
+        let chosen: String? = model ?? pendingModel ?? file?.model(for: nil, scope: scope == .series ? .series : .system)
+        chat.send(text, label: label, attachments: files, images: previews, model: chosen, situation: situation)
         draft = ""
         attachments = []
         previews = []
+        pendingModel = nil
     }
 
     private func seriesContext(_ series: ExerciseSeries, pdfAttached: Bool) -> ClaudeTutor.SeriesContext {

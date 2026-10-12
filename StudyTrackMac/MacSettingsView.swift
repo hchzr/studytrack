@@ -116,11 +116,13 @@ private struct StudySettingsPane: View {
             Section {
                 Stepper("Durée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
                 Toggle("Maintenir pour finir plus tôt", isOn: $settings.studyHoldToLeave)
+                Toggle("Bloquer le reste", isOn: $settings.studyBlocking)
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
+                    .disabled(!settings.studyBlocking)
             } header: {
                 Text("Session")
             } footer: {
-                Text("Sinon, elles sont juste cachées.")
+                Text(settings.studyBlocking ? "Sinon, elles sont juste cachées." : "Rien n'est bloqué, ni ici ni sur l'iPhone.")
             }
 
             Section {
@@ -141,23 +143,36 @@ private struct StudySettingsPane: View {
                             Button("Choisir…", action: chooseFolder)
                         }
                     }
+                    let file = ClaudeProjectSetup.file(settings: settings)
+                    LabeledContent("Fichier") {
+                        HStack {
+                            Text(file == nil ? "aucun" : "studytrack.json").foregroundStyle(.secondary)
+                            Button(file == nil ? "Créer" : "Ouvrir") { openProjectFile(exists: file != nil) }
+                        }
+                    }
                     LabeledContent("Compétences") {
                         let skills = ClaudeProjectSetup.linkedSkills(settings: settings)
                         Text(skills.isEmpty ? "aucune" : skills.joined(separator: ", "))
-                            .foregroundStyle(skills.isEmpty ? Carnet.wrong : .secondary)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
                     }
-                    Toggle("Notion (carnet d'erreurs)", isOn: $settings.claudeNotion)
                     TextField("Serveur StudyTrack (https://…)", text: $settings.claudeStudyTrackMCP)
                     LabeledContent("Permis") {
-                        Text(ClaudeProject.permissionSummary(notion: settings.claudeNotion,
+                        Text(ClaudeProject.permissionSummary(file: file ?? ClaudeProject.File(),
                                                              studyTrack: settings.claudeStudyTrackMCP.hasPrefix("https://")))
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if let models = file?.models, models.tutor != nil || models.system != nil {
+                        LabeledContent("Modèles") {
+                            Text("indices : \(models.tutor ?? "défaut") · système : \(models.system ?? "défaut")").foregroundStyle(.secondary)
+                        }
                     }
                 }
             } header: {
                 Text("Claude")
             } footer: {
-                Text(settings.claudeProject ? "Tes compétences EPFL, dans ce dossier. Rien d'autre." : "Passe par ton abonnement, sans outils.")
+                Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json." : "Passe par ton abonnement, sans outils.")
             }
 
             Section {
@@ -226,6 +241,16 @@ private struct StudySettingsPane: View {
         siteError = false
         if !settings.studySites.contains(domain) { settings.studySites.append(domain) }
         newSite = ""
+    }
+
+    /// Ouvre `studytrack.json` (le crée vide d'abord).
+    private func openProjectFile(exists: Bool) {
+        let url = ClaudeProjectSetup.fileURL(settings: settings)
+        if !exists {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? ClaudeProject.emptyFileTemplate.write(to: url, atomically: true, encoding: .utf8)
+        }
+        NSWorkspace.shared.open(url)
     }
 
     private func chooseFolder() {

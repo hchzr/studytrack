@@ -7,7 +7,7 @@ import WebKit
 
 /// Les sites qui demandent une connexion EPFL (Tequila, Microsoft, SWITCH).
 enum StudySite: String, Identifiable {
-    case moodle, courseware, mediaspace
+    case moodle, courseware, mediaspace, ed
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,7 @@ enum StudySite: String, Identifiable {
         case .moodle: return "Moodle"
         case .courseware: return "Courseware"
         case .mediaspace: return "MediaSpace"
+        case .ed: return "Ed"
         }
     }
 
@@ -23,6 +24,7 @@ enum StudySite: String, Identifiable {
         case .moodle: return MoodleClient.login
         case .courseware: return CoursewareClient.login
         case .mediaspace: return URL(string: "https://mediaspace.epfl.ch/user/login")!
+        case .ed: return EdClient.login
         }
     }
 
@@ -34,6 +36,7 @@ enum StudySite: String, Identifiable {
         case .moodle: return host == "moodle.epfl.ch" && !path.hasPrefix("/login") && !path.contains("/auth/")
         case .courseware: return host == "courseware.epfl.ch" && !path.hasPrefix("/login") && !path.hasPrefix("/auth") && !path.hasPrefix("/register")
         case .mediaspace: return host == "mediaspace.epfl.ch" && !path.contains("login") && !path.contains("saml")
+        case .ed: return host == "edstem.org" && path.hasPrefix("/eu/") && !path.contains("login")
         }
     }
 }
@@ -467,5 +470,78 @@ struct EdXUnitReader: View {
         guard texts[block.id] == nil, let address = block.viewURL else { return }
         let html = (try? await desk.courseware.blockHTML(address)) ?? ""
         texts[block.id] = SiteHTML.blocks(html, base: URL(string: address))
+    }
+}
+
+// MARK: - Ed Discussion
+
+/// Un fil d'Ed, en natif : la question, les réponses (validées en tête de
+/// liste par Ed), et les commentaires en retrait. Lecture seule.
+struct EdThreadReader: View {
+    let id: Int
+    let title: String
+    var desk: StudyDesk
+    var open: (String, String) -> Void
+    var openWeb: (URL, String) -> Void
+
+    @State private var post: EdDiscussion.Post?
+    @State private var needsLogin = false
+    @State private var failed = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Kicker("Ed")
+                Text(title).font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
+                if let post {
+                    message(post, depth: 0)
+                } else if needsLogin {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Connecte-toi à Ed.").foregroundStyle(Carnet.inkSecondary)
+                        Button("Se connecter") { desk.signIn = .ed }.buttonStyle(.ink)
+                    }
+                } else if failed {
+                    Text("Fil introuvable.").foregroundStyle(Carnet.inkSecondary)
+                } else {
+                    ProgressView()
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 780, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .task(id: "\(id)|\(desk.signInRevision)") {
+            needsLogin = false
+            do { post = try await desk.ed.thread(id); failed = post == nil }
+            catch HiddenSiteSession.SiteError.notSignedIn { needsLogin = true }
+            catch { failed = true }
+        }
+    }
+
+    private func message(_ post: EdDiscussion.Post, depth: Int) -> AnyView {
+        AnyView(VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(post.author).font(.callout.weight(.medium)).foregroundStyle(Carnet.ink)
+                if post.isEndorsed { Label("Validée", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Carnet.correct) }
+                else if post.isAnswer { Text("Réponse").font(.caption).foregroundStyle(Carnet.inkSecondary) }
+                Spacer()
+                Text(EdThreadReader.day(post.date)).font(.caption).foregroundStyle(Carnet.inkTertiary)
+            }
+            SiteBlocksView(blocks: EdDiscussion.blocks(post.content), desk: desk, open: open, openWeb: openWeb)
+            ForEach(Array(post.replies.enumerated()), id: \.offset) { _, reply in
+                message(reply, depth: depth + 1)
+            }
+        }
+        .padding(depth == 0 ? 0 : 14)
+        .background(depth == 0 ? Color.clear : Carnet.sheetRaised.opacity(depth == 1 ? 0.7 : 0.4),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)))
+    }
+
+    /// « 2026-10-10T10:00:00.123+02:00 » → « 10 oct. ».
+    static func day(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        return date.map { $0.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "fr_CH"))) } ?? ""
     }
 }

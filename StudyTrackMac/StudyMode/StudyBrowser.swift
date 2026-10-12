@@ -39,6 +39,12 @@ final class StudyBrowserModel: NSObject {
 
     /// Les sites permis : lus dans les réglages à chaque navigation.
     @ObservationIgnored var sites: () -> [String] = { StudyMode.defaultSites }
+    /// Le mode étude bloque-t-il ? Sinon, tous les sites s'ouvrent.
+    @ObservationIgnored var locks: () -> Bool = { true }
+
+    private func allows(_ url: URL?) -> Bool {
+        !locks() || StudyMode.isAllowed(url: url, sites: sites())
+    }
 
     private static let configuration: WKWebViewConfiguration = {
         let configuration = WKWebViewConfiguration()
@@ -113,7 +119,7 @@ extension StudyBrowserModel: WKNavigationDelegate, WKUIDelegate {
                 decisionHandler(.allow)
                 return
             }
-            if StudyMode.isAllowed(url: navigationAction.request.url, sites: sites()) {
+            if allows(navigationAction.request.url) {
                 decisionHandler(.allow)
             } else {
                 refuse(navigationAction.request.url)
@@ -126,7 +132,7 @@ extension StudyBrowserModel: WKNavigationDelegate, WKUIDelegate {
     nonisolated func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                              for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         MainActor.assumeIsolated {
-            guard StudyMode.isAllowed(url: navigationAction.request.url, sites: sites()) else {
+            guard allows(navigationAction.request.url) else {
                 refuse(navigationAction.request.url)
                 return nil
             }

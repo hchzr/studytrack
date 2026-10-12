@@ -39,8 +39,11 @@ final class ClaudeChat: Identifiable {
         var folder: URL
         var mcpConfigPath: String?
         var allowedTools: [String] = []
+        var tools: [String] = ClaudeProject.baseTools
         /// Ce qui est permis, en clair.
         var permissions: String
+        /// Le fichier du projet (`studytrack.json`) : boutons, modèles, compétences.
+        var file: ClaudeProject.File?
 
         static var isolated: Config {
             let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -82,6 +85,9 @@ final class ClaudeChat: Identifiable {
     @ObservationIgnored private var receivedAny = false
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var forceResume: Bool?
+    /// Le modèle demandé pour le prochain message, et celui du processus en cours.
+    @ObservationIgnored private var requestedModel: String?
+    @ObservationIgnored private var runningModel: String?
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "claude")
 
     init(seriesID: UUID?, config: Config) {
@@ -171,10 +177,18 @@ final class ClaudeChat: Identifiable {
         var skill: String?
     }
 
+    /// - Parameter model: le modèle de ce message (`nil` : celui de
+    ///   l'abonnement). Un autre modèle que celui du processus en cours le
+    ///   relance sur la même session (`--resume --model …`) : des indices
+    ///   légers, puis un post-mortem avec un modèle plus fort, sans perdre le fil.
     func send(_ text: String, label: String? = nil, attachments: [ClaudeTutor.Attachment] = [], images: [NSImage] = [],
-              situation: Situation) {
+              model: String? = nil, situation: Situation) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty, !isAnswering else { return }
+        if model != runningModel, let process, process.isRunning {
+            close()
+        }
+        requestedModel = model
         do {
             try startIfNeeded()
         } catch {
@@ -251,7 +265,8 @@ final class ClaudeChat: Identifiable {
         process.arguments = ClaudeTutor.arguments(.init(profile: config.profile, sessionID: sessionID.uuidString.lowercased(),
                                                         resume: resume, systemPrompt: ClaudeTutor.systemPrompt(mode: mode),
                                                         mcpConfigPath: config.mcpConfigPath, allowedTools: config.allowedTools,
-                                                        model: Self.debugModel))
+                                                        tools: config.tools, model: Self.debugModel ?? requestedModel))
+        runningModel = requestedModel
         try? FileManager.default.createDirectory(at: config.folder, withIntermediateDirectories: true)
         process.currentDirectoryURL = config.folder
         var environment = ProcessInfo.processInfo.environment
@@ -278,7 +293,8 @@ final class ClaudeChat: Identifiable {
         }
         process.terminationHandler = { [weak self] ended in
             let status = ended.terminationStatus
-            Task { @MainActor in self?.ended(status: status) }
+            let id = ObjectIdentifier(ended)
+            Task { @MainActor in self?.ended(status: status, process: id) }
         }
         stderrText = ""
         try process.run()
@@ -334,7 +350,10 @@ final class ClaudeChat: Identifiable {
         }
     }
 
-    private func ended(status: Int32) {
+    private func ended(status: Int32, process id: ObjectIdentifier) {
+        // Un processus remplacé (changement de modèle, nouvelle conversation)
+        // ne touche pas à celui qui l'a remplacé.
+        if let process, ObjectIdentifier(process) != id { return }
         process = nil
         input = nil
         // La session a disparu, ou existe déjà : on relance une fois, même message.

@@ -5688,13 +5688,15 @@ do {
     let resumed = ClaudeTutor.arguments(.init(sessionID: "S", resume: true, systemPrompt: "P"))
     check(resumed.contains("--resume") && !resumed.contains("--session-id"), "Claude : une session existante se reprend")
 
+    let projectFile = ClaudeProject.File(mcpServers: ["notion": .init(url: "https://mcp.notion.com/mcp")])
     let project = ClaudeTutor.arguments(.init(profile: .project, sessionID: "S", systemPrompt: "P", mcpConfigPath: "/tmp/mcp.json",
-                                              allowedTools: ClaudeProject.allowedTools(notion: true, studyTrack: false)))
+                                              allowedTools: ClaudeProject.allowedTools(file: projectFile, studyTrack: false),
+                                              tools: ClaudeProject.tools(file: projectFile)))
     check(!project.contains("--safe-mode") && !project.contains("--disable-slash-commands"), "projet EPFL : compétences et commandes chargées")
     if let i = project.firstIndex(of: "--setting-sources") { check(project[i + 1] == "project,local", "projet EPFL : les réglages du dossier seulement") } else { check(false, "projet : --setting-sources") }
     check(project.contains("--strict-mcp-config") && project.contains("/tmp/mcp.json"), "projet EPFL : seulement les MCP du fichier")
-    if let i = project.firstIndex(of: "--allowedTools") { check(project[i + 1] == "Read,Skill,mcp__notion", "projet EPFL : outils permis") } else { check(false, "projet : --allowedTools") }
-    if let i = project.firstIndex(of: "--tools") { check(project[i + 1] == "Read,Skill", "projet EPFL : ni terminal ni écriture") } else { check(false, "projet : --tools") }
+    if let i = project.firstIndex(of: "--allowedTools") { check(project[i + 1] == "Read,Glob,Skill,mcp__notion", "projet EPFL : outils permis") } else { check(false, "projet : --allowedTools") }
+    if let i = project.firstIndex(of: "--tools") { check(project[i + 1] == "Read,Glob,Skill", "projet EPFL : ni terminal ni écriture") } else { check(false, "projet : --tools") }
     check(project.contains("--append-system-prompt") && !project.contains("--system-prompt"), "projet EPFL : la consigne s'ajoute à celle de Claude Code")
 
     check(ClaudeTutor.sessionRecovery(stderr: "Error: No conversation found with session ID: abc") == .startFresh, "session perdue : on repart")
@@ -5765,15 +5767,37 @@ do {
           && updated.components(separatedBy: ClaudeProject.beginMarker).count == 2, "CLAUDE.md : la partie de l'app est remplacée, le reste gardé")
     let ctx = ClaudeProject.context(courses: [.init(code: "MATH-101", name: "Analyse I", week: 4, progress: "Série 4 : 1/5")], week: 4, date: "12 oct.")
     check(ctx.contains("MATH-101 — Analyse I (semaine 4) · Série 4 : 1/5") && ctx.contains("Semaine du semestre : 4"), "CLAUDE.md : cours et semaine")
-    let mcp = ClaudeProject.mcpConfig(notion: true, studyTrackURL: "https://x.supabase.co/functions/v1/mcp/T")
-    if let object = try? JSONSerialization.jsonObject(with: Data(mcp.utf8)) as? [String: Any], let servers = object["mcpServers"] as? [String: Any] {
-        check(Set(servers.keys) == ["notion", "studytrack"], "MCP : Notion et StudyTrack, rien d'autre")
+    let json = """
+    {"skills":["epfl-serie","epfl-planning"],"seriesSkill":"epfl-serie","models":{"tutor":"haiku","system":"sonnet"},
+     "mcpServers":{"notion":{"type":"http","url":"https://mcp.notion.com/mcp"},"todoist":{"type":"http","url":"https://ai.todoist.net/mcp"}},
+     "allowedTools":["Write(./memoire/**)","Edit(./memoire/**)"],
+     "commands":[{"id":"brief","label":"Brief","icon":"sun.max","prompt":"brief"},
+                 {"id":"pm","label":"Post-mortem","prompt":"post-mortem série {serie} {cours}","scope":"series","model":"system","verdicts":true},
+                 {"id":"bloque","label":"Bloqué","prompt":"bloqué sur l'exercice {exercice}","scope":"series","capture":true}]}
+    """
+    if let file = ClaudeProject.File.decode(Data(json.utf8)) {
+        check(file.commands(.system).map(\.id) == ["brief"] && file.commands(.series).map(\.id) == ["pm", "bloque"], "fichier : boutons par conversation")
+        check(file.model(for: file.commands[0], scope: .system) == "sonnet" && file.model(for: file.commands[2], scope: .series) == "haiku"
+              && file.model(for: file.commands[1], scope: .series) == "sonnet", "fichier : le modèle de chaque bouton")
+        check(ClaudeProject.tools(file: file) == ["Read", "Glob", "Skill", "Write", "Edit"], "fichier : écriture limitée chargée")
+        check(ClaudeProject.allowedTools(file: file, studyTrack: false) == ["Read", "Glob", "Skill", "mcp__notion", "mcp__todoist",
+                                                                           "Write(./memoire/**)", "Edit(./memoire/**)"], "fichier : règles permises")
+        let mcp = ClaudeProject.mcpConfig(file: file, studyTrackURL: "https://x.supabase.co/functions/v1/mcp/T")
+        if let object = try? JSONSerialization.jsonObject(with: Data(mcp.utf8)) as? [String: Any], let servers = object["mcpServers"] as? [String: Any] {
+            check(Set(servers.keys) == ["notion", "todoist", "studytrack"], "MCP : les serveurs du fichier et StudyTrack")
+        } else { check(false, "MCP : JSON lisible") }
+        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: "http://pas-sur").contains("studytrack"), "MCP : une adresse non chiffrée est refusée")
+        check(ClaudeProject.permissionSummary(file: file, studyTrack: true) == "lecture, compétences, écriture limitée, Notion, Todoist, StudyTrack",
+              "permissions en clair")
+        check(ClaudeProject.expand(file.commands[1].prompt, .init(code: "MATH-101", course: "analyse", seriesNumber: "4")) == "post-mortem série 4 analyse",
+              "commande : série et cours remplis")
     } else {
-        check(false, "MCP : JSON lisible")
+        check(false, "fichier du projet lisible")
     }
-    check(ClaudeProject.mcpConfig(notion: false, studyTrackURL: "http://pas-sur").contains("{\n\n}") || !ClaudeProject.mcpConfig(notion: false, studyTrackURL: "http://pas-sur").contains("studytrack"),
-          "MCP : une adresse non chiffrée est refusée")
-    check(ClaudeProject.permissionSummary(notion: true, studyTrack: true) == "lecture, compétences, Notion, StudyTrack", "permissions en clair")
+    check(ClaudeProject.File.decode(Data(ClaudeProject.emptyFileTemplate.utf8)) == ClaudeProject.File(), "fichier vide : lisible, sans rien")
+    check(ClaudeProject.File.decode(Data("{}".utf8))?.commands.isEmpty == true, "fichier minimal : aucun bouton")
+    check(ClaudeProject.shortCourseName("Analyse I classe inversée") == "analyse" && ClaudeProject.shortCourseName("Algèbre linéaire") == "algebre",
+          "nom court d'un cours")
 
     let line = ClaudeTutor.userLine(text: "Aide", attachments: [.init(kind: .pdf, data: Data([1, 2, 3]), name: "Série 3")])
     if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
@@ -5895,6 +5919,71 @@ do {
     check(MoodleActivityContent.decode(#"{"module":"page","needsLogin":true}"#)?.needsLogin == true, "Moodle : page de connexion reconnue")
     check(BotafogoFigure.imagePath(script: "/media/jsxgraph/jsx_suite_divergente.js") == "/media/jsxgraph/jsx_suite_divergente.png",
           "Botafogo : l'image fixe d'une figure interactive")
+}
+
+// MARK: Ed Discussion
+do {
+    let user = #"{"user":{"id":1},"courses":[{"course":{"id":101,"code":"CS-101","name":"AICC I"},"role":{"role":"student"}},{"course":{"id":200,"code":"CS-101 2026","name":"AICC I"}},{"course":{"id":7,"code":"MATH-111","name":"Algèbre"}}]}"#
+    let courses = EdDiscussion.courses(userJSON: Data(user.utf8))
+    check(courses.map(\.id) == [101, 200, 7], "Ed : les cours de l'utilisateur·rice")
+    check(EdDiscussion.match(code: "CS-101", in: courses)?.id == 200 && EdDiscussion.match(code: "MATH-111", in: courses)?.id == 7
+          && EdDiscussion.match(code: "PHYS-101(c)", in: courses) == nil, "Ed : le cours du même code, le plus récent")
+    let list = #"{"threads":[{"id":5,"number":12,"title":"Série 3, ex 2","category":"Séries","type":"question","is_pinned":false,"is_answered":true,"reply_count":2,"created_at":"2026-10-10T10:00:00Z","document":"Bonjour"}]}"#
+    check(EdDiscussion.threads(json: Data(list.utf8)).first?.isAnswered == true, "Ed : la liste des fils")
+    let thread = #"{"thread":{"id":5,"user_id":1,"content":"<document version=\"2.0\"><paragraph>Pourquoi <math>x_n \\to 0</math> ?</paragraph></document>","answers":[{"user_id":2,"is_endorsed":true,"content":"<document version=\"2.0\"><paragraph>Par <bold>encadrement</bold>.</paragraph></document>","comments":[{"user_id":1,"content":"<document version=\"2.0\"><paragraph>Merci</paragraph></document>"}]}],"comments":[]},"users":[{"id":1,"name":"Hugo"},{"id":2,"name":"Assistant"}]}"#
+    if let post = EdDiscussion.thread(json: Data(thread.utf8)) {
+        check(post.author == "Hugo" && post.replies.first?.author == "Assistant" && post.replies.first?.isEndorsed == true
+              && post.replies.first?.replies.first?.author == "Hugo", "Ed : fil, réponse validée, commentaire")
+        check(EdDiscussion.blocks(post.content) == [.markdown("Pourquoi \\(x_n \\to 0\\) ?")], "Ed : formule gardée")
+        check(EdDiscussion.blocks(post.replies[0].content) == [.markdown("Par **encadrement**.")], "Ed : gras")
+    } else {
+        check(false, "Ed : fil lisible")
+    }
+    let doc = #"<document version="2.0"><heading level="2">Titre</heading><list style="bullet"><list-item><paragraph>un</paragraph></list-item></list><snippet language="py">print(1)</snippet></document>"#
+    check(EdDiscussion.blocks(doc) == [.markdown("### Titre"), .markdown("- un"), .markdown("```\nprint(1)\n```")], "Ed : titre, liste, code")
+}
+
+// MARK: Mode étude sans blocage
+do {
+    var state = FocusTimerState()
+    StudyMode.enter(&state, minutes: 30)
+    check(StudyMode.locks(state) && state.studyLocks == nil, "mode étude : bloque par défaut")
+    StudyMode.enter(&state, minutes: 30, locks: false)
+    check(StudyMode.isActive(state) && !StudyMode.locks(state), "mode étude sans blocage : actif, rien de bloqué")
+    StudyMode.leave(&state)
+    check(state.studyLocks == nil && !StudyMode.locks(state), "sortie : plus de blocage")
+    let old = try? JSONDecoder().decode(FocusTimerState.self, from: JSONEncoder().encode(FocusTimerState()))
+    check(old?.studyLocks == nil, "un état d'avant se lit (champ absent)")
+}
+
+// MARK: Cours d'essai parti dans iCloud (PreviewSeedCleanup)
+do {
+    let seedPDF = "file:///Users/x/studytrack/Analyse%20I%20Serie%2003.pdf"
+    check(PreviewSeedCleanup.isLeakedSeed(name: "Analyse I (classe inversée)", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
+                                          seriesAddresses: [seedPDF]), "cours d'essai reconnu")
+    check(!PreviewSeedCleanup.isLeakedSeed(name: "Analyse I classe inversée", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
+                                           seriesAddresses: [seedPDF]), "le vrai cours (autre nom) est gardé")
+    check(!PreviewSeedCleanup.isLeakedSeed(name: "Analyse I (classe inversée)", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
+                                           seriesAddresses: ["https://moodle.epfl.ch/pluginfile.php/1/serie3.pdf"]), "sans le PDF du dépôt : gardé")
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+    if let container = try? ModelContainer(for: schema, configurations: [config]) {
+        let context = ModelContext(container)
+        let real = Course(code: "MATH-101", name: "Analyse I classe inversée", colorHex: "#000000")
+        let seed = Course(code: "MATH-101", name: "Analyse I (classe inversée)", colorHex: "#4F46E5")
+        seed.contentSources = ["https://botafogo.epfl.ch/analyse-1-flipped/"]
+        context.insert(real); context.insert(seed)
+        context.insert(ExerciseSeries(course: seed, seriesNumber: 3, title: "Série 3", plannedWeek: 1, urlString: seedPDF))
+        let session = StudySession(course: seed, taskType: .exercise, startedAt: Date(), durationSeconds: 600)
+        context.insert(session)
+        try? context.save()
+        check(PreviewSeedCleanup.run(in: context) == 1, "cours d'essai supprimé")
+        let left = (try? context.fetch(FetchDescriptor<Course>())) ?? []
+        let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
+        check(left.map(\.name) == ["Analyse I classe inversée"], "seul le vrai cours reste")
+        check(sessions.count == 1 && sessions.first?.course?.name == "Analyse I classe inversée", "son temps rejoint le vrai cours")
+    } else {
+        check(false, "base de test")
+    }
 }
 
 // MARK: Botafogo : noms et macros

@@ -757,6 +757,62 @@ extension MediaSpaceClient {
     }
 }
 
+// MARK: - Ed Discussion
+
+/// Ed Discussion (edstem.org, EU), lu dans la session : la page d'Ed garde son
+/// jeton dans `localStorage` et l'envoie dans l'en-tête `X-Token` à
+/// `https://<région>.edstem.org/api` (observé dans son code). On charge le
+/// tableau de bord sans l'afficher, on y lit le jeton, et l'on fait les mêmes
+/// appels depuis la page. Le décodage est dans `EdDiscussion` (pur, testé).
+@MainActor
+final class EdClient {
+    static let home = URL(string: "https://edstem.org/eu/dashboard")!
+    static let login = URL(string: "https://edstem.org/eu/login")!
+
+    private let session = HiddenSiteSession()
+    private var isReady = false
+
+    /// Après une connexion : la page doit être rechargée pour voir le jeton.
+    func reset() { isReady = false }
+
+    private func api(_ path: String) async throws -> Data {
+        if !isReady {
+            try await session.load(Self.home)
+            isReady = true
+        }
+        let raw = try await session.run(#"""
+        let token = null, region = 'eu';
+        for (let i = 0; i < 20 && !token; i++) {
+          for (let k = 0; k < localStorage.length; k++) {
+            const key = localStorage.key(k);
+            const value = (localStorage.getItem(key) || '').replace(/^"|"$/g, '');
+            if (/authRegion/.test(key) && value) region = value;
+            if (/authToken/.test(key) && !/device/i.test(key) && value) token = value;
+          }
+          if (!token) await new Promise(r => setTimeout(r, 300));
+        }
+        if (!token) return '__login__';
+        const r = await fetch('https://' + region + '.edstem.org/api/' + path, { headers: { 'X-Token': token } });
+        if (r.status === 401 || r.status === 403) return '__login__';
+        return await r.text();
+        """#, arguments: ["path": path])
+        if raw == "__login__" { throw HiddenSiteSession.SiteError.notSignedIn }
+        return Data(raw.utf8)
+    }
+
+    func courses() async throws -> [EdDiscussion.Course] {
+        EdDiscussion.courses(userJSON: try await api("user"))
+    }
+
+    func threads(course: Int) async throws -> [EdDiscussion.Thread] {
+        EdDiscussion.threads(json: try await api("courses/\(course)/threads?limit=50&sort=new"))
+    }
+
+    func thread(_ id: Int) async throws -> EdDiscussion.Post? {
+        EdDiscussion.thread(json: try await api("threads/\(id)?view=1"))
+    }
+}
+
 // MARK: - MOOC cités depuis Moodle
 
 /// Le MOOC qu'un cours Moodle cite, lu sur Courseware et rangé dans ses

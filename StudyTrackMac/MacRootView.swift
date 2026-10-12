@@ -6,7 +6,7 @@ import SwiftData
 /// chercher, ouvrir, chronométrer. ⇧⌘E entre en mode étude.
 struct MacRootView: View {
     enum Page: Hashable {
-        case today, focus, agenda, stats
+        case today, focus, agenda, stats, claude
         case course(UUID)
     }
 
@@ -42,6 +42,11 @@ struct MacRootView: View {
                     .tag(Page.focus)
                     Label("Agenda", systemImage: "calendar").tag(Page.agenda)
                     Label("Bilan", systemImage: "chart.bar.xaxis").tag(Page.stats)
+                    // La conversation « EPFL » (brief, semaine, revue…), quand le
+                    // projet Claude a des commandes pour le système.
+                    if settings.claudeProject {
+                        Label("Claude", systemImage: "sparkle").tag(Page.claude)
+                    }
                 }
                 Section("Cours") {
                     ForEach(tracked) { course in
@@ -75,6 +80,9 @@ struct MacRootView: View {
                     MacAgendaView(open: open)
                 case .stats:
                     MacStatsView()
+                case .claude:
+                    ClaudePane(course: nil, courses: courses, desk: StudyModeController.shared.desk, onlySystem: true)
+                        .background(Carnet.ground)
                 case .course(let id):
                     if let course = courses.first(where: { $0.id == id }) {
                         MacCourseView(course: course, focusTarget: $focusTarget)
@@ -177,6 +185,7 @@ struct MacRootView: View {
         case .stats?: return "stats"
         case .focus?: return "focus"
         case .agenda?: return "agenda"
+        case .claude?: return "claude"
         case .course(let id)?: return id.uuidString
         default: return "today"
         }
@@ -186,6 +195,7 @@ struct MacRootView: View {
         if raw == "stats" { return .stats }
         if raw == "focus" { return .focus }
         if raw == "agenda" { return .agenda }
+        if raw == "claude" { return .claude }
         if let id = UUID(uuidString: raw) { return .course(id) }
         return .today
     }

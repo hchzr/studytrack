@@ -173,18 +173,22 @@ final class MacTimer {
 
     /// Entre en mode étude pour `minutes` : démarre le chrono s'il dort, sinon
     /// verrouille la session en cours. Publié comme un geste : l'iPhone suit.
-    func enterStudy(minutes: Int, courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "") {
+    func enterStudy(minutes: Int, courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "",
+                    locks: Bool = true) {
         if state == nil || phase == .idle {
             start(courseID: courseID, taskType: taskType, targetID: targetID, label: label)
         } else if courseID != nil || targetID != nil {
             retarget(courseID: courseID ?? self.courseID, taskType: taskType ?? self.taskType, targetID: targetID)
         }
         guard var current = state else { return }
-        StudyMode.enter(&current, minutes: minutes)
+        StudyMode.enter(&current, minutes: minutes, locks: locks)
         if !current.isRunning, current.currentBreak == nil { current.start() }
         state = current
         commit()
     }
+
+    /// Le mode étude bloque-t-il le reste (apps fermées, sites filtrés) ?
+    var studyLocks: Bool { StudyMode.locks(state) }
 
     func extendStudy(minutes: Int) {
         guard var current = state else { return }

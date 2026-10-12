@@ -57,15 +57,23 @@ enum StudyMode {
     }
 
     /// Entre en mode étude pour `minutes` à partir de `now`.
-    static func enter(_ state: inout FocusTimerState, minutes: Int, now: Date = Date()) {
+    static func enter(_ state: inout FocusTimerState, minutes: Int, locks: Bool = true, now: Date = Date()) {
         state.studySince = now
         state.studyUntil = now.addingTimeInterval(TimeInterval(minutes * 60))
+        state.studyLocks = locks ? nil : false
+    }
+
+    /// Le mode étude est actif **et** bloque le reste. Sans blocage, c'est un
+    /// écran de travail : aucune app fermée, aucun site refusé, l'iPhone libre.
+    static func locks(_ state: FocusTimerState?, at now: Date = Date()) -> Bool {
+        isActive(state, at: now) && state?.studyLocks != false
     }
 
     /// Lève le mode étude (la session continue).
     static func leave(_ state: inout FocusTimerState) {
         state.studyUntil = nil
         state.studySince = nil
+        state.studyLocks = nil
     }
 
     // MARK: Sites permis
@@ -81,11 +89,14 @@ enum StudyMode {
         "accounts.google.com", "appleid.apple.com",
         "kaltura.com", "switch.ch",
         "geogebra.org", "desmos.com", "wolframalpha.com",
+        // Ed Discussion (forum des cours) et la connexion de Courseware.
+        "edstem.org", "edusercontent.com", "openlearnity.org",
     ]
 
     /// Les sites ajoutés à la liste par défaut après coup : ils rejoignent une
     /// liste déjà enregistrée (sans rétablir ceux qu'on a retirés).
-    static let addedLater: Set<String> = ["geogebra.org", "desmos.com", "wolframalpha.com"]
+    static let addedLater: Set<String> = ["geogebra.org", "desmos.com", "wolframalpha.com",
+                                          "edstem.org", "edusercontent.com", "openlearnity.org"]
 
     /// `https://www.Moodle.epfl.ch/my/` → `moodle.epfl.ch`. Ce que l'utilisateur·rice
     /// tape dans les réglages, ramené à un domaine ; `nil` si ce n'en est pas un.

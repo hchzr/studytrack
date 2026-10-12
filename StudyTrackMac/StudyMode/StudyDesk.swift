@@ -166,6 +166,22 @@ final class StudyDesk {
     // MARK: Courseware et MediaSpace
 
     let courseware = CoursewareClient()
+    let ed = EdClient()
+    /// Les cours Ed de l'étudiant·e (`nil` : pas encore lus).
+    var edCourses: [EdDiscussion.Course]?
+    var edNeedsLogin = false
+    var edThreads: [Int: [EdDiscussion.Thread]] = [:]
+
+    /// Lit les cours Ed une fois (et après une connexion).
+    func loadEdCourses() async {
+        guard edCourses == nil else { return }
+        do {
+            edCourses = try await ed.courses()
+            edNeedsLogin = false
+        } catch HiddenSiteSession.SiteError.notSignedIn {
+            edNeedsLogin = true
+        } catch {}
+    }
     let mediaspace = MediaSpaceClient()
     var edxOutlines: [String: EdXOutline] = [:]
 
@@ -177,6 +193,13 @@ final class StudyDesk {
     private(set) var signInRevision = 0
 
     func signedIn(_ site: StudySite) {
+        if site == .ed {
+            ed.reset()
+            edCourses = nil
+            edNeedsLogin = false
+            edThreads = [:]
+            Task { await loadEdCourses() }
+        }
         if site == .moodle {
             moodleError = [:]
             Task { try? await moodle.prepare(force: true); signInRevision += 1 }
