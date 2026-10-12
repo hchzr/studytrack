@@ -25,7 +25,7 @@ struct CommandPalette: View {
         var title: String
         var subtitle: String = ""
         var icon: String
-        var tint: Color = .secondary
+        var tint: Color = Carnet.inkSecondary
         var section: String
         var shortcut: String?
         var run: () -> Void
@@ -100,9 +100,9 @@ struct CommandPalette: View {
             .padding(.vertical, 8)
         }
         .frame(width: 620)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.separator))
-        .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Carnet.rule))
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selected = 0 }
     }
@@ -112,8 +112,8 @@ struct CommandPalette: View {
             Text(key)
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 5).padding(.vertical, 1)
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
-            Text(label).font(.caption).foregroundStyle(.secondary)
+                .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 4))
+            Text(label).font(.caption).foregroundStyle(Carnet.inkSecondary)
         }
     }
 
@@ -180,14 +180,19 @@ struct CommandPalette: View {
         })
         items.append(Item(id: "p.today", title: "Aujourd'hui", icon: "sun.max", section: "Aller à", shortcut: "⌘1") { navigate(.page(.today)) })
         items.append(Item(id: "p.focus", title: "Chrono", icon: "timer", section: "Aller à", shortcut: "⌘2") { navigate(.page(.focus)) })
-        items.append(Item(id: "p.stats", title: "Bilan", icon: "chart.bar.xaxis", section: "Aller à", shortcut: "⌘3") { navigate(.page(.stats)) })
+        items.append(Item(id: "p.agenda", title: "Agenda", icon: "calendar", section: "Aller à", shortcut: "⌘3") { navigate(.page(.agenda)) })
+        items.append(Item(id: "p.stats", title: "Bilan", icon: "chart.bar.xaxis", section: "Aller à", shortcut: "⌘4") { navigate(.page(.stats)) })
+        items.append(Item(id: "a.study", title: "Mode étude…", subtitle: "Plein écran, seulement ce qui sert à travailler",
+                          icon: "moon.stars", section: "Actions", shortcut: "⇧⌘E") {
+            StudyModeController.shared.presentSetup(courseID: timer.courseID)
+        })
         items.append(Item(id: "a.settings", title: "Réglages…", icon: "gearshape", section: "Aller à", shortcut: "⌘,") { openSettings() })
         return items
     }
 
     private func courseItem(_ course: Course) -> Item {
         Item(id: "c.\(course.id)", title: course.name, subtitle: course.displayCode, icon: "book.closed.fill",
-             tint: Color(hex: course.colorHex), section: "Cours",
+             tint: Carnet.tint(course.colorHex), section: "Cours",
              run: { navigate(.page(.course(course.id))) },
              time: { time(course.id, .exercise, nil) })
     }
@@ -231,24 +236,24 @@ private struct PaletteRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: item.icon)
-                .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(item.tint))
+                .foregroundStyle(selected ? Carnet.ground : item.tint)
                 .frame(width: 20)
             Text(item.title).lineLimit(1)
             if !item.subtitle.isEmpty {
                 Text(item.subtitle)
-                    .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.75)) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(selected ? Carnet.ground.opacity(0.75) : Carnet.inkSecondary)
                     .lineLimit(1)
             }
             Spacer()
             if let shortcut = item.shortcut {
                 Text(shortcut).font(.callout)
-                    .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.75)) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(selected ? Carnet.ground.opacity(0.75) : Carnet.inkTertiary)
             }
         }
-        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        .foregroundStyle(selected ? Carnet.ground : Carnet.ink)
         .padding(.horizontal, 10)
         .frame(height: 34)
-        .background(selected ? AnyShapeStyle(Color(nsColor: .selectedContentBackgroundColor)) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(selected ? Carnet.ink : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
     }
 }

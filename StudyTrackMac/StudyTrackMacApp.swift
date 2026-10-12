@@ -12,18 +12,35 @@ struct StudyTrackMacApp: App {
     @State private var store: MacStore
     @State private var settings: MacSettings
     @State private var timer: MacTimer
+    @State private var menuClock: MenuBarClock
 
     init() {
         let settings = MacSettings()
         let store = MacStore()
+        #if DEBUG
+        // `-isolatedTimer` : un chrono qui ne publie rien (essais, captures) —
+        // l'iPhone n'en voit rien.
+        let timer = MacTimer(settings: settings, isolated: CommandLine.arguments.contains("-isolatedTimer"))
+        #else
         let timer = MacTimer(settings: settings)
+        #endif
+        let menuClock = MenuBarClock()
+        menuClock.timer = timer
+        menuClock.settings = settings
         timer.container = store.container
-        timer.applyRemote()
-        // Les widgets du bureau suivent le chrono et les données.
+        // Le mode étude suit le chrono : lancé sur l'iPhone, il s'ouvre ici.
+        StudyModeController.shared.timer = timer
+        StudyModeController.shared.settings = settings
+        StudyModeController.shared.container = store.container
+        // Les widgets du bureau, le chrono flottant, la barre des menus et le
+        // mode étude suivent le chrono.
         timer.onChange = {
             MacWidgetWriter.schedule(container: store.container, timer: timer)
             MiniTimerPanel.shared.update()
+            menuClock.update()
+            StudyModeController.shared.update()
         }
+        timer.applyRemote()
         MiniTimerPanel.shared.timer = timer
         MiniTimerPanel.shared.settings = settings
         MiniTimerPanel.shared.container = store.container
@@ -32,9 +49,11 @@ struct StudyTrackMacApp: App {
         _settings = State(initialValue: settings)
         _store = State(initialValue: store)
         _timer = State(initialValue: timer)
+        _menuClock = State(initialValue: menuClock)
+        menuClock.update()
         MacAppDelegate.timer = timer
         // La voie instantanée du chrono partagé (moins d'une seconde).
-        if store.isCloudSynced {
+        if store.isCloudSynced, !CommandLine.arguments.contains("-isolatedTimer") {
             // Chaque geste du Mac emporte l'état de l'îlot : le relais le pousse
             // à l'écran verrouillé de l'iPhone, même app fermée.
             TimerLink.shared.livePayload = { [container = store.container] snapshot in
@@ -52,6 +71,7 @@ struct StudyTrackMacApp: App {
                 try? await Task.sleep(for: .seconds(3))
                 if action == "start" { timer.start(taskType: .exercise, label: "Test du chrono partagé") }
                 if action == "discard" { timer.discard() }
+                if action == "study" { timer.enterStudy(minutes: 25, label: "Test du mode étude") }
             }
         }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
@@ -61,6 +81,8 @@ struct StudyTrackMacApp: App {
                 try? await Task.sleep(for: .seconds(2))
                 if page == "palette" {
                     NotificationCenter.default.post(name: .macFocusSearch, object: nil)
+                } else if page == "study" {
+                    StudyModeController.shared.presentSetup()
                 } else {
                     NotificationCenter.default.post(name: .macGoTo, object: page)
                 }
@@ -102,6 +124,7 @@ struct StudyTrackMacApp: App {
             MenuBarLabel()
                 .environment(timer)
                 .environment(settings)
+                .environment(menuClock)
         }
         .menuBarExtraStyle(.window)
 
@@ -157,13 +180,19 @@ struct MacCommands: Commands {
             }))
             .keyboardShortcut("m", modifiers: [.command, .option])
             Divider()
+            Button(timer.isStudying ? "Revenir au mode étude" : "Mode étude…") {
+                StudyModeController.shared.presentSetup()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            Divider()
             Button("Abandonner la session", role: .destructive) { timer.discard() }
                 .disabled(timer.phase == .idle)
         }
         CommandMenu("Aller") {
             Button("Aujourd'hui") { go("today") }.keyboardShortcut("1", modifiers: [.command])
             Button("Chrono") { go("focus") }.keyboardShortcut("2", modifiers: [.command])
-            Button("Bilan") { go("stats") }.keyboardShortcut("3", modifiers: [.command])
+            Button("Agenda") { go("agenda") }.keyboardShortcut("3", modifiers: [.command])
+            Button("Bilan") { go("stats") }.keyboardShortcut("4", modifiers: [.command])
             Divider()
             Button("Rechercher…") {
                 NotificationCenter.default.post(name: .macFocusSearch, object: nil)
@@ -184,7 +213,8 @@ struct MacCommands: Commands {
                 ⌃⌥Espace — démarrer ou mettre en pause, depuis n'importe quelle app
                 ⌘T — démarrer / pause · ⇧⌘T — terminer
                 ⌘K ou ⌘F — chercher, ouvrir, chronométrer (⌘↩)
-                ⌘1 ⌘2 ⌘3 — Aujourd'hui, Chrono, Bilan
+                ⌘1 ⌘2 ⌘3 ⌘4 — Aujourd'hui, Chrono, Agenda, Bilan
+                ⇧⌘E — mode étude (plein écran, Mac et iPhone fermés au reste)
                 ⌥⌘M — chrono flottant
                 Dans un cours : Espace coche, ↩ chronomètre l'exercice choisi
                 """
@@ -214,9 +244,18 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MiniTimerPanel.shared.update()
         // Au réveil du Mac, la socket du chrono partagé est morte : on la relance.
+        // À l'endormissement, on la ferme : pas de tentatives de reconnexion
+        // pendant la veille.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { TimerLink.shared.resume() }
+            MainActor.assumeIsolated {
+                TimerLink.shared.resume()
+                StudyModeController.shared.update()
+            }
         }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { TimerLink.shared.suspend() }
+        }
+        StudyModeController.shared.update()
         hotKey = GlobalHotKey { Self.timer?.toggle() }
         updateHotKey()
         withObservationTracking({ _ = Self.settings?.globalShortcut }, onChange: { [weak self] in
@@ -258,6 +297,12 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     /// Fermer la fenêtre ne quitte pas : le chrono reste dans la barre des menus.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// ⌘Q pendant le mode étude : on demande d'abord.
+    @MainActor
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        StudyModeController.shared.confirmQuit() ? .terminateNow : .terminateCancel
+    }
 }
 
 /// Un élément de menu qui exécute une fermeture.

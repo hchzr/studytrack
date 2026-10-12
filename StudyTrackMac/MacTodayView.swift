@@ -2,8 +2,14 @@ import SwiftUI
 import SwiftData
 import Charts
 
-/// La journée : par quoi commencer (un clic lance le chrono), ce qu'il y a à
-/// faire, le temps du jour et de la semaine, chaque cours.
+/// La journée : par quoi commencer (un clic lance le chrono, ou le mode
+/// étude), l'horaire du jour, ce qu'il y a à faire, les échéances, le temps du
+/// jour et de la semaine, chaque cours.
+///
+/// Cette page se recalculait **chaque seconde** pendant une session (elle lisait
+/// l'heure du chrono) : planning, requête de toutes les sessions, graphique.
+/// Elle ne relit plus que les données ; les secondes vivent dans de petites
+/// vues à part (`MacClock.swift`).
 struct MacTodayView: View {
     var open: (UUID, UUID?) -> Void
     var goFocus: () -> Void
@@ -12,44 +18,49 @@ struct MacTodayView: View {
     @Environment(MacSettings.self) private var settings
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    /// Huit jours suffisent (aujourd'hui, la semaine, le graphique de 7 jours).
+    @Query private var sessions: [StudySession]
+    @Query private var events: [LinkedCalendarEvent]
+
+    init(open: @escaping (UUID, UUID?) -> Void, goFocus: @escaping () -> Void) {
+        self.open = open
+        self.goFocus = goFocus
+        let since = DateUtils.addDays(-8, to: DateUtils.startOfDay(Date()))
+        _sessions = Query(filter: #Predicate<StudySession> { $0.startedAt >= since },
+                          sort: \StudySession.startedAt, order: .reverse)
+        let dayStart = DateUtils.startOfDay(Date())
+        let dayEnd = DateUtils.addDays(1, to: dayStart)
+        _events = Query(filter: #Predicate<LinkedCalendarEvent> { $0.startsAt >= dayStart && $0.startsAt < dayEnd },
+                        sort: \LinkedCalendarEvent.startsAt)
+    }
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
     var body: some View {
         let todos = DailyPlanner.todos(for: tracked, limit: 9)
+        let todayEvents = events.filter { $0.isAcademic && !$0.isSkipped }
+        let deadlines = Deadline.upcoming(in: tracked, days: 14)
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 26) {
                 header
                 nowCard(first: todos.first)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 20) {
+                HStack(alignment: .top, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 22) {
                         todoColumn(Array(todos.dropFirst()))
-                            .frame(minWidth: 400, maxWidth: .infinity, alignment: .topLeading)
-                        VStack(spacing: 20) {
-                            todaySessions
-                            weekChart
-                        }
-                        .frame(width: 320)
+                        weekCourses
                     }
-                    VStack(alignment: .leading, spacing: 20) {
-                        todoColumn(Array(todos.dropFirst()))
+                    .frame(minWidth: 380, maxWidth: .infinity, alignment: .topLeading)
+                    VStack(alignment: .leading, spacing: 22) {
+                        if !todayEvents.isEmpty { schedule(todayEvents) }
+                        if !deadlines.isEmpty { deadlineList(deadlines) }
                         todaySessions
                         weekChart
                     }
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionTitle(title: weekTitle)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 14)], spacing: 14) {
-                        ForEach(tracked) { course in
-                            Button { open(course.id, nil) } label: { WeekCourseCard(course: course) }
-                                .buttonStyle(.plain)
-                        }
-                    }
+                    .frame(width: 330)
                 }
             }
-            .padding(28)
-            .frame(maxWidth: 1100, alignment: .leading)
+            .padding(Carnet.pagePadding)
+            .frame(maxWidth: 1180, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("Aujourd'hui")
@@ -70,34 +81,40 @@ struct MacTodayView: View {
 
     private var weekSeconds: Int {
         let start = DateUtils.startOfWeek(Date())
-        return sessions.filter { $0.startedAt >= start }.reduce(0) { $0 + $1.durationSeconds }
+        return sessions.filter { $0.startedAt >= start && $0.taskType.canonical != .lecture }
+            .reduce(0) { $0 + $1.durationSeconds }
     }
 
     private var header: some View {
-        let today = TodayTotal.seconds(sessions, timer: timer)
         let goal = settings.dailyGoalSeconds
+        let week = weekSeconds
         return HStack(alignment: .center, spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(Self.dayTitle).font(MacStyle.title(30))
-                Text("\(weekTitle) · \(DateUtils.hoursLabel(seconds: weekSeconds + (timer.phase == .idle ? 0 : Int(timer.elapsed)))) depuis lundi")
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Kicker(weekTitle)
+                Text(Self.dayTitle).font(Carnet.serif(34)).foregroundStyle(Carnet.ink)
             }
             Spacer()
-            HStack(spacing: 12) {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(DateUtils.hoursLabel(seconds: today))
-                        .font(MacStyle.clock(26, weight: .regular))
-                    Text("sur \(DateUtils.hoursLabel(seconds: goal)) aujourd'hui")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                ZStack {
-                    TimerRing(progress: Double(today) / Double(max(goal, 1)), tint: today >= goal ? .green : MacStyle.goalTint, lineWidth: 6)
-                    if today >= goal {
-                        Image(systemName: "checkmark").font(.headline).foregroundStyle(.green)
+            TodayStudyText(savedSeconds: TodayTotal.saved(sessions)) { today in
+                AnyView(
+                    HStack(spacing: 14) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(DateUtils.hoursLabel(seconds: today))
+                                .font(Carnet.clock(28))
+                                .foregroundStyle(Carnet.ink)
+                            Text("sur \(DateUtils.hoursLabel(seconds: goal)) · \(DateUtils.hoursLabel(seconds: week + (today - TodayTotal.saved(sessions)))) cette semaine")
+                                .font(.caption)
+                                .foregroundStyle(Carnet.inkSecondary)
+                        }
+                        ZStack {
+                            TimerRing(progress: Double(today) / Double(max(goal, 1)),
+                                      tint: today >= goal ? Carnet.correct : MacStyle.goalTint, lineWidth: 5)
+                            if today >= goal {
+                                Image(systemName: "checkmark").font(.headline).foregroundStyle(Carnet.correct)
+                            }
+                        }
+                        .frame(width: 50, height: 50)
                     }
-                }
-                .frame(width: 50, height: 50)
+                )
             }
             .help("Objectif du jour, modifiable dans les Réglages")
         }
@@ -110,47 +127,49 @@ struct MacTodayView: View {
         if timer.phase != .idle {
             RunningNowCard(open: goFocus)
         } else if let todo = first {
-            let tint = Color(hex: todo.colorHex)
-            HStack(spacing: 16) {
-                RoundedRectangle(cornerRadius: 3).fill(tint.gradient).frame(width: 5)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Pour commencer")
-                        .font(.caption.weight(.semibold))
-                        .textCase(.uppercase)
-                        .tracking(1)
-                        .foregroundStyle(tint)
-                    Text(todo.title).font(MacStyle.title(22)).lineLimit(1)
+            let tint = Carnet.tint(todo.colorHex)
+            HStack(spacing: 18) {
+                RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 4)
+                VStack(alignment: .leading, spacing: 5) {
+                    Kicker("Pour commencer", color: tint)
+                    Text(todo.title).font(Carnet.serif(24)).foregroundStyle(Carnet.ink).lineLimit(1)
                     Text([todo.courseName, todo.kind.label, todo.durationLabel].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Carnet.inkSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 Button("Autre chose…", action: goFocus)
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Carnet.inkSecondary)
+                Button {
+                    StudyModeController.shared.presentSetup(courseID: todo.courseID, taskType: todo.taskType,
+                                                            targetID: todo.targetID, label: todo.title)
+                } label: {
+                    Label("Mode étude", systemImage: "moon.stars")
+                }
+                .buttonStyle(.paperLarge)
+                .help("Plein écran, Mac et iPhone fermés à tout le reste")
                 Button {
                     timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
                 } label: {
                     Label("Démarrer", systemImage: "play.fill")
-                        .padding(.horizontal, 6)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(tint)
-                .controlSize(.large)
+                .buttonStyle(InkButtonStyle(tint: tint, large: true))
                 .help("Démarrer le chrono là-dessus")
             }
             .fixedSize(horizontal: false, vertical: true)
-            .macCard(padding: 18)
+            .paperSheet(padding: 20)
             .contextMenu {
                 Button("Ouvrir dans le cours") { open(todo.courseID, todo.targetID) }
             }
         } else {
             HStack {
                 Label("Rien en retard ni pour cette semaine. Bien joué.", systemImage: "checkmark.seal")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Carnet.inkSecondary)
                 Spacer()
-                Button("Session libre", action: goFocus)
+                Button("Session libre", action: goFocus).buttonStyle(.paper)
             }
-            .macCard(padding: 18)
+            .paperSheet(padding: 20)
         }
     }
 
@@ -168,10 +187,10 @@ struct MacTodayView: View {
                                 open: { open(todo.courseID, todo.targetID) },
                                 start: { start(todo) },
                                 complete: { complete(todo) })
-                        if todo.id != todos.last?.id { Divider().padding(.leading, 40) }
+                        if todo.id != todos.last?.id { PaperRule(inset: 40) }
                     }
                 }
-                .macCard(padding: 6)
+                .paperSheet(padding: 6)
             }
         }
     }
@@ -203,7 +222,48 @@ struct MacTodayView: View {
         }
     }
 
-    // MARK: Temps
+    // MARK: Les cours de la semaine
+
+    private var weekCourses: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle(title: weekTitle)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14)], spacing: 14) {
+                ForEach(tracked) { course in
+                    Button { open(course.id, nil) } label: { WeekCourseCard(course: course) }
+                        .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: Colonne de droite
+
+    private func schedule(_ events: [LinkedCalendarEvent]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle(title: "Horaire du jour")
+            VStack(spacing: 0) {
+                ForEach(events) { event in
+                    EventLine(event: event)
+                    if event.id != events.last?.id { PaperRule(inset: 54) }
+                }
+            }
+            .paperSheet(padding: 6)
+        }
+    }
+
+    private func deadlineList(_ items: [Deadline]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle(title: "Échéances", trailing: "14 jours")
+            VStack(spacing: 0) {
+                ForEach(items.prefix(6)) { item in
+                    Button { open(item.courseID, item.targetID) } label: { DeadlineLine(item: item) }
+                        .buttonStyle(.plain)
+                    if item.id != items.prefix(6).last?.id { PaperRule(inset: 54) }
+                }
+            }
+            .paperSheet(padding: 6)
+        }
+    }
 
     @ViewBuilder
     private var todaySessions: some View {
@@ -215,17 +275,17 @@ struct MacTodayView: View {
                 if today.isEmpty {
                     Text(timer.phase == .idle ? "Pas encore de session. ⌃⌥Espace lance le chrono, d'où que tu sois." : "Une session est en cours.")
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Carnet.inkSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
+                        .padding(10)
                 }
                 ForEach(today) { session in
                     SessionRow(session: session, compact: true)
-                        .padding(.horizontal, 8)
-                    if session.id != today.last?.id { Divider() }
+                        .padding(.horizontal, 10)
+                    if session.id != today.last?.id { PaperRule() }
                 }
             }
-            .macCard(padding: 6)
+            .paperSheet(padding: 6)
         }
     }
 
@@ -237,12 +297,12 @@ struct MacTodayView: View {
             Chart {
                 ForEach(days) { day in
                     BarMark(x: .value("Jour", day.day, unit: .day), y: .value("Heures", Double(day.seconds) / 3600))
-                        .foregroundStyle(Double(day.seconds) / 3600 >= goalHours ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(MacStyle.goalTint.opacity(0.75).gradient))
+                        .foregroundStyle(Double(day.seconds) / 3600 >= goalHours ? Carnet.correct : Carnet.ink.opacity(0.75))
                         .cornerRadius(3)
                 }
                 RuleMark(y: .value("Objectif", goalHours))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MacStyle.goalTint)
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day)) { _ in
@@ -251,12 +311,12 @@ struct MacTodayView: View {
             }
             .chartYAxis {
                 AxisMarks(values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine()
+                    AxisGridLine().foregroundStyle(Carnet.rule)
                     AxisValueLabel { if let h = value.as(Double.self) { Text("\(Int(h)) h") } }
                 }
             }
             .frame(height: 120)
-            .macCard(padding: 14)
+            .paperSheet(padding: 14)
         }
     }
 }
@@ -269,32 +329,30 @@ private struct RunningNowCard: View {
 
     var body: some View {
         let course = courses.first { $0.id == timer.courseID }
-        let tint = timer.phase == .onBreak ? MacStyle.breakTint : MacTargets.tint(course)
-        HStack(spacing: 16) {
-            ZStack {
-                TimerRing(progress: timer.ringProgress, tint: tint, lineWidth: 5, draining: timer.phase == .onBreak)
-            }
-            .frame(width: 54, height: 54)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(timer.statusLabel ?? "En cours")
-                    .font(.caption.weight(.semibold))
-                    .textCase(.uppercase)
-                    .tracking(1)
-                    .foregroundStyle(tint)
+        let tint = MacTargets.tint(course)
+        HStack(spacing: 18) {
+            LiveTimerRing(tint: tint, lineWidth: 5)
+                .frame(width: 56, height: 56)
+            VStack(alignment: .leading, spacing: 4) {
+                TimerTimeline { date in
+                    Kicker(timer.isStudying ? "Mode étude" : (timer.statusLabel(at: date) ?? "En cours"), color: tint)
+                }
                 Text(MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID))
-                    .font(MacStyle.title(22))
+                    .font(Carnet.serif(24))
+                    .foregroundStyle(Carnet.ink)
                     .lineLimit(1)
-                Text(course?.name ?? "Session libre").foregroundStyle(.secondary).lineLimit(1)
+                Text(course?.name ?? "Session libre").foregroundStyle(Carnet.inkSecondary).lineLimit(1)
             }
             Spacer()
-            Text(timer.displayTime.clockLabel)
-                .font(MacStyle.clock(36))
-                .contentTransition(.numericText())
-                .foregroundStyle(timer.phase == .paused ? .secondary : .primary)
+            TimerClockText(font: MacStyle.clock(38))
             TimerControls(size: 40, tint: tint)
-            Button("Ouvrir", action: open).buttonStyle(.borderless)
+            if timer.isStudying {
+                Button("Mode étude") { StudyModeController.shared.present() }.buttonStyle(.paper)
+            } else {
+                Button("Ouvrir", action: open).buttonStyle(.paper)
+            }
         }
-        .macCard(padding: 18)
+        .paperSheet(padding: 20, highlighted: tint.opacity(0.5))
     }
 }
 
@@ -308,6 +366,7 @@ private struct TodoRow: View {
     @State private var checked = false
 
     var body: some View {
+        let tint = Carnet.tint(todo.colorHex)
         HStack(spacing: 10) {
             Button {
                 withAnimation(.snappy(duration: 0.2)) { checked = true }
@@ -318,40 +377,41 @@ private struct TodoRow: View {
             } label: {
                 Image(systemName: checked ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(checked ? AnyShapeStyle(Color(hex: todo.colorHex)) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(checked ? tint : Carnet.inkTertiary)
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
             .help(todo.kind == .correction ? "Corrigé juste" : "Marquer comme fait")
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(todo.title).lineLimit(1)
+                    .foregroundStyle(Carnet.ink)
                     .strikethrough(checked)
                 HStack(spacing: 5) {
-                    Circle().fill(Color(hex: todo.colorHex)).frame(width: 6, height: 6)
+                    Circle().fill(tint).frame(width: 6, height: 6)
                     Text([todo.courseCode, todo.kind.label, todo.durationLabel].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(todo.kind == .redo ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(todo.kind == .redo ? Carnet.wrong : Carnet.inkSecondary)
                         .lineLimit(1)
                 }
                 .font(.caption)
             }
             Spacer()
             if isTimed {
-                Label("En cours", systemImage: "timer").font(.caption).foregroundStyle(.secondary)
+                Label("En cours", systemImage: "timer").font(.caption).foregroundStyle(Carnet.inkSecondary)
             } else if hovering {
                 Button(action: open) { Image(systemName: "arrow.right.circle") }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Carnet.inkSecondary)
                     .help("Ouvrir dans le cours")
                 Button(action: start) {
                     Image(systemName: "play.circle.fill").font(.title2)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color(hex: todo.colorHex))
+                .foregroundStyle(tint)
                 .help("Démarrer le chrono là-dessus")
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .hoverRow()
         .opacity(checked ? 0.5 : 1)
         .help(todo.detail)
@@ -359,6 +419,10 @@ private struct TodoRow: View {
         .onTapGesture(count: 2, perform: open)
         .contextMenu {
             Button("Démarrer le chrono", action: start)
+            Button("Mode étude…") {
+                StudyModeController.shared.presentSetup(courseID: todo.courseID, taskType: todo.taskType,
+                                                        targetID: todo.targetID, label: todo.title)
+            }
             Button("Ouvrir dans le cours", action: open)
             Divider()
             Button(todo.kind == .correction ? "Corrigé juste" : "Marquer comme fait", action: complete)
@@ -374,42 +438,42 @@ private struct WeekCourseCard: View {
     var body: some View {
         let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
         let late = ProgressEngine.lateCount(for: course)
-        let tint = Color(hex: course.colorHex)
+        let tint = Carnet.tint(course.colorHex)
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text(course.displayCode).font(.caption.weight(.semibold)).foregroundStyle(tint)
+                CourseTag(code: course.displayCode, tint: tint)
                 Spacer()
                 if late > 0 {
-                    Text("\(late) en retard").font(.caption.weight(.semibold)).foregroundStyle(.red)
+                    Text("\(late) en retard").font(.caption.weight(.semibold)).foregroundStyle(Carnet.wrong)
                 } else {
-                    Label("À jour", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    Label("À jour", systemImage: "checkmark").font(.caption).foregroundStyle(Carnet.inkSecondary)
                 }
             }
-            Text(course.name).font(MacStyle.title(18)).lineLimit(2, reservesSpace: true)
+            Text(course.name).font(Carnet.serif(18)).foregroundStyle(Carnet.ink).lineLimit(2, reservesSpace: true)
             HStack(spacing: 14) {
                 meter("Théorie", week.watchedCount, week.videoCount, tint)
                 meter("Exercices", week.doneCount, week.exerciseCount, tint)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: MacStyle.cardRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: MacStyle.cardRadius, style: .continuous)
-            .strokeBorder(hovering ? AnyShapeStyle(tint.opacity(0.6)) : AnyShapeStyle(.separator.opacity(0.6))))
-        .shadow(color: .black.opacity(hovering ? 0.08 : 0), radius: 8, y: 3)
-        .scaleEffect(hovering ? 1.01 : 1)
+        .paperSheet(padding: 16, highlighted: hovering ? tint.opacity(0.6) : nil)
         .contentShape(Rectangle())
-        .onHover { value in withAnimation(.easeOut(duration: 0.15)) { hovering = value } }
+        .onHover { hovering = $0 }
     }
 
     private func meter(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(title).font(.caption).foregroundStyle(.secondary)
+                Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
                 Spacer()
-                Text("\(done)/\(total)").font(.caption.monospacedDigit())
+                Text("\(done)/\(total)").font(.caption.monospacedDigit()).foregroundStyle(Carnet.ink)
             }
-            ProgressView(value: Double(done), total: Double(max(total, 1))).tint(tint)
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Carnet.rule)
+                    Capsule().fill(tint).frame(width: proxy.size.width * min(1, Double(done) / Double(max(total, 1))))
+                }
+            }
+            .frame(height: 4)
         }
     }
 }
@@ -421,20 +485,20 @@ struct SessionRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: session.taskType.icon)
-                .foregroundStyle(session.course.map { Color(hex: $0.colorHex) } ?? .secondary)
+                .foregroundStyle(Carnet.tint(session.course))
                 .frame(width: 20)
-            Text(session.course?.displayCode ?? "Sans cours").fontWeight(.medium)
-            if !compact { Text(session.taskType.label).foregroundStyle(.secondary) }
+            Text(session.course?.displayCode ?? "Sans cours").fontWeight(.medium).foregroundStyle(Carnet.ink)
+            if !compact { Text(session.taskType.label).foregroundStyle(Carnet.inkSecondary) }
             if let target = session.targetLabel {
-                Text(target).foregroundStyle(.secondary).lineLimit(1)
+                Text(target).foregroundStyle(Carnet.inkSecondary).lineLimit(1)
             }
             Spacer()
-            Text(DateUtils.time.string(from: session.startedAt)).foregroundStyle(.secondary).monospacedDigit()
+            Text(DateUtils.time.string(from: session.startedAt)).foregroundStyle(Carnet.inkSecondary).monospacedDigit()
             Text(session.durationSeconds < 60 ? "< 1 min" : session.durationLabel)
                 .monospacedDigit()
-                .foregroundStyle(session.durationSeconds < 60 ? .secondary : .primary)
+                .foregroundStyle(session.durationSeconds < 60 ? Carnet.inkSecondary : Carnet.ink)
                 .frame(minWidth: 56, alignment: .trailing)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
     }
 }

@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// La fenêtre : à gauche Aujourd'hui, le Chrono, le Bilan et les cours ; à
-/// droite la page. ⌘K (ou ⌘F) ouvre la palette : chercher, ouvrir, chronométrer.
+/// La fenêtre : à gauche Aujourd'hui, le Chrono, l'Agenda, le Bilan et les
+/// cours ; à droite la page, sur papier. ⌘K (ou ⌘F) ouvre la palette :
+/// chercher, ouvrir, chronométrer. ⇧⌘E entre en mode étude.
 struct MacRootView: View {
     enum Page: Hashable {
-        case today, focus, stats
+        case today, focus, agenda, stats
         case course(UUID)
     }
 
@@ -32,15 +33,14 @@ struct MacRootView: View {
                             Text("Chrono")
                             Spacer()
                             if timer.phase != .idle {
-                                Text(timer.displayTime.clockLabel)
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
+                                TimerClockText(font: .caption.monospacedDigit())
                             }
                         }
                     } icon: {
                         Image(systemName: "timer")
                     }
                     .tag(Page.focus)
+                    Label("Agenda", systemImage: "calendar").tag(Page.agenda)
                     Label("Bilan", systemImage: "chart.bar.xaxis").tag(Page.stats)
                 }
                 Section("Cours") {
@@ -49,6 +49,7 @@ struct MacRootView: View {
                             .tag(Page.course(course.id))
                             .contextMenu {
                                 Button("Chronométrer ce cours") { time(course) }
+                                Button("Mode étude sur ce cours…") { StudyModeController.shared.presentSetup(courseID: course.id) }
                                 Button("Ouvrir") { page = .course(course.id) }
                             }
                     }
@@ -56,9 +57,12 @@ struct MacRootView: View {
             }
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                SyncFooter()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
+                VStack(alignment: .leading, spacing: 10) {
+                    StudyModeSidebarButton()
+                    SyncFooter()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
             }
         } detail: {
             Group {
@@ -67,6 +71,8 @@ struct MacRootView: View {
                     MacTodayView(open: open, goFocus: { page = .focus })
                 case .focus:
                     MacFocusView()
+                case .agenda:
+                    MacAgendaView(open: open)
                 case .stats:
                     MacStatsView()
                 case .course(let id):
@@ -78,11 +84,18 @@ struct MacRootView: View {
                     }
                 }
             }
+            .paperPage()
             .toolbar {
                 if page != .focus {
                     ToolbarItem(placement: .primaryAction) {
                         ToolbarTimer { page = .focus }
                     }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { StudyModeController.shared.presentSetup() } label: {
+                        Label("Mode étude", systemImage: "moon.stars")
+                    }
+                    .help("Mode étude : plein écran, seulement ce qui sert à travailler (⇧⌘E)")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingPalette = true } label: {
@@ -92,6 +105,7 @@ struct MacRootView: View {
                 }
             }
         }
+        .tint(Carnet.ink)
         .overlay {
             if showingPalette {
                 ZStack(alignment: .top) {
@@ -133,7 +147,7 @@ struct MacRootView: View {
                 } description: {
                     Text("Importe-les dans StudyTrack sur l'iPhone : iCloud les apporte ici, en général en moins d'une minute.")
                 }
-                .background(.background)
+                .background(Carnet.ground)
             }
         }
     }
@@ -162,6 +176,7 @@ struct MacRootView: View {
         switch page {
         case .stats?: return "stats"
         case .focus?: return "focus"
+        case .agenda?: return "agenda"
         case .course(let id)?: return id.uuidString
         default: return "today"
         }
@@ -170,13 +185,35 @@ struct MacRootView: View {
     static func decode(_ raw: String) -> Page {
         if raw == "stats" { return .stats }
         if raw == "focus" { return .focus }
+        if raw == "agenda" { return .agenda }
         if let id = UUID(uuidString: raw) { return .course(id) }
         return .today
     }
 }
 
+/// Au pied de la barre latérale : entrer en mode étude (ou y revenir).
+private struct StudyModeSidebarButton: View {
+    @Environment(MacTimer.self) private var timer
+
+    var body: some View {
+        Button {
+            StudyModeController.shared.presentSetup()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "moon.stars.fill")
+                Text(timer.isStudying ? "Revenir au mode étude" : "Mode étude")
+                Spacer(minLength: 0)
+                Text("⇧⌘E").font(.caption).foregroundStyle(Carnet.ground.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(InkButtonStyle())
+        .help("Plein écran, seulement Moodle, Claude, GoodNotes… sur le Mac et l'iPhone")
+    }
+}
+
 /// Dans la barre d'outils : le chrono qui tourne (un clic ouvre la page
-/// Chrono), ou « Démarrer ».
+/// Chrono), ou « Chrono ».
 private struct ToolbarTimer: View {
     @Environment(MacTimer.self) private var timer
     @Query(sort: \Course.code) private var courses: [Course]
@@ -184,7 +221,7 @@ private struct ToolbarTimer: View {
 
     var body: some View {
         let course = courses.first { $0.id == timer.courseID }
-        let tint = timer.phase == .onBreak ? MacStyle.breakTint : MacTargets.tint(course)
+        let tint = MacTargets.tint(course)
         if timer.phase == .idle {
             Button { open() } label: {
                 Label("Chrono", systemImage: "timer")
@@ -194,14 +231,12 @@ private struct ToolbarTimer: View {
             HStack(spacing: 6) {
                 Button { open() } label: {
                     HStack(spacing: 6) {
-                        TimerRing(progress: timer.ringProgress, tint: tint, lineWidth: 2.5, draining: timer.phase == .onBreak)
+                        LiveTimerRing(tint: tint, lineWidth: 2.5)
                             .frame(width: 16, height: 16)
-                        Text(timer.displayTime.clockLabel)
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(timer.phase == .paused ? .secondary : .primary)
+                        TimerClockText(font: .body.monospacedDigit())
                         Text(course?.displayCode ?? "Libre")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Carnet.inkSecondary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -224,26 +259,28 @@ private struct CourseSidebarRow: View {
     var body: some View {
         let progress = ProgressEngine.progress(for: course)
         let late = ProgressEngine.lateCount(for: course)
+        let tint = Carnet.tint(course.colorHex)
         HStack(spacing: 8) {
-            ProgressRingMini(value: progress.completion, tint: Color(hex: course.colorHex))
+            ProgressRingMini(value: progress.completion, tint: tint)
             VStack(alignment: .leading, spacing: 1) {
                 Text(course.displayCode).font(.callout.weight(.semibold))
                 Text(course.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
             if isTimed {
+                // Statique : un symbole qui pulse en continu redessine la barre
+                // latérale à chaque image, pendant toute la session.
                 Image(systemName: "timer")
                     .font(.caption)
-                    .foregroundStyle(Color(hex: course.colorHex))
-                    .symbolEffect(.pulse)
+                    .foregroundStyle(tint)
                     .help("Chronométré en ce moment")
             }
             if late > 0 {
                 Text("\(late)")
                     .font(.caption2.weight(.bold).monospacedDigit())
                     .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(.red.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.red)
+                    .background(Carnet.wrong.opacity(0.14), in: Capsule())
+                    .foregroundStyle(Carnet.wrong)
                     .help("\(late) en retard")
             }
         }
@@ -254,11 +291,12 @@ private struct CourseSidebarRow: View {
 struct ProgressRingMini: View {
     let value: Double
     let tint: Color
+    var lineWidth: CGFloat = 3
 
     var body: some View {
         ZStack {
-            Circle().stroke(tint.opacity(0.2), lineWidth: 3)
-            Circle().trim(from: 0, to: value).stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            Circle().stroke(Carnet.rule, lineWidth: lineWidth)
+            Circle().trim(from: 0, to: value).stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         .frame(width: 18, height: 18)
@@ -271,10 +309,10 @@ struct SyncFooter: View {
     @Environment(MacStore.self) private var store
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { context in
+        TimelineView(.periodic(from: .now, by: 60)) { context in
             Label(Self.describe(store.syncState, synced: store.isCloudSynced, now: context.date), systemImage: icon)
                 .font(.caption)
-                .foregroundStyle(isFailure ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .foregroundStyle(isFailure ? AnyShapeStyle(Carnet.wrong) : AnyShapeStyle(.secondary))
                 .lineLimit(2)
         }
     }
@@ -308,4 +346,3 @@ struct SyncFooter: View {
         }
     }
 }
-

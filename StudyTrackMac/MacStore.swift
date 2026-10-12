@@ -33,6 +33,15 @@ final class MacStore {
 
     init() {
         let schema = StudyTrackSchema.current
+        #if DEBUG
+        // `-memoryStore` : une base vide en mémoire, sans iCloud (essais,
+        // captures à côté de l'app réelle, sans toucher à ses données).
+        if CommandLine.arguments.contains("-memoryStore") {
+            container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+            isCloudSynced = false
+            return
+        }
+        #endif
         let cloud = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
                                        cloudKitDatabase: .private(Self.cloudContainerID))
         if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,

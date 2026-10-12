@@ -291,6 +291,8 @@ struct FocusTimerPanel: View {
                     .transition(.opacity)
                 }
             }
+
+            StudyModeEntry(courseID: courseID, taskType: taskType, targetID: targetID)
         }
     }
 

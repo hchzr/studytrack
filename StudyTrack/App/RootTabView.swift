@@ -82,6 +82,17 @@ struct RootTabView: View {
             #endif
         }
         .sheet(item: $debugBrowse) { link in InAppBrowser(link: link) }
+        // Le mode étude, lancé ici ou sur le Mac : l'écran plein s'ouvre,
+        // et se ferme avec la session.
+        .fullScreenCover(isPresented: $router.showingStudyMode) {
+            NavigationStack { StudyModeScreen() }
+        }
+        .onChange(of: app.focus.isStudying) { _, studying in
+            if studying { app.router.showingStudyMode = true }
+        }
+        .onChange(of: app.focus.hasSession) { _, open in
+            if !open { app.router.showingStudyMode = false }
+        }
         .onOpenURL { url in
             handle(url)
         }

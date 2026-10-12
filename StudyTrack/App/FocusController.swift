@@ -31,6 +31,10 @@ final class FocusController {
 
     @ObservationIgnored weak var app: AppContainer?
     @ObservationIgnored private var ticker: Task<Void, Never>?
+    /// Réveil à la fin du mode étude (app ouverte) : le bouclier se lève à l'heure.
+    @ObservationIgnored private var studyEnd: Task<Void, Never>?
+    /// Change à la fin du mode étude : l'écran plein se relit.
+    private(set) var studyRevision = 0
     /// Vrai pendant qu'on applique un état venu d'un autre appareil : on ne le
     /// republie pas (sinon les appareils se le renverraient sans fin).
     @ObservationIgnored private var applyingRemote = false
@@ -79,6 +83,7 @@ final class FocusController {
     func reload() {
         guard var saved = FocusTimerStore.load() else {
             state = nil
+            syncStudyLock()
             updateTicker()
             return
         }
@@ -101,6 +106,7 @@ final class FocusController {
                 try? context.save()
             }
             StudyActivityController.end(session: saved.sessionStartedAt)
+            syncStudyLock()
             updateTicker()
             return
         }
@@ -110,6 +116,7 @@ final class FocusController {
             lastEvent = events.last
             commit(presence: false, publish: false)
         }
+        syncStudyLock()
         updateTicker()
     }
 
@@ -342,6 +349,63 @@ final class FocusController {
         }
     }
 
+    // MARK: Mode étude
+
+    /// Le mode étude est en vigueur (relu à son échéance, `studyRevision`).
+    var isStudying: Bool {
+        _ = studyRevision
+        return StudyMode.isActive(state)
+    }
+
+    var studyIsOver: Bool {
+        _ = studyRevision
+        return StudyMode.isOver(state)
+    }
+
+    /// Entre en mode étude : démarre la session si besoin. Publié comme un
+    /// geste : le Mac ouvre son écran plein, et se ferme au reste lui aussi.
+    func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil) {
+        if !hasSession {
+            start(courseID: courseID, taskType: taskType, targetID: targetID)
+        }
+        guard var current = state else { return }
+        StudyMode.enter(&current, minutes: minutes)
+        if !current.isRunning, current.currentBreak == nil { current.start() }
+        state = current
+        commit(presence: false)
+    }
+
+    func extendStudy(minutes: Int) {
+        guard var current = state else { return }
+        if current.studySince == nil || StudyMode.isOver(current) { current.studySince = Date() }
+        current.studyUntil = StudyMode.extended(current.studyUntil, by: minutes)
+        if !current.isRunning, current.currentBreak == nil { current.start() }
+        state = current
+        commit(presence: false)
+    }
+
+    func leaveStudy() {
+        guard var current = state, current.studyUntil != nil else { return }
+        StudyMode.leave(&current)
+        state = current
+        commit(presence: false)
+    }
+
+    /// Bouclier du Temps d'écran et réveil de fin, d'après l'état.
+    private func syncStudyLock() {
+        StudyLock.shared.sync(state)
+        studyEnd?.cancel()
+        studyEnd = nil
+        studyRevision &+= 1
+        guard let until = state?.studyUntil, until > Date() else { return }
+        studyEnd = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(until.timeIntervalSinceNow + 0.2))
+            guard !Task.isCancelled, let self else { return }
+            StudyLock.shared.sync(self.state)
+            self.studyRevision &+= 1
+        }
+    }
+
     // MARK: Entre appareils
 
     /// Reprend l'état publié par un autre appareil (le Mac a démarré, mis en
@@ -398,6 +462,7 @@ final class FocusController {
         lastEvent = nil
         FocusTimerStore.save(nil)
         StudyActivityController.end(session: ended)
+        syncStudyLock()
         app?.notifications.cancelPomodoro()
         if let app {
             app.presence.stop(context: ModelContext(app.modelContainer), social: app.social)
@@ -424,6 +489,7 @@ final class FocusController {
         // qui se réveille rattrape les blocs de SA dernière version) et
         // écraser le « play » donné entre-temps sur le Mac.
         if publish, !applyingRemote, let state { CloudRelay.publishTimer(state, context: relayContext) }
+        syncStudyLock()
         guard let app, let state else { updateTicker(); return }
         if activity {
             StudyActivityController.publish(state, container: app)

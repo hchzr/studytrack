@@ -199,6 +199,12 @@ struct ProfileView: View {
                             value: app.settings.offlineEnabled ? OfflinePlan.label(bytes: OfflineLibrary.shared.usedBytes) : "désactivé")
             }
             NavigationLink {
+                StudyModeSettingsView()
+            } label: {
+                settingsRow("Mode étude", icon: "moon.stars",
+                            value: StudyLock.shared.isAuthorized ? "\(StudyLock.shared.allowedAppCount) app\(StudyLock.shared.allowedAppCount > 1 ? "s" : "") permise\(StudyLock.shared.allowedAppCount > 1 ? "s" : "")" : "à configurer")
+            }
+            NavigationLink {
                 subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
             } label: {
                 settingsRow("Chrono et Pomodoro", icon: "timer",

@@ -4,7 +4,8 @@ import SwiftData
 
 /// Le chrono flottant : une petite pilule au-dessus de toutes les fenêtres,
 /// sur tous les bureaux, pendant une session. On la déplace où on veut (la
-/// place est retenue) ; au survol, pause et terminer.
+/// place est retenue) ; au survol, pause et terminer. En mode étude, elle suit
+/// dans GoodNotes ou Claude : le temps reste sous les yeux.
 @MainActor
 final class MiniTimerPanel {
     static let shared = MiniTimerPanel()
@@ -30,7 +31,8 @@ final class MiniTimerPanel {
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 236, height: 52),
                                 styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
                                 backing: .buffered, defer: false)
-            panel.level = .floating
+            // Au-dessus du mode étude aussi (niveau `.statusBar` pour le voile).
+            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             panel.isMovableByWindowBackground = true
             panel.backgroundColor = .clear
@@ -56,7 +58,7 @@ final class MiniTimerPanel {
     }
 }
 
-/// La pilule : la pastille du cours, le temps, ce qu'on fait ; les gestes au survol.
+/// La pilule : l'anneau du cours, le temps, ce qu'on fait ; les gestes au survol.
 struct MiniTimerView: View {
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
@@ -64,28 +66,29 @@ struct MiniTimerView: View {
     @State private var hovering = false
 
     private var course: Course? { courses.first { $0.id == timer.courseID } }
-    private var tint: Color { timer.phase == .onBreak ? MacStyle.breakTint : MacTargets.tint(course) }
+    private var tint: Color { MacTargets.tint(course) }
 
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
-                TimerRing(progress: timer.ringProgress, tint: tint, lineWidth: 3.5, draining: timer.phase == .onBreak)
+                LiveTimerRing(tint: tint, lineWidth: 3.5)
                 if timer.phase == .paused {
                     Image(systemName: "pause.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(tint)
                 } else if timer.phase == .onBreak {
-                    Image(systemName: "cup.and.saucer.fill").font(.system(size: 9)).foregroundStyle(tint)
+                    Image(systemName: "cup.and.saucer.fill").font(.system(size: 9)).foregroundStyle(MacStyle.breakTint)
+                } else if timer.isStudying {
+                    Image(systemName: "moon.stars.fill").font(.system(size: 9)).foregroundStyle(tint)
                 }
             }
             .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 0) {
-                Text(timer.displayTime.clockLabel)
-                    .font(MacStyle.clock(19, weight: .regular))
-                    .contentTransition(.numericText())
-                    .foregroundStyle(timer.phase == .paused ? .secondary : .primary)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                TimerClockText(font: MacStyle.clock(19))
+                TimerTimeline(interval: 60) { date in
+                    Text(subtitle(at: date))
+                        .font(.caption2)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
             if hovering {
@@ -94,24 +97,33 @@ struct MiniTimerView: View {
                         Image(systemName: timer.phase == .running ? "pause.fill" : "play.fill")
                     }
                     .help(timer.phase == .running ? "Pause" : "Reprendre")
-                    Button { timer.finish() } label: { Image(systemName: "checkmark") }
-                        .help("Terminer et enregistrer")
+                    if timer.isStudying {
+                        Button { StudyModeController.shared.present() } label: { Image(systemName: "moon.stars") }
+                            .help("Revenir au mode étude")
+                    } else {
+                        Button { timer.finish() } label: { Image(systemName: "checkmark") }
+                            .help("Terminer et enregistrer")
+                    }
                 }
                 .buttonStyle(RoundButtonStyle(size: 26))
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .transition(.opacity)
             }
         }
         .padding(.leading, 11)
         .padding(.trailing, 12)
         .frame(width: 236, height: 52)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+        .background(Carnet.sheet, in: Capsule())
+        .overlay(Capsule().strokeBorder(Carnet.rule))
         .contentShape(Capsule())
         .onHover { value in withAnimation(.easeOut(duration: 0.15)) { hovering = value } }
         .onTapGesture(count: 2) { primary() }
         .contextMenu {
             Button(timer.phase == .running ? "Pause" : "Reprendre") { primary() }
-            Button("Terminer et enregistrer") { timer.finish() }
+            if timer.isStudying {
+                Button("Revenir au mode étude") { StudyModeController.shared.present() }
+            } else {
+                Button("Terminer et enregistrer") { timer.finish() }
+            }
             Divider()
             Button("Masquer le chrono flottant") {
                 settings.floatingTimer = false
@@ -120,9 +132,12 @@ struct MiniTimerView: View {
         }
     }
 
-    private var subtitle: String {
+    private func subtitle(at date: Date) -> String {
         let what = MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID)
-        if let status = timer.statusLabel { return "\(status) · \(what)" }
+        if timer.isStudying {
+            return "Mode étude · reste \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true))"
+        }
+        if let status = timer.statusLabel(at: date) { return "\(status) · \(what)" }
         guard let course else { return what }
         return "\(course.displayCode) · \(what)"
     }

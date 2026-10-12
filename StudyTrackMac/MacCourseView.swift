@@ -23,7 +23,7 @@ struct MacCourseView: View {
     @Environment(MacTimer.self) private var timer
     @Environment(\.modelContext) private var context
 
-    private var tint: Color { Color(hex: course.colorHex) }
+    private var tint: Color { Carnet.tint(course.colorHex) }
     private var weeks: [Int] {
         let all = Set(course.series.map(\.plannedWeek) + course.theoryItems.map(\.plannedWeek)).filter { $0 > 0 }
         return all.sorted()
@@ -39,6 +39,8 @@ struct MacCourseView: View {
                 }
             }
             .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .background(Carnet.ground)
             // Au clavier : Espace coche, ↩ chronomètre ce qui est choisi.
             .onKeyPress(.space) {
                 guard let id = selection else { return .ignored }
@@ -107,15 +109,17 @@ struct MacCourseView: View {
         let progress = ProgressEngine.progress(for: course)
         let late = ProgressEngine.lateCount(for: course)
         return VStack(alignment: .leading, spacing: 12) {
+            CourseTag(code: course.displayCode, tint: tint)
             Text(course.name)
-                .font(.system(size: 26, weight: .regular, design: .serif))
+                .font(Carnet.serif(30))
+                .foregroundStyle(Carnet.ink)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .center, spacing: 22) {
                 Text([course.credits > 0 ? "\(course.credits.formatted()) ECTS" : nil,
                       course.currentWeek > 0 ? "semaine \(course.currentWeek)" : nil,
                       late > 0 ? "\(late) en retard" : "à jour"].compactMap { $0 }.joined(separator: " · "))
-                    .foregroundStyle(late > 0 ? .red : .secondary)
+                    .foregroundStyle(late > 0 ? Carnet.wrong : Carnet.inkSecondary)
                     .lineLimit(1)
                 Picker("Semaine", selection: $week) {
                     Text("Tout le semestre").tag(0)
@@ -131,8 +135,9 @@ struct MacCourseView: View {
                 stat("Théorie", progress.watchedCount, progress.videoCount)
                 stat("Exercices", progress.doneCount, progress.exerciseCount)
                 ZStack {
-                    ProgressRingMini(value: progress.completion, tint: tint).scaleEffect(2.2)
-                    Text("\(Int((progress.completion * 100).rounded()))").font(.callout.weight(.semibold)).monospacedDigit()
+                    TimerRing(progress: progress.completion, tint: tint, lineWidth: 4)
+                    Text("\(Int((progress.completion * 100).rounded()))").font(Carnet.serif(.callout, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(Carnet.ink)
                 }
                 .frame(width: 44, height: 44)
                 .help("\(Int((progress.completion * 100).rounded())) % du cours fait")
@@ -144,8 +149,8 @@ struct MacCourseView: View {
 
     private func stat(_ title: String, _ done: Int, _ total: Int) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text("\(done)/\(total)").font(.title3.monospacedDigit())
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text("\(done)/\(total)").font(Carnet.serif(.title3).monospacedDigit()).foregroundStyle(Carnet.ink)
+            Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
         }
     }
 
@@ -217,12 +222,12 @@ struct MacCourseView: View {
                 }
             } header: {
                 HStack {
-                    Text(key > 0 ? "Semaine \(key)" : "Documents").font(.system(.title3, design: .serif))
+                    Text(key > 0 ? "Semaine \(key)" : "Documents").font(Carnet.serif(.title3))
                     if key == course.currentWeek {
                         Text("en cours").font(.caption.weight(.semibold)).foregroundStyle(tint)
                     }
                 }
-                .foregroundStyle(.primary)
+                .foregroundStyle(Carnet.ink)
                 .padding(.top, 8)
             }
         }
@@ -273,14 +278,14 @@ private struct SeriesHeader: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title)
-                .font(.system(.title3, design: .serif))
-                .foregroundStyle(.primary)
+                .font(Carnet.serif(.title3))
+                .foregroundStyle(Carnet.ink)
             if series.plannedWeek > 0 {
                 Text("S\(series.plannedWeek)").foregroundStyle(.secondary)
             }
             if let due = series.dueDate {
                 Label("à rendre le \(DateUtils.shortDay.string(from: due))", systemImage: "tray.and.arrow.up")
-                    .foregroundStyle(due < Date() ? .red : .orange)
+                    .foregroundStyle(due < Date() ? Carnet.wrong : Carnet.review)
             }
             Spacer()
             ProgressView(value: Double(series.doneCount), total: Double(max(series.requiredExercises.count, 1)))
@@ -329,17 +334,14 @@ private struct ExerciseMacRow: View {
                 Text("bonus").font(.caption).foregroundStyle(.secondary)
             }
             if exercise.redoRequired {
-                Text("à refaire").font(.caption.weight(.semibold)).foregroundStyle(.red)
+                Text("à refaire").font(.caption.weight(.semibold)).foregroundStyle(Carnet.wrong)
             }
             Spacer()
             if isTimed {
                 Image(systemName: "timer").foregroundStyle(.secondary).help("Chronométré en ce moment")
             }
             if let correctness = exercise.correctness {
-                Label(correctness.shortLabel, systemImage: "circle.fill")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption)
-                    .foregroundStyle(correctness.color)
+                VerdictTag(correctness: correctness)
             } else if exercise.isDone {
                 Text("à corriger").font(.caption).foregroundStyle(.secondary)
             }
@@ -392,7 +394,7 @@ private struct ExerciseInspector: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(exercise.displayNumber).font(.caption.weight(.semibold)).foregroundStyle(tint)
                     Text(exercise.title.isEmpty ? exercise.displayNumber : exercise.title)
-                        .font(.system(.title3, design: .serif))
+                        .font(Carnet.serif(.title3))
                     if !exercise.statement.isEmpty {
                         Text(exercise.statement).foregroundStyle(.secondary).textSelection(.enabled)
                     }
@@ -458,6 +460,8 @@ private struct ExerciseInspector: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Carnet.ground)
     }
 }
 
@@ -472,7 +476,7 @@ private struct TheoryInspector: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text([item.kind.label, item.number].filter { !$0.isEmpty }.joined(separator: " "))
                         .font(.caption.weight(.semibold)).foregroundStyle(tint)
-                    Text(item.title.isEmpty ? item.kind.label : item.title).font(.system(.title3, design: .serif))
+                    Text(item.title.isEmpty ? item.kind.label : item.title).font(Carnet.serif(.title3))
                     if item.plannedWeek > 0 { Text("Semaine \(item.plannedWeek)").foregroundStyle(.secondary) }
                 }
                 Toggle("Vu", isOn: Binding(get: { item.isWatched },
@@ -496,5 +500,7 @@ private struct TheoryInspector: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Carnet.ground)
     }
 }

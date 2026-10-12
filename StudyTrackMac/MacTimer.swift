@@ -23,8 +23,16 @@ final class MacTimer {
     var taskType: TaskType = .exercise
     var targetID: UUID?
     var pomodoro = false
-    /// Avance d'une seconde pendant qu'il se passe quelque chose.
-    private(set) var now = Date()
+    /// Change à chaque frontière du cycle (fin de bloc, de pause, du mode
+    /// étude) : ce qui dépend de l'heure **et** de l'état se relit alors.
+    ///
+    /// Le chrono avançait un `now` observé chaque seconde : toute vue qui le
+    /// lisait — la fenêtre entière, avec ses requêtes et ses calculs de
+    /// planning — se recalculait 60 fois par minute, même cachée. C'est ce qui
+    /// vidait la batterie. Désormais, seules les petites vues qui affichent des
+    /// secondes battent (`TimelineView`, voir `MacClock.swift`) ; le modèle,
+    /// lui, ne se réveille qu'aux instants où quelque chose change vraiment.
+    private(set) var revision = 0
     /// La session qu'on vient de terminer ici : le récapitulatif propose de
     /// cocher ce qui a été fait, et d'annuler un « Terminer » de trop.
     private(set) var recap: Recap?
@@ -51,7 +59,7 @@ final class MacTimer {
     /// Appelé à chaque changement d'état (widgets du bureau).
     @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored weak var container: ModelContainer?
-    @ObservationIgnored private var ticker: Timer?
+    @ObservationIgnored private var boundary: Timer?
     @ObservationIgnored private var applyingRemote = false
     @ObservationIgnored private var observer: NSObjectProtocol?
     @ObservationIgnored private var baseObserver: NSObjectProtocol?
@@ -74,7 +82,7 @@ final class MacTimer {
             FocusTimerStore.save(nil)
         }
         syncSelection()
-        tick()
+        scheduleBoundary()
         observer = NotificationCenter.default.addObserver(forName: CloudRelay.changed, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyRemote() }
         }
@@ -93,57 +101,107 @@ final class MacTimer {
         return state.isRunning ? .running : .paused
     }
 
-    var elapsed: TimeInterval { state?.elapsed(at: now) ?? 0 }
+    func elapsed(at now: Date = Date()) -> TimeInterval { state?.elapsed(at: now) ?? 0 }
 
     /// La phase fine (bloc prêt après une pause, etc.), déduite de l'état.
-    var focusPhase: FocusPhase { state?.phase(settings: settings.pomodoro, at: now) ?? .idle }
+    func focusPhase(at now: Date = Date()) -> FocusPhase { state?.phase(settings: settings.pomodoro, at: now) ?? .idle }
 
-    var pomodoroStatus: PomodoroStatus? {
+    func pomodoroStatus(at now: Date = Date()) -> PomodoroStatus? {
         guard let state, state.pomodoro else { return nil }
-        return PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes)
+        return PomodoroEngine.status(elapsed: elapsed(at: now), focusMinutes: settings.focusMinutes)
     }
 
     /// Le temps passé sur la cible actuelle (depuis « Passer à… »).
-    var targetElapsed: TimeInterval { state?.currentTargetElapsed(at: now) ?? 0 }
+    func targetElapsed(at now: Date = Date()) -> TimeInterval { state?.currentTargetElapsed(at: now) ?? 0 }
 
     /// Ce que dessine l'anneau : le bloc ou la pause qui s'écoule ; l'heure
     /// entamée en session libre.
-    var ringProgress: Double {
+    func ringProgress(at now: Date = Date()) -> Double {
         guard let state else { return 0 }
         if let pause = state.currentBreak {
             let total = pause.endsAt.timeIntervalSince(pause.startedAt)
             return total > 0 ? min(1, max(0, 1 - pause.endsAt.timeIntervalSince(now) / total)) : 0
         }
-        if case .readyForBlock = focusPhase { return 1 }
+        if case .readyForBlock = focusPhase(at: now) { return 1 }
         let block = state.pomodoro ? settings.pomodoro.blockDuration : 3600
-        return elapsed.truncatingRemainder(dividingBy: block) / block
+        return elapsed(at: now).truncatingRemainder(dividingBy: block) / block
     }
 
     /// Ce qui s'affiche en grand : le temps compté, ce qui reste du bloc en
     /// Pomodoro, ou ce qui reste de la pause.
-    var displayTime: TimeInterval {
+    func displayTime(at now: Date = Date()) -> TimeInterval {
         guard let state else { return 0 }
         // Comptes à rebours arrondis au-dessus, comme sur l'iPhone (« 25:00 »
         // au départ, « 00:01 » à la dernière seconde) : sinon une seconde d'écart.
         if let pause = state.currentBreak { return max(0, pause.endsAt.timeIntervalSince(now)).rounded(.up) }
         if state.pomodoro {
             let block = settings.pomodoro.blockDuration
-            let into = elapsed.truncatingRemainder(dividingBy: block)
+            let into = elapsed(at: now).truncatingRemainder(dividingBy: block)
             return max(0, block - into).rounded(.up)
         }
-        return elapsed
+        return elapsed(at: now)
     }
 
-    var statusLabel: String? {
+    /// Le chrono compte-t-il à rebours (pause, Pomodoro) ?
+    var countsDown: Bool { phase == .onBreak || state?.pomodoro == true }
+
+    func statusLabel(at now: Date = Date()) -> String? {
         guard let state else { return nil }
         if let pause = state.currentBreak { return pause.kind.label }
-        if case .readyForBlock(let block) = focusPhase { return "Bloc \(block) prêt" }
+        if case .readyForBlock(let block) = focusPhase(at: now) { return "Bloc \(block) prêt" }
         if !state.isRunning { return "En pause" }
         if state.pomodoro {
-            let block = Int(elapsed / settings.pomodoro.blockDuration) + 1
+            let block = Int(elapsed(at: now) / settings.pomodoro.blockDuration) + 1
             return "Bloc \(block)"
         }
         return nil
+    }
+
+    // MARK: Mode étude
+
+    /// Le mode étude est en vigueur (relu à chaque frontière, `revision`).
+    var isStudying: Bool {
+        _ = revision
+        return StudyMode.isActive(state)
+    }
+
+    /// Le mode étude est arrivé à son terme, la session tourne encore.
+    var studyIsOver: Bool {
+        _ = revision
+        return StudyMode.isOver(state)
+    }
+
+    /// Entre en mode étude pour `minutes` : démarre le chrono s'il dort, sinon
+    /// verrouille la session en cours. Publié comme un geste : l'iPhone suit.
+    func enterStudy(minutes: Int, courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "") {
+        if state == nil || phase == .idle {
+            start(courseID: courseID, taskType: taskType, targetID: targetID, label: label)
+        } else if courseID != nil || targetID != nil {
+            retarget(courseID: courseID ?? self.courseID, taskType: taskType ?? self.taskType, targetID: targetID)
+        }
+        guard var current = state else { return }
+        StudyMode.enter(&current, minutes: minutes)
+        if !current.isRunning, current.currentBreak == nil { current.start() }
+        state = current
+        commit()
+    }
+
+    func extendStudy(minutes: Int) {
+        guard var current = state else { return }
+        // Prolonger après l'échéance repart d'un anneau vide.
+        if current.studySince == nil || StudyMode.isOver(current) { current.studySince = Date() }
+        current.studyUntil = StudyMode.extended(current.studyUntil, by: minutes)
+        if !current.isRunning, current.currentBreak == nil { current.start() }
+        state = current
+        commit()
+    }
+
+    /// Sortir du mode étude sans terminer la session.
+    func leaveStudy() {
+        guard var current = state, current.studyUntil != nil else { return }
+        StudyMode.leave(&current)
+        state = current
+        commit()
     }
 
     // MARK: Gestes
@@ -276,14 +334,14 @@ final class MacTimer {
         state = nil
         if !isolated { FocusTimerStore.save(nil) }
         cancelNotifications()
-        tick()
+        scheduleBoundary()
         onChange?()
     }
 
     /// `publish` : seuls les gestes partent aux autres appareils ; la fin d'un
     /// bloc ou d'une pause se déduit des dates, pareil partout (voir l'iPhone).
     private func commit(publish: Bool = true) {
-        if isolated { now = Date(); tick(); return }
+        if isolated { scheduleBoundary(); onChange?(); return }
         FocusTimerStore.save(state)
         if publish, !applyingRemote, let state {
             CloudRelay.publishTimer(state, context: relayContext)
@@ -291,8 +349,7 @@ final class MacTimer {
         }
         syncSelection()
         scheduleNotifications()
-        now = Date()
-        tick()
+        scheduleBoundary()
         onChange?()
     }
 
@@ -340,34 +397,50 @@ final class MacTimer {
         }
     }
 
-    // MARK: Battement
+    // MARK: Frontières
 
-    /// Une seconde, seulement quand il y a quelque chose qui avance.
-    private func tick() {
-        ticker?.invalidate()
-        ticker = nil
-        guard let state, state.isRunning || state.currentBreak != nil else { return }
-        // Sur les frontières de seconde de la session (`tickAnchor`), comme
-        // l'iPhone : les deux affichages changent ensemble.
-        let anchor = state.tickAnchor
-        let phase = Date().timeIntervalSince(anchor).truncatingRemainder(dividingBy: 1)
-        let first = Date().addingTimeInterval(phase >= 0 ? 1 - phase : -phase)
-        let timer = Timer(fire: first, interval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.beat() }
-        }
-        timer.tolerance = 0.01
-        RunLoop.main.add(timer, forMode: .common)
-        ticker = timer
+    /// La prochaine date où l'état change de lui-même : fin du bloc, de la
+    /// pause, du mode étude. Un seul réveil, à cet instant — pas un battement
+    /// par seconde.
+    private func nextBoundary(after now: Date = Date()) -> Date? {
+        guard let state else { return nil }
+        var dates: [Date] = []
+        if let pause = state.currentBreak { dates.append(pause.endsAt) }
+        if let end = state.blockEndDate(settings: settings.pomodoro) { dates.append(end) }
+        if let until = state.studyUntil { dates.append(until) }
+        return dates.filter { $0 > now }.min()
     }
 
-    private func beat() {
-        now = Date()
+    private func scheduleBoundary() {
+        boundary?.invalidate()
+        boundary = nil
+        revision &+= 1
+        guard let date = nextBoundary() else { return }
+        let timer = Timer(fire: date.addingTimeInterval(0.05), interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reachBoundary() }
+        }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        boundary = timer
+    }
+
+    private func reachBoundary() {
         guard var current = state else { return }
+        let now = Date()
+        let studyEnded = current.studyUntil.map { abs($0.timeIntervalSince(now)) < 1 } ?? false
         let events = current.advance(settings: settings.pomodoro, to: now)
-        guard !events.isEmpty else { return }
-        state = current
-        commit(publish: false)
-        if settings.sounds, let last = events.last {
+        if events.isEmpty {
+            // Fin du mode étude seulement : rien à publier, l'heure suffit.
+            scheduleBoundary()
+            onChange?()
+        } else {
+            state = current
+            commit(publish: false)
+        }
+        guard settings.sounds else { return }
+        if studyEnded {
+            NSSound(named: "Funk")?.play()
+        } else if let last = events.last {
             switch last {
             case .blockEnded: NSSound(named: "Glass")?.play()
             case .breakEnded: NSSound(named: "Hero")?.play()
@@ -381,6 +454,14 @@ final class MacTimer {
         cancelNotifications()
         guard let state else { return }
         let center = UNUserNotificationCenter.current()
+        if let until = state.studyUntil, until.timeIntervalSinceNow > 1 {
+            let content = UNMutableNotificationContent()
+            content.title = "Mode étude terminé"
+            content.body = "Tout est rouvert. Termine la session pour l'enregistrer, ou prolonge."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: "mac.study", content: content,
+                                             trigger: UNTimeIntervalNotificationTrigger(timeInterval: until.timeIntervalSinceNow, repeats: false)))
+        }
         if let pause = state.currentBreak {
             let content = UNMutableNotificationContent()
             content.title = "Fin de la pause"
@@ -405,7 +486,7 @@ final class MacTimer {
     }
 
     private func cancelNotifications() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["mac.break", "mac.block"])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["mac.break", "mac.block", "mac.study"])
     }
 }
 

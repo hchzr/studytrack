@@ -67,6 +67,8 @@ final class AppRouter {
 
     /// L'écran Focus (chrono, saisie, journal), en feuille au-dessus de l'onglet.
     var showingFocus = false
+    /// L'écran plein du mode étude (lancé ici ou adopté du Mac).
+    var showingStudyMode = false
     /// L'agenda complet, en feuille (depuis l'horaire du jour, une évaluation…).
     var showingAgenda = false
     /// « Moi » (bilan de la semaine, réglages) : une feuille ouverte depuis

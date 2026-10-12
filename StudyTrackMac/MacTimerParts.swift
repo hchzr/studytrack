@@ -70,12 +70,12 @@ struct TimerSetup: View {
         VStack(alignment: .leading, spacing: compact ? 10 : 14) {
             // Les cours en pastilles : un clic choisit.
             FlowChips(spacing: 6) {
-                CourseChip(title: "Libre", color: .secondary, selected: timer.courseID == nil) {
+                CourseChip(title: "Libre", color: Carnet.inkSecondary, selected: timer.courseID == nil) {
                     timer.courseID = nil
                     timer.targetID = nil
                 }
                 ForEach(courses) { item in
-                    CourseChip(title: item.displayCode, color: Color(hex: item.colorHex), selected: timer.courseID == item.id) {
+                    CourseChip(title: item.displayCode, color: Carnet.tint(item.colorHex), selected: timer.courseID == item.id) {
                         timer.courseID = item.id
                         timer.targetID = nil
                     }
@@ -160,13 +160,14 @@ struct CourseChip: View {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
                 Text(title).font(.callout.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(Carnet.ink)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background {
-                Capsule().fill(selected ? AnyShapeStyle(color.opacity(0.18)) : AnyShapeStyle(Color.primary.opacity(hovering ? 0.08 : 0.04)))
+                Capsule().fill(selected ? color.opacity(0.14) : (hovering ? Carnet.rule : Carnet.sheetRaised))
             }
-            .overlay { Capsule().strokeBorder(selected ? color.opacity(0.7) : .clear, lineWidth: 1) }
+            .overlay { Capsule().strokeBorder(selected ? color : .clear, lineWidth: 1) }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -222,11 +223,11 @@ struct UpNextList: View {
                         HStack(spacing: 8) {
                             Image(systemName: item.type.icon)
                                 .font(.caption)
-                                .foregroundStyle(Color(hex: course.colorHex))
+                                .foregroundStyle(Carnet.tint(course.colorHex))
                                 .frame(width: 16)
-                            Text(item.title).lineLimit(1)
+                            Text(item.title).lineLimit(1).foregroundStyle(Carnet.ink)
                             Spacer()
-                            Text("Passer").font(.caption).foregroundStyle(.secondary)
+                            Text("Passer").font(.caption).foregroundStyle(Carnet.inkSecondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -274,13 +275,15 @@ struct RecapCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: recap.discarded ? "xmark.circle" : "checkmark.circle.fill")
-                    .foregroundStyle(recap.discarded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.green))
+                    .foregroundStyle(recap.discarded ? Carnet.inkSecondary : Carnet.correct)
                 Text(recap.discarded ? "Moins d'une minute : rien d'enregistré" : "Session enregistrée")
-                    .font(.headline)
+                    .font(Carnet.serif(.headline))
+                    .foregroundStyle(Carnet.ink)
                 Spacer()
                 if !recap.discarded {
                     Text(DateUtils.durationLabel(seconds: recap.totalSeconds))
-                        .font(.headline.monospacedDigit())
+                        .font(Carnet.serif(.headline).monospacedDigit())
+                        .foregroundStyle(Carnet.ink)
                 }
             }
             ForEach(recap.parts) { part in
@@ -289,11 +292,12 @@ struct RecapCard: View {
             HStack {
                 if !recap.discarded {
                     Button("Annuler l'enregistrement") { timer.undoRecap() }
-                        .buttonStyle(.link)
-                        .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Carnet.inkSecondary)
                 }
                 Spacer()
                 Button("OK") { timer.dismissRecap() }
+                    .buttonStyle(.ink)
             }
             .font(.callout)
         }
@@ -310,12 +314,12 @@ private struct RecapRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 3, height: 16)
-                Text(course?.displayCode ?? "Libre").font(.callout.weight(.semibold))
+                Text(course?.displayCode ?? "Libre").font(.callout.weight(.semibold)).foregroundStyle(Carnet.ink)
                 Text(MacTargets.headline(course: course, taskType: part.taskType, targetID: part.targetID))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Carnet.inkSecondary)
                 Spacer()
-                Text(DateUtils.durationLabel(seconds: part.seconds)).monospacedDigit().foregroundStyle(.secondary)
+                Text(DateUtils.durationLabel(seconds: part.seconds)).monospacedDigit().foregroundStyle(Carnet.inkSecondary)
             }
             .font(.callout)
             if let exercise = course?.allExercises.first(where: { $0.id == part.targetID }) {
@@ -349,8 +353,8 @@ struct ExerciseQuickMark: View {
                         .font(.caption.weight(.medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(selected ? AnyShapeStyle(result.color) : AnyShapeStyle(result.color.opacity(0.14))))
-                        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(result.color))
+                        .background(Capsule().fill(selected ? Carnet.color(for: result) : Carnet.color(for: result).opacity(0.12)))
+                        .foregroundStyle(selected ? Carnet.ground : Carnet.color(for: result))
                 }
                 .buttonStyle(.plain)
                 .help("Corrigé : \(result.label.lowercased())")
@@ -372,17 +376,17 @@ struct GoalBar: View {
         let progress = min(1, Double(seconds) / Double(max(goal, 1)))
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Aujourd'hui").foregroundStyle(.secondary)
+                Text("Aujourd'hui").foregroundStyle(Carnet.inkSecondary)
                 Spacer()
                 Text("\(DateUtils.hoursLabel(seconds: seconds)) / \(DateUtils.hoursLabel(seconds: goal))")
                     .monospacedDigit()
-                    .foregroundStyle(progress >= 1 ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(progress >= 1 ? Carnet.correct : Carnet.inkSecondary)
             }
             .font(.caption)
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule().fill(progress >= 1 ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(tint.gradient))
+                    Capsule().fill(Carnet.rule)
+                    Capsule().fill(progress >= 1 ? Carnet.correct : tint)
                         .frame(width: max(4, proxy.size.width * progress))
                 }
             }
@@ -391,12 +395,28 @@ struct GoalBar: View {
     }
 }
 
-/// Le temps d'étude d'aujourd'hui, session en cours comprise.
+/// Le temps d'étude d'aujourd'hui, déjà enregistré (la session en cours
+/// s'ajoute à la minute, `TodayStudyText`).
 @MainActor
 enum TodayTotal {
-    static func seconds(_ sessions: [StudySession], timer: MacTimer) -> Int {
-        let saved = sessions.prefix(200).filter { Calendar.current.isDateInToday($0.startedAt) }
+    static func saved(_ sessions: [StudySession]) -> Int {
+        sessions.filter { Calendar.current.isDateInToday($0.startedAt) && $0.taskType.canonical != .lecture }
             .reduce(0) { $0 + $1.durationSeconds }
-        return saved + (timer.phase == .idle ? 0 : Int(timer.elapsed))
+    }
+
+    /// Le début du jour, pour borner les requêtes : la fenêtre ne relit plus
+    /// tout l'historique pour un total du jour.
+    static var startOfToday: Date { Calendar.current.startOfDay(for: Date()) }
+}
+
+/// L'objectif du jour, session en cours comprise, à la minute.
+struct LiveGoalBar: View {
+    let sessions: [StudySession]
+    let goal: Int
+
+    var body: some View {
+        TodayStudyText(savedSeconds: TodayTotal.saved(sessions)) { seconds in
+            AnyView(GoalBar(seconds: seconds, goal: goal))
+        }
     }
 }

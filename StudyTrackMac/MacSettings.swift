@@ -27,6 +27,30 @@ final class MacSettings {
     var sounds: Bool { didSet { defaults.set(sounds, forKey: "mac.sounds") } }
     /// L'icône reste dans le Dock fenêtre fermée (sinon : barre des menus seule).
     var keepInDock: Bool { didSet { defaults.set(keepInDock, forKey: "mac.keepInDock") } }
+    /// Les secondes dans la barre des menus. Coupé par défaut : la minute suffit
+    /// pour se situer, et l'étiquette ne se redessine alors qu'une fois par minute.
+    var menuBarSeconds: Bool { didSet { defaults.set(menuBarSeconds, forKey: "mac.menuBarSeconds") } }
+
+    // MARK: Mode étude
+
+    /// Les sites ouverts pendant le mode étude (un domaine couvre ses sous-domaines).
+    var studySites: [String] {
+        didSet {
+            defaults.set(studySites, forKey: "mac.studySites")
+            // Les mêmes sites sur l'iPhone (son filtre web les lit ici).
+            NSUbiquitousKeyValueStore.default.set(studySites, forKey: "studyMode.sites")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+    /// Les apps permises, par identifiant (GoodNotes, Claude, Aperçu…).
+    var studyApps: [String] { didSet { defaults.set(studyApps, forKey: "mac.studyApps") } }
+    /// La durée proposée au lancement, en minutes.
+    var studyMinutes: Int { didSet { defaults.set(studyMinutes, forKey: "mac.studyMinutes") } }
+    /// Sortir avant la fin demande d'appuyer longuement : une seconde de
+    /// réflexion contre le réflexe.
+    var studyHoldToLeave: Bool { didSet { defaults.set(studyHoldToLeave, forKey: "mac.studyHoldToLeave") } }
+    /// Pomodoro pendant le mode étude.
+    var studyPomodoro: Bool { didSet { defaults.set(studyPomodoro, forKey: "mac.studyPomodoro") } }
 
     init() {
         focusMinutes = defaults.object(forKey: "mac.focusMinutes") as? Int ?? 25
@@ -41,6 +65,12 @@ final class MacSettings {
         floatingTimer = defaults.object(forKey: "mac.floatingTimer") as? Bool ?? true
         sounds = defaults.object(forKey: "mac.sounds") as? Bool ?? true
         keepInDock = defaults.bool(forKey: "mac.keepInDock")
+        menuBarSeconds = defaults.bool(forKey: "mac.menuBarSeconds")
+        studySites = defaults.stringArray(forKey: "mac.studySites") ?? StudyMode.defaultSites
+        studyApps = defaults.stringArray(forKey: "mac.studyApps") ?? StudyMode.defaultMacApps
+        studyMinutes = defaults.object(forKey: "mac.studyMinutes") as? Int ?? 50
+        studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
+        studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
     }
 
     var dailyGoalSeconds: Int { max(15, dailyGoalMinutes) * 60 }

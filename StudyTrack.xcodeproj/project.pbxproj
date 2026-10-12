@@ -23,6 +23,7 @@
 		F3000000000000000000000C /* ExamActivityState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000C /* ExamActivityState.swift */; };
 		F3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +48,13 @@
 			remoteGlobalIDString = G10000000000000000000003;
 			remoteInfo = StudyTrackMacWidgets;
 		};
+		H1000000000000000000000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = H10000000000000000000003;
+			remoteInfo = StudyTrackLock;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -58,6 +66,7 @@
 			files = (
 				B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */,
 				E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */,
+				H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -95,6 +104,7 @@
 		F2000000000000000000000C /* ExamActivityState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExamActivityState.swift; path = Shared/ExamActivityState.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000D /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WidgetBridge.swift; path = Shared/WidgetBridge.swift; sourceTree = SOURCE_ROOT; };
 		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -117,6 +127,7 @@
 		F1000000000000000000000D /* Domain (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "Domain (Mac)"; path = StudyTrack/Domain; sourceTree = "<group>"; };
 		G10000000000000000000001 /* StudyTrackMacWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackMacWidgets; sourceTree = "<group>"; };
 		G1000000000000000000000C /* MacShared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MacShared; sourceTree = "<group>"; };
+		H10000000000000000000001 /* StudyTrackLock */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackLock; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +166,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		H10000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -166,6 +184,7 @@
 				E10000000000000000000001 /* StudyTrackShare */,
 				C10000000000000000000001 /* Shared */,
 				F10000000000000000000001 /* StudyTrackMac */,
+				H10000000000000000000001 /* StudyTrackLock */,
 				G10000000000000000000001 /* StudyTrackMacWidgets */,
 				G1000000000000000000000C /* MacShared */,
 				F1000000000000000000000E /* Mac — sources partagées */,
@@ -182,6 +201,7 @@
 				E10000000000000000000002 /* StudyTrackShare.appex */,
 				F10000000000000000000002 /* StudyTrack.app */,
 				G10000000000000000000002 /* StudyTrackMacWidgets.appex */,
+				H10000000000000000000002 /* StudyTrackLock.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -225,6 +245,7 @@
 			dependencies = (
 				B1000000000000000000000C /* PBXTargetDependency */,
 				E1000000000000000000000B /* PBXTargetDependency */,
+				H1000000000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000001 /* StudyTrack */,
@@ -323,6 +344,26 @@
 			productReference = G10000000000000000000002 /* StudyTrackMacWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		H10000000000000000000003 /* StudyTrackLock */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackLock" */;
+			buildPhases = (
+				H10000000000000000000007 /* Sources */,
+				H10000000000000000000009 /* Frameworks */,
+				H10000000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				H10000000000000000000001 /* StudyTrackLock */,
+			);
+			name = StudyTrackLock;
+			productName = StudyTrackLock;
+			productReference = H10000000000000000000002 /* StudyTrackLock.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -348,6 +389,9 @@
 					G10000000000000000000003 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					H10000000000000000000003 = {
+						CreatedOnToolsVersion = 16.0;
+					};
 				};
 			};
 			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXProject "StudyTrack" */;
@@ -369,6 +413,7 @@
 				E10000000000000000000003 /* StudyTrackShare */,
 				F10000000000000000000003 /* StudyTrackMac */,
 				G10000000000000000000003 /* StudyTrackMacWidgets */,
+				H10000000000000000000003 /* StudyTrackLock */,
 			);
 		};
 /* End PBXProject section */
@@ -403,6 +448,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		G10000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		H10000000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -460,6 +512,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		H10000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -477,6 +536,11 @@
 			isa = PBXTargetDependency;
 			target = G10000000000000000000003 /* StudyTrackMacWidgets */;
 			targetProxy = G1000000000000000000000D /* PBXContainerItemProxy */;
+		};
+		H1000000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = H10000000000000000000003 /* StudyTrackLock */;
+			targetProxy = H1000000000000000000000D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -824,6 +888,62 @@
 			};
 			name = Release;
 		};
+		H10000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D10000000000000000000001 /* Supabase.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackLock.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 5GGDH5F3NG;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).lock";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		H10000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D10000000000000000000001 /* Supabase.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackLock.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 5GGDH5F3NG;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).lock";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -877,6 +997,15 @@
 			buildConfigurations = (
 				G10000000000000000000005 /* Debug */,
 				G10000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackLock" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				H10000000000000000000005 /* Debug */,
+				H10000000000000000000006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

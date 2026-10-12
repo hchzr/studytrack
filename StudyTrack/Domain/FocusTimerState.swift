@@ -40,6 +40,12 @@ struct FocusTimerState: Codable, Equatable {
     var segments: [FocusSegment]?
     /// Temps compté au moment où la cible actuelle a commencé.
     var currentTargetSince: TimeInterval?
+    /// Mode étude : jusqu'à cette date, chaque appareil n'ouvre que ce qui sert
+    /// à travailler (Moodle, Claude, GoodNotes…). Voyage avec l'état du chrono :
+    /// lancé sur le Mac, il verrouille aussi l'iPhone. `nil` : pas de mode étude.
+    var studyUntil: Date?
+    /// Le début du mode étude (l'anneau de l'écran se remplit de là à `studyUntil`).
+    var studySince: Date?
 
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,

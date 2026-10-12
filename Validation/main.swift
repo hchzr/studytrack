@@ -5552,6 +5552,80 @@ do {
     check(merged == ["1": ["a", "b", "c"], "2": ["x"]], "activités vues : union de tous les appareils")
 }
 
+// MARK: Mode étude
+do {
+    let t0 = Date(timeIntervalSince1970: 2_000_000_000)
+    var state = FocusTimerState(sessionStartedAt: t0)
+    state.start(at: t0)
+    check(!StudyMode.isActive(state, at: t0), "sans date : pas de mode étude")
+    state.studyUntil = t0.addingTimeInterval(50 * 60)
+    check(StudyMode.isActive(state, at: t0.addingTimeInterval(60)), "pendant les 50 min : actif")
+    check(!StudyMode.isActive(state, at: t0.addingTimeInterval(50 * 60)), "à l'échéance : levé")
+    check(StudyMode.isOver(state, at: t0.addingTimeInterval(51 * 60)), "échéance passée, session ouverte : « terminé »")
+    check(StudyMode.remaining(state, at: t0.addingTimeInterval(10 * 60)) == 40 * 60, "reste 40 min après 10")
+    check(abs(StudyMode.progress(state, since: t0, at: t0.addingTimeInterval(25 * 60)) - 0.5) < 0.001, "à mi-chemin : 0,5")
+    var entered = FocusTimerState(sessionStartedAt: t0)
+    StudyMode.enter(&entered, minutes: 50, now: t0.addingTimeInterval(600))
+    check(entered.studySince == t0.addingTimeInterval(600) && entered.studyUntil == t0.addingTimeInterval(600 + 3000),
+          "entrer en cours de session : 50 min à partir de maintenant")
+    check(abs(StudyMode.progress(entered, at: t0.addingTimeInterval(600 + 1500)) - 0.5) < 0.001, "l'anneau part du début du mode étude")
+    StudyMode.leave(&entered)
+    check(entered.studyUntil == nil && entered.studySince == nil && !StudyMode.isActive(entered), "sortir : plus de mode étude")
+    check(StudyMode.extended(t0.addingTimeInterval(600), by: 25, now: t0) == t0.addingTimeInterval(600 + 1500),
+          "prolonger avant la fin : à partir de la fin prévue")
+    check(StudyMode.extended(t0, by: 25, now: t0.addingTimeInterval(300)) == t0.addingTimeInterval(300 + 1500),
+          "prolonger après coup : à partir de maintenant")
+
+    // Le mode étude voyage avec le chrono : un état sans le champ se relit.
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+    if let data = try? encoder.encode(state), let back = try? decoder.decode(FocusTimerState.self, from: data) {
+        check(back.studyUntil == state.studyUntil, "la fin du mode étude passe d'un appareil à l'autre")
+    } else {
+        check(false, "codage du mode étude")
+    }
+    let legacy = #"{"accumulated":0,"sessionStartedAt":0,"taskTypeRaw":"exercise","note":"","contextLabel":"","pomodoro":false}"#
+    check((try? decoder.decode(FocusTimerState.self, from: Data(legacy.utf8)))?.studyUntil == nil,
+          "un chrono d'une version précédente se relit, sans mode étude")
+    var changed = state
+    changed.studyUntil = nil
+    check(changed != state, "lever le mode étude est un changement (publié aux autres appareils)")
+
+    // Sites
+    check(StudyMode.normalizedDomain("https://www.Moodle.EPFL.ch/my/?x=1") == "moodle.epfl.ch", "adresse → domaine")
+    check(StudyMode.normalizedDomain("*.epfl.ch") == "epfl.ch", "joker → domaine")
+    check(StudyMode.normalizedDomain("claude.ai:443") == "claude.ai", "port retiré")
+    check(StudyMode.normalizedDomain("pas un site") == nil && StudyMode.normalizedDomain("") == nil, "texte libre refusé")
+    let sites = StudyMode.defaultSites
+    check(StudyMode.isAllowed(host: "moodle.epfl.ch", sites: sites), "Moodle permis")
+    check(StudyMode.isAllowed(host: "botafogo.epfl.ch", sites: sites), "Botafogo permis")
+    check(StudyMode.isAllowed(host: "courseware.epfl.ch", sites: sites), "Courseware permis")
+    check(StudyMode.isAllowed(host: "claude.ai", sites: sites), "Claude permis")
+    check(!StudyMode.isAllowed(host: "notepfl.ch", sites: sites), "un domaine qui finit pareil n'est pas permis")
+    check(!StudyMode.isAllowed(host: "www.youtube.com", sites: sites), "YouTube bloqué par défaut")
+    check(!StudyMode.isAllowed(host: "instagram.com", sites: sites), "Instagram bloqué")
+    check(StudyMode.isAllowed(url: URL(string: "about:blank"), sites: sites), "page vide permise")
+    check(!StudyMode.isAllowed(url: URL(string: "file:///etc/hosts"), sites: sites), "fichiers locaux refusés")
+    check(!StudyMode.isAllowed(url: URL(string: "https://epfl.ch.evil.com/"), sites: sites), "faux sous-domaine refusé")
+
+    // Apps (Mac)
+    let apps = StudyMode.defaultMacApps
+    check(!StudyMode.shouldBlock(bundleID: "com.goodnotesapp.x", isRegular: true, own: "me", allowed: apps), "GoodNotes permis")
+    check(StudyMode.shouldBlock(bundleID: "com.apple.Safari", isRegular: true, own: "me", allowed: apps), "Safari bloqué (le navigateur du mode étude le remplace)")
+    check(StudyMode.shouldBlock(bundleID: "com.spotify.client", isRegular: true, own: "me", allowed: apps), "Spotify bloqué")
+    check(!StudyMode.shouldBlock(bundleID: "me", isRegular: true, own: "me", allowed: apps), "StudyTrack jamais bloqué")
+    check(!StudyMode.shouldBlock(bundleID: "com.apple.loginwindow", isRegular: true, own: "me", allowed: apps), "le système jamais bloqué")
+    check(!StudyMode.shouldBlock(bundleID: "com.example.agent", isRegular: false, own: "me", allowed: apps), "un agent sans fenêtre n'est pas bloqué")
+    check(!StudyMode.shouldBlock(bundleID: "com.anthropic.claudefordesktop.helper", isRegular: true, own: "me", allowed: apps),
+          "l'assistant d'une app permise l'est avec elle")
+
+    // Outils
+    let tools = StudyMode.tools(courseName: "Analyse I", courseLinks: ["https://moodle.epfl.ch/course/view.php?id=1", "pas une url", "https://moodle.epfl.ch/course/view.php?id=1"])
+    check(tools.first?.title == "Moodle du cours" && tools.filter { $0.id.hasPrefix("course:") }.count == 1,
+          "outils : la page du cours d'abord, sans doublon ni lien invalide")
+    check(tools.contains { $0.id == "claude" } && tools.contains { $0.id == "goodnotes" }, "outils : Claude et GoodNotes toujours là")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }

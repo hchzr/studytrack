@@ -14,6 +14,8 @@ struct MacStatsView: View {
     @State private var period: Period = .week
     @State private var weekOffset = 0
     @State private var editing: StudySession?
+    /// Une session ajoutée à la main : « Annuler » la retire.
+    @State private var creating: StudySession?
 
     private var range: (start: Date, end: Date) {
         switch period {
@@ -60,7 +62,7 @@ struct MacStatsView: View {
         for session in studySessions {
             let code = session.course?.displayCode ?? "Sans cours"
             seconds[code, default: 0] += session.durationSeconds
-            colors[code] = session.course.map { Color(hex: $0.colorHex) } ?? .gray
+            colors[code] = session.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
         }
         return seconds.map { CourseSlice(code: $0.key, color: colors[$0.key] ?? .gray, seconds: $0.value) }
             .sorted { $0.seconds > $1.seconds }
@@ -77,8 +79,22 @@ struct MacStatsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(rangeTitle).font(MacStyle.title(26))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Kicker("Bilan")
+                        Text(rangeTitle).font(Carnet.serif(32)).foregroundStyle(Carnet.ink)
+                    }
                     Spacer()
+                    Button {
+                        let session = StudySession(course: nil, taskType: .exercise,
+                                                   startedAt: Date().addingTimeInterval(-3600),
+                                                   durationSeconds: 3600, isManual: true)
+                        context.insert(session)
+                        creating = session
+                    } label: {
+                        Label("Ajouter une session", systemImage: "plus")
+                    }
+                    .buttonStyle(.paper)
+                    .help("Une session oubliée, un travail fait sans le chrono")
                 }
                 HStack(spacing: 36) {
                     figure(DateUtils.hoursLabel(seconds: total), "d'étude")
@@ -101,7 +117,7 @@ struct MacStatsView: View {
 
                 sessionsCard
             }
-            .padding(28)
+            .padding(Carnet.pagePadding)
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -125,6 +141,7 @@ struct MacStatsView: View {
         }
         .onChange(of: period) { _, _ in weekOffset = 0 }
         .sheet(item: $editing) { SessionEditor(session: $0) }
+        .sheet(item: $creating) { SessionEditor(session: $0, isNew: true) }
     }
 
     private static let categories = TaskType.reportCategories.filter { $0 != .lecture }
@@ -148,9 +165,9 @@ struct MacStatsView: View {
                 }
                 RuleMark(y: .value("Objectif", goal))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MacStyle.goalTint)
                     .annotation(position: .top, alignment: .trailing) {
-                        Text("objectif").font(.caption2).foregroundStyle(.secondary)
+                        Text("objectif").font(.caption2).foregroundStyle(Carnet.inkSecondary)
                     }
             }
             .chartXScale(domain: range.start...range.end)
@@ -208,7 +225,7 @@ struct MacStatsView: View {
             }
             ForEach(groups) { group in
                 HStack(alignment: .firstTextBaseline) {
-                    Text(dayLabel(group.day)).font(.callout.weight(.semibold))
+                    Text(dayLabel(group.day)).font(Carnet.serif(.callout, weight: .semibold)).foregroundStyle(Carnet.ink)
                     Spacer()
                     Text(DateUtils.hoursLabel(seconds: group.totalSeconds)).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 }
@@ -244,8 +261,8 @@ struct MacStatsView: View {
 
     private func figure(_ value: String, _ caption: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(MacStyle.clock(28, weight: .regular))
-            Text(caption).font(.callout).foregroundStyle(.secondary)
+            Text(value).font(MacStyle.clock(30)).foregroundStyle(Carnet.ink)
+            Text(caption).font(.callout).foregroundStyle(Carnet.inkSecondary)
         }
     }
 
@@ -261,6 +278,7 @@ struct MacStatsView: View {
 /// Corriger une session : sa durée, sa date, son cours — ou la supprimer.
 private struct SessionEditor: View {
     @Bindable var session: StudySession
+    var isNew = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
@@ -280,14 +298,25 @@ private struct SessionEditor: View {
             Stepper("Durée : \(DateUtils.durationLabel(seconds: minutes * 60))", value: $minutes, in: 1...720, step: 5)
         }
         .formStyle(.grouped)
-        .frame(width: 420)
+        .frame(width: 440)
         .onAppear { minutes = max(1, session.durationSeconds / 60) }
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                if isNew {
+                    Button("Annuler") {
+                        context.delete(session)
+                        try? context.save()
+                        dismiss()
+                    }
+                }
+            }
             ToolbarItem(placement: .destructiveAction) {
+                if !isNew {
                 Button("Supprimer", role: .destructive) {
                     context.delete(session)
                     try? context.save()
                     dismiss()
+                }
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
