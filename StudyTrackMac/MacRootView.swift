@@ -48,8 +48,8 @@ struct MacRootView: View {
                         CourseSidebarRow(course: course, isTimed: timer.phase != .idle && timer.courseID == course.id)
                             .tag(Page.course(course.id))
                             .contextMenu {
-                                Button("Chronométrer ce cours") { time(course) }
-                                Button("Mode étude sur ce cours…") { StudyModeController.shared.presentSetup(courseID: course.id) }
+                                Button("Chronométrer") { time(course) }
+                                Button("Mode étude…") { StudyModeController.shared.presentSetup(courseID: course.id) }
                                 Button("Ouvrir") { page = .course(course.id) }
                             }
                     }
@@ -95,13 +95,13 @@ struct MacRootView: View {
                     Button { StudyModeController.shared.presentSetup() } label: {
                         Label("Mode étude", systemImage: "moon.stars")
                     }
-                    .help("Mode étude : plein écran, seulement ce qui sert à travailler (⇧⌘E)")
+                    .help("Mode étude (⇧⌘E)")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingPalette = true } label: {
                         Label("Rechercher", systemImage: "magnifyingglass")
                     }
-                    .help("Chercher, ouvrir, chronométrer (⌘K)")
+                    .help("Chercher (⌘K)")
                 }
             }
         }
@@ -143,9 +143,9 @@ struct MacRootView: View {
         .overlay {
             if tracked.isEmpty {
                 ContentUnavailableView {
-                    Label("Tes cours arrivent de l'iPhone", systemImage: "icloud.and.arrow.down")
+                    Label("Pas encore de cours", systemImage: "icloud.and.arrow.down")
                 } description: {
-                    Text("Importe-les dans StudyTrack sur l'iPhone : iCloud les apporte ici, en général en moins d'une minute.")
+                    Text("Ajoute-les sur ton iPhone, ils arrivent ici.")
                 }
                 .background(Carnet.ground)
             }
@@ -208,7 +208,7 @@ private struct StudyModeSidebarButton: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(InkButtonStyle())
-        .help("Plein écran, seulement Moodle, Claude, GoodNotes… sur le Mac et l'iPhone")
+        .help("Mode étude")
     }
 }
 
@@ -226,7 +226,7 @@ private struct ToolbarTimer: View {
             Button { open() } label: {
                 Label("Chrono", systemImage: "timer")
             }
-            .help("Ouvrir le chrono (⌘2)")
+            .help("Chrono (⌘2)")
         } else {
             HStack(spacing: 6) {
                 Button { open() } label: {
@@ -240,7 +240,7 @@ private struct ToolbarTimer: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .help("Ouvrir le chrono")
+                .help("Chrono")
                 Button { timer.phase == .onBreak ? timer.skipBreak() : timer.toggle() } label: {
                     Image(systemName: timer.phase == .running ? "pause.fill" : "play.fill")
                 }
@@ -273,7 +273,7 @@ private struct CourseSidebarRow: View {
                 Image(systemName: "timer")
                     .font(.caption)
                     .foregroundStyle(tint)
-                    .help("Chronométré en ce moment")
+                    .help("En cours")
             }
             if late > 0 {
                 Text("\(late)")
@@ -332,7 +332,7 @@ struct SyncFooter: View {
     }
 
     static func describe(_ state: MacStore.SyncState, synced: Bool, now: Date) -> String {
-        guard synced else { return "iCloud indisponible : données de ce Mac seulement" }
+        guard synced else { return "iCloud coupé" }
         switch state {
         case .idle: return "iCloud"
         case .working(let kind): return "iCloud : \(kind)…"

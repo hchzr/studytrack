@@ -345,8 +345,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     func confirmQuit() -> Bool {
         guard let timer, timer.isStudying else { return true }
         let alert = NSAlert()
-        alert.messageText = "Quitter pendant le mode étude ?"
-        alert.informativeText = "Le Mac et l'iPhone seront rouverts. La session continue de tourner : tu pourras la terminer plus tard."
+        alert.messageText = "Quitter le mode étude ?"
+        alert.informativeText = "Ta session continue."
         alert.addButton(withTitle: "Rester")
         alert.addButton(withTitle: "Quitter")
         return alert.runModal() == .alertSecondButtonReturn

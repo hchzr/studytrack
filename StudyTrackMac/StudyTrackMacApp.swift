@@ -174,7 +174,7 @@ struct MacCommands: Commands {
             Button("À propos de StudyTrack") {
                 NSApp.orderFrontStandardAboutPanel(options: [
                     .credits: NSAttributedString(
-                        string: "Tes cours de l'EPFL, tes séries et ton temps d'étude — synchronisés avec l'iPhone par iCloud.",
+                        string: "Tes cours, tes séries, ton temps.",
                         attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor])
                 ])
             }
@@ -185,7 +185,7 @@ struct MacCommands: Commands {
                 if timer.phase == .onBreak { timer.skipBreak() } else { timer.toggle() }
             }
             .keyboardShortcut("t", modifiers: [.command])
-            Button("Terminer et enregistrer") { timer.finish() }
+            Button("Terminer") { timer.finish() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(timer.phase == .idle)
             Button("Écourter la pause") { timer.skipBreak() }
@@ -202,7 +202,7 @@ struct MacCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
-            Button("Abandonner la session", role: .destructive) { timer.discard() }
+            Button("Abandonner", role: .destructive) { timer.discard() }
                 .disabled(timer.phase == .idle)
         }
         CommandMenu("Aller") {
@@ -223,7 +223,7 @@ struct MacCommands: Commands {
             .keyboardShortcut("f", modifiers: [.command])
         }
         CommandGroup(replacing: .help) {
-            Button("Raccourcis de StudyTrack") {
+            Button("Raccourcis") {
                 let alert = NSAlert()
                 alert.messageText = "Raccourcis"
                 alert.informativeText = """

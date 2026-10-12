@@ -214,7 +214,7 @@ struct StudyBrowserPane: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(StudyPalette.inkSecondary)
-            .help("Replier le navigateur")
+            .help("Replier")
         }
         .padding(8)
     }
@@ -241,7 +241,7 @@ struct StudyBrowserPane: View {
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity)
             .background(StudyPalette.ground, in: Capsule())
-            Image(systemName: "checkmark.shield").foregroundStyle(tint).help("Seuls les sites permis s'ouvrent ici")
+            Image(systemName: "checkmark.shield").foregroundStyle(tint).help("Sites permis")
         }
         .buttonStyle(.plain)
         .foregroundStyle(StudyPalette.ink)
@@ -252,7 +252,7 @@ struct StudyBrowserPane: View {
     private func refusalBanner(_ host: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "hand.raised.fill")
-            Text("\(host) n'est pas ouvert pendant le mode étude.")
+            Text("\(host) est bloqué.")
             Button { browser.dismissRefusal() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
         }

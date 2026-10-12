@@ -5623,7 +5623,8 @@ do {
     let tools = StudyMode.tools(courseName: "Analyse I", courseLinks: ["https://moodle.epfl.ch/course/view.php?id=1", "pas une url", "https://moodle.epfl.ch/course/view.php?id=1"])
     check(tools.first?.title == "Moodle du cours" && tools.filter { $0.id.hasPrefix("course:") }.count == 1,
           "outils : la page du cours d'abord, sans doublon ni lien invalide")
-    check(tools.contains { $0.id == "claude" } && tools.contains { $0.id == "goodnotes" }, "outils : Claude et GoodNotes toujours là")
+    check(tools.contains { $0.id == "claude-app" } && tools.contains { $0.id == "goodnotes" } && !tools.contains { $0.id == "claude" },
+          "outils : l'app Claude et GoodNotes, plus claude.ai en site")
 }
 
 // MARK: Calculatrice du mode étude (MathEngine)
@@ -5668,12 +5669,111 @@ do {
 
 // MARK: Claude dans le mode étude (ClaudeTutor, RichMarkup)
 do {
-    let args = ClaudeTutor.arguments(systemPrompt: "P")
-    check(args.contains("--safe-mode") && args.contains("--strict-mcp-config") && args.contains("--no-session-persistence"),
-          "Claude : sans configuration, sans MCP, sans session gardée")
-    if let i = args.firstIndex(of: "--tools") { check(args[i + 1] == "", "Claude : aucun outil") } else { check(false, "Claude : --tools présent") }
+    let series = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+    let sid = ClaudeTutor.sessionID(seriesID: series, profile: .isolated)
+    check(sid == ClaudeTutor.sessionID(seriesID: series, profile: .isolated), "session : la même pour une série")
+    check(sid != ClaudeTutor.sessionID(seriesID: series, profile: .project)
+          && sid != ClaudeTutor.sessionID(seriesID: series, profile: .isolated, generation: 1)
+          && sid != ClaudeTutor.sessionID(seriesID: UUID(), profile: .isolated), "session : autre profil, autre génération, autre série")
+    check(sid.uuidString.dropFirst(14).first == "5", "session : un UUID de forme v5")
+
+    let args = ClaudeTutor.arguments(.init(sessionID: sid.uuidString, systemPrompt: "P"))
+    check(args.contains("--safe-mode") && args.contains("--strict-mcp-config") && args.contains("--disable-slash-commands"),
+          "Claude isolé : sans configuration, sans MCP, sans commandes")
+    check(!args.contains("--no-session-persistence"), "Claude : la conversation est gardée")
+    if let i = args.firstIndex(of: "--session-id") { check(args[i + 1] == sid.uuidString, "Claude : la session de la série") } else { check(false, "Claude : --session-id présent") }
+    if let i = args.firstIndex(of: "--tools") { check(args[i + 1] == "", "Claude isolé : aucun outil") } else { check(false, "Claude : --tools présent") }
     check(!args.contains("--model"), "Claude : le modèle de l'abonnement par défaut")
     check(!args.contains { $0.contains("api-key") }, "Claude : jamais de clé d'API")
+    let resumed = ClaudeTutor.arguments(.init(sessionID: "S", resume: true, systemPrompt: "P"))
+    check(resumed.contains("--resume") && !resumed.contains("--session-id"), "Claude : une session existante se reprend")
+
+    let project = ClaudeTutor.arguments(.init(profile: .project, sessionID: "S", systemPrompt: "P", mcpConfigPath: "/tmp/mcp.json",
+                                              allowedTools: ClaudeProject.allowedTools(notion: true, studyTrack: false)))
+    check(!project.contains("--safe-mode") && !project.contains("--disable-slash-commands"), "projet EPFL : compétences et commandes chargées")
+    if let i = project.firstIndex(of: "--setting-sources") { check(project[i + 1] == "project,local", "projet EPFL : les réglages du dossier seulement") } else { check(false, "projet : --setting-sources") }
+    check(project.contains("--strict-mcp-config") && project.contains("/tmp/mcp.json"), "projet EPFL : seulement les MCP du fichier")
+    if let i = project.firstIndex(of: "--allowedTools") { check(project[i + 1] == "Read,Skill,mcp__notion", "projet EPFL : outils permis") } else { check(false, "projet : --allowedTools") }
+    if let i = project.firstIndex(of: "--tools") { check(project[i + 1] == "Read,Skill", "projet EPFL : ni terminal ni écriture") } else { check(false, "projet : --tools") }
+    check(project.contains("--append-system-prompt") && !project.contains("--system-prompt"), "projet EPFL : la consigne s'ajoute à celle de Claude Code")
+
+    check(ClaudeTutor.sessionRecovery(stderr: "Error: No conversation found with session ID: abc") == .startFresh, "session perdue : on repart")
+    check(ClaudeTutor.sessionRecovery(stderr: "Error: Session ID abc is already in use.") == .resume, "session déjà là : on la reprend")
+    check(ClaudeTutor.sessionRecovery(stderr: "autre chose") == nil, "autre erreur : rien")
+    check(ClaudeTutor.sessionFolderName(workingDirectory: "/Users/a/Library/Caches/StudyTrack/claude") == "-Users-a-Library-Caches-StudyTrack-claude"
+          && ClaudeTutor.sessionFolderName(workingDirectory: "/Users/a/Application Support/x.y") == "-Users-a-Application-Support-x-y",
+          "dossier des sessions de Claude Code")
+
+    let opening = ClaudeTutor.openingMessage(series: .init(courseCode: "MATH-101", title: "Série 3", week: 3, due: "jeudi",
+                                                          exercises: [.init(number: "1", status: "fait"), .init(number: "2", status: "à faire")],
+                                                          pdfAttached: true),
+                                             exercise: nil, skill: "epfl-serie")
+    check(opening.hasPrefix("/epfl-serie ") && opening.contains("- 2 : à faire") && opening.contains("PDF joint"),
+          "série : la compétence lancée avec la série et ses exercices")
+    let plain = ClaudeTutor.openingMessage(series: .init(title: "Série 3"), exercise: nil, skill: nil)
+    check(!plain.hasPrefix("/") && plain.contains("Série 3"), "série sans compétence : le contexte seul")
+    check(ClaudeTutor.displayText(opening) == "/epfl-serie On attaque « Série 3 » (MATH-101).", "affichage : sans le contexte de l'app")
+    let switched = ClaudeTutor.exerciseSwitch(.init(exercise: "Exercice 2"))
+    check(switched.contains("autre exercice") && switched.contains("Exercice 2") && ClaudeTutor.displayText(switched + "Et là ?") == "Et là ?",
+          "changer d'exercice dans la conversation")
+
+    let report = "Bilan.\n\n```studytrack\n1 : juste\nEx 2 : moyen\nexercice 3: FAUX\n4 : ?\n```\nVoilà."
+    check(ClaudeTutor.verdicts(in: report) == [.init(exercise: "1", result: .correct), .init(exercise: "2", result: .partial),
+                                                 .init(exercise: "3", result: .wrong)], "post-mortem : verdicts lus")
+    check(ClaudeTutor.withoutVerdicts(report) == "Bilan.\n\n\nVoilà." || !ClaudeTutor.withoutVerdicts(report).contains("studytrack"),
+          "post-mortem : le bloc ne s'affiche pas en texte")
+    check(ClaudeTutor.verdicts(in: "rien") == [], "pas de bloc, pas de verdict")
+    check(ClaudeTutor.postMortemPrompt(useSkill: true).contains("```studytrack"), "post-mortem : le format demandé")
+    check(ClaudeTutor.matchExercise("2", numbers: ["1", "2", "3"]) == 1, "verdict → exercice 2")
+    check(ClaudeTutor.matchExercise("3", numbers: ["Ex-03-01", "Ex-03-03"]) == 1, "verdict → numéro à tirets")
+    check(ClaudeTutor.matchExercise("1.2", numbers: ["1.1", "1.2"]) == 1 && ClaudeTutor.matchExercise("9", numbers: ["1"]) == nil,
+          "verdict : numéro composé, inconnu")
+
+    let initLine = #"{"type":"system","subtype":"init","session_id":"S","model":"claude-opus","permissionMode":"default","skills":["anthropic-skills:pdf","epfl-serie"],"tools":["Read","Skill"],"mcp_servers":[{"name":"notion","status":"needs-auth"}]}"#
+    if case .started(let info)? = ClaudeTutor.parse(line: initLine) {
+        check(info.sessionID == "S" && info.hasSkill("epfl-serie") && info.hasSkill("pdf") && !info.hasSkill("epfl-anki"), "début : session et compétences")
+        check(info.mcpServers == [.init(name: "notion", status: "needs-auth")] && info.permissionMode == "default", "début : MCP et permissions")
+    } else {
+        check(false, "début de session lu")
+    }
+    check(ClaudeTutor.parse(line: #"{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":2,"cache_creation_input_tokens":100,"cache_read_input_tokens":900}}"#)
+          == .finished(error: nil, contextTokens: 1002), "fin : taille du contexte")
+    check(ClaudeTutor.parse(line: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","name":"mcp__notion__notion-search"}}}"#)
+          == .tool("mcp__notion__notion-search"), "flux : un outil")
+    check(ClaudeTutor.toolLabel("mcp__notion__notion-search") == "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") == "StudyTrack",
+          "outil : nom lisible")
+    let jsonl = [
+        #"{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\n<command-name>/epfl-serie</command-name>\n<command-args>On attaque.\n\n[StudyTrack]\nCours : X\n[/StudyTrack]\n\nPar où ?</command-args>"}}"#,
+        #"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill"}]}}"#,
+        #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Salut"},{"type":"tool_use","name":"Read"}]}}"#,
+        #"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"x"}]}}"#,
+        #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"On commence."}]}}"#,
+        #"{"type":"user","message":{"role":"user","content":[{"type":"document"},{"type":"text","text":"[StudyTrack]\nCours : X\n[/StudyTrack]\n\nUn indice ?"}]}}"#,
+    ].joined(separator: "\n")
+    check(ClaudeTutor.history(jsonl: jsonl) == [.init(fromStudent: true, text: "/epfl-serie On attaque.\n\nPar où ?"), .init(fromStudent: false, text: "Salut\n\nOn commence."),
+                                                 .init(fromStudent: true, text: "Un indice ?")],
+          "conversation reprise : messages réaffichés, sans contexte ni outils")
+
+    // Le projet EPFL
+    let md = ClaudeProject.claudeMD(existing: nil, context: "A")
+    check(md.contains(ClaudeProject.beginMarker) && md.contains("A"), "CLAUDE.md : créé")
+    let mine = "# Mes notes\n\nGarder ça."
+    let merged = ClaudeProject.claudeMD(existing: mine, context: "A")
+    check(merged.hasPrefix(mine) && merged.contains("A"), "CLAUDE.md : la partie de l'app s'ajoute")
+    let updated = ClaudeProject.claudeMD(existing: merged, context: "B")
+    check(updated.hasPrefix(mine) && updated.contains("B") && !updated.contains("\nA\n")
+          && updated.components(separatedBy: ClaudeProject.beginMarker).count == 2, "CLAUDE.md : la partie de l'app est remplacée, le reste gardé")
+    let ctx = ClaudeProject.context(courses: [.init(code: "MATH-101", name: "Analyse I", week: 4, progress: "Série 4 : 1/5")], week: 4, date: "12 oct.")
+    check(ctx.contains("MATH-101 — Analyse I (semaine 4) · Série 4 : 1/5") && ctx.contains("Semaine du semestre : 4"), "CLAUDE.md : cours et semaine")
+    let mcp = ClaudeProject.mcpConfig(notion: true, studyTrackURL: "https://x.supabase.co/functions/v1/mcp/T")
+    if let object = try? JSONSerialization.jsonObject(with: Data(mcp.utf8)) as? [String: Any], let servers = object["mcpServers"] as? [String: Any] {
+        check(Set(servers.keys) == ["notion", "studytrack"], "MCP : Notion et StudyTrack, rien d'autre")
+    } else {
+        check(false, "MCP : JSON lisible")
+    }
+    check(ClaudeProject.mcpConfig(notion: false, studyTrackURL: "http://pas-sur").contains("{\n\n}") || !ClaudeProject.mcpConfig(notion: false, studyTrackURL: "http://pas-sur").contains("studytrack"),
+          "MCP : une adresse non chiffrée est refusée")
+    check(ClaudeProject.permissionSummary(notion: true, studyTrack: true) == "lecture, compétences, Notion, StudyTrack", "permissions en clair")
 
     let line = ClaudeTutor.userLine(text: "Aide", attachments: [.init(kind: .pdf, data: Data([1, 2, 3]), name: "Série 3")])
     if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
@@ -5720,6 +5820,81 @@ do {
           [.text("Le "), .bold("point"), .text(" clé : "), .math("x_n"), .text(", "), .code("f"), .text(" et "), .italic("vite"), .text(".")],
           "en ligne : gras, formule, code, italique")
     check(RichMarkup.inlines("nom_de_variable et 5\\$") == [.text("nom_de_variable et 5$")], "pas d'italique dans un mot, dollar échappé")
+}
+
+// MARK: Sites du cours lus en natif (SiteContent)
+do {
+    let base = URL(string: "https://moodle.epfl.ch/mod/page/view.php?id=5")!
+    let html = """
+    <div class="box generalbox"><h2>Consignes</h2><p>Lire le <strong>chapitre 2</strong> et
+    <em>noter</em> \\(x_n\\).</p><script>alert(1)</script>
+    <ul><li>un</li><li>deux</li></ul><ol><li>a</li></ol>
+    <p>Voir <a href="/pluginfile.php/12/mod_page/content/serie.pdf">la série</a>.</p>
+    <img src="/pluginfile.php/12/fig.png" alt="">
+    <iframe src="https://api.cast.switch.ch/p/113/embedPlaykitJs/uiconf_id/1?iframeembed=true&amp;entry_id=0_5f16lokn" title="Cours 1"></iframe>
+    <table><tr><th>Date</th><th>Salle</th></tr><tr><td>lundi</td><td>CE1</td></tr></table>
+    <pre>let x = 1</pre><p>&eacute;t&eacute; &amp; co</p></div>
+    """
+    let blocks = SiteHTML.blocks(html, base: base)
+    check(blocks.first == .markdown("### Consignes"), "HTML : un titre")
+    check(blocks.contains(.markdown("Lire le **chapitre 2** et *noter* \\(x_n\\).")), "HTML : gras, italique, formule gardée")
+    check(!blocks.contains { if case .markdown(let t) = $0 { return t.contains("alert") }; return false }, "HTML : pas de script")
+    check(blocks.contains(.markdown("- un\n- deux\n1. a")) || blocks.contains(.markdown("- un\n- deux")), "HTML : listes")
+    check(blocks.contains(.file(title: "la série", url: "https://moodle.epfl.ch/pluginfile.php/12/mod_page/content/serie.pdf")), "HTML : un fichier lié")
+    check(blocks.contains(.image("https://moodle.epfl.ch/pluginfile.php/12/fig.png")), "HTML : une image, adresse résolue")
+    check(blocks.contains { if case .video(let title, _) = $0 { return title == "Cours 1" }; return false }, "HTML : une vidéo intégrée")
+    check(blocks.contains(.markdown("- Date · Salle\n- lundi · CE1")), "HTML : un tableau en lignes")
+    check(blocks.contains(.markdown("```\nlet x = 1\n```")), "HTML : du code")
+    check(blocks.last == .markdown("été & co"), "HTML : entités décodées")
+
+    check(SiteRouter.route("https://moodle.epfl.ch/mod/page/view.php?id=42") == .moodle(module: "page", id: 42), "lien : page Moodle")
+    check(SiteRouter.route("https://moodle.epfl.ch/mod/resource/view.php?id=42") == .pdf, "lien : fichier Moodle → PDF")
+    check(SiteRouter.route("https://moodle.epfl.ch/pluginfile.php/1/x/slides.pptx") == .file, "lien : diapositives")
+    check(SiteRouter.route("https://mediaspace.epfl.ch/media/Cours+1/0_5f16lokn") == .mediaspace(entryID: "0_5f16lokn"), "lien : vidéo MediaSpace")
+    check(SiteRouter.route("https://www.youtube.com/watch?v=abc123") == .youtube(id: "abc123")
+          && SiteRouter.route("https://youtu.be/xyz") == .youtube(id: "xyz"), "lien : YouTube")
+    check(SiteRouter.route("https://courseware.epfl.ch/courses/course-v1:EPFLx+MATH101+2025/course/") == .courseware(courseKey: "course-v1:EPFLx+MATH101+2025"),
+          "lien : Courseware")
+    check(SiteRouter.route("https://botafogo.epfl.ch/analyse-1-GM/") == .botafogo && SiteRouter.route("https://www.geogebra.org/calculator") == .geogebra,
+          "lien : Botafogo, GeoGebra")
+    check(SiteRouter.route("https://example.com/a.pdf") == .pdf && SiteRouter.route("https://example.com/") == .web, "lien : PDF ailleurs, page web")
+
+    check(Kaltura.manifestURL(entryID: "0_5f16lokn")?.absoluteString
+          == "https://api.cast.switch.ch/p/113/sp/11300/playManifest/entryId/0_5f16lokn/format/applehttp/protocol/https/a.m3u8",
+          "Kaltura : manifeste HLS d'une vidéo publique")
+    check(Kaltura.manifestURL(entryID: "0_x", ks: "KEY")?.absoluteString.contains("/ks/KEY/a.m3u8") == true, "Kaltura : avec la clé de session")
+    let page = #"<script>var x = {"partnerId":"113","ks":"djJ8MTEzfJfIN6eBQhUqAAAAAAAAAA=="};</script>"#
+    check(Kaltura.config(html: page).partnerID == 113 && Kaltura.config(html: page).ks == "djJ8MTEzfJfIN6eBQhUqAAAAAAAAAA==", "Kaltura : partenaire et clé lus")
+    check(Kaltura.isPlayableManifest("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nx") && !Kaltura.isPlayableManifest("<html>"), "Kaltura : manifeste reconnu")
+
+    let edx = """
+    {"root":"r","blocks":{
+     "r":{"type":"course","display_name":"MOOC","children":["c1"]},
+     "c1":{"type":"chapter","display_name":"Semaine 1","children":["s1"]},
+     "s1":{"type":"sequential","display_name":"Suites","children":["u1"]},
+     "u1":{"type":"vertical","display_name":"Définition","children":["v1","h1","p1"]},
+     "v1":{"type":"video","display_name":"Vidéo","student_view_url":"https://c/xblock/v1",
+           "student_view_data":{"encoded_videos":{"mobile_low":{"url":"https://v/low.mp4"},"hls":{"url":"https://v/a.m3u8"},"youtube":{"url":"https://www.youtube.com/watch?v=YT1"}}}},
+     "h1":{"type":"html","display_name":"Texte","student_view_url":"https://c/xblock/h1"},
+     "p1":{"type":"problem","display_name":"Quiz"}}}
+    """
+    if let outline = EdXOutline.parse(json: Data(edx.utf8)) {
+        let unit = outline.chapters.first?.sequences.first?.units.first
+        check(outline.chapters.map(\.title) == ["Semaine 1"] && unit?.title == "Définition", "edX : chapitres, séquences, unités")
+        check(unit?.blocks.map(\.kind) == [.video, .html, .problem], "edX : les blocs d'une unité")
+        check(unit?.blocks.first?.videoURL == "https://v/a.m3u8" && unit?.blocks.first?.youTubeID == "YT1", "edX : HLS d'abord, YouTube en secours")
+        check(unit?.blocks[1].viewURL == "https://c/xblock/h1", "edX : le texte par son adresse seule")
+    } else {
+        check(false, "edX : plan lisible")
+    }
+    check(EdXOutline.bestVideo(["all_sources": ["https://a/x.webm", "https://a/x.mp4"]]) == "https://a/x.mp4", "edX : mp4 parmi les sources")
+
+    let moodle = MoodleActivityContent.decode(#"{"module":"assign","title":"Devoir 1 &amp; 2","html":"<p>Rendre</p>","dates":["À rendre : lundi"],"files":[{"name":"enonce.pdf","url":"https://moodle.epfl.ch/pluginfile.php/1/enonce.pdf"}],"status":["Statut : Aucune remise"]}"#)
+    check(moodle?.title == "Devoir 1 & 2" && moodle?.dates == ["À rendre : lundi"] && moodle?.files.count == 1
+          && moodle?.status.first == "Statut : Aucune remise" && moodle?.posts == [], "Moodle : un devoir lu")
+    check(MoodleActivityContent.decode(#"{"module":"page","needsLogin":true}"#)?.needsLogin == true, "Moodle : page de connexion reconnue")
+    check(BotafogoFigure.imagePath(script: "/media/jsxgraph/jsx_suite_divergente.js") == "/media/jsxgraph/jsx_suite_divergente.png",
+          "Botafogo : l'image fixe d'une figure interactive")
 }
 
 // MARK: Botafogo : noms et macros

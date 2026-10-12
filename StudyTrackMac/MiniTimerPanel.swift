@@ -99,10 +99,10 @@ struct MiniTimerView: View {
                     .help(timer.phase == .running ? "Pause" : "Reprendre")
                     if timer.isStudying {
                         Button { StudyModeController.shared.present() } label: { Image(systemName: "moon.stars") }
-                            .help("Revenir au mode étude")
+                            .help("Mode étude")
                     } else {
                         Button { timer.finish() } label: { Image(systemName: "checkmark") }
-                            .help("Terminer et enregistrer")
+                            .help("Terminer")
                     }
                 }
                 .buttonStyle(RoundButtonStyle(size: 26))
@@ -120,12 +120,12 @@ struct MiniTimerView: View {
         .contextMenu {
             Button(timer.phase == .running ? "Pause" : "Reprendre") { primary() }
             if timer.isStudying {
-                Button("Revenir au mode étude") { StudyModeController.shared.present() }
+                Button("Mode étude") { StudyModeController.shared.present() }
             } else {
-                Button("Terminer et enregistrer") { timer.finish() }
+                Button("Terminer") { timer.finish() }
             }
             Divider()
-            Button("Masquer le chrono flottant") {
+            Button("Masquer") {
                 settings.floatingTimer = false
                 MiniTimerPanel.shared.update()
             }

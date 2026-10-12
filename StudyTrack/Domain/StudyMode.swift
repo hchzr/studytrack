@@ -190,10 +190,9 @@ enum StudyMode {
                                subtitle: courseName ?? host, icon: icon, kind: .web(url)))
         }
         let base: [Tool] = [
+            // Claude n'est plus un site : il est dans l'app (le bureau du Mac).
             Tool(id: "moodle", title: "Moodle", subtitle: "Tes cours", icon: "graduationcap",
                  kind: .web(URL(string: "https://moodle.epfl.ch/my/")!)),
-            Tool(id: "claude", title: "claude.ai", subtitle: "Pour t'aider", icon: "sparkle",
-                 kind: .web(URL(string: "https://claude.ai/new")!)),
             Tool(id: "claude-app", title: "Claude", subtitle: "L'app", icon: "sparkles",
                  kind: .app(bundleID: "com.anthropic.claudefordesktop", scheme: "claude://")),
             Tool(id: "goodnotes", title: "GoodNotes", subtitle: "Écrire", icon: "pencil.and.scribble",

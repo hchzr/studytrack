@@ -54,6 +54,19 @@ final class MacSettings {
     /// Pomodoro pendant le mode étude.
     var studyPomodoro: Bool { didSet { defaults.set(studyPomodoro, forKey: "mac.studyPomodoro") } }
 
+    // MARK: Claude
+
+    /// Le « projet EPFL » : Claude tourne dans un dossier à soi, avec les
+    /// compétences de l'étudiant·e et les serveurs MCP qu'elles utilisent.
+    /// Coupé par défaut : le mode isolé coûte ~600 jetons par message.
+    var claudeProject: Bool { didSet { defaults.set(claudeProject, forKey: "mac.claudeProject") } }
+    /// Le dossier du projet (`~/EPFL` par défaut).
+    var claudeProjectFolder: String { didSet { defaults.set(claudeProjectFolder, forKey: "mac.claudeProjectFolder") } }
+    /// Le serveur MCP de Notion (carnet d'erreurs, file de reprise).
+    var claudeNotion: Bool { didSet { defaults.set(claudeNotion, forKey: "mac.claudeNotion") } }
+    /// L'adresse du serveur MCP de StudyTrack (iPhone › Réglages › Assistant IA).
+    var claudeStudyTrackMCP: String { didSet { defaults.set(claudeStudyTrackMCP, forKey: "mac.claudeStudyTrackMCP") } }
+
     init() {
         focusMinutes = defaults.object(forKey: "mac.focusMinutes") as? Int ?? 25
         shortBreakMinutes = defaults.object(forKey: "mac.shortBreakMinutes") as? Int ?? 5
@@ -76,6 +89,11 @@ final class MacSettings {
         studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
         studyCloseApps = defaults.object(forKey: "mac.studyCloseApps") as? Bool ?? true
+        claudeProject = defaults.bool(forKey: "mac.claudeProject")
+        claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("EPFL").path
+        claudeNotion = defaults.object(forKey: "mac.claudeNotion") as? Bool ?? true
+        claudeStudyTrackMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
     }
 
     var dailyGoalSeconds: Int { max(15, dailyGoalMinutes) * 60 }

@@ -1,0 +1,471 @@
+import AVKit
+import QuickLookUI
+import SwiftUI
+import WebKit
+
+// MARK: - Se connecter
+
+/// Les sites qui demandent une connexion EPFL (Tequila, Microsoft, SWITCH).
+enum StudySite: String, Identifiable {
+    case moodle, courseware, mediaspace
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .moodle: return "Moodle"
+        case .courseware: return "Courseware"
+        case .mediaspace: return "MediaSpace"
+        }
+    }
+
+    var start: URL {
+        switch self {
+        case .moodle: return MoodleClient.login
+        case .courseware: return CoursewareClient.login
+        case .mediaspace: return URL(string: "https://mediaspace.epfl.ch/user/login")!
+        }
+    }
+
+    /// De retour sur le site, hors des pages de connexion : c'est fait.
+    func isSignedIn(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        let path = url.path.lowercased()
+        switch self {
+        case .moodle: return host == "moodle.epfl.ch" && !path.hasPrefix("/login") && !path.contains("/auth/")
+        case .courseware: return host == "courseware.epfl.ch" && !path.hasPrefix("/login") && !path.hasPrefix("/auth") && !path.hasPrefix("/register")
+        case .mediaspace: return host == "mediaspace.epfl.ch" && !path.contains("login") && !path.contains("saml")
+        }
+    }
+}
+
+/// La seule page web du bureau : la connexion EPFL, dans une petite feuille
+/// qui se ferme toute seule une fois connecté·e. Les cookies vont dans le
+/// magasin WebKit par défaut, celui des lecteurs natifs.
+struct SignInSheet: View {
+    let site: StudySite
+    var done: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Connexion à \(site.title)").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
+                Spacer()
+                Button("Annuler") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            SignInWebView(start: site.start) { url in
+                guard site.isSignedIn(url) else { return }
+                done()
+                dismiss()
+            }
+        }
+        .frame(width: 520, height: 640)
+    }
+}
+
+private struct SignInWebView: NSViewRepresentable {
+    let start: URL
+    var changed: (URL) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(changed: changed) }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
+        view.load(URLRequest(url: start))
+        return view
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let changed: (URL) -> Void
+        /// La première page chargée (souvent déjà le site, avant la redirection
+        /// vers la connexion) ne compte pas.
+        private var loads = 0
+        init(changed: @escaping (URL) -> Void) { self.changed = changed }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            loads += 1
+            guard let url = webView.url else { return }
+            // Moodle montre son menu utilisateur une fois connecté·e : on vérifie.
+            webView.evaluateJavaScript("!!document.querySelector('#user-menu-toggle, .usermenu .userbutton, a[href*=\"logout\"]')") { [changed] value, _ in
+                if (value as? Bool) == true || self.loads > 1 { changed(url) }
+            }
+        }
+    }
+}
+
+// MARK: - Vidéo
+
+/// Une vidéo, lue en natif (AVKit) : MediaSpace (manifeste Kaltura), un flux
+/// HLS ou un mp4 de Courseware. YouTube n'a pas de flux lisible sans son
+/// lecteur : une carte qui l'ouvre ailleurs.
+struct NativeVideo: View {
+    let title: String
+    let address: String
+    var desk: StudyDesk
+    var openWeb: (URL, String) -> Void
+
+    @State private var player: AVPlayer?
+    @State private var failed: String?
+    @State private var playing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let player {
+                VideoPlayer(player: player)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .onDisappear { player.pause() }
+            } else if case .youtube(let id) = SiteRouter.route(address) {
+                Button {
+                    if let url = URL(string: "https://www.youtube.com/watch?v=\(id)") { openWeb(url, title) }
+                } label: { Label("\(title) · YouTube", systemImage: "play.rectangle") }
+                .buttonStyle(.paper)
+            } else {
+                Button {
+                    playing = true
+                    Task { await resolve() }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: playing && failed == nil ? "hourglass" : "play.circle.fill").font(.title2)
+                        Text(title).lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .foregroundStyle(Carnet.ink)
+                }
+                .buttonStyle(.plain)
+                .disabled(playing && failed == nil)
+                if let failed {
+                    HStack {
+                        Text(failed).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                        Button("Se connecter") { desk.signIn = .mediaspace }.buttonStyle(.paper)
+                    }
+                }
+            }
+        }
+        .onChange(of: desk.signInRevision) { _, _ in
+            if failed != nil { failed = nil; Task { await resolve() } }
+        }
+    }
+
+    private func resolve() async {
+        switch SiteRouter.route(address) {
+        case .mediaspace(let entry):
+            if let url = await desk.mediaspace.playbackURL(entryID: entry) { play(url) } else { failed = "Vidéo réservée." }
+        default:
+            if let url = URL(string: address) { play(url) } else { failed = "Adresse illisible." }
+        }
+    }
+
+    private func play(_ url: URL) {
+        let player = AVPlayer(url: url)
+        self.player = player
+        player.play()
+    }
+}
+
+// MARK: - Fichiers
+
+/// Un fichier qui n'est pas un PDF (diapositives, image, code) : l'aperçu du
+/// système, dans le bureau.
+struct QuickLookPane: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero, style: .normal)!
+        view.previewItem = url as NSURL
+        return view
+    }
+
+    func updateNSView(_ view: QLPreviewView, context: Context) {
+        if (view.previewItem as? NSURL) as URL? != url { view.previewItem = url as NSURL }
+    }
+}
+
+struct FileReader: View {
+    let title: String
+    let address: String
+    var desk: StudyDesk
+
+    @State private var file: URL?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let file {
+                QuickLookPane(url: file)
+            } else if failed {
+                ContentUnavailableView {
+                    Label("Fichier introuvable", systemImage: "doc")
+                } actions: {
+                    Button("Se connecter") { desk.signIn = .moodle }.buttonStyle(.paper)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: "\(address)|\(desk.signInRevision)") {
+            guard let url = URL(string: address) else { failed = true; return }
+            failed = false
+            if let result = try? await AuthenticatedDownloader.file(url), !(result.type ?? "").contains("text/html") {
+                file = result.file
+            } else {
+                failed = true
+            }
+        }
+    }
+}
+
+/// Une image d'un site du cours, avec les cookies EPFL (Moodle en demande).
+struct SiteImage: View {
+    let address: String
+    @State private var image: NSImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 420)
+            } else if !failed {
+                ProgressView().frame(height: 60)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .task(id: address) {
+            guard let url = URL(string: address) else { failed = true; return }
+            if let data = await AuthenticatedDownloader.data(url), let loaded = NSImage(data: data) { image = loaded } else { failed = true }
+        }
+    }
+}
+
+// MARK: - Blocs
+
+/// Une page de site, mise en page nativement.
+struct SiteBlocksView: View {
+    let blocks: [SiteBlock]
+    var desk: StudyDesk
+    /// Un lien : le lecteur choisit où l'ouvrir (`SiteRouter`).
+    var open: (String, String) -> Void
+    var openWeb: (URL, String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .markdown(let text):
+                    RichTextView(text: text, size: 15)
+                case .image(let source):
+                    SiteImage(address: source)
+                case .video(let title, let url):
+                    NativeVideo(title: title, address: url, desk: desk, openWeb: openWeb)
+                case .file(let title, let url):
+                    Button { open(url, title) } label: { Label(title, systemImage: "doc.richtext") }
+                        .buttonStyle(.paper)
+                case .link(let title, let url):
+                    Button { open(url, title) } label: {
+                        Label(title, systemImage: SiteRouter.route(url) == .web || SiteRouter.route(url) == .geogebra ? "arrow.up.right" : "arrow.right")
+                    }
+                    .buttonStyle(.paper)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Moodle
+
+/// Une activité Moodle lue en natif : page, dossier, devoir, lien, forum.
+struct MoodleActivityReader: View {
+    let module: String
+    let id: Int
+    let title: String
+    var desk: StudyDesk
+    var open: (String, String) -> Void
+    var openWeb: (URL, String) -> Void
+
+    @State private var content: MoodleActivityContent?
+    @State private var error: String?
+    @State private var needsLogin = false
+    @State private var discussion: MoodleActivityContent?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Kicker(Self.kind(module))
+                Text(content?.title.isEmpty == false ? content!.title : title).font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
+                if let content {
+                    details(content)
+                } else if needsLogin {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Connecte-toi à Moodle.").foregroundStyle(Carnet.inkSecondary)
+                        Button("Se connecter") { desk.signIn = .moodle }.buttonStyle(.ink)
+                    }
+                } else if let error {
+                    Text(error).foregroundStyle(Carnet.inkSecondary)
+                } else {
+                    ProgressView()
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 780, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .task(id: "\(module)\(id)|\(desk.signInRevision)") { await load() }
+    }
+
+    private func load() async {
+        error = nil
+        needsLogin = false
+        do {
+            let loaded = try await desk.moodle.activity(module: module, id: id)
+            content = loaded
+            // Un lien : on suit sa cible, en natif si on sait la lire.
+            if module == "url", let target = loaded.target, !target.isEmpty, SiteRouter.route(target) != .web {
+                open(target, loaded.title.isEmpty ? title : loaded.title)
+            }
+        } catch HiddenSiteSession.SiteError.notSignedIn {
+            needsLogin = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private func details(_ content: MoodleActivityContent) -> some View {
+        if !content.dates.isEmpty || !content.status.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(content.dates, id: \.self) { Label($0, systemImage: "calendar").foregroundStyle(Carnet.ink) }
+                ForEach(content.status, id: \.self) { Text($0).font(.callout).foregroundStyle(Carnet.inkSecondary) }
+            }
+            .paperSheet(padding: 14)
+        }
+        if !content.html.isEmpty {
+            SiteBlocksView(blocks: SiteHTML.blocks(content.html, base: URL(string: "https://moodle.epfl.ch/")), desk: desk,
+                           open: open, openWeb: openWeb)
+        }
+        if let target = content.target, !target.isEmpty {
+            Button { open(target, content.title) } label: { Label(URL(string: target)?.host ?? target, systemImage: "arrow.right") }
+                .buttonStyle(.ink)
+        }
+        if !content.files.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Kicker("Fichiers")
+                ForEach(content.files, id: \.url) { file in
+                    Button { open(file.url, file.name) } label: { Label(file.name, systemImage: "doc.richtext") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Carnet.ink)
+                }
+            }
+        }
+        if module == "forum" {
+            forum(content)
+        }
+        if content.html.isEmpty && content.files.isEmpty && content.discussions.isEmpty && content.target == nil && content.dates.isEmpty {
+            Text("Rien à lire ici.").foregroundStyle(Carnet.inkSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private func forum(_ content: MoodleActivityContent) -> some View {
+        if let discussion {
+            Button { self.discussion = nil } label: { Label("Toutes les annonces", systemImage: "chevron.left") }
+                .buttonStyle(.plain).foregroundStyle(Carnet.inkSecondary)
+            ForEach(Array(discussion.posts.enumerated()), id: \.offset) { _, post in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(post.subject).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+                    Text([post.author, post.date].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                    SiteBlocksView(blocks: SiteHTML.blocks(post.html, base: URL(string: "https://moodle.epfl.ch/")), desk: desk,
+                                   open: open, openWeb: openWeb)
+                }
+                .paperSheet(padding: 16)
+            }
+        } else if content.discussions.isEmpty {
+            Text("Pas d'annonce.").foregroundStyle(Carnet.inkSecondary)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(content.discussions, id: \.id) { item in
+                    Button {
+                        Task { discussion = try? await desk.moodle.discussion(id: item.id) }
+                    } label: {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(item.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                            Spacer()
+                            Text(item.date).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle().fill(Carnet.rule).frame(height: 1)
+                }
+            }
+        }
+    }
+
+    static func kind(_ module: String) -> String {
+        switch module {
+        case "page": return "Page"
+        case "folder": return "Dossier"
+        case "assign": return "Devoir"
+        case "url": return "Lien"
+        case "forum": return "Annonces"
+        case "quiz": return "Quiz"
+        default: return "Moodle"
+        }
+    }
+}
+
+// MARK: - Courseware
+
+/// Une unité de Courseware : ses vidéos (AVKit) et ses textes, en natif.
+struct EdXUnitReader: View {
+    let unit: EdXOutline.Unit
+    var desk: StudyDesk
+    var open: (String, String) -> Void
+    var openWeb: (URL, String) -> Void
+
+    @State private var texts: [String: [SiteBlock]] = [:]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(unit.title).font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
+                ForEach(unit.blocks) { block in
+                    switch block.kind {
+                    case .video:
+                        if let url = block.videoURL ?? block.youTubeID.map({ "https://www.youtube.com/watch?v=\($0)" }) {
+                            NativeVideo(title: block.title.isEmpty ? "Vidéo" : block.title, address: url, desk: desk, openWeb: openWeb)
+                        }
+                    case .html, .problem, .other:
+                        VStack(alignment: .leading, spacing: 8) {
+                            if block.kind == .problem { Kicker("Exercice · \(block.title)") }
+                            if let blocks = texts[block.id] {
+                                SiteBlocksView(blocks: blocks, desk: desk, open: open, openWeb: openWeb)
+                            } else if block.viewURL != nil {
+                                ProgressView()
+                            }
+                        }
+                        .task(id: block.id) { await load(block) }
+                    }
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 780, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func load(_ block: EdXOutline.Block) async {
+        guard texts[block.id] == nil, let address = block.viewURL else { return }
+        let html = (try? await desk.courseware.blockHTML(address)) ?? ""
+        texts[block.id] = SiteHTML.blocks(html, base: URL(string: address))
+    }
+}

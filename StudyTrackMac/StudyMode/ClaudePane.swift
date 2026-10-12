@@ -3,48 +3,73 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Claude dans le bureau : une conversation **par exercice**, qui connaît
-/// l'énoncé, les questions cochées, la série (PDF joint), et à qui l'on montre
-/// sa copie d'une capture d'écran (une page de GoodNotes). Par l'abonnement
+/// Claude dans le bureau : une conversation **par série**, gardée d'un
+/// lancement à l'autre. Elle connaît la série (PDF joint au début), l'exercice
+/// en cours et ses questions cochées ; changer d'exercice reste dans la même
+/// conversation. « Post-mortem » et « Rapport » en fin de série ; les verdicts
+/// d'un post-mortem ne sont notés qu'une fois confirmés. Par l'abonnement
 /// Claude, pas d'une clé d'API.
 struct ClaudePane: View {
     let course: Course?
+    let courses: [Course]
     var desk: StudyDesk
 
     @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
     @State private var draft = ""
     @State private var attachments: [ClaudeTutor.Attachment] = []
     @State private var previews: [NSImage] = []
     @State private var attachSeries = true
+    @State private var config: ClaudeChat.Config?
     @FocusState private var focused: Bool
 
     private var exercise: Exercise? { course?.allExercises.first { $0.id == timer.targetID } }
-    private var chat: ClaudeChat { desk.chat(for: timer.targetID) }
+
+    /// La série de la conversation : celle de l'exercice en cours, sinon la
+    /// série de la semaine.
+    private var series: ExerciseSeries? {
+        if let series = exercise?.series { return series }
+        let all = course?.sortedSeries.filter { !$0.exercises.isEmpty } ?? []
+        let week = course?.currentWeek ?? 0
+        return all.first { $0.plannedWeek >= week && !$0.isComplete } ?? all.last
+    }
+
     private var seriesAddress: String? {
-        guard let exercise else { return nil }
-        let address = exercise.statementURLString.isEmpty ? (exercise.series?.urlString ?? "") : exercise.statementURLString
+        let address = exercise.map { $0.statementURLString.isEmpty ? ($0.series?.urlString ?? "") : $0.statementURLString }
+            ?? series?.urlString ?? ""
         return address.isEmpty ? nil : address
     }
 
     var body: some View {
-        let chat = self.chat
-        VStack(spacing: 0) {
-            header(chat)
-            Rectangle().fill(Carnet.rule).frame(height: 1)
-            if !ClaudeChat.isAvailable {
-                notInstalled
+        Group {
+            if let config {
+                let chat = desk.chat(series: series?.id, config: config)
+                VStack(spacing: 0) {
+                    header(chat)
+                    Rectangle().fill(Carnet.rule).frame(height: 1)
+                    if !ClaudeChat.isAvailable {
+                        notInstalled
+                    } else {
+                        conversation(chat)
+                    }
+                    Rectangle().fill(Carnet.rule).frame(height: 1)
+                    composer(chat)
+                }
             } else {
-                conversation(chat)
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Rectangle().fill(Carnet.rule).frame(height: 1)
-            composer(chat)
         }
-        .onAppear {
+        .task(id: settingsKey) {
+            // Le dossier du projet, son CLAUDE.md, ses compétences : une fois par
+            // réglage, pas à chaque rendu.
+            config = ClaudeProjectSetup.config(settings: settings, courses: courses)
+        }
+        .onChange(of: config) { _, _ in
             takePending()
             #if DEBUG
             // `-claudeAsk "…"` : une vraie question, pour vérifier la chaîne entière.
             if let index = CommandLine.arguments.firstIndex(of: "-claudeAsk"), index + 1 < CommandLine.arguments.count,
-               self.chat.messages.isEmpty {
+               let config, desk.chat(series: series?.id, config: config).messages.isEmpty {
                 send(CommandLine.arguments[index + 1])
             }
             #endif
@@ -52,41 +77,102 @@ struct ClaudePane: View {
         .onChange(of: desk.pendingQuestion) { _, _ in takePending() }
     }
 
+    private var settingsKey: String {
+        "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeNotion)|\(settings.claudeStudyTrackMCP)"
+    }
+
+    private var chat: ClaudeChat? {
+        config.map { desk.chat(series: series?.id, config: $0) }
+    }
+
     // MARK: En-tête
 
     private func header(_ chat: ClaudeChat) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkle").foregroundStyle(Carnet.ink)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Claude").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
-                Text(exercise.map { "sur \($0.displayNumber)\(course.map { " · \($0.displayCode)" } ?? "")" } ?? "conversation libre")
-                    .font(.caption).foregroundStyle(Carnet.inkSecondary)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkle").foregroundStyle(Carnet.ink)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(series.map(name) ?? "Claude").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+                    if let course { Text(course.displayCode).font(.caption).foregroundStyle(Carnet.inkSecondary) }
+                }
+                if let series {
+                    Menu {
+                        ForEach(series.sortedExercises) { item in
+                            Button {
+                                if let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: item.id) }
+                            } label: {
+                                if item.id == timer.targetID { Label(item.displayNumber, systemImage: "checkmark") } else { Text(item.displayNumber) }
+                            }
+                        }
+                    } label: {
+                        Text(exercise?.displayNumber ?? "Exercice")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Changer d'exercice")
+                }
+                Spacer()
+                Picker("Mode", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
+                    ForEach(ClaudeTutor.Mode.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 200)
+                if let usage = chat.usage {
+                    Text("\(Int(usage * 100)) %")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(usage > 0.8 ? Carnet.wrong : Carnet.inkTertiary)
+                        .help("Abonnement utilisé (5 h)")
+                }
+                Menu {
+                    Button("Nouvelle conversation", systemImage: "square.and.pencil") { chat.startOver() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(Carnet.inkSecondary)
             }
-            Spacer()
-            Picker("Mode", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
-                ForEach(ClaudeTutor.Mode.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 210)
-            .help("Tuteur : des indices, jamais la solution d'emblée. Explications : tout, solutions comprises.")
-            if let usage = chat.usage {
-                Text("abonnement \(Int(usage * 100)) %")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(usage > 0.8 ? Carnet.wrong : Carnet.inkTertiary)
-                    .help("La part utilisée de la fenêtre de 5 h de ton abonnement Claude")
-            }
-            Button {
-                desk.resetChat(for: timer.targetID)
-            } label: {
-                Image(systemName: "square.and.pencil")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Carnet.inkSecondary)
-            .help("Nouvelle conversation")
+            status(chat)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
+    }
+
+    /// Comment tourne Claude : isolé ou projet, ce qu'il peut faire, et ce que
+    /// coûte le contexte.
+    private func status(_ chat: ClaudeChat) -> some View {
+        HStack(spacing: 10) {
+            Label(chat.config.profile == .project ? "Projet EPFL" : "Isolé",
+                  systemImage: chat.config.profile == .project ? "folder" : "lock")
+            Text("·")
+            Text("permis : \(chat.config.permissions)")
+            if let info = chat.info {
+                if chat.config.profile == .project {
+                    Text("·")
+                    Text(info.hasSkill(ClaudeProject.seriesSkill) ? "epfl-serie" : "sans epfl-serie")
+                        .foregroundStyle(info.hasSkill(ClaudeProject.seriesSkill) ? Carnet.inkTertiary : Carnet.wrong)
+                }
+                ForEach(info.mcpServers, id: \.name) { server in
+                    Text("·")
+                    Text("\(ClaudeTutor.toolLabel("mcp__" + server.name)) \(server.status == "connected" ? "connecté" : "à connecter")")
+                        .foregroundStyle(server.status == "connected" ? Carnet.inkTertiary : Carnet.wrong)
+                        .help(server.status == "connected" ? "" : "Tape `claude` puis `/mcp` dans le Terminal, dans le dossier du projet")
+                }
+            }
+            if let tokens = chat.contextTokens {
+                Text("·")
+                Text("contexte \(tokens >= 1000 ? "\(tokens / 1000) k" : "\(tokens)")")
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(Carnet.inkTertiary)
+        .lineLimit(1)
+    }
+
+    private func name(_ series: ExerciseSeries) -> String {
+        series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title
     }
 
     // MARK: Conversation
@@ -97,8 +183,13 @@ struct ClaudePane: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if chat.messages.isEmpty { welcome }
                     ForEach(chat.messages) { message in
-                        MessageView(message: message, thinking: chat.isThinking && message.isStreaming)
+                        MessageView(message: message, thinking: chat.isThinking && message.isStreaming,
+                                    tool: message.isStreaming ? chat.activeTool : nil)
                             .id(message.id)
+                        if message.role == .claude, !message.isStreaming, let series {
+                            let verdicts = ClaudeTutor.verdicts(in: message.text)
+                            if !verdicts.isEmpty { VerdictCard(verdicts: verdicts, series: series) }
+                        }
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
@@ -110,16 +201,16 @@ struct ClaudePane: View {
             .onChange(of: chat.messages.count) { _, _ in
                 withAnimation(.smooth(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(exercise == nil ? "Une question ?" : "On regarde \(exercise!.displayNumber) ensemble ?")
+            Text(series == nil ? "Une question ?" : "On attaque ?")
                 .font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
-            Text("Claude connaît l'exercice en cours, ses questions et la série. En mode tuteur, il donne des indices, pas la solution. Montre-lui ta copie : « Capturer » prend une zone de l'écran (une page de GoodNotes).")
+            Text("Montre ta copie avec « Capturer ».")
                 .foregroundStyle(Carnet.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
             FlowChips(spacing: 8) {
                 ForEach(ClaudeTutor.QuickAction.allCases) { action in
                     Button { send(action.prompt) } label: { Label(action.label, systemImage: action.icon) }
@@ -133,11 +224,11 @@ struct ClaudePane: View {
     private var notInstalled: some View {
         VStack(spacing: 14) {
             Image(systemName: "terminal").font(.largeTitle).foregroundStyle(Carnet.inkSecondary)
-            Text("Claude passe par ton abonnement").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
-            Text("Installe Claude Code (claude.com/code), puis tape `claude` une fois dans le Terminal pour te connecter avec ton compte Claude. StudyTrack s'en sert ensuite, sans clé d'API.")
+            Text("Connecte Claude").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
+            Text("Installe Claude Code, puis tape `claude` une fois dans le Terminal.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Carnet.inkSecondary)
-                .frame(maxWidth: 460)
+                .frame(maxWidth: 420)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -146,13 +237,27 @@ struct ClaudePane: View {
 
     private func composer(_ chat: ClaudeChat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !chat.messages.isEmpty {
+            if !chat.messages.isEmpty || series != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(ClaudeTutor.QuickAction.allCases) { action in
-                            Button { send(action.prompt) } label: { Label(action.label, systemImage: action.icon) }
+                        if !chat.messages.isEmpty {
+                            ForEach(ClaudeTutor.QuickAction.allCases) { action in
+                                Button { send(action.prompt) } label: { Label(action.label, systemImage: action.icon) }
+                                    .buttonStyle(.paper)
+                                    .disabled(chat.isAnswering)
+                            }
+                        }
+                        if let series {
+                            if !chat.messages.isEmpty { Rectangle().fill(Carnet.rule).frame(width: 1, height: 20) }
+                            Button {
+                                send(ClaudeTutor.postMortemPrompt(useSkill: usesSkill(chat)), label: "Post-mortem")
+                            } label: { Label("Post-mortem", systemImage: "checklist") }
                                 .buttonStyle(.paper)
-                                .disabled(chat.isAnswering)
+                                .disabled(chat.isAnswering || series.doneCount == 0)
+                                .help(series.isComplete ? "" : "Mieux après la correction")
+                            Button { send(ClaudeTutor.reportPrompt, label: "Rapport") } label: { Label("Rapport", systemImage: "doc.text.magnifyingglass") }
+                                .buttonStyle(.paper)
+                                .disabled(chat.isAnswering || chat.messages.isEmpty)
                         }
                     }
                 }
@@ -181,10 +286,10 @@ struct ClaudePane: View {
             }
             HStack(alignment: .bottom, spacing: 10) {
                 Menu {
-                    Button("Capturer une zone de l'écran", systemImage: "camera.viewfinder", action: capture)
-                    Button("Joindre une image ou un PDF…", systemImage: "paperclip", action: pick)
+                    Button("Capturer", systemImage: "camera.viewfinder", action: capture)
+                    Button("Joindre un fichier…", systemImage: "paperclip", action: pick)
                     Divider()
-                    Toggle("Joindre la série (PDF) au premier message", isOn: $attachSeries)
+                    Toggle("Joindre la série", isOn: $attachSeries)
                 } label: {
                     Image(systemName: "plus.circle").font(.title2)
                 }
@@ -195,8 +300,8 @@ struct ClaudePane: View {
                 Button(action: capture) { Image(systemName: "camera.viewfinder").font(.title3) }
                     .buttonStyle(.plain)
                     .foregroundStyle(Carnet.inkSecondary)
-                    .help("Capturer ta copie (une page de GoodNotes) et la montrer à Claude")
-                TextField(chat.mode == .tutor ? "Ta question, ou où tu bloques…" : "Ta question…", text: $draft, axis: .vertical)
+                    .help("Capturer ta copie")
+                TextField(chat.mode == .tutor ? "Où tu bloques ?" : "Ta question", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
                     .lineLimit(1...8)
@@ -231,7 +336,7 @@ struct ClaudePane: View {
     // MARK: Gestes
 
     private func takePending() {
-        guard let question = desk.pendingQuestion else { return }
+        guard config != nil, let question = desk.pendingQuestion else { return }
         attachSeries = desk.pendingAttachSeries
         desk.pendingQuestion = nil
         if question == ClaudeTutor.QuickAction.check.prompt {
@@ -243,17 +348,39 @@ struct ClaudePane: View {
         }
     }
 
-    private func send(_ text: String) {
-        let chat = self.chat
+    private func usesSkill(_ chat: ClaudeChat) -> Bool {
+        guard chat.config.profile == .project else { return false }
+        return chat.info?.hasSkill(ClaudeProject.seriesSkill) ?? ClaudeProjectSetup.linkedSkills(settings: settings).contains(ClaudeProject.seriesSkill)
+    }
+
+    private func send(_ text: String, label: String? = nil) {
+        guard let chat else { return }
         var files = attachments
-        if attachSeries, chat.messages.isEmpty, let address = seriesAddress,
+        var pdfAttached = false
+        if attachSeries, !chat.opened, let address = seriesAddress,
            case .ready(let url)? = desk.document(address), let data = try? Data(contentsOf: url) {
-            files.insert(.init(kind: .pdf, data: data, name: exercise?.series.map { $0.title.isEmpty ? "Série \($0.seriesNumber)" : $0.title } ?? "Série"), at: 0)
+            files.insert(.init(kind: .pdf, data: data, name: series.map(name) ?? "Série"), at: 0)
+            pdfAttached = true
         }
-        chat.send(text, attachments: files, images: previews, context: context)
+        let situation = ClaudeChat.Situation(series: series.map { seriesContext($0, pdfAttached: pdfAttached) },
+                                             exerciseID: exercise?.id, exercise: context,
+                                             skill: usesSkill(chat) ? ClaudeProject.seriesSkill : nil)
+        chat.send(text, label: label, attachments: files, images: previews, situation: situation)
         draft = ""
         attachments = []
         previews = []
+    }
+
+    private func seriesContext(_ series: ExerciseSeries, pdfAttached: Bool) -> ClaudeTutor.SeriesContext {
+        ClaudeTutor.SeriesContext(
+            courseCode: course?.displayCode, courseName: course?.name, title: name(series),
+            week: series.plannedWeek > 0 ? series.plannedWeek : nil,
+            due: series.dueDate.map { $0.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH"))) },
+            exercises: series.sortedExercises.map { item in
+                let status = item.correctness.map { $0.label.lowercased() } ?? (item.isDone ? "fait" : "à faire")
+                return .init(number: item.exerciseNumber, title: item.title, status: status + (item.isBonus ? " (bonus)" : ""))
+            },
+            pdfAttached: pdfAttached)
     }
 
     private var context: ClaudeTutor.Context {
@@ -262,7 +389,7 @@ struct ClaudePane: View {
                                    exercise: exercise.map { "\($0.series.map { "Série \($0.seriesNumber) · " } ?? "")\($0.displayNumber)" },
                                    statement: exercise?.statement, questions: questions,
                                    doneQuestions: exercise?.subQuestionDoneCount ?? 0,
-                                   correction: exercise?.correctness?.label, hint: nil)
+                                   correction: exercise?.correctness?.label, hint: exercise?.hint.isEmpty == false ? exercise?.hint : nil)
     }
 
     /// La capture interactive du système (un viseur, comme ⇧⌘4).
@@ -324,6 +451,7 @@ struct ClaudePane: View {
 private struct MessageView: View {
     let message: ClaudeChat.Message
     let thinking: Bool
+    var tool: String?
 
     var body: some View {
         switch message.role {
@@ -341,7 +469,14 @@ private struct MessageView: View {
                     Label(message.attachments.joined(separator: ", "), systemImage: "paperclip")
                         .font(.caption).foregroundStyle(Carnet.inkSecondary)
                 }
-                if !message.text.isEmpty {
+                if let label = message.label {
+                    Label(label, systemImage: "checklist")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(Carnet.ink)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else if !message.text.isEmpty {
                     Text(message.text)
                         .foregroundStyle(Carnet.ink)
                         .padding(.horizontal, 14)
@@ -365,15 +500,76 @@ private struct MessageView: View {
                     } else if message.text.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
-                            Text(thinking ? "Claude réfléchit…" : "…").foregroundStyle(Carnet.inkSecondary)
+                            Text(tool.map { "\($0)…" } ?? (thinking ? "Claude réfléchit…" : "…")).foregroundStyle(Carnet.inkSecondary)
                         }
                     } else {
-                        RichTextView(text: message.text, size: 14.5)
+                        RichTextView(text: ClaudeTutor.withoutVerdicts(message.text), size: 14.5)
+                        if let tool, message.isStreaming {
+                            Label("\(tool)…", systemImage: "wrench.and.screwdriver").font(.caption).foregroundStyle(Carnet.inkTertiary)
+                        }
                     }
                 }
                 Spacer(minLength: 0)
             }
         }
+    }
+}
+
+/// Les verdicts d'un post-mortem : rien n'est noté sans un clic.
+private struct VerdictCard: View {
+    let verdicts: [ClaudeTutor.Verdict]
+    let series: ExerciseSeries
+    @State private var applied: Set<String> = []
+
+    private var rows: [(verdict: ClaudeTutor.Verdict, exercise: Exercise?)] {
+        let exercises = series.sortedExercises
+        let numbers = exercises.map(\.exerciseNumber)
+        return verdicts.map { verdict in
+            (verdict, ClaudeTutor.matchExercise(verdict.exercise, numbers: numbers).map { exercises[$0] })
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Kicker("À noter dans StudyTrack")
+                Spacer()
+                let pending = rows.filter { $0.exercise != nil && !applied.contains($0.verdict.exercise) }
+                if pending.count > 1 {
+                    Button("Tout noter") { for row in pending { apply(row.verdict, to: row.exercise!) } }
+                        .buttonStyle(.ink)
+                }
+            }
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 10) {
+                    Text(row.exercise?.displayNumber ?? "Exercice \(row.verdict.exercise)")
+                        .foregroundStyle(row.exercise == nil ? Carnet.inkTertiary : Carnet.ink)
+                    Spacer()
+                    Text(row.verdict.result.shortLabel)
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Carnet.color(for: row.verdict.result).opacity(0.14)))
+                        .foregroundStyle(Carnet.color(for: row.verdict.result))
+                    if let exercise = row.exercise {
+                        if applied.contains(row.verdict.exercise) || exercise.correctness == row.verdict.result {
+                            Image(systemName: "checkmark").foregroundStyle(Carnet.inkSecondary)
+                        } else {
+                            Button("Noter") { apply(row.verdict, to: exercise) }.buttonStyle(.paper)
+                        }
+                    } else {
+                        Text("introuvable").font(.caption).foregroundStyle(Carnet.inkTertiary)
+                    }
+                }
+            }
+        }
+        .paperSheet(padding: 14)
+        .padding(.leading, 38)
+    }
+
+    private func apply(_ verdict: ClaudeTutor.Verdict, to exercise: Exercise) {
+        exercise.correct(verdict.result)
+        applied.insert(verdict.exercise)
     }
 }
 

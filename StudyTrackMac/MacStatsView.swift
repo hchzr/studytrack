@@ -91,10 +91,10 @@ struct MacStatsView: View {
                         context.insert(session)
                         creating = session
                     } label: {
-                        Label("Ajouter une session", systemImage: "plus")
+                        Label("Ajouter", systemImage: "plus")
                     }
                     .buttonStyle(.paper)
-                    .help("Une session oubliée, un travail fait sans le chrono")
+                    .help("Ajouter une session")
                 }
                 HStack(spacing: 36) {
                     figure(DateUtils.hoursLabel(seconds: total), "d'étude")
@@ -221,7 +221,7 @@ struct MacStatsView: View {
         card("Sessions") {
             let groups = SessionStats.groupedByDay(Array(studySessions.prefix(80)))
             if groups.isEmpty {
-                Text("Aucune session sur la période.").foregroundStyle(.secondary)
+                Text("Rien sur cette période.").foregroundStyle(.secondary)
             }
             ForEach(groups) { group in
                 HStack(alignment: .firstTextBaseline) {
@@ -247,7 +247,7 @@ struct MacStatsView: View {
                     }
                 }
             }
-            Text("Double-clic pour corriger une session.").font(.caption).foregroundStyle(.tertiary)
+            Text("Double-clic pour corriger.").font(.caption).foregroundStyle(.tertiary)
         }
     }
 

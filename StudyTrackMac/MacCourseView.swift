@@ -95,7 +95,7 @@ struct MacCourseView: View {
                 Button { showingInspector.toggle() } label: {
                     Label("Inspecteur", systemImage: "sidebar.trailing")
                 }
-                .help("Afficher ou masquer l'inspecteur")
+                .help("Inspecteur")
             }
         }
     }
@@ -130,7 +130,7 @@ struct MacCourseView: View {
                 }
                 .labelsHidden()
                 .fixedSize()
-                .help("Montrer une semaine")
+                .help("Semaine")
                 Spacer(minLength: 12)
                 stat("Théorie", progress.watchedCount, progress.videoCount)
                 stat("Exercices", progress.doneCount, progress.exerciseCount)
@@ -140,7 +140,7 @@ struct MacCourseView: View {
                         .foregroundStyle(Carnet.ink)
                 }
                 .frame(width: 44, height: 44)
-                .help("\(Int((progress.completion * 100).rounded())) % du cours fait")
+                .help("\(Int((progress.completion * 100).rounded())) %")
             }
         }
         .padding(.vertical, 8)
@@ -190,7 +190,7 @@ struct MacCourseView: View {
             }
         }
         Divider()
-        Button("Chronométrer cet exercice") { time(exercise.id, .exercise) }
+        Button("Chronométrer") { time(exercise.id, .exercise) }
         if let url = web(exercise.statementURLString) ?? web(exercise.series?.urlString ?? "") {
             Link("Ouvrir l'énoncé", destination: url)
         }
@@ -243,7 +243,7 @@ struct MacCourseView: View {
             TheoryInspector(item: item, tint: tint) { time(item.id, .theory) }
         } else {
             ContentUnavailableView("Choisis un exercice", systemImage: "sidebar.trailing",
-                                   description: Text("L'énoncé, les questions, la correction et le temps passé s'affichent ici."))
+                                   description: Text("Choisis-en un à gauche."))
         }
     }
 
@@ -338,7 +338,7 @@ private struct ExerciseMacRow: View {
             }
             Spacer()
             if isTimed {
-                Image(systemName: "timer").foregroundStyle(.secondary).help("Chronométré en ce moment")
+                Image(systemName: "timer").foregroundStyle(.secondary).help("En cours")
             }
             if let correctness = exercise.correctness {
                 VerdictTag(correctness: correctness)
@@ -452,10 +452,10 @@ private struct ExerciseInspector: View {
             Section {
                 let sessions = exercise.targetedSessions ?? []
                 LabeledContent("Temps passé", value: DateUtils.hoursLabel(seconds: sessions.reduce(0) { $0 + $1.durationSeconds }))
-                Button(action: time) { Label("Chronométrer cet exercice", systemImage: "play.circle") }
+                Button(action: time) { Label("Chronométrer", systemImage: "play.circle") }
                 if let url = URL(string: exercise.statementURLString.isEmpty ? (exercise.series?.urlString ?? "") : exercise.statementURLString),
                    url.scheme?.hasPrefix("http") == true {
-                    Link(destination: url) { Label("Ouvrir l'énoncé", systemImage: "doc.richtext") }
+                    Link(destination: url) { Label("Énoncé", systemImage: "doc.richtext") }
                 }
             }
         }

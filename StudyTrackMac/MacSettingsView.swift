@@ -32,21 +32,17 @@ private struct GeneralSettings: View {
                 if let error = settings.launchAtLoginError {
                     Text(error).font(.caption).foregroundStyle(Carnet.wrong)
                 }
-            } footer: {
-                Text("Le chrono reste dans la barre des menus, même fenêtre fermée.")
             }
             Section {
-                Toggle("Garder l'icône dans le Dock, fenêtre fermée", isOn: $settings.keepInDock)
-            } footer: {
-                Text("Sinon StudyTrack ne vit que dans la barre des menus quand sa fenêtre est fermée.")
+                Toggle("Garder l'icône dans le Dock", isOn: $settings.keepInDock)
             }
             Section {
-                Toggle("Afficher le temps dans la barre des menus", isOn: $settings.showTimeInMenuBar)
+                Toggle("Temps dans la barre des menus", isOn: $settings.showTimeInMenuBar)
                 Toggle("Avec les secondes", isOn: $settings.menuBarSeconds)
                     .disabled(!settings.showTimeInMenuBar)
                 Toggle("Raccourci global ⌃⌥Espace", isOn: $settings.globalShortcut)
             } footer: {
-                Text("⌃⌥Espace démarre ou met en pause le chrono depuis n'importe quelle app. Sans les secondes, la barre des menus ne se redessine qu'une fois par minute : c'est plus doux pour la batterie.")
+                Text("Sans les secondes, ça use moins la batterie.")
             }
         }
         .formStyle(.grouped)
@@ -63,10 +59,10 @@ private struct PomodoroSettingsPane: View {
             Section {
                 Stepper("Objectif du jour : \(DateUtils.hoursLabel(seconds: settings.dailyGoalSeconds))",
                         value: $settings.dailyGoalMinutes, in: 30...600, step: 30)
-                Toggle("Chrono flottant pendant les sessions", isOn: Binding(
+                Toggle("Chrono flottant", isOn: Binding(
                     get: { settings.floatingTimer },
                     set: { settings.floatingTimer = $0; MiniTimerPanel.shared.update() }))
-                Toggle("Son à la fin d'un bloc et d'une pause", isOn: $settings.sounds)
+                Toggle("Sons", isOn: $settings.sounds)
             } header: {
                 Text("Chrono")
             }
@@ -76,7 +72,7 @@ private struct PomodoroSettingsPane: View {
                 Stepper("Pause courte : \(settings.shortBreakMinutes) min", value: $settings.shortBreakMinutes, in: 1...30)
                 Stepper("Pause longue : \(settings.longBreakMinutes) min", value: $settings.longBreakMinutes, in: 5...60, step: 5)
                 Stepper("Pause longue tous les \(settings.longBreakEvery) blocs", value: $settings.longBreakEvery, in: 2...8)
-                Toggle("Relancer le bloc après la pause", isOn: $settings.autoStartFocus)
+                Toggle("Relancer après la pause", isOn: $settings.autoStartFocus)
             } header: {
                 Text("Pomodoro")
             }
@@ -100,7 +96,7 @@ private struct SyncSettings: View {
                         .multilineTextAlignment(.trailing)
                 }
             } footer: {
-                Text("Cours, séries, coches et sessions sont ceux de l'iPhone. Moodle est relu par l'iPhone (un seul appareil à la fois) ; ce qu'il ajoute arrive ici tout seul.")
+                Text("Les mêmes données que sur ton iPhone.")
             }
         }
         .formStyle(.grouped)
@@ -118,28 +114,50 @@ private struct StudySettingsPane: View {
         @Bindable var settings = settings
         Form {
             Section {
-                Stepper("Durée proposée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
-                Toggle("Maintenir pour terminer avant l'heure", isOn: $settings.studyHoldToLeave)
-                Toggle("Fermer les apps non permises", isOn: $settings.studyCloseApps)
+                Stepper("Durée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
+                Toggle("Maintenir pour finir plus tôt", isOn: $settings.studyHoldToLeave)
+                Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
             } header: {
                 Text("Session")
             } footer: {
-                Text("Au début du mode étude, les apps non permises se ferment (elles demandent d'enregistrer d'abord) ; celles qu'on rouvre se ferment aussitôt. Sans cette option, elles sont seulement couvertes d'un voile. ⌘Q demande confirmation.")
+                Text("Sinon, elles sont juste cachées.")
             }
 
             Section {
                 LabeledContent("Claude Code") {
                     if let path = ClaudeChat.executable?.path {
-                        Text("trouvé · \(path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))")
+                        Text(path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
                             .foregroundStyle(.secondary)
                     } else {
                         Text("introuvable").foregroundStyle(Carnet.wrong)
                     }
                 }
+                Toggle("Projet EPFL", isOn: $settings.claudeProject)
+                if settings.claudeProject {
+                    LabeledContent("Dossier") {
+                        HStack {
+                            Text(settings.claudeProjectFolder.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                                .foregroundStyle(.secondary)
+                            Button("Choisir…", action: chooseFolder)
+                        }
+                    }
+                    LabeledContent("Compétences") {
+                        let skills = ClaudeProjectSetup.linkedSkills(settings: settings)
+                        Text(skills.isEmpty ? "aucune" : skills.joined(separator: ", "))
+                            .foregroundStyle(skills.isEmpty ? Carnet.wrong : .secondary)
+                    }
+                    Toggle("Notion (carnet d'erreurs)", isOn: $settings.claudeNotion)
+                    TextField("Serveur StudyTrack (https://…)", text: $settings.claudeStudyTrackMCP)
+                    LabeledContent("Permis") {
+                        Text(ClaudeProject.permissionSummary(notion: settings.claudeNotion,
+                                                             studyTrack: settings.claudeStudyTrackMCP.hasPrefix("https://")))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } header: {
                 Text("Claude")
             } footer: {
-                Text("Claude, dans le mode étude, passe par ton abonnement : StudyTrack fait parler Claude Code, connecté une fois à ton compte (tape `claude` dans le Terminal). Ni clé d'API, ni coût en plus ; sans outils ni accès à tes fichiers.")
+                Text(settings.claudeProject ? "Tes compétences EPFL, dans ce dossier. Rien d'autre." : "Passe par ton abonnement, sans outils.")
             }
 
             Section {
@@ -166,8 +184,6 @@ private struct StudySettingsPane: View {
                 Button("Ajouter une app…", action: addApp)
             } header: {
                 Text("Apps permises")
-            } footer: {
-                Text("Safari, Chrome et Arc restent fermés : les sites permis s'ouvrent dans le navigateur du mode étude.")
             }
 
             Section {
@@ -183,19 +199,19 @@ private struct StudySettingsPane: View {
                     }
                 }
                 HStack {
-                    TextField("Ajouter un site (ex. wolframalpha.com)", text: $newSite)
+                    TextField("wolframalpha.com", text: $newSite)
                         .onSubmit(addSite)
                     Button("Ajouter", action: addSite).disabled(newSite.isEmpty)
                 }
                 if siteError {
-                    Text("Ce n'est pas une adresse de site.").font(.caption).foregroundStyle(Carnet.wrong)
+                    Text("Adresse invalide").font(.caption).foregroundStyle(Carnet.wrong)
                 }
-                Button("Rétablir les sites par défaut") { settings.studySites = StudyMode.defaultSites }
+                Button("Rétablir") { settings.studySites = StudyMode.defaultSites }
                     .buttonStyle(.link)
             } header: {
                 Text("Sites permis")
             } footer: {
-                Text("Un domaine ouvre ses sous-domaines : « epfl.ch » ouvre Moodle, Courseware, Botafogo, Mediaspace… Les mêmes sites sont permis sur l'iPhone.")
+                Text("« epfl.ch » ouvre aussi Moodle, Botafogo…")
             }
         }
         .formStyle(.grouped)
@@ -210,6 +226,16 @@ private struct StudySettingsPane: View {
         siteError = false
         if !settings.studySites.contains(domain) { settings.studySites.append(domain) }
         newSite = ""
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choisir"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.claudeProjectFolder = url.path
     }
 
     private func addApp() {

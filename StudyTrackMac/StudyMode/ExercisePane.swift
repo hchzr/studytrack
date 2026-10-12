@@ -44,7 +44,7 @@ struct ExercisePane: View {
             ContentUnavailableView {
                 Label("Pas de série", systemImage: "doc.text")
             } description: {
-                Text(course == nil ? "Choisis un cours pour la session : ses séries s'ouvrent ici." : "Ce cours n'a pas encore de série importée.")
+                Text(course == nil ? "Choisis un cours." : "Rien d'importé pour ce cours.")
             }
         }
     }
@@ -69,7 +69,7 @@ struct ExercisePane: View {
             .fixedSize()
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
-            .help("Changer de série")
+            .help("Série")
             ScrollView {
                 VStack(spacing: 2) {
                     ForEach(series.sortedExercises) { item in
@@ -124,14 +124,11 @@ struct ExercisePane: View {
                     HStack {
                         Text(message).font(.caption).foregroundStyle(Carnet.inkSecondary)
                         Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
-                        if let url = URL(string: address) {
-                            Button("Ouvrir la page") { openWeb(url, name(series)) }.buttonStyle(.paper)
-                        }
                     }
                     .padding(.bottom, 12)
                 }
             case .loading?, nil:
-                ProgressView("Ouverture de l'énoncé…")
+                ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear { desk.loadPDF(address) }
             }
@@ -171,21 +168,16 @@ struct ExercisePane: View {
                 .frame(maxWidth: 760, alignment: .leading)
             }
         } else {
-            ContentUnavailableView("Choisis un exercice", systemImage: "list.number",
-                                   description: Text("Son énoncé s'affiche ici, et le chrono passe dessus."))
+            ContentUnavailableView("Choisis un exercice", systemImage: "list.number")
         }
     }
 
     private func loginPrompt(_ address: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "person.badge.key").font(.largeTitle).foregroundStyle(Carnet.inkSecondary)
-            Text("Connecte-toi à Moodle, une fois").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
-            Text("L'énoncé est sur Moodle. La connexion faite dans l'onglet Web du mode étude sert ensuite partout.")
-                .foregroundStyle(Carnet.inkSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
+            Text("Connecte-toi à Moodle").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
             HStack {
-                Button("Se connecter") { openWeb(MoodleClient.login, "Moodle") }.buttonStyle(.ink)
+                Button("Se connecter") { desk.signIn = .moodle }.buttonStyle(.ink)
                 Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
             }
         }
@@ -255,16 +247,16 @@ private struct ExerciseDrawer: View {
                 Button {
                     desk.ask(ClaudeTutor.QuickAction.hint.prompt)
                 } label: {
-                    Label("Un indice de Claude", systemImage: "lightbulb")
+                    Label("Un indice", systemImage: "lightbulb")
                 }
                 .buttonStyle(.ink)
                 Button {
                     desk.ask(ClaudeTutor.QuickAction.check.prompt)
                 } label: {
-                    Label("Vérifier ma copie…", systemImage: "camera.viewfinder")
+                    Label("Vérifier ma copie", systemImage: "camera.viewfinder")
                 }
                 .buttonStyle(.paper)
-                .help("Ouvre Claude : capture ta page GoodNotes, Claude dit où est la première erreur")
+                .help("Montre ta copie à Claude")
             }
         }
         .padding(16)

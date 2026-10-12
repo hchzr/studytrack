@@ -523,6 +523,106 @@ final class MoodleClient {
         return String(decoding: try JSONSerialization.data(withJSONObject: data), as: UTF8.self)
     }
 
+    // MARK: Lire une activité (mode étude du Mac)
+
+    /// Une activité lue dans la session : une page (son texte), un dossier
+    /// (ses fichiers), un devoir (dates, consignes, fichiers, état de la
+    /// remise), un lien (sa vraie cible), un forum (ses discussions). Le JSON
+    /// est décodé par `MoodleActivityContent` (pur, testé).
+    func activity(module: String, id: Int) async throws -> MoodleActivityContent {
+        try await prepare()
+        let raw = try await session.run(Self.activityScript, arguments: ["module": module, "id": id])
+        guard let content = MoodleActivityContent.decode(raw) else { throw HiddenSiteSession.SiteError.failed("Page Moodle illisible.") }
+        if content.needsLogin { throw HiddenSiteSession.SiteError.notSignedIn }
+        return content
+    }
+
+    /// Les messages d'une discussion de forum.
+    func discussion(id: Int) async throws -> MoodleActivityContent {
+        try await prepare()
+        let raw = try await session.run(Self.activityScript, arguments: ["module": "discussion", "id": id])
+        guard let content = MoodleActivityContent.decode(raw) else { throw HiddenSiteSession.SiteError.failed("Discussion illisible.") }
+        if content.needsLogin { throw HiddenSiteSession.SiteError.notSignedIn }
+        return content
+    }
+
+    nonisolated static let activityScript = #"""
+    const clean = t => (t || '').replace(/\s+/g, ' ').trim();
+    const load = async (path) => {
+      const r = await fetch(path, { credentials: 'include' });
+      const text = await r.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const base = r.url;
+      doc.querySelectorAll('[href]').forEach(a => { try { a.setAttribute('href', new URL(a.getAttribute('href'), base).href); } catch (e) {} });
+      doc.querySelectorAll('[src]').forEach(a => { try { a.setAttribute('src', new URL(a.getAttribute('src'), base).href); } catch (e) {} });
+      return { url: r.url, doc };
+    };
+    const login = (page) => /\/login\//.test(page.url) || !!page.doc.querySelector('form#login, #login');
+    const titleOf = (doc) => clean((doc.querySelector('.page-header-headings h1, #page-header h1, h1') || {}).textContent || doc.title);
+    const strip = (node) => { if (!node) return ''; const copy = node.cloneNode(true);
+      copy.querySelectorAll('.activity-header, .activity-information, .completion-info, [data-region="activity-information"], nav, .sr-only, .visually-hidden, .accesshide').forEach(e => e.remove());
+      return copy.innerHTML; };
+    const files = (root) => [...(root ? root.querySelectorAll('a[href*="pluginfile.php"]') : [])]
+      .map(a => ({ name: clean(a.textContent) || decodeURIComponent(a.href.split('/').pop().split('?')[0]), url: a.href }))
+      .filter((f, i, all) => all.findIndex(g => g.url === f.url) === i);
+    const main = (doc) => doc.querySelector('#region-main [role="main"], [role="main"], #region-main') || doc.body;
+    const out = { module, title: '' };
+    if (module === 'discussion') {
+      const page = await load('/mod/forum/discuss.php?d=' + id);
+      if (login(page)) return JSON.stringify({ module, needsLogin: true });
+      out.title = titleOf(page.doc);
+      out.posts = [...page.doc.querySelectorAll('[data-region="post"], .forumpost')].map(p => ({
+        subject: clean((p.querySelector('[data-region-content="forum-post-core-subject"], h3, h4, .subject') || {}).textContent),
+        author: clean((p.querySelector('[data-region="author-name"], .author a, .author') || {}).textContent),
+        date: clean((p.querySelector('time') || {}).textContent),
+        html: (p.querySelector('.post-content-container, .posting, .content') || { innerHTML: '' }).innerHTML
+      })).filter(p => p.html || p.subject);
+      return JSON.stringify(out);
+    }
+    const force = (module === 'url' || module === 'resource') ? '&forceview=1' : '';
+    const page = await load('/mod/' + module + '/view.php?id=' + id + force);
+    if (login(page)) return JSON.stringify({ module, needsLogin: true });
+    const doc = page.doc;
+    out.title = titleOf(doc);
+    const intro = doc.querySelector('.activity-description, #intro, .box.generalbox');
+    if (module === 'page') {
+      out.html = strip(doc.querySelector('#region-main .box.generalbox:not(.activity-description), [role="main"] .generalbox, [role="main"] .no-overflow') || main(doc));
+      out.files = files(main(doc));
+    } else if (module === 'folder') {
+      out.html = strip(intro);
+      out.files = files(doc.querySelector('.foldertree, .filemanager, [role="main"]') || doc.body);
+    } else if (module === 'assign') {
+      out.html = strip(intro);
+      out.dates = [...doc.querySelectorAll('[data-region="activity-dates"] > div, .activity-dates > div, .description-inner > div')].map(d => clean(d.textContent)).filter(Boolean);
+      out.files = files(doc.querySelector('.activity-description, #intro, .introattachments, [role="main"]'));
+      out.status = [...doc.querySelectorAll('.submissionstatustable tr, .generaltable.submissionsummarytable tr')]
+        .map(tr => { const th = tr.querySelector('th'), td = tr.querySelector('td'); return th && td ? clean(th.textContent) + ' : ' + clean(td.textContent) : ''; })
+        .filter(Boolean);
+    } else if (module === 'url') {
+      const link = doc.querySelector('.urlworkaround a, [role="main"] a[href]:not([href*="moodle.epfl.ch"])');
+      out.target = link ? link.href : '';
+      out.html = strip(intro);
+    } else if (module === 'forum') {
+      out.html = strip(intro);
+      const seen = new Set();
+      out.discussions = [...doc.querySelectorAll('[data-region="discussion-list-item"], tr.discussion, a[href*="discuss.php?d="]')].map(node => {
+        const a = node.matches('a') ? node : node.querySelector('a[href*="discuss.php?d="]');
+        if (!a) return null;
+        const d = parseInt((a.href.match(/[?&]d=(\d+)/) || [])[1] || '0', 10);
+        if (!d || seen.has(d)) return null;
+        seen.add(d);
+        const row = a.closest('tr, [data-region="discussion-list-item"]') || a;
+        return { id: d, title: clean(a.textContent) || 'Discussion',
+                 author: clean((row.querySelector('.author-info .text-truncate, .author, [data-region="author-name"]') || {}).textContent),
+                 date: clean((row.querySelector('time, .lastpost, [data-region="last-post-date"]') || {}).textContent) };
+      }).filter(Boolean).filter(d => d.title.length > 1);
+    } else {
+      out.html = strip(main(doc));
+      out.files = files(main(doc));
+    }
+    return JSON.stringify(out);
+    """#
+
     /// Trouve le cours Moodle d'un cours de l'app : le lien déjà retenu, sinon
     /// la recherche par code, départagée par les inscriptions.
     func resolve(_ course: Course, enrolled: [MoodleCourseRef]) async throws -> MoodleCourseMatcher.Match {
@@ -587,6 +687,12 @@ final class CoursewareClient {
         return rows.map { Enrollment(key: $0.key, name: BotafogoParser.decode($0.name)) }
     }
 
+    /// Un script dans une page de Courseware (la session de l'étudiant·e).
+    func run(_ script: String, arguments: [String: Any]) async throws -> String {
+        try await prepare()
+        return try await session.run(script, arguments: arguments)
+    }
+
     /// Le plan d'un cours : chapitres, leçons et vidéos.
     func content(of key: String) async throws -> ScrapedCourse {
         try await prepare()
@@ -599,6 +705,55 @@ final class CoursewareClient {
             throw WebContentScraper.ScrapeError.empty
         }
         return page
+    }
+}
+
+extension CoursewareClient {
+    /// Le plan complet d'un cours pour le lire en natif : chaque unité et ses
+    /// blocs, avec les sources des vidéos (`student_view_data`).
+    func outline(of key: String) async throws -> EdXOutline {
+        let raw = try await run(#"""
+        const get = async (path) => { const r = await fetch(path, { credentials: 'include', headers: { Accept: 'application/json' } }); return r.ok ? await r.text() : null; };
+        const meText = await get('/api/user/v1/me');
+        if (!meText) return JSON.stringify({ error: 'login' });
+        const me = JSON.parse(meText);
+        const tree = await get('/api/courses/v2/blocks/?course_id=' + encodeURIComponent(key) + '&username=' + encodeURIComponent(me.username)
+          + '&depth=all&requested_fields=children,display_name,type,student_view_url,student_view_data&student_view_data=video');
+        return tree || JSON.stringify({ error: 'plan' });
+        """#, arguments: ["key": key])
+        if raw.contains(#""error":"login""#) { throw HiddenSiteSession.SiteError.notSignedIn }
+        guard let outline = EdXOutline.parse(json: Data(raw.utf8)) else { throw WebContentScraper.ScrapeError.empty }
+        return outline
+    }
+
+    /// Le HTML d'un bloc seul (`student_view_url`), dans la session.
+    func blockHTML(_ address: String) async throws -> String {
+        try await run(#"""
+        const r = await fetch(address, { credentials: 'include' });
+        return r.ok ? await r.text() : '';
+        """#, arguments: ["address": address])
+    }
+}
+
+extension MediaSpaceClient {
+    /// L'adresse lisible d'une vidéo MediaSpace : le manifeste public, sinon
+    /// celui que la clé de session de la page MediaSpace ouvre. `nil` : il faut
+    /// se connecter (ou la vidéo n'existe plus).
+    func playbackURL(entryID: String) async -> URL? {
+        if let url = Kaltura.manifestURL(entryID: entryID), await Self.isPlayable(url) { return url }
+        guard let page = URL(string: "https://mediaspace.epfl.ch/media/t/\(entryID)") else { return nil }
+        guard let html = try? await pageHTML(page) else { return nil }
+        let config = Kaltura.config(html: html)
+        guard let ks = config.ks,
+              let url = Kaltura.manifestURL(entryID: entryID, partnerID: config.partnerID ?? Kaltura.defaultPartner, ks: ks),
+              await Self.isPlayable(url) else { return nil }
+        return url
+    }
+
+    nonisolated static func isPlayable(_ url: URL) async -> Bool {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        return Kaltura.isPlayableManifest(String(decoding: data.prefix(4096), as: UTF8.self))
     }
 }
 
@@ -785,6 +940,22 @@ final class MediaSpaceClient {
         } catch {
             return false
         }
+    }
+
+    /// Le HTML d'une page MediaSpace chargée dans la session ; `notSignedIn`
+    /// si MediaSpace renvoie vers la connexion SWITCH.
+    func pageHTML(_ page: URL) async throws -> String {
+        try await session.load(page)
+        let html = try await session.run(#"""
+        for (let i = 0; i < 20; i++) {
+          if (/wayf|eduid|login|saml/i.test(location.href)) return '__login__';
+          if (/"ks"\s*:\s*"/.test(document.documentElement.innerHTML)) break;
+          await new Promise(r => setTimeout(r, 300));
+        }
+        return document.documentElement.outerHTML;
+        """#)
+        if html == "__login__" { throw Failure.notSignedIn }
+        return html
     }
 
     func entries(of collection: URL) async throws -> [CourseVideos.Video] {

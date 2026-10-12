@@ -457,7 +457,7 @@ final class MacTimer {
         if let until = state.studyUntil, until.timeIntervalSinceNow > 1 {
             let content = UNMutableNotificationContent()
             content.title = "Mode étude terminé"
-            content.body = "Tout est rouvert. Termine la session pour l'enregistrer, ou prolonge."
+            content.body = "Termine ta session, ou prolonge."
             content.sound = .default
             center.add(UNNotificationRequest(identifier: "mac.study", content: content,
                                              trigger: UNTimeIntervalNotificationTrigger(timeInterval: until.timeIntervalSinceNow, repeats: false)))
@@ -465,7 +465,7 @@ final class MacTimer {
         if let pause = state.currentBreak {
             let content = UNMutableNotificationContent()
             content.title = "Fin de la pause"
-            content.body = "On s'y remet quand tu es prêt·e."
+            content.body = "On s'y remet ?"
             content.sound = .default
             let interval = pause.endsAt.timeIntervalSinceNow
             if interval > 1 {

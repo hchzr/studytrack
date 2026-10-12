@@ -117,7 +117,7 @@ struct MacFocusView: View {
                 .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: Carnet.tileCorner, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Mode étude").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
-                Text("Plein écran. Le Mac et l'iPhone n'ouvrent plus que Moodle, Claude, GoodNotes et tes sites de cours.")
+                Text("Seulement tes outils de cours.")
                     .font(.caption)
                     .foregroundStyle(Carnet.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -195,7 +195,7 @@ struct MacFocusView: View {
                 Kicker("Ensuite")
                 UpNextList(course: course)
             } else {
-                Text("Session sans cours : choisis-en un pour répartir le temps.")
+                Text("Pas de cours choisi.")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary)
                 Menu("Choisir un cours") {
                     ForEach(tracked) { item in

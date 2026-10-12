@@ -42,7 +42,7 @@ struct CommandPalette: View {
                 Image(systemName: "magnifyingglass")
                     .font(.title3)
                     .foregroundStyle(.secondary)
-                TextField("Chercher un cours, un exercice, une action…", text: $query)
+                TextField("Chercher", text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 20))
                     .focused($focused)
@@ -182,7 +182,7 @@ struct CommandPalette: View {
         items.append(Item(id: "p.focus", title: "Chrono", icon: "timer", section: "Aller à", shortcut: "⌘2") { navigate(.page(.focus)) })
         items.append(Item(id: "p.agenda", title: "Agenda", icon: "calendar", section: "Aller à", shortcut: "⌘3") { navigate(.page(.agenda)) })
         items.append(Item(id: "p.stats", title: "Bilan", icon: "chart.bar.xaxis", section: "Aller à", shortcut: "⌘4") { navigate(.page(.stats)) })
-        items.append(Item(id: "a.study", title: "Mode étude…", subtitle: "Plein écran, seulement ce qui sert à travailler",
+        items.append(Item(id: "a.study", title: "Mode étude…", subtitle: "Plein écran",
                           icon: "moon.stars", section: "Actions", shortcut: "⇧⌘E") {
             StudyModeController.shared.presentSetup(courseID: timer.courseID)
         })

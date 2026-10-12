@@ -17,7 +17,7 @@ struct TimerControls: View {
             if timer.phase != .idle {
                 Button { timer.discard() } label: { Image(systemName: "xmark") }
                     .buttonStyle(RoundButtonStyle(size: size * 0.7))
-                    .help("Abandonner la session (rien n'est enregistré)")
+                    .help("Abandonner")
             }
             Button { primary() } label: {
                 Image(systemName: primaryIcon).contentTransition(.symbolEffect(.replace))
@@ -27,7 +27,7 @@ struct TimerControls: View {
             if timer.phase != .idle {
                 Button { timer.finish() } label: { Image(systemName: "checkmark") }
                     .buttonStyle(RoundButtonStyle(size: size * 0.7))
-                    .help("Terminer et enregistrer (⇧⌘T)")
+                    .help("Terminer (⇧⌘T)")
             }
         }
     }
@@ -49,7 +49,7 @@ struct TimerControls: View {
         case .idle: return "Démarrer (⌘T)"
         case .running: return "Pause (⌘T)"
         case .paused: return "Reprendre (⌘T)"
-        case .onBreak: return "Écourter la pause et reprendre"
+        case .onBreak: return "Reprendre"
         }
     }
 }
@@ -144,7 +144,7 @@ struct TargetMenu: View {
             Text(label).lineLimit(1)
         }
         .fixedSize()
-        .help("Sur quoi exactement : le temps est compté à cet exercice")
+        .help("Sur quoi")
     }
 }
 
@@ -276,7 +276,7 @@ struct RecapCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: recap.discarded ? "xmark.circle" : "checkmark.circle.fill")
                     .foregroundStyle(recap.discarded ? Carnet.inkSecondary : Carnet.correct)
-                Text(recap.discarded ? "Moins d'une minute : rien d'enregistré" : "Session enregistrée")
+                Text(recap.discarded ? "Trop court, pas gardé" : "Enregistré")
                     .font(Carnet.serif(.headline))
                     .foregroundStyle(Carnet.ink)
                 Spacer()
@@ -291,7 +291,7 @@ struct RecapCard: View {
             }
             HStack {
                 if !recap.discarded {
-                    Button("Annuler l'enregistrement") { timer.undoRecap() }
+                    Button("Annuler") { timer.undoRecap() }
                         .buttonStyle(.plain)
                         .foregroundStyle(Carnet.inkSecondary)
                 }
@@ -357,7 +357,7 @@ struct ExerciseQuickMark: View {
                         .foregroundStyle(selected ? Carnet.ground : Carnet.color(for: result))
                 }
                 .buttonStyle(.plain)
-                .help("Corrigé : \(result.label.lowercased())")
+                .help(result.label)
             }
         }
         .font(.callout)

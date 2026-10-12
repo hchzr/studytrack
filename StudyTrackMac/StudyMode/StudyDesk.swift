@@ -59,25 +59,18 @@ final class StudyDesk {
 
     // MARK: Claude
 
-    /// Une conversation par exercice : on retrouve la sienne en y revenant.
-    private(set) var chats: [UUID: ClaudeChat] = [:]
-    private var freeChat: ClaudeChat?
+    /// Une conversation par série : on retrouve la sienne en y revenant, et
+    /// Claude Code la garde d'un lancement de l'app à l'autre. Une conversation
+    /// libre (`nil`) quand la session ne vise pas d'exercice.
+    private(set) var chats: [UUID?: ClaudeChat] = [:]
 
-    func chat(for targetID: UUID?) -> ClaudeChat {
-        if let targetID {
-            if let chat = chats[targetID] { return chat }
-            let chat = ClaudeChat(targetID: targetID)
-            chats[targetID] = chat
-            return chat
-        }
-        if let freeChat { return freeChat }
-        let chat = ClaudeChat(targetID: nil)
-        freeChat = chat
+    func chat(series seriesID: UUID?, config: ClaudeChat.Config) -> ClaudeChat {
+        // Le réglage « projet EPFL » a changé : une autre conversation.
+        if let chat = chats[seriesID], chat.config == config { return chat }
+        chats[seriesID]?.close()
+        let chat = ClaudeChat(seriesID: seriesID, config: config)
+        chats[seriesID] = chat
         return chat
-    }
-
-    func resetChat(for targetID: UUID?) {
-        if let targetID { chats[targetID]?.close(); chats[targetID] = nil } else { freeChat?.close(); freeChat = nil }
     }
 
     /// Une question préparée ailleurs (« Demander à Claude » sur un exercice).
@@ -118,7 +111,7 @@ final class StudyDesk {
             return
         }
         guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else {
-            documents[address] = .failed("Pas d'adresse de document.")
+            documents[address] = .failed("Pas de document.")
             return
         }
         if case .ready? = documents[address] { return }
@@ -170,8 +163,31 @@ final class StudyDesk {
     var moodleOutlines: [Int: MoodleCourseSnapshot] = [:]
     var moodleError: [Int: String] = [:]
 
+    // MARK: Courseware et MediaSpace
+
+    let courseware = CoursewareClient()
+    let mediaspace = MediaSpaceClient()
+    var edxOutlines: [String: EdXOutline] = [:]
+
+    // MARK: Connexion
+
+    /// Le site où se connecter (la feuille de connexion, seule page web du bureau).
+    var signIn: StudySite?
+    /// Augmente à chaque connexion réussie : les lecteurs réessaient.
+    private(set) var signInRevision = 0
+
+    func signedIn(_ site: StudySite) {
+        if site == .moodle {
+            moodleError = [:]
+            Task { try? await moodle.prepare(force: true); signInRevision += 1 }
+        } else {
+            signInRevision += 1
+        }
+        // Les PDF qui attendaient la connexion.
+        for (address, load) in documents where load == .needsLogin { documents[address] = nil }
+    }
+
     func closeAll() {
         for chat in chats.values { chat.close() }
-        freeChat?.close()
     }
 }

@@ -21,12 +21,12 @@ struct StudyModeEntry: View {
             Button {
                 app.router.showingStudyMode = true
             } label: {
-                Label("Revenir au mode étude", systemImage: "moon.stars.fill")
+                Label("Mode étude", systemImage: "moon.stars.fill")
             }
             .buttonStyle(.carnetSecondaryWide)
         } else {
             Menu {
-                Section("Mode étude : seulement tes outils de travail") {
+                Section("Mode étude") {
                     ForEach(StudyMode.durations, id: \.self) { minutes in
                         Button(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h\(minutes % 60 == 0 ? "" : " \(minutes % 60)")") {
                             enter(minutes)
@@ -34,7 +34,7 @@ struct StudyModeEntry: View {
                     }
                 }
                 if !StudyLock.shared.isAuthorized {
-                    Button("Configurer le blocage de l'iPhone…", systemImage: "gearshape") { showingSetup = true }
+                    Button("Réglages", systemImage: "gearshape") { showingSetup = true }
                 }
             } label: {
                 Label("Mode étude", systemImage: "moon.stars")
@@ -180,7 +180,7 @@ struct StudyModeScreen: View {
                     NavigationLink {
                         StudyModeSettingsView()
                     } label: {
-                        Label("L'iPhone n'est pas encore fermé au reste : configurer", systemImage: "exclamationmark.lock")
+                        Label("Blocage pas activé", systemImage: "exclamationmark.lock")
                             .font(.footnote)
                     }
                     .foregroundStyle(Carnet.review)
@@ -195,7 +195,7 @@ struct StudyModeScreen: View {
 
     /// Tenir pour terminer : une seconde et demie pour y penser.
     private var holdToFinish: some View {
-        Text(holding ? "Maintiens…" : "Maintenir pour terminer")
+        Text(holding ? "Maintiens…" : "Maintiens pour finir")
             .font(.body.weight(.semibold))
             .foregroundStyle(Carnet.ink)
             .frame(maxWidth: .infinity, minHeight: 52)
@@ -224,15 +224,15 @@ struct StudyModeScreen: View {
         VStack(spacing: 20) {
             Image(systemName: "checkmark.seal").font(.system(size: 44, weight: .light)).foregroundStyle(Carnet.correct)
             Text("C'est fait.").font(.system(size: 48, design: .serif)).foregroundStyle(Carnet.ink)
-            Text("L'iPhone et le Mac sont rouverts.").foregroundStyle(Carnet.inkSecondary)
+            Text("Tout est rouvert.").foregroundStyle(Carnet.inkSecondary)
             Button {
                 focus.finish()
                 app.router.showingStudyMode = false
-            } label: { Text("Terminer et enregistrer").frame(maxWidth: .infinity) }
+            } label: { Text("Terminer").frame(maxWidth: .infinity) }
                 .buttonStyle(.carnetPrimaryWide)
             Button { focus.extendStudy(minutes: 25) } label: { Text("Encore 25 min").frame(maxWidth: .infinity) }
                 .buttonStyle(.carnetSecondaryWide)
-            Button("Continuer sans le mode étude") {
+            Button("Continuer sans") {
                 focus.leaveStudy()
                 app.router.showingStudyMode = false
             }
@@ -278,13 +278,13 @@ struct StudyModeSettingsView: View {
         Form {
             Section {
                 if lock.isAuthorized {
-                    Label("Temps d'écran autorisé", systemImage: "checkmark.shield")
+                    Label("Autorisé", systemImage: "checkmark.shield")
                         .foregroundStyle(Carnet.correct)
                 } else {
                     Button {
                         Task { await lock.requestAuthorization() }
                     } label: {
-                        Label("Autoriser StudyTrack à fermer les apps", systemImage: "lock.shield")
+                        Label("Autoriser", systemImage: "lock.shield")
                     }
                     if let error = lock.lastError {
                         Text(error).font(.footnote).foregroundStyle(Carnet.wrong)
@@ -293,7 +293,7 @@ struct StudyModeSettingsView: View {
             } header: {
                 CarnetFormHeader("Temps d'écran")
             } footer: {
-                Text("Pendant le mode étude — lancé ici ou sur le Mac — l'iPhone n'ouvre que les apps choisies et les sites de cours. Tout se rouvre à l'heure prévue, même si StudyTrack est fermée.")
+                Text("Seulement tes apps et sites de cours, jusqu'à la fin.")
             }
 
             Section {
@@ -309,7 +309,7 @@ struct StudyModeSettingsView: View {
             } header: {
                 CarnetFormHeader("Apps")
             } footer: {
-                Text("Choisis StudyTrack, GoodNotes, Claude et Safari (pour Moodle). Le Téléphone et les appels d'urgence restent toujours ouverts.")
+                Text("Par exemple GoodNotes, Claude et Safari.")
             }
 
             Section {
@@ -330,7 +330,7 @@ struct StudyModeSettingsView: View {
             } header: {
                 CarnetFormHeader("Sites permis")
             } footer: {
-                Text("« epfl.ch » ouvre Moodle, Courseware, Botafogo… La liste est la même sur le Mac.")
+                Text("« epfl.ch » ouvre aussi Moodle, Botafogo…")
             }
         }
         .carnetForm()

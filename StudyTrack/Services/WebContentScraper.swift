@@ -417,6 +417,28 @@ enum AuthenticatedDownloader {
         try await fetch(address, depth: 0).file
     }
 
+    /// N'importe quel fichier (image, diapositives, archive), avec les cookies
+    /// des sites EPFL : ce que le mode étude du Mac affiche en natif.
+    @MainActor
+    static func file(_ address: URL) async throws -> (file: URL, type: String?) {
+        let url = SiteLinks.normalize(address)
+        let session = await authenticatedSession(for: url)
+        defer { session.finishTasksAndInvalidate() }
+        let (temporary, response) = try await session.download(from: url)
+        let name = response.suggestedFilename ?? url.lastPathComponent
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name)
+        try FileManager.default.moveItem(at: temporary, to: destination)
+        return (destination, (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type"))
+    }
+
+    /// Les octets d'une adresse (une image d'une page Moodle), avec les cookies.
+    @MainActor
+    static func data(_ address: URL) async -> Data? {
+        let session = await authenticatedSession(for: address)
+        defer { session.finishTasksAndInvalidate() }
+        return try? await session.data(from: address).0
+    }
+
     /// L'adresse du **document** derrière un lien Moodle (page, dossier, lien,
     /// fichier) : ce que l'app enregistre à la place de la page d'activité.
     /// `nil` si la page ne désigne aucun document lisible.

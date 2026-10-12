@@ -42,7 +42,7 @@ struct CalcPane: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Carnet.inkSecondary)
-                .help("Ouvrir GeoGebra (pour la géométrie, le calcul formel)")
+                .help("GeoGebra")
             }
             .padding(16)
             ScrollViewReader { proxy in
@@ -76,7 +76,7 @@ struct CalcPane: View {
             keypad
             HStack(spacing: 8) {
                 Text("›").font(.title2).foregroundStyle(Carnet.inkTertiary)
-                TextField("2x^2 - 3x + 1, f(x) = sin(x)/x, int(f, 0, pi)…", text: $line)
+                TextField("2x^2 - 3x + 1, f(x) = sin(x)/x", text: $line)
                     .textFieldStyle(.plain)
                     .font(.system(.title3, design: .monospaced))
                     .focused($focused)
@@ -102,7 +102,7 @@ struct CalcPane: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Carnet.inkSecondary)
             }
-            Text("Les fonctions définies (f(x) = …) se tracent à droite.")
+            Text("f(x) = … se trace à droite.")
                 .font(.caption).foregroundStyle(Carnet.inkTertiary)
         }
         .padding(16)
@@ -136,7 +136,7 @@ struct CalcPane: View {
             if let value = try desk.calc.run(input) {
                 desk.calcHistory.append((input, "= " + MathEngine.format(value), false))
             } else {
-                desk.calcHistory.append((input, "fonction définie — tracée à droite", false))
+                desk.calcHistory.append((input, "tracée à droite", false))
             }
             line = ""
         } catch {
@@ -168,7 +168,7 @@ struct CalcPane: View {
             .buttonStyle(.paper)
             if names.isEmpty {
                 ContentUnavailableView("Aucune fonction", systemImage: "function",
-                                       description: Text("Définis-en une à gauche : f(x) = x^2 - 2"))
+                                       description: Text("Essaie f(x) = x^2 - 2"))
             } else {
                 Chart {
                     RuleMark(y: .value("0", 0)).foregroundStyle(Carnet.inkTertiary.opacity(0.6))
@@ -201,7 +201,7 @@ struct CalcPane: View {
                 .paperSheet(padding: 0)
                 legend(names)
             }
-            Text("Intervalle : \(MathEngine.format(range.lowerBound)) à \(MathEngine.format(range.upperBound)) (largeur \(MathEngine.format(span)))")
+            Text("\(MathEngine.format(range.lowerBound)) à \(MathEngine.format(range.upperBound))")
                 .font(.caption).foregroundStyle(Carnet.inkTertiary)
         }
         .padding(16)

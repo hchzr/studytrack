@@ -37,7 +37,7 @@ enum PendingWidgetActions {
 /// « ✓ » dans le widget « Prochaine tâche » : l'action est cochée sans ouvrir l'app.
 struct CompleteNextActionIntent: AppIntent {
     static var title: LocalizedStringResource = "Marquer comme fait"
-    static var description = IntentDescription("Coche la prochaine tâche proposée par StudyTrack.")
+    static var description = IntentDescription("Coche la prochaine tâche.")
     static var isDiscoverable: Bool = false
 
     @Parameter(title: "Type") var kind: String

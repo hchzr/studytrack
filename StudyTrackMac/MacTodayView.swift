@@ -116,7 +116,7 @@ struct MacTodayView: View {
                     }
                 )
             }
-            .help("Objectif du jour, modifiable dans les Réglages")
+            .help("Objectif du jour")
         }
     }
 
@@ -148,23 +148,23 @@ struct MacTodayView: View {
                     Label("Mode étude", systemImage: "moon.stars")
                 }
                 .buttonStyle(.paperLarge)
-                .help("Plein écran, Mac et iPhone fermés à tout le reste")
+                .help("Mode étude")
                 Button {
                     timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
                 } label: {
                     Label("Démarrer", systemImage: "play.fill")
                 }
                 .buttonStyle(InkButtonStyle(tint: tint, large: true))
-                .help("Démarrer le chrono là-dessus")
+                .help("Chronométrer")
             }
             .fixedSize(horizontal: false, vertical: true)
             .paperSheet(padding: 20)
             .contextMenu {
-                Button("Ouvrir dans le cours") { open(todo.courseID, todo.targetID) }
+                Button("Ouvrir") { open(todo.courseID, todo.targetID) }
             }
         } else {
             HStack {
-                Label("Rien en retard ni pour cette semaine. Bien joué.", systemImage: "checkmark.seal")
+                Label("Tout est à jour.", systemImage: "checkmark.seal")
                     .foregroundStyle(Carnet.inkSecondary)
                 Spacer()
                 Button("Session libre", action: goFocus).buttonStyle(.paper)
@@ -273,7 +273,7 @@ struct MacTodayView: View {
                          trailing: today.isEmpty ? nil : DateUtils.hoursLabel(seconds: today.reduce(0) { $0 + $1.durationSeconds }))
             VStack(spacing: 0) {
                 if today.isEmpty {
-                    Text(timer.phase == .idle ? "Pas encore de session. ⌃⌥Espace lance le chrono, d'où que tu sois." : "Une session est en cours.")
+                    Text(timer.phase == .idle ? "Pas encore de session." : "Session en cours.")
                         .font(.callout)
                         .foregroundStyle(Carnet.inkSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -401,13 +401,13 @@ private struct TodoRow: View {
                 Button(action: open) { Image(systemName: "arrow.right.circle") }
                     .buttonStyle(.plain)
                     .foregroundStyle(Carnet.inkSecondary)
-                    .help("Ouvrir dans le cours")
+                    .help("Ouvrir")
                 Button(action: start) {
                     Image(systemName: "play.circle.fill").font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(tint)
-                .help("Démarrer le chrono là-dessus")
+                .help("Chronométrer")
             }
         }
         .padding(.horizontal, 8)
@@ -418,12 +418,12 @@ private struct TodoRow: View {
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: open)
         .contextMenu {
-            Button("Démarrer le chrono", action: start)
+            Button("Démarrer", action: start)
             Button("Mode étude…") {
                 StudyModeController.shared.presentSetup(courseID: todo.courseID, taskType: todo.taskType,
                                                         targetID: todo.targetID, label: todo.title)
             }
-            Button("Ouvrir dans le cours", action: open)
+            Button("Ouvrir", action: open)
             Divider()
             Button(todo.kind == .correction ? "Corrigé juste" : "Marquer comme fait", action: complete)
         }

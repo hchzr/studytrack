@@ -2,28 +2,31 @@ import SwiftUI
 import SwiftData
 
 /// Le cours, dans le bureau, en natif : ce que StudyTrack en sait (semaine
-/// par semaine, avec ce qui est vu et fait), le plan Moodle en direct, et le
-/// site Botafogo lu comme un livre — pages, séries, indications, solutions.
-/// Les documents PDF s'ouvrent ici (PDFKit) ; seules les pages qu'on ne sait
-/// pas lire passent par l'onglet Web.
+/// par semaine, avec ce qui est vu et fait), le plan Moodle en direct (pages,
+/// dossiers, devoirs, liens, annonces lus ici), Courseware (vidéos et textes)
+/// et le site Botafogo lu comme un livre. PDF (PDFKit), autres fichiers
+/// (Aperçu), vidéos MediaSpace (AVKit) : tout s'ouvre ici. Seuls GeoGebra et
+/// les sites inconnus passent par l'onglet Web.
 struct CoursePane: View {
     let course: Course?
     var desk: StudyDesk
     var openWeb: (URL, String) -> Void
 
     enum Source: String, CaseIterable, Identifiable {
-        case studytrack, moodle, botafogo
+        case studytrack, moodle, courseware, botafogo
         var id: String { rawValue }
         var label: String {
             switch self {
             case .studytrack: return "Le cours"
             case .moodle: return "Moodle"
+            case .courseware: return "Courseware"
             case .botafogo: return "Botafogo"
             }
         }
     }
 
     @State private var source: Source = .studytrack
+    @State private var coursewareFailed = false
     /// Ce qu'on lit à droite.
     @State private var reading: Reading?
     @State private var book = BotafogoBook()
@@ -32,6 +35,10 @@ struct CoursePane: View {
         case pdf(title: String, address: String)
         case botafogo(title: String, url: String)
         case theory(UUID)
+        case moodle(module: String, id: Int, title: String)
+        case video(title: String, address: String)
+        case file(title: String, address: String)
+        case edx(EdXOutline.Unit)
     }
 
     private var moodleID: Int? {
@@ -43,8 +50,17 @@ struct CoursePane: View {
         course?.contentSources.compactMap(URL.init(string:)).first { ContentSource.detect(host: $0.host) == .botafogo }
     }
 
+    /// Le MOOC Courseware du cours, s'il en cite un.
+    private var coursewareKey: String? {
+        guard let course else { return nil }
+        return (course.contentSources + course.theoryItems.map(\.urlString)).lazy.compactMap(MoocReference.courseKey(in:)).first
+    }
+
     private var sources: [Source] {
-        Source.allCases.filter { $0 == .studytrack || ($0 == .moodle && moodleID != nil) || ($0 == .botafogo && botafogoURL != nil) }
+        Source.allCases.filter {
+            $0 == .studytrack || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
+                || ($0 == .botafogo && botafogoURL != nil)
+        }
     }
 
     var body: some View {
@@ -62,6 +78,7 @@ struct CoursePane: View {
                     switch source {
                     case .studytrack: studyTrackList(course)
                     case .moodle: moodleList(course)
+                    case .courseware: coursewareList
                     case .botafogo: botafogoList
                     }
                 }
@@ -82,8 +99,8 @@ struct CoursePane: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
-            ContentUnavailableView("Session libre", systemImage: "books.vertical",
-                                   description: Text("Choisis un cours pour la session : son contenu s'ouvre ici."))
+            ContentUnavailableView("Pas de cours", systemImage: "books.vertical",
+                                   description: Text("Choisis-en un pour la session."))
         }
     }
 
@@ -126,7 +143,7 @@ struct CoursePane: View {
                     }
                 }
                 if !course.documents.isEmpty {
-                    Section("Documents du cours") {
+                    Section("Documents") {
                         ForEach(course.documents) { document in
                             Button { openLink(document.url, title: document.title, kind: document.kind) } label: {
                                 Label(document.title, systemImage: document.kind.icon).foregroundStyle(Carnet.ink)
@@ -146,13 +163,26 @@ struct CoursePane: View {
         reading = .theory(item.id)
     }
 
-    /// Un lien du cours : un PDF s'ouvre ici, une page dans l'onglet Web.
+    /// Un lien du cours, ouvert en natif selon où il mène (`SiteRouter`) ;
+    /// l'onglet Web seulement pour GeoGebra et les sites qu'on ne sait pas lire.
     private func openLink(_ address: String, title: String, kind: ContentLink.Kind? = nil) {
         guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else { return }
-        if Self.isDocument(url) || kind == .pdf || kind == .slides || kind == .notes || kind == .solution {
+        if kind == .pdf || kind == .slides || kind == .notes || kind == .solution { reading = .pdf(title: title, address: address); return }
+        switch SiteRouter.route(address) {
+        case .pdf:
             reading = .pdf(title: title, address: address)
-        } else {
-            openWeb(url, title)
+        case .file:
+            reading = .file(title: title, address: address)
+        case .moodle(let module, let id):
+            reading = .moodle(module: module, id: id, title: title)
+        case .mediaspace, .youtube, .video:
+            reading = .video(title: title, address: address)
+        case .courseware:
+            source = .courseware
+        case .botafogo:
+            source = .botafogo
+        case .geogebra, .web:
+            if Self.isDocument(url) { reading = .pdf(title: title, address: address) } else { openWeb(url, title) }
         }
     }
 
@@ -176,9 +206,6 @@ struct CoursePane: View {
                                         Image(systemName: Self.icon(for: activity.module)).foregroundStyle(Carnet.tint(course.colorHex)).frame(width: 18)
                                         Text(activity.name).foregroundStyle(Carnet.ink).lineLimit(2)
                                         Spacer(minLength: 0)
-                                        if activity.module != "resource" {
-                                            Image(systemName: "arrow.up.right").font(.caption2).foregroundStyle(Carnet.inkTertiary)
-                                        }
                                     }
                                 }
                                 .buttonStyle(.plain)
@@ -193,13 +220,13 @@ struct CoursePane: View {
             } else if let error = desk.moodleError[id] {
                 VStack(spacing: 12) {
                     Text(error).foregroundStyle(Carnet.inkSecondary).multilineTextAlignment(.center)
-                    Button("Se connecter à Moodle") { openWeb(MoodleClient.login, "Moodle") }.buttonStyle(.ink)
+                    Button("Se connecter") { desk.signIn = .moodle }.buttonStyle(.ink)
                     Button("Réessayer") { loadMoodle(id, course: course) }.buttonStyle(.paper)
                 }
                 .padding(20)
                 .frame(maxHeight: .infinity)
             } else {
-                ProgressView("Plan Moodle…")
+                ProgressView()
                     .frame(maxHeight: .infinity)
                     .onAppear { loadMoodle(id, course: course) }
             }
@@ -213,7 +240,7 @@ struct CoursePane: View {
                 desk.moodleOutlines[id] = try await desk.moodle.outline(courseID: id, title: course.name)
             } catch {
                 desk.moodleError[id] = (error as? HiddenSiteSession.SiteError).map { _ in
-                    "Moodle ne répond pas, ou il faut te connecter (une fois, dans l'onglet Web)."
+                    "Connecte-toi à Moodle."
                 } ?? error.localizedDescription
             }
         }
@@ -222,8 +249,59 @@ struct CoursePane: View {
     private func openActivity(_ activity: MoodleActivity) {
         if activity.module == "resource" {
             reading = .pdf(title: activity.name, address: activity.link)
-        } else if let url = URL(string: activity.link) {
-            openWeb(url, activity.name)
+        } else if let id = Int(activity.id) ?? URLComponents(string: activity.link)?.queryItems?.first(where: { $0.name == "id" })?.value.flatMap(Int.init) {
+            reading = .moodle(module: activity.module, id: id, title: activity.name)
+        } else {
+            openLink(activity.link, title: activity.name)
+        }
+    }
+
+    // MARK: Courseware
+
+    @ViewBuilder
+    private var coursewareList: some View {
+        if let key = coursewareKey {
+            if let outline = desk.edxOutlines[key] {
+                List {
+                    ForEach(outline.chapters) { chapter in
+                        Section {
+                            ForEach(chapter.sequences) { sequence in
+                                DisclosureGroup {
+                                    ForEach(sequence.units) { unit in
+                                        Button { reading = .edx(unit) } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: unit.blocks.contains { $0.kind == .video } ? "play.rectangle" : "doc.text")
+                                                    .foregroundStyle(Carnet.tint(course?.colorHex ?? "")).frame(width: 18)
+                                                Text(unit.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                } label: {
+                                    Text(sequence.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                }
+                            }
+                        } header: {
+                            Text(chapter.title).font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+            } else if coursewareFailed {
+                VStack(spacing: 12) {
+                    Text("Connecte-toi à Courseware.").foregroundStyle(Carnet.inkSecondary)
+                    Button("Se connecter") { desk.signIn = .courseware }.buttonStyle(.ink)
+                }
+                .frame(maxHeight: .infinity)
+                .onChange(of: desk.signInRevision) { _, _ in coursewareFailed = false }
+            } else {
+                ProgressView()
+                    .frame(maxHeight: .infinity)
+                    .task(id: desk.signInRevision) {
+                        do { desk.edxOutlines[key] = try await desk.courseware.outline(of: key) } catch { coursewareFailed = true }
+                    }
+            }
         }
     }
 
@@ -281,11 +359,11 @@ struct CoursePane: View {
             case .failed(let message):
                 VStack(spacing: 10) {
                     Text(message).foregroundStyle(Carnet.inkSecondary)
-                    Button("Ouvrir le site") { openWeb(url, "Botafogo") }.buttonStyle(.paper)
+                    Button("Réessayer") { book.reset(); Task { await book.load(url) } }.buttonStyle(.paper)
                 }
                 .frame(maxHeight: .infinity)
             case .idle, .loading:
-                ProgressView("Programme Botafogo…")
+                ProgressView()
                     .frame(maxHeight: .infinity)
                     .task { await book.load(url) }
             }
@@ -305,9 +383,9 @@ struct CoursePane: View {
                     PDFPane(url: file)
                 case .needsLogin?:
                     VStack(spacing: 10) {
-                        Text("Ce document est sur Moodle : connecte-toi une fois.").foregroundStyle(Carnet.inkSecondary)
+                        Text("Connecte-toi à Moodle.").foregroundStyle(Carnet.inkSecondary)
                         HStack {
-                            Button("Se connecter") { openWeb(MoodleClient.login, "Moodle") }.buttonStyle(.ink)
+                            Button("Se connecter") { desk.signIn = .moodle }.buttonStyle(.ink)
                             Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
                         }
                     }
@@ -315,7 +393,7 @@ struct CoursePane: View {
                 case .failed(let message)?:
                     VStack(spacing: 10) {
                         Text(message).foregroundStyle(Carnet.inkSecondary)
-                        if let url = URL(string: address) { Button("Ouvrir la page") { openWeb(url, title) }.buttonStyle(.paper) }
+                        Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
                     }
                     .frame(maxHeight: .infinity)
                 case .loading?, nil:
@@ -326,6 +404,36 @@ struct CoursePane: View {
         case .botafogo(let title, let url)?:
             BotafogoReader(book: book, title: title, url: url, desk: desk, openWeb: openWeb)
                 .id(url)
+        case .moodle(let module, let id, let title)?:
+            VStack(spacing: 0) {
+                plainHeader(title)
+                MoodleActivityReader(module: module, id: id, title: title, desk: desk,
+                                     open: { openLink($0, title: $1) }, openWeb: openWeb)
+            }
+            .id("\(module)\(id)")
+        case .video(let title, let address)?:
+            VStack(spacing: 0) {
+                plainHeader(title)
+                ScrollView {
+                    NativeVideo(title: title, address: address, desk: desk, openWeb: openWeb)
+                        .padding(32)
+                        .frame(maxWidth: 960)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .id(address)
+        case .file(let title, let address)?:
+            VStack(spacing: 0) {
+                plainHeader(title)
+                FileReader(title: title, address: address, desk: desk)
+            }
+            .id(address)
+        case .edx(let unit)?:
+            VStack(spacing: 0) {
+                plainHeader(unit.title)
+                EdXUnitReader(unit: unit, desk: desk, open: { openLink($0, title: $1) }, openWeb: openWeb)
+            }
+            .id(unit.id)
         case .theory(let id)?:
             if let item = course.theoryItems.first(where: { $0.id == id }) {
                 TheoryDetail(item: item, tint: Carnet.tint(course.colorHex), openLink: { openLink($0, title: $1, kind: $2) })
@@ -334,7 +442,7 @@ struct CoursePane: View {
             ContentUnavailableView {
                 Label(course.name, systemImage: "books.vertical")
             } description: {
-                Text("Choisis une vidéo, une section, une série : elle s'ouvre ici.")
+                Text("Choisis à gauche.")
             }
         }
     }
@@ -344,14 +452,21 @@ struct CoursePane: View {
             Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
             Spacer()
             Button { desk.ask("J'ai une question sur ce document (« \(title) »).", attachSeries: false) } label: {
-                Label("Demander à Claude", systemImage: "sparkle")
+                Label("Claude", systemImage: "sparkle")
             }
             .buttonStyle(.paper)
-            if let url = URL(string: address) {
-                Button { openWeb(url, title) } label: { Image(systemName: "globe") }
-                    .buttonStyle(.paper)
-                    .help("Ouvrir dans l'onglet Web")
+        }
+        .padding(12)
+    }
+
+    private func plainHeader(_ title: String) -> some View {
+        HStack {
+            Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
+            Spacer()
+            Button { desk.ask("J'ai une question sur « \(title) ».", attachSeries: false) } label: {
+                Label("Claude", systemImage: "sparkle")
             }
+            .buttonStyle(.paper)
         }
         .padding(12)
     }
@@ -408,7 +523,7 @@ private struct TheoryDetail: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if !item.urlString.isEmpty {
                         Button { openLink(item.urlString, item.title, nil) } label: {
-                            Label(item.kind.label + " — ouvrir", systemImage: item.kind.icon)
+                            Label("Ouvrir", systemImage: item.kind.icon)
                         }
                         .buttonStyle(.ink)
                     }
@@ -445,6 +560,8 @@ final class BotafogoBook {
     private(set) var root: URL?
     private var nodes: [String: [String: Any]] = [:]
 
+    func reset() { state = .idle }
+
     func load(_ url: URL) async {
         if case .ready = state { return }
         state = .loading
@@ -456,7 +573,7 @@ final class BotafogoBook {
             if let program = await BotafogoClient.program(html: html, root: root, session: .shared), !program.isEmpty {
                 state = .ready(program.filter { $0.type == "week" })
             } else {
-                state = .failed("Ce site Botafogo ne publie pas de programme lisible.")
+                state = .failed("Programme introuvable.")
             }
         } catch {
             state = .failed(error.localizedDescription)
@@ -482,7 +599,9 @@ final class BotafogoBook {
     func assetURL(_ source: String) -> URL? {
         if source.hasPrefix("http") { return URL(string: source) }
         guard let root else { return nil }
-        return URL(string: source.hasPrefix("/") ? (root.scheme ?? "https") + "://" + (root.host ?? "") + source : root.absoluteString + source)
+        // « /media/… » est relatif au **site** du cours (`…/analyse-1-GM/`) : les
+        // images y sont aussi, les figures seulement là (vérifié).
+        return URL(string: root.absoluteString + (source.hasPrefix("/") ? String(source.dropFirst()) : source))
     }
 }
 
@@ -504,21 +623,16 @@ private struct BotafogoReader: View {
                 Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
                 Spacer()
                 Button { desk.ask("J'ai une question sur « \(title) » (Botafogo).", attachSeries: false) } label: {
-                    Label("Demander à Claude", systemImage: "sparkle")
+                    Label("Claude", systemImage: "sparkle")
                 }
                 .buttonStyle(.paper)
-                if let page = book.pageURL(url) {
-                    Button { openWeb(page, title) } label: { Image(systemName: "globe") }
-                        .buttonStyle(.paper)
-                        .help("La page sur le site (figures interactives)")
-                }
             }
             .padding(12)
             if let blocks {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         Text(title).font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
-                        ReaderBlocks(blocks: blocks, book: book, openWeb: openWeb)
+                        ReaderBlocks(blocks: blocks, book: book, desk: desk, openWeb: openWeb)
                     }
                     .padding(32)
                     .frame(maxWidth: 780, alignment: .leading)
@@ -540,6 +654,8 @@ indirect enum ReaderBlock: Equatable {
     case text(String)
     case image(String)
     case video(id: String, title: String)
+    /// Une figure interactive (JSXGraph) : son image fixe, si le site en a une.
+    case figure(String)
     case box(title: String, [ReaderBlock])
     case folded(title: String, [ReaderBlock])
 
@@ -611,7 +727,7 @@ indirect enum ReaderBlock: Equatable {
                 paragraph += "**" + BotafogoDocument.text(of: child).trimmingCharacters(in: .whitespaces) + "** "
             case "jsxgraph":
                 flush()
-                blocks.append(.text("*Figure interactive : ouvre la page sur le site pour la manipuler.*"))
+                if let script = properties["url"] as? String { blocks.append(.figure(script)) }
             default:
                 // Un conteneur (div, template, multicols…) : on lit dedans.
                 let inner = parse(content(child))
@@ -659,6 +775,7 @@ indirect enum ReaderBlock: Equatable {
 private struct ReaderBlocks: View {
     let blocks: [ReaderBlock]
     var book: BotafogoBook
+    var desk: StudyDesk
     var openWeb: (URL, String) -> Void
 
     var body: some View {
@@ -684,21 +801,32 @@ private struct ReaderBlocks: View {
                 .frame(maxWidth: .infinity)
             }
         case .video(let id, let title):
-            Button {
-                if let url = URL(string: "https://mediaspace.epfl.ch/media/t/\(id)") { openWeb(url, title) }
-            } label: {
-                Label(title, systemImage: "play.rectangle.fill")
+            NativeVideo(title: title, address: "https://mediaspace.epfl.ch/media/t/\(id)", desk: desk, openWeb: openWeb)
+        case .figure(let script):
+            // Botafogo publie l'image fixe de chaque figure à côté de son script
+            // (`…/jsx_suite.js` → `…/jsx_suite.png`, vérifié) ; sinon, un repère.
+            AsyncImage(url: book.assetURL(BotafogoFigure.imagePath(script: script))) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFit().frame(maxHeight: 320)
+                } else if case .failure = phase {
+                    Label("Graphique interactif", systemImage: "chart.xyaxis.line")
+                        .font(.callout).foregroundStyle(Carnet.inkSecondary)
+                        .frame(maxWidth: .infinity).padding(18)
+                        .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    ProgressView()
+                }
             }
-            .buttonStyle(.paper)
+            .frame(maxWidth: .infinity)
         case .box(let title, let inner):
             VStack(alignment: .leading, spacing: 8) {
                 Kicker(title)
-                ReaderBlocks(blocks: inner, book: book, openWeb: openWeb)
+                ReaderBlocks(blocks: inner, book: book, desk: desk, openWeb: openWeb)
             }
             .paperSheet(padding: 16)
         case .folded(let title, let inner):
             DisclosureGroup {
-                ReaderBlocks(blocks: inner, book: book, openWeb: openWeb).padding(.top, 6)
+                ReaderBlocks(blocks: inner, book: book, desk: desk, openWeb: openWeb).padding(.top, 6)
             } label: {
                 Text(title).font(.callout.weight(.semibold)).foregroundStyle(Carnet.inkSecondary)
             }

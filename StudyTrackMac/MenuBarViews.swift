@@ -223,7 +223,7 @@ struct MenuBarTimerView: View {
                 Button {
                     StudyModeController.shared.present()
                 } label: {
-                    Label("Revenir au mode étude", systemImage: "moon.stars.fill").frame(maxWidth: .infinity)
+                    Label("Mode étude", systemImage: "moon.stars.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(InkButtonStyle())
             }
@@ -270,7 +270,7 @@ struct MenuBarTimerView: View {
                     Image(systemName: "moon.stars")
                 }
                 .buttonStyle(PaperButtonStyle(large: true))
-                .help("Mode étude : plein écran, le Mac et l'iPhone fermés à tout le reste")
+                .help("Mode étude")
             }
 
             let todos = DailyPlanner.todos(for: tracked, limit: 4)
@@ -305,13 +305,13 @@ struct MenuBarTimerView: View {
             } label: {
                 Image(systemName: settings.floatingTimer ? "pip.fill" : "pip")
             }
-            .help(settings.floatingTimer ? "Ne plus afficher le chrono flottant" : "Afficher le chrono flottant pendant les sessions")
+            .help(settings.floatingTimer ? "Masquer le chrono" : "Chrono flottant")
             SettingsLink {
                 Image(systemName: "gearshape")
             }
             .help("Réglages (⌘,)")
             Menu {
-                Button("Quitter StudyTrack") { NSApp.terminate(nil) }
+                Button("Quitter") { NSApp.terminate(nil) }
             } label: {
                 Image(systemName: "ellipsis")
             }
@@ -358,7 +358,7 @@ struct TodoStartRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(todo.detail.isEmpty ? "Démarrer le chrono là-dessus" : todo.detail)
+        .help(todo.detail.isEmpty ? "Chronométrer" : todo.detail)
     }
 }
 

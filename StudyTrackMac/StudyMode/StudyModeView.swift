@@ -98,10 +98,10 @@ private struct StudySetupView: View {
         VStack(alignment: .leading, spacing: 30) {
             VStack(alignment: .leading, spacing: 10) {
                 Kicker("Mode étude", color: tint)
-                Text("Rien que le travail.")
+                Text("On s'y met ?")
                     .font(Carnet.serif(52))
                     .foregroundStyle(StudyPalette.ink)
-                Text("Jusqu'à la fin, le Mac et l'iPhone n'ouvrent plus que Moodle, Claude, GoodNotes et tes sites de cours. Le reste attend.")
+                Text("Seulement tes outils de cours, jusqu'à la fin.")
                     .font(.title3)
                     .foregroundStyle(StudyPalette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -136,7 +136,7 @@ private struct StudySetupView: View {
                 }
             }
 
-            field("Combien de temps") {
+            field("Durée") {
                 HStack(spacing: 8) {
                     ForEach(StudyMode.durations, id: \.self) { value in
                         Button {
@@ -163,7 +163,7 @@ private struct StudySetupView: View {
                 Toggle(isOn: $pomodoro) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Pomodoro").foregroundStyle(StudyPalette.ink)
-                        Text("\(settings.focusMinutes) min de travail, \(settings.shortBreakMinutes) min de pause. Le mode étude reste fermé pendant les pauses.")
+                        Text("\(settings.focusMinutes) min de travail, \(settings.shortBreakMinutes) min de pause.")
                             .font(.caption)
                             .foregroundStyle(StudyPalette.inkSecondary)
                     }
@@ -173,7 +173,7 @@ private struct StudySetupView: View {
                 .disabled(timer.phase != .idle)
             }
 
-            field("Ouverts pendant la session") {
+            field("Ouverts") {
                 StudyToolStrip(course: course)
             }
 
@@ -447,16 +447,16 @@ private struct StudyDoneView: View {
                 .font(Carnet.serif(60))
                 .foregroundStyle(StudyPalette.ink)
             TimerTimeline(interval: 60) { date in
-                Text("\(DateUtils.durationLabel(seconds: Int(timer.elapsed(at: date)))) de travail. Le Mac et l'iPhone sont rouverts.")
+                Text("\(DateUtils.durationLabel(seconds: Int(timer.elapsed(at: date)))) de travail.")
                     .font(.title3)
                     .foregroundStyle(StudyPalette.inkSecondary)
             }
             HStack(spacing: 12) {
-                Button { timer.leaveStudy() } label: { Text("Continuer sans le mode étude") }
+                Button { timer.leaveStudy() } label: { Text("Continuer sans") }
                     .buttonStyle(PaperButtonStyle(large: true))
                 Button { timer.extendStudy(minutes: 25) } label: { Label("Encore 25 min", systemImage: "plus") }
                     .buttonStyle(PaperButtonStyle(large: true))
-                Button { timer.finish() } label: { Label("Terminer et enregistrer", systemImage: "checkmark") }
+                Button { timer.finish() } label: { Label("Terminer", systemImage: "checkmark") }
                     .buttonStyle(InkButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
             }
@@ -483,11 +483,11 @@ struct StudyShieldView: View {
                 Image(systemName: "moon.stars.fill")
                     .font(.system(size: 40, weight: .light))
                     .foregroundStyle(StudyPalette.inkSecondary)
-                Text("\(screen.blockedName ?? "Cette app") attendra.")
+                Text("\(screen.blockedName ?? "Cette app") attendra")
                     .font(Carnet.serif(48))
                     .foregroundStyle(StudyPalette.ink)
                 StudyTimeline(interval: 60) { date in
-                    Text("Mode étude : encore \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true)). Seuls tes outils de travail sont ouverts.")
+                    Text("Encore \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true)).")
                         .font(.title3)
                         .foregroundStyle(StudyPalette.inkSecondary)
                 }
@@ -506,7 +506,7 @@ struct StudyShieldView: View {
                     Button {
                         StudyModeController.shared.returnToStudy()
                     } label: {
-                        Label("Revenir à l'étude", systemImage: "arrow.uturn.backward")
+                        Label("Retour", systemImage: "arrow.uturn.backward")
                     }
                     .buttonStyle(InkButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
