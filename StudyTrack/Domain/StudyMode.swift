@@ -235,6 +235,13 @@ enum StudyMode {
     }
 
     /// Le nom et l'icône d'un site de cours connu.
+    /// Les sites **du cours** (sa page Moodle, Courseware, Botafogo, ses vidéos,
+    /// Explique), sans les outils de toujours : la page du cours les montre.
+    static func courseSites(_ course: Course) -> [Tool] {
+        let links = [course.moodleLink?.absoluteString].compactMap { $0 } + course.contentSources
+        return tools(courseName: course.name, courseLinks: links).filter { $0.id.hasPrefix("course:") }
+    }
+
     static func siteLabel(_ host: String) -> (String, String) {
         if host.hasPrefix("moodle.") { return ("Moodle du cours", "graduationcap") }
         if host.hasPrefix("courseware.") { return ("Courseware", "play.rectangle") }

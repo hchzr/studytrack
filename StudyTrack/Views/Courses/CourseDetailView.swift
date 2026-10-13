@@ -193,6 +193,10 @@ struct CourseDetailView: View {
             Text(metaLine)
                 .font(.footnote)
                 .foregroundStyle(Carnet.inkSecondary)
+            CourseSitesRow(course: course) { url, title in
+                browsing = BrowsedLink(title: title, url: url, icon: "globe")
+            }
+            .padding(.top, 4)
             if course.theoryItems.isEmpty && course.series.isEmpty {
                 Button {
                     app.router.openContentImport(courseID: course.id)

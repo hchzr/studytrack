@@ -175,6 +175,7 @@ struct MacCourseView: View {
                 .foregroundStyle(Carnet.ink)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+            CourseSitesRow(course: course) { url, _ in NSWorkspace.shared.open(url) }
             HStack(alignment: .center, spacing: 22) {
                 Text([course.credits > 0 ? "\(course.credits.formatted()) ECTS" : nil,
                       course.currentWeek > 0 ? "semaine \(course.currentWeek)" : nil,
