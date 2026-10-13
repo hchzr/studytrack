@@ -841,6 +841,17 @@ enum TaskSync {
         return result
     }
 
+    /// Coche (ou décoche) une tâche ici **et** chez son fournisseur.
+    @MainActor
+    static func setDone(_ task: LinkedTask, _ done: Bool, context: ModelContext, settings: SettingsStore) async {
+        task.isDone = done
+        task.updatedAt = Date()
+        try? context.save()
+        guard let externalID = task.externalID else { return }
+        let service = TaskServiceFactory.shared.service(for: task.provider, settings: settings)
+        _ = await service?.setCompleted(identifier: externalID, completed: done)
+    }
+
     /// Rattache automatiquement une tâche à un cours dont le code apparaît dans le titre.
     static func autoLink(tasks: [LinkedTask], courses: [Course]) {
         for task in tasks where task.course == nil {

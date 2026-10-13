@@ -13,7 +13,10 @@ struct WeekTimeCard: View {
     /// La semaine du semestre, tous cours suivis : faits sur prévus.
     let theory: (done: Int, total: Int)
     let series: (done: Int, total: Int)
-    /// Éléments des semaines passées pas faits, tous cours confondus.
+    /// Exercices de la semaine faits, et parmi eux corrigés.
+    let corrections: (done: Int, total: Int)
+    /// Éléments des semaines passées pas faits (corrections comprises), tous
+    /// cours confondus.
     let late: Int
     var onOpen: () -> Void
 
@@ -50,6 +53,7 @@ struct WeekTimeCard: View {
                 HStack(spacing: 18) {
                     axis("Théorie", theory)
                     axis("Séries", series)
+                    axis("Corrigés", corrections)
                 }
                 if late > 0 {
                     Label(late == 1 ? "1 élément des semaines passées à rattraper"
@@ -120,15 +124,14 @@ struct WeekTimeCard: View {
     }
 }
 
-/// Un cours dans sa semaine : sa couleur, son nom, théorie et exercices faits
-/// sur prévus, deux barres, et le retard en mots.
+/// Un cours dans sa semaine : sa couleur, son nom, théorie, exercices et
+/// corrections faits sur prévus, et le retard en mots.
 struct WeekCourseRow: View {
-    let course: Course
+    let summary: WeekCourseSummary
 
     var body: some View {
-        let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
-        let late = ProgressEngine.lateCount(for: course)
-        let ahead = ProgressEngine.aheadCount(for: course)
+        let course = summary.course
+        let week = summary.week
         let tint = Carnet.tint(course.colorHex)
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -145,13 +148,21 @@ struct WeekCourseRow: View {
                         .foregroundStyle(Carnet.ink)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    standing(late: late, ahead: ahead, week: week)
+                    standing(late: summary.late, ahead: summary.ahead, week: week)
                 }
                 if week.hasItems {
                     HStack(spacing: 14) {
                         axis("Théorie", done: week.watchedCount, total: week.videoCount, tint: tint)
                         axis("Exercices", done: week.doneCount, total: week.exerciseCount, tint: tint)
+                        if week.doneCount > 0 {
+                            axis("Corrigés", done: week.correctedCount, total: week.doneCount, tint: tint)
+                        }
                     }
+                }
+                if !summary.corrections.isEmpty {
+                    Label(correctionsLine, systemImage: "checkmark.seal")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(summary.corrections.toRedo > 0 ? Carnet.wrong : Carnet.inkSecondary)
                 }
                 if let exam = course.nextExam, DateUtils.daysBetween(Date(), exam.date) <= 14 {
                     Label("\(exam.kind.label) \(DateUtils.countdownLabel(to: exam.date).lowercased())",
@@ -165,6 +176,14 @@ struct WeekCourseRow: View {
         .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var correctionsLine: String {
+        var parts: [String] = []
+        let due = summary.corrections
+        if due.toCorrect > 0 { parts.append("\(due.toCorrect) à corriger") }
+        if due.toRedo > 0 { parts.append("\(due.toRedo) à refaire") }
+        return parts.joined(separator: " · ")
     }
 
     private func axis(_ title: String, done: Int, total: Int, tint: Color) -> some View {

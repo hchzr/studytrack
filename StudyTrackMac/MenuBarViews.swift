@@ -273,18 +273,6 @@ struct MenuBarTimerView: View {
                 .help("Mode étude")
             }
 
-            let todos = DailyPlanner.todos(for: tracked, limit: 4)
-            if !todos.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Kicker("À faire").padding(.horizontal, 8)
-                    ForEach(todos) { todo in
-                        TodoStartRow(todo: todo) {
-                            timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
-                        }
-                    }
-                }
-                .padding(.horizontal, -8)
-            }
         }
     }
 
@@ -324,41 +312,6 @@ struct MenuBarTimerView: View {
         .foregroundStyle(Carnet.inkSecondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-}
-
-/// Une chose à faire, un clic pour démarrer le chrono dessus.
-struct TodoStartRow: View {
-    let todo: StudyTodo
-    var start: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        let tint = Carnet.tint(todo.colorHex)
-        Button(action: start) {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 3, height: 24)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(todo.title).lineLimit(1).foregroundStyle(Carnet.ink)
-                    Text([todo.courseCode, todo.kind.label, todo.durationLabel].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(todo.kind == .redo ? Carnet.wrong : Carnet.inkSecondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Image(systemName: "play.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(tint)
-                    .opacity(hovering ? 1 : 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(hovering ? Carnet.sheetRaised : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(todo.detail.isEmpty ? "Chronométrer" : todo.detail)
     }
 }
 

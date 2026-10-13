@@ -21,6 +21,8 @@ struct MacTodayView: View {
     /// Huit jours suffisent (aujourd'hui, la semaine, le graphique de 7 jours).
     @Query private var sessions: [StudySession]
     @Query private var events: [LinkedCalendarEvent]
+    @Query(filter: #Predicate<LinkedTask> { !$0.isDone }, sort: \LinkedTask.dueDate) private var openTasks: [LinkedTask]
+    @Environment(MacStore.self) private var store
 
     init(open: @escaping (UUID, UUID?) -> Void, goFocus: @escaping () -> Void) {
         self.open = open
@@ -37,17 +39,18 @@ struct MacTodayView: View {
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
     var body: some View {
-        let todos = DailyPlanner.todos(for: tracked, limit: 9)
         let todayEvents = events.filter { $0.isAcademic && !$0.isSkipped }
-        let deadlines = Deadline.upcoming(in: tracked, days: 14)
+        let deadlines = Deadline.upcoming(in: tracked, days: 14).filter { $0.date >= Date() }
+        let summaries = tracked.map { WeekCourseSummary(course: $0) }
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 header
-                nowCard(first: todos.first)
+                news
+                if timer.phase != .idle { RunningNowCard(open: goFocus) }
                 HStack(alignment: .top, spacing: 22) {
                     VStack(alignment: .leading, spacing: 22) {
-                        todoColumn(Array(todos.dropFirst()))
-                        weekCourses
+                        weekCourses(summaries)
+                        taskList
                     }
                     .frame(minWidth: 380, maxWidth: .infinity, alignment: .topLeading)
                     VStack(alignment: .leading, spacing: 22) {
@@ -64,6 +67,28 @@ struct MacTodayView: View {
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("Aujourd'hui")
+    }
+
+    /// « Nouveau dans tes cours » — ce que la relecture automatique a ajouté
+    /// (ici ou sur l'iPhone), jusqu'à ce qu'on le ferme (ici ou là-bas).
+    @ViewBuilder
+    private var news: some View {
+        let news = store.preferences.contentRefreshNews
+        if !news.isEmpty {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "sparkles").foregroundStyle(Carnet.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Nouveau dans tes cours").fontWeight(.semibold).foregroundStyle(Carnet.ink)
+                    Text(news).font(.callout).foregroundStyle(Carnet.inkSecondary)
+                }
+                Spacer()
+                Button { store.preferences.contentRefreshNews = "" } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .help("Masquer")
+            }
+            .paperSheet(padding: 14)
+        }
     }
 
     // MARK: En-tête
@@ -120,118 +145,51 @@ struct MacTodayView: View {
         }
     }
 
-    // MARK: Maintenant
-
-    @ViewBuilder
-    private func nowCard(first: StudyTodo?) -> some View {
-        if timer.phase != .idle {
-            RunningNowCard(open: goFocus)
-        } else if let todo = first {
-            let tint = Carnet.tint(todo.colorHex)
-            HStack(spacing: 18) {
-                RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 4)
-                VStack(alignment: .leading, spacing: 5) {
-                    Kicker("Pour commencer", color: tint)
-                    Text(todo.title).font(Carnet.serif(24)).foregroundStyle(Carnet.ink).lineLimit(1)
-                    Text([todo.courseName, todo.kind.label, todo.durationLabel].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button("Autre chose…", action: goFocus)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Carnet.inkSecondary)
-                Button {
-                    StudyModeController.shared.presentSetup(courseID: todo.courseID, taskType: todo.taskType,
-                                                            targetID: todo.targetID, label: todo.title)
-                } label: {
-                    Label("Mode étude", systemImage: "moon.stars")
-                }
-                .buttonStyle(.paperLarge)
-                .help("Mode étude")
-                Button {
-                    timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
-                } label: {
-                    Label("Démarrer", systemImage: "play.fill")
-                }
-                .buttonStyle(InkButtonStyle(tint: tint, large: true))
-                .help("Chronométrer")
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .paperSheet(padding: 20)
-            .contextMenu {
-                Button("Ouvrir") { open(todo.courseID, todo.targetID) }
-            }
-        } else {
-            HStack {
-                Label("Tout est à jour.", systemImage: "checkmark.seal")
-                    .foregroundStyle(Carnet.inkSecondary)
-                Spacer()
-                Button("Session libre", action: goFocus).buttonStyle(.paper)
-            }
-            .paperSheet(padding: 20)
-        }
-    }
-
-    // MARK: À faire
-
-    @ViewBuilder
-    private func todoColumn(_ todos: [StudyTodo]) -> some View {
-        if !todos.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(title: "Ensuite")
-                VStack(spacing: 0) {
-                    ForEach(todos) { todo in
-                        TodoRow(todo: todo,
-                                isTimed: timer.phase != .idle && timer.targetID == todo.targetID,
-                                open: { open(todo.courseID, todo.targetID) },
-                                start: { start(todo) },
-                                complete: { complete(todo) })
-                        if todo.id != todos.last?.id { PaperRule(inset: 40) }
-                    }
-                }
-                .paperSheet(padding: 6)
-            }
-        }
-    }
-
-    private func start(_ todo: StudyTodo) {
-        if timer.phase == .idle {
-            timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
-        } else {
-            timer.retarget(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID)
-        }
-    }
-
-    /// Cocher depuis « À faire » : l'exercice est fait, la théorie vue.
-    private func complete(_ todo: StudyTodo) {
-        guard let course = tracked.first(where: { $0.id == todo.courseID }) else { return }
-        withAnimation(.smooth(duration: 0.3)) {
-            if let exercise = course.allExercises.first(where: { $0.id == todo.targetID }) {
-                if todo.kind == .redo {
-                    exercise.redoRequired = false
-                } else if todo.kind == .correction {
-                    exercise.correct(.correct)
-                } else {
-                    exercise.setDone(true)
-                }
-            } else if let item = course.theoryItems.first(where: { $0.id == todo.targetID }) {
-                item.watchedAt = item.watchedAt ?? Date()
-            }
-            try? context.save()
-        }
-    }
-
     // MARK: Les cours de la semaine
 
-    private var weekCourses: some View {
+    private func weekCourses(_ summaries: [WeekCourseSummary]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: weekTitle)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14)], spacing: 14) {
-                ForEach(tracked) { course in
-                    Button { open(course.id, nil) } label: { WeekCourseCard(course: course) }
+                ForEach(summaries, id: \.course.id) { summary in
+                    Button { open(summary.course.id, nil) } label: { WeekCourseCard(summary: summary) }
                         .buttonStyle(.plain)
                 }
+            }
+        }
+    }
+
+    // MARK: Tâches
+
+    /// Les tâches ouvertes des fournisseurs reliés sur l'iPhone (Rappels,
+    /// Todoist…), dues dans la semaine ou en retard. Elles se cochent sur
+    /// l'iPhone, qui parle au fournisseur.
+    @ViewBuilder
+    private var taskList: some View {
+        let soon = DateUtils.addDays(7, to: DateUtils.startOfDay(Date()))
+        let due = openTasks.filter { task in task.dueDate.map { $0 < soon } ?? false }.prefix(8)
+        if !due.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(title: "Tâches")
+                VStack(spacing: 0) {
+                    ForEach(Array(due)) { task in
+                        HStack(spacing: 10) {
+                            Image(systemName: "circle").foregroundStyle(Carnet.inkTertiary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(task.title).foregroundStyle(Carnet.ink).lineLimit(1)
+                                Text([task.course?.displayCode, task.dueDate.map(DateUtils.countdownLabel(to:)), task.provider.label]
+                                    .compactMap { $0 }.joined(separator: " · "))
+                                    .font(.caption)
+                                    .foregroundStyle(task.isOverdue ? Carnet.wrong : Carnet.inkSecondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 7)
+                        if task.id != due.last?.id { PaperRule(inset: 34) }
+                    }
+                }
+                .paperSheet(padding: 6)
             }
         }
     }
@@ -290,12 +248,19 @@ struct MacTodayView: View {
     }
 
     private var weekChart: some View {
-        let days = SessionStats.dailyTotals(sessions.filter { $0.taskType.canonical != .lecture }, days: 7)
+        // Compté comme partout : sessions et cours suivis (`StudyTime`).
+        let _ = sessions.count
+        let first = DateUtils.addDays(-6, to: DateUtils.startOfDay(Date()))
+        let blocks = StudyTime.blocks(in: context, from: first, to: DateUtils.addDays(7, to: first))
+        let days = (0..<7).map { offset -> (day: Date, seconds: Int) in
+            let day = DateUtils.addDays(offset, to: first)
+            return (day, blocks.filter { DateUtils.startOfDay($0.start) == day }.reduce(0) { $0 + $1.seconds })
+        }
         let goalHours = Double(settings.dailyGoalSeconds) / 3600
         return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "7 derniers jours")
             Chart {
-                ForEach(days) { day in
+                ForEach(days, id: \.day) { day in
                     BarMark(x: .value("Jour", day.day, unit: .day), y: .value("Heures", Double(day.seconds) / 3600))
                         .foregroundStyle(Double(day.seconds) / 3600 >= goalHours ? Carnet.correct : Carnet.ink.opacity(0.75))
                         .cornerRadius(3)
@@ -356,95 +321,22 @@ private struct RunningNowCard: View {
     }
 }
 
-private struct TodoRow: View {
-    let todo: StudyTodo
-    let isTimed: Bool
-    var open: () -> Void
-    var start: () -> Void
-    var complete: () -> Void
-    @State private var hovering = false
-    @State private var checked = false
-
-    var body: some View {
-        let tint = Carnet.tint(todo.colorHex)
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(.snappy(duration: 0.2)) { checked = true }
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(350))
-                    complete()
-                }
-            } label: {
-                Image(systemName: checked ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(checked ? tint : Carnet.inkTertiary)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain)
-            .help(todo.kind == .correction ? "Corrigé juste" : "Marquer comme fait")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(todo.title).lineLimit(1)
-                    .foregroundStyle(Carnet.ink)
-                    .strikethrough(checked)
-                HStack(spacing: 5) {
-                    Circle().fill(tint).frame(width: 6, height: 6)
-                    Text([todo.courseCode, todo.kind.label, todo.durationLabel].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(todo.kind == .redo ? Carnet.wrong : Carnet.inkSecondary)
-                        .lineLimit(1)
-                }
-                .font(.caption)
-            }
-            Spacer()
-            if isTimed {
-                Label("En cours", systemImage: "timer").font(.caption).foregroundStyle(Carnet.inkSecondary)
-            } else if hovering {
-                Button(action: open) { Image(systemName: "arrow.right.circle") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .help("Ouvrir")
-                Button(action: start) {
-                    Image(systemName: "play.circle.fill").font(.title2)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(tint)
-                .help("Chronométrer")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .hoverRow()
-        .opacity(checked ? 0.5 : 1)
-        .help(todo.detail)
-        .onHover { hovering = $0 }
-        .onTapGesture(count: 2, perform: open)
-        .contextMenu {
-            Button("Démarrer", action: start)
-            Button("Mode étude…") {
-                StudyModeController.shared.presentSetup(courseID: todo.courseID, taskType: todo.taskType,
-                                                        targetID: todo.targetID, label: todo.title)
-            }
-            Button("Ouvrir", action: open)
-            Divider()
-            Button(todo.kind == .correction ? "Corrigé juste" : "Marquer comme fait", action: complete)
-        }
-    }
-}
-
-/// Un cours dans la semaine : théorie et exercices de la semaine, le retard.
+/// Un cours dans la semaine : théorie, exercices et corrections de la
+/// semaine, le retard (corrections comprises) — comme sur l'iPhone.
 private struct WeekCourseCard: View {
-    let course: Course
+    let summary: WeekCourseSummary
     @State private var hovering = false
 
     var body: some View {
-        let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
-        let late = ProgressEngine.lateCount(for: course)
+        let course = summary.course
+        let week = summary.week
         let tint = Carnet.tint(course.colorHex)
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 CourseTag(code: course.displayCode, tint: tint)
                 Spacer()
-                if late > 0 {
-                    Text("\(late) en retard").font(.caption.weight(.semibold)).foregroundStyle(Carnet.wrong)
+                if summary.late > 0 {
+                    Text("\(summary.late) en retard").font(.caption.weight(.semibold)).foregroundStyle(Carnet.wrong)
                 } else {
                     Label("À jour", systemImage: "checkmark").font(.caption).foregroundStyle(Carnet.inkSecondary)
                 }
@@ -453,6 +345,14 @@ private struct WeekCourseCard: View {
             HStack(spacing: 14) {
                 meter("Théorie", week.watchedCount, week.videoCount, tint)
                 meter("Exercices", week.doneCount, week.exerciseCount, tint)
+                if week.doneCount > 0 { meter("Corrigés", week.correctedCount, week.doneCount, tint) }
+            }
+            if !summary.corrections.isEmpty {
+                Text([summary.corrections.toCorrect > 0 ? "\(summary.corrections.toCorrect) à corriger" : nil,
+                      summary.corrections.toRedo > 0 ? "\(summary.corrections.toRedo) à refaire" : nil]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(summary.corrections.toRedo > 0 ? Carnet.wrong : Carnet.inkSecondary)
             }
         }
         .paperSheet(padding: 16, highlighted: hovering ? tint.opacity(0.6) : nil)

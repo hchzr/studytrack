@@ -109,8 +109,20 @@ struct ManualSessionSheet: View {
 /// deux copies finiraient par diverger.
 struct PomodoroSettingsForm: View {
     @Bindable var settings: SettingsStore
+    @Environment(AppContainer.self) private var app
 
     var body: some View {
+        Group {
+            sections
+        }
+        // Les nouvelles durées valent pour la session ouverte (et l'autre
+        // appareil) : fin de bloc et notification recalculées, d'où qu'on les
+        // change — la feuille du chrono ou les réglages.
+        .onChange(of: settings.pomodoro) { _, _ in app.focus.settingsDidChange() }
+    }
+
+    @ViewBuilder
+    private var sections: some View {
         Section {
             Stepper(value: $settings.pomodoroFocusMinutes, in: 5...120, step: 5) {
                 LabeledContent("Bloc de travail", value: "\(settings.pomodoroFocusMinutes) min")
@@ -149,12 +161,7 @@ struct PomodoroSettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("OK") {
-                        // Les nouvelles durées valent pour le bloc en cours : la
-                        // fin de bloc et sa notification sont recalculées.
-                        app.focus.settingsDidChange()
-                        dismiss()
-                    }
+                    Button("OK") { dismiss() }
                     .fontWeight(.semibold)
                 }
             }

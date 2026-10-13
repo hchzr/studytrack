@@ -1246,6 +1246,27 @@ do {
     }
     check(ProgressEngine.lateCount(for: paced, currentWeek: 3) == 1, "une vidéo de la semaine 1 non vue : 1 en retard")
     check(ProgressEngine.aheadCount(for: paced, currentWeek: 3) == 1, "une vidéo de la semaine 5 déjà vue : 1 d'avance")
+    // Corriger fait partie du travail : la correction en retard compte.
+    let graded = Course(code: "TEST-778", name: "Corrections")
+    context.insert(graded)
+    let pastSeries = ExerciseSeries(course: graded, seriesNumber: 1, plannedWeek: 1)
+    let lockedSeries = ExerciseSeries(course: graded, seriesNumber: 2, plannedWeek: 2)
+    lockedSeries.solutionsAt = Date().addingTimeInterval(86400)
+    context.insert(pastSeries)
+    context.insert(lockedSeries)
+    let doneUncorrected = Exercise(series: pastSeries, exerciseNumber: "1.1", sortOrder: 1)
+    doneUncorrected.setDone(true)
+    let redo = Exercise(series: pastSeries, exerciseNumber: "1.2", sortOrder: 2)
+    redo.setDone(true)
+    redo.correct(.wrong)
+    redo.redoRequired = true
+    let waiting = Exercise(series: lockedSeries, exerciseNumber: "2.1", sortOrder: 1)
+    waiting.setDone(true)
+    [doneUncorrected, redo, waiting].forEach(context.insert)
+    let gradedDue = ProgressEngine.correctionsDue(for: graded)
+    check(gradedDue.toCorrect == 1 && gradedDue.toRedo == 1, "1 à corriger (corrigé publié), 1 à refaire ; le corrigé pas encore publié n'est pas dû")
+    check(ProgressEngine.lateCount(for: graded, currentWeek: 3) == 2,
+          "en retard : la correction d'une semaine passée et l'exercice à refaire (\(ProgressEngine.lateCount(for: graded, currentWeek: 3)))")
     ContentDraftWriter.apply(dalg, to: written, context: context, updateWeeks: false)
     check(written.exams.count == 2 && written.documents.count == outcome.documentsAdded, "une mise à jour ne double rien")
     let wphys = Course(code: "TEST-602", name: "Liens")
@@ -2776,12 +2797,6 @@ let runningTerm = AcademicTerm(year: 2025,
 check(runningTerm.isRunning, "semestre en cours détecté")
 check(DateUtils.clampedWeek(for: Date(), term: runningTerm) == 3,
       "semestre démarré il y a 2 semaines → semaine 3")
-
-print("== DailyPlanner ==")
-let todos = DailyPlanner.todos(for: courses.filter(\.isTracked), limit: 20)
-check(!todos.isEmpty, "des tâches à faire sont proposées (\(todos.count))")
-check(todos.allSatisfy { $0.week >= 1 }, "chaque tâche porte une semaine valide")
-check(todos == todos.sorted { $0.kind.rank < $1.kind.rank }, "tâches triées par priorité")
 
 print("== ICSParser (horaire EPFL) ==")
 let ics = """
@@ -6053,59 +6068,17 @@ func runBenchmark() {
         return ms
     }
 
-    print("  coût d'UNE passe de dérivation :")
-    let planner = measure("DailyPlanner.todos(limit: 12)") {
-        _ = DailyPlanner.todos(for: benchTracked, limit: 12)
+    print("  coût d'UNE passe de dérivation d'« Aujourd'hui » :")
+    _ = measure("WeekCourseSummary (tous cours)") {
+        for course in benchTracked { _ = WeekCourseSummary(course: course) }
     }
-    let workload = measure("WorkloadEngine.aggregate") {
+    _ = measure("Deadline.upcoming (14 j)") {
+        _ = Deadline.upcoming(in: benchTracked, days: 14)
+    }
+    _ = measure("WorkloadEngine.aggregate") {
         _ = WorkloadEngine.aggregate(courses: benchTracked, hoursPerCredit: 30)
     }
-    let weekWindow = measure("sessions des 7 derniers jours") {
-        let range = DateUtils.dateRange(days: 7)
-        _ = benchSessions.reduce(0) { total, session in
-            session.startedAt >= range.start && session.startedAt < range.end
-                ? total + session.durationSeconds
-                : total
-        }
-    }
-    let trackedFilter = measure("courses.filter(isTracked)") {
-        _ = benchAll.filter(\.isTracked)
-    }
-    let progress = measure("ProgressEngine.progress (tous cours)") {
+    _ = measure("ProgressEngine.progress (tous cours)") {
         for course in benchTracked { _ = ProgressEngine.progress(for: course) }
     }
-
-    // Reconstitution d'un rendu de « Aujourd'hui », à partir des lectures que
-    // faisait `body` avant le correctif :
-    //   todos    : 5 lectures directes + `todos.last?.id` une fois PAR LIGNE
-    //   workload : 3 lectures (icône, valeur, teinte) sur la carte de la semaine
-    //   tracked  : 6 lectures + `tracked.last?.id` une fois par cours
-    let rows = DailyPlanner.todos(for: benchTracked, limit: 12).count
-    let beforeTodos = 5 + rows
-    let beforeWorkload = 3
-    let beforeTracked = 6 + benchTracked.count
-
-    let before = Double(beforeTodos) * planner
-        + Double(beforeWorkload) * workload
-        + weekWindow + Double(beforeTracked) * trackedFilter
-        + progress
-    let after = planner + workload
-        + weekWindow + trackedFilter
-        + progress
-
-    func pair(_ label: String, _ old: String, _ new: String) {
-        print("  " + label.padding(toLength: 30, withPad: " ", startingAt: 0)
-            + old.padding(toLength: 14, withPad: " ", startingAt: 0) + new)
-    }
-    print("")
-    print("  rendu de « Aujourd'hui »            avant         après")
-    pair("DailyPlanner.todos", "×\(beforeTodos)", "×1")
-    pair("WorkloadEngine.aggregate", "×\(beforeWorkload)", "×1")
-    pair("courses.filter(isTracked)", "×\(beforeTracked)", "×1")
-    pair("ProgressEngine.progress", "×\(benchTracked.count)", "×\(benchTracked.count) (inchangé)")
-    print("")
-    print(String(format: "  total des termes mesurés : %.3f ms → %.3f ms  (−%.0f %%)",
-                 before, after, (before - after) / before * 100))
-    print("  (hors filtres courts : évaluations, séances planifiées et tâches,")
-    print("   eux aussi passés de 2 lectures à 1, négligeables devant `todos`.)")
 }

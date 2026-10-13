@@ -32,8 +32,7 @@ struct MacFocusView: View {
                     if timer.phase == .idle {
                         setupCard
                         studyCard
-                        suggestions
-                    } else {
+                            } else {
                         if timer.isStudying { studyRunningCard } else { studyCard }
                         targetCard
                         segmentsCard
@@ -144,23 +143,6 @@ struct MacFocusView: View {
         .paperSheet()
     }
 
-    @ViewBuilder
-    private var suggestions: some View {
-        let todos = DailyPlanner.todos(for: tracked, limit: 5)
-        if !todos.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(title: "Ou directement")
-                VStack(spacing: 0) {
-                    ForEach(todos) { todo in
-                        TodoStartRow(todo: todo) {
-                            timer.start(courseID: todo.courseID, taskType: todo.taskType, targetID: todo.targetID, label: todo.title)
-                        }
-                    }
-                }
-            }
-            .paperSheet(padding: 12)
-        }
-    }
 
     // MARK: En session
 

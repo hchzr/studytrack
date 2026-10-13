@@ -2,22 +2,29 @@ import SwiftUI
 import SwiftData
 
 /// Tout ce que `TodayView` dérive de l'état persisté, calculé **une fois** par
-/// rendu : SwiftUI réévalue une propriété calculée à chaque lecture, et l'agrégat
-/// de charge reparcourt tous les cours.
+/// rendu : SwiftUI réévalue une propriété calculée à chaque lecture, et les
+/// agrégats reparcourent tous les cours.
 private struct TodayState {
     let tracked: [Course]
     let term: AcademicTerm?
     /// La semaine en cours, du lundi au lundi suivant.
     let weekStart: Date
-    /// La semaine du semestre, tous cours : théorie vue et exercices faits.
+    /// Chaque cours dans sa semaine (progression, retard, corrections).
+    let summaries: [WeekCourseSummary]
+    /// La semaine du semestre, tous cours : théorie vue, exercices faits, corrigés.
     let theory: (done: Int, total: Int)
     let series: (done: Int, total: Int)
-    /// Éléments des semaines passées pas faits.
+    let corrections: (done: Int, total: Int)
+    /// Éléments des semaines passées pas faits (corrections comprises).
     let late: Int
-    /// Temps d'étude enregistré, jour par jour, du lundi au dimanche.
+    /// Temps compté (sessions et cours suivis), jour par jour, du lundi au dimanche.
     let days: [Int]
     /// Le planning du jour : séances, sessions planifiées, évaluations.
     let todayItems: [TodayItem]
+    /// Évaluations, séries à rendre, corrigés publiés : les deux semaines à venir.
+    let deadlines: [Deadline]
+    /// Les tâches ouvertes (Rappels, Todoist…) en retard ou dues dans la semaine.
+    let tasks: [LinkedTask]
 }
 
 /// Une ligne du planning du jour.
@@ -32,46 +39,64 @@ struct TodayItem: Identifiable {
 }
 
 /// Aujourd'hui : le tableau de bord de la semaine.
+///
+/// Ce qui est cadré (l'horaire, les échéances, les tâches) et où en est chaque
+/// cours — théorie, exercices, corrections. Pas de « prochaine chose à faire » :
+/// on sait sur quoi on travaille ; ce qu'on ne voit pas d'un coup d'œil, c'est
+/// la semaine entière.
 struct TodayView: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @Query(sort: \Course.code) private var courses: [Course]
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query(sort: \Exam.date) private var exams: [Exam]
-    @Query(sort: \PlannedSession.startsAt) private var plannedSessions: [PlannedSession]
-    @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
+    /// Deux semaines au plus : la semaine en cours, même si l'app reste
+    /// ouverte au passage du lundi. L'historique entier n'est jamais chargé ici.
+    @Query private var sessions: [StudySession]
+    @Query private var plannedSessions: [PlannedSession]
+    @Query private var events: [LinkedCalendarEvent]
+    @Query(filter: #Predicate<LinkedTask> { !$0.isDone }, sort: \LinkedTask.dueDate) private var openTasks: [LinkedTask]
 
-    /// Élément ouvert depuis la liste « À faire » : la fiche, pas le chrono.
-    @State private var searchQuery = ""
     @State private var sheet: TodaySheet?
-    @State private var openedExercise: Exercise?
-    @State private var openedVideo: TheoryItem?
-    /// Un cours ouvert depuis « La semaine ».
+    /// Un cours ouvert depuis « La semaine » ou une échéance.
     @State private var openedCourseDetail: Course?
+
+    init() {
+        let since = DateUtils.addDays(-7, to: DateUtils.startOfWeek(Date()))
+        let until = DateUtils.addDays(14, to: DateUtils.startOfWeek(Date()))
+        _sessions = Query(filter: #Predicate<StudySession> { $0.startedAt >= since },
+                          sort: \StudySession.startedAt, order: .reverse)
+        _plannedSessions = Query(filter: #Predicate<PlannedSession> { $0.startsAt >= since && $0.startsAt < until },
+                                 sort: \PlannedSession.startsAt)
+        _events = Query(filter: #Predicate<LinkedCalendarEvent> { $0.startsAt >= since && $0.startsAt < until },
+                        sort: \LinkedCalendarEvent.startsAt)
+    }
 
     /// Une seule passe de dérivation, réutilisée par toutes les sections du rendu.
     private func derived() -> TodayState {
+        let now = Date()
         let tracked = courses.filter(\.isTracked)
-        let weekStart = DateUtils.startOfWeek(Date())
+        let weekStart = DateUtils.startOfWeek(now)
         let weekEnd = DateUtils.addDays(7, to: weekStart)
-        let weeks = tracked.map { ProgressEngine.weekProgress(for: $0, week: $0.currentWeek) }
-        // Le chrono **et** les heures de cours passées (`StudyTime`) : un amphi
-        // suivi est du travail, une séance d'exercices ne l'est que chronométrée.
-        // Les sessions sont triées de la plus récente à la plus ancienne.
-        let weekSessions = Array(sessions.prefix { $0.startedAt >= weekStart }).filter { $0.startedAt < weekEnd }
+        let summaries = tracked.map { WeekCourseSummary(course: $0, now: now) }
+        let weeks = summaries.map(\.week)
+        let weekSessions = sessions.filter { $0.startedAt >= weekStart && $0.startedAt < weekEnd }
         let weekEvents = events.filter { $0.startsAt >= weekStart && $0.startsAt < weekEnd }
         let days = StudyTime.days(of: StudyTime.blocks(events: weekEvents, sessions: weekSessions), weekStart: weekStart)
+        let soon = DateUtils.addDays(7, to: DateUtils.startOfDay(now))
         return TodayState(
             tracked: tracked,
             term: AcademicTerm.resolve(from: tracked.compactMap(\.term)),
             weekStart: weekStart,
+            summaries: summaries,
             theory: (weeks.reduce(0) { $0 + $1.watchedCount }, weeks.reduce(0) { $0 + $1.videoCount }),
             series: (weeks.reduce(0) { $0 + $1.doneCount }, weeks.reduce(0) { $0 + $1.exerciseCount }),
-            late: tracked.reduce(0) { $0 + ProgressEngine.lateCount(for: $1) },
+            corrections: (weeks.reduce(0) { $0 + $1.correctedCount }, weeks.reduce(0) { $0 + $1.doneCount }),
+            late: summaries.reduce(0) { $0 + $1.late },
             days: days,
-            todayItems: todayItems()
+            todayItems: todayItems(),
+            deadlines: Array(Deadline.upcoming(in: tracked, days: 14).filter { $0.date >= now }.prefix(6)),
+            tasks: Array(openTasks.filter { task in task.dueDate.map { $0 < soon } ?? false }.prefix(6))
         )
     }
 
@@ -101,7 +126,7 @@ struct TodayView: View {
                                    icon: "timer",
                                    color: .indigo))
         }
-        for exam in exams where calendar.isDateInToday(exam.date) {
+        for exam in courses.flatMap(\.exams) where calendar.isDateInToday(exam.date) {
             items.append(TodayItem(id: "exam-\(exam.id)",
                                    start: exam.date,
                                    end: nil,
@@ -120,25 +145,15 @@ struct TodayView: View {
     private var isWide: Bool { sizeClass == .regular }
 
     /// Les présentations de « Aujourd'hui », en une seule valeur.
-    ///
-    /// Les trois premières viennent d'une **demande** posée sur le routeur par un
-    /// autre écran (la couverture du suivi renvoie vers le profil, par exemple) :
-    /// `onChange` la consomme et la traduit en feuille.
     private enum TodaySheet: Identifiable, Hashable {
         case tasks
-        case search
         case seriesImport(Course?, PendingImport?)
-        case exercise(Exercise)
-        case video(TheoryItem)
 
         var id: String {
             switch self {
             case .tasks: return "tasks"
-            case .search: return "search"
             case .seriesImport(let course, let shared):
                 return "seriesImport-\(course?.id.uuidString ?? "aucun")-\(shared?.receivedAt.timeIntervalSince1970 ?? 0)"
-            case .exercise(let exercise): return "exercise-\(exercise.id)"
-            case .video(let video): return "video-\(video.id)"
             }
         }
     }
@@ -156,56 +171,37 @@ struct TodayView: View {
                 CourseDetailView(course: course)
             }
             .toolbar {
-                // L'action de l'onglet, puis l'avatar — la même règle partout.
-                // La loupe vit dans « Cours », dont elle cherche le contenu.
-                // Moi — le bilan et les réglages — derrière l'avatar, en haut à gauche.
+                // Moi — le bilan et les réglages — derrière l'avatar, en haut à
+                // gauche ; à droite, ce qu'on ajoute. Le chrono a son bouton dans
+                // la barre d'onglets, l'agenda s'ouvre depuis l'horaire, une
+                // session passée se saisit depuis le chrono ou le bilan.
                 ToolbarItem(placement: .topBarLeading) {
                     ProfileButton()
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        app.router.openAgenda()
-                    } label: {
-                        Image(systemName: "calendar")
-                    }
-                    .accessibilityLabel("Agenda")
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Section {
-                            Button {
-                                app.router.openFocus(.timer)
-                            } label: {
-                                Label("Ouvrir le chrono", systemImage: "timer")
-                            }
-                            Button {
-                                app.router.openFocus(.manual)
-                            } label: {
-                                Label("Saisir une session passée", systemImage: "square.and.pencil")
-                            }
-                        }
-                        Section {
-                            Button {
-                                app.router.openContentImport()
-                            } label: {
-                                Label("Importer du contenu de cours", systemImage: "square.and.arrow.down.on.square")
-                            }
-                            Button {
-                                sheet = .seriesImport(nil, nil)
-                            } label: {
-                                Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
-                            }
+                        Button {
+                            app.router.openContentImport()
+                        } label: {
+                            Label("Importer du contenu de cours", systemImage: "square.and.arrow.down.on.square")
                         }
                         Button {
-                            app.router.showingTasks = true
+                            sheet = .seriesImport(nil, nil)
+                        } label: {
+                            Label("Importer une série (PDF)", systemImage: "doc.badge.plus")
+                        }
+                        Button {
+                            sheet = .tasks
                         } label: {
                             Label("Tâches", systemImage: "checklist")
                         }
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .accessibilityLabel("Ajouter ou démarrer")
+                    .accessibilityLabel("Ajouter")
                 }
             }
-            // **Une seule** feuille pour les six présentations.
+            // **Une seule** feuille pour toutes les présentations.
             //
             // Six `.sheet` enchaînés sur la même vue ne fonctionnent pas de façon
             // fiable : SwiftUI n'en honore qu'une selon l'ordre, et les autres
@@ -237,13 +233,6 @@ struct TodayView: View {
                 // ouvrent la feuille. Le changement d'état est différé d'un tour :
                 // modifié pendant la première passe de mise en page, il est absorbé
                 // et la feuille ne s'ouvre jamais.
-                if PreviewLaunch.isSet(PreviewLaunch.searchFlag) {
-                    searchQuery = PreviewLaunch.string(PreviewLaunch.searchFlag) ?? ""
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        sheet = .search
-                    }
-                }
                 if let path = PreviewLaunch.string(PreviewLaunch.importFileFlag) {
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
@@ -261,10 +250,7 @@ struct TodayView: View {
                 #endif
             }
             .modifier(TodayObservers(sheet: $sheet,
-                                     searchQuery: $searchQuery,
                                      requests: requests,
-                                     openedExercise: openedExercise,
-                                     openedVideo: openedVideo,
                                      courses: courses,
                                      app: app,
                                      applyRequests: apply))
@@ -292,12 +278,15 @@ struct TodayView: View {
             // Sur iPad : le temps et l'horaire à gauche, les cours à droite.
             CarnetColumns {
                 WeekTimeCard(days: state.days, weekStart: state.weekStart,
-                             theory: state.theory, series: state.series, late: state.late) {
+                             theory: state.theory, series: state.series,
+                             corrections: state.corrections, late: state.late) {
                     app.router.showingStats = true
                 }
                 todaySchedule(state)
+                deadlines(state)
             } trailing: {
                 weekCourses(state)
+                tasks(state)
             }
         }
     }
@@ -320,17 +309,134 @@ struct TodayView: View {
                 }
             }
             CarnetSheet {
-                ForEach(Array(state.tracked.enumerated()), id: \.element.id) { index, course in
+                ForEach(Array(state.summaries.enumerated()), id: \.element.course.id) { index, summary in
                     Button {
-                        openedCourseDetail = course
+                        openedCourseDetail = summary.course
                     } label: {
-                        WeekCourseRow(course: course)
+                        WeekCourseRow(summary: summary)
                     }
                     .buttonStyle(PressableStyle(scale: 0.99))
-                    if index < state.tracked.count - 1 { CarnetRule(inset: Carnet.rowInset) }
+                    if index < state.summaries.count - 1 { CarnetRule(inset: Carnet.rowInset) }
                 }
             }
         }
+    }
+
+    // MARK: Échéances
+
+    /// Évaluations, séries à rendre, corrigés publiés : les deux semaines à
+    /// venir. Toucher une échéance ouvre son cours (une évaluation, l'agenda).
+    @ViewBuilder
+    private func deadlines(_ state: TodayState) -> some View {
+        if !state.deadlines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Échéances")
+                CarnetSheet {
+                    ForEach(Array(state.deadlines.enumerated()), id: \.element.id) { index, item in
+                        Button {
+                            if item.kind == .exam {
+                                app.router.openAgenda(day: item.date, courseID: item.courseID)
+                            } else {
+                                openedCourseDetail = state.tracked.first { $0.id == item.courseID }
+                            }
+                        } label: {
+                            deadlineRow(item)
+                        }
+                        .buttonStyle(PressableStyle(scale: 0.99))
+                        if index < state.deadlines.count - 1 { CarnetRule(inset: 52) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func deadlineRow(_ item: Deadline) -> some View {
+        let tint = Carnet.tint(item.colorHex)
+        let days = DateUtils.daysBetween(Date(), item.date)
+        return HStack(spacing: 12) {
+            Image(systemName: item.icon)
+                .font(.callout)
+                .foregroundStyle(item.kind == .exam ? Carnet.wrong : tint)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.body)
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(1)
+                Text("\(item.courseCode) · \(item.detail)")
+                    .font(.footnote)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            Text(DateUtils.countdownLabel(to: item.date))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(item.kind == .exam && days <= 3 ? Carnet.wrong : Carnet.inkSecondary)
+        }
+        .padding(.horizontal, Carnet.rowInset)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Tâches
+
+    /// Les tâches des fournisseurs reliés (Rappels, Todoist…) en retard ou
+    /// dues dans la semaine, cochables ici ; toutes dans « Tâches ».
+    @ViewBuilder
+    private func tasks(_ state: TodayState) -> some View {
+        if !state.tasks.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                CarnetSectionTitle("Tâches") {
+                    Button {
+                        sheet = .tasks
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("Toutes")
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        }
+                    }
+                }
+                CarnetSheet {
+                    ForEach(Array(state.tasks.enumerated()), id: \.element.id) { index, task in
+                        taskRow(task)
+                        if index < state.tasks.count - 1 { CarnetRule(inset: 52) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func taskRow(_ task: LinkedTask) -> some View {
+        HStack(spacing: 8) {
+            CheckCircleButton(isOn: task.isDone,
+                              tint: task.course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink,
+                              label: "Marquer « \(task.title) » faite") {
+                Task { await TaskSync.setDone(task, !task.isDone, context: context, settings: app.settings) }
+            }
+            .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.body)
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    if let code = task.course?.displayCode {
+                        Text(code).font(.footnote.weight(.semibold))
+                            .foregroundStyle(Carnet.tint(task.course?.colorHex ?? ""))
+                    }
+                    if let due = task.dueDate {
+                        Text(DateUtils.countdownLabel(to: due))
+                            .font(.footnote)
+                            .foregroundStyle(task.isOverdue ? Carnet.wrong : Carnet.inkSecondary)
+                    }
+                    Text(task.provider.label).font(.footnote).foregroundStyle(Carnet.inkTertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.trailing, Carnet.rowInset)
+        .padding(.vertical, 5)
     }
 
     /// « Nouveau sur Moodle : MATH-101 : 1 série » — ce que la mise à jour
@@ -374,10 +480,7 @@ struct TodayView: View {
     /// le seul nom suffisait à alourdir chaque expression.
     private struct TodayObservers: ViewModifier {
         @Binding var sheet: TodaySheet?
-        @Binding var searchQuery: String
         var requests: Requests
-        var openedExercise: Exercise?
-        var openedVideo: TheoryItem?
         var courses: [Course]
         var app: AppContainer
         var applyRequests: (Requests) -> Void
@@ -387,8 +490,6 @@ struct TodayView: View {
                 .onChange(of: requests) { _, state in applyRequests(state) }
                 .onChange(of: app.router.shortcut) { _, shortcut in handleShortcut(shortcut) }
                 .onChange(of: app.router.pendingImport) { _, shared in handleImport(shared) }
-                .onChange(of: openedExercise) { _, exercise in handleExercise(exercise) }
-                .onChange(of: openedVideo) { _, video in handleVideo(video) }
         }
 
         // Chaque fermeture appelle une méthode nommée : cinq `.onChange` dont le
@@ -413,13 +514,7 @@ struct TodayView: View {
             app.router.pendingImport = nil
         }
 
-        private func handleExercise(_ exercise: Exercise?) {
-            if let exercise { sheet = .exercise(exercise) }
-        }
 
-        private func handleVideo(_ video: TheoryItem?) {
-            if let video { sheet = .video(video) }
-        }
     }
 
     // MARK: Feuilles
@@ -445,16 +540,10 @@ struct TodayView: View {
         switch destination {
         case .tasks:
             TasksView()
-        case .search:
-            SearchView(initialQuery: searchQuery)
         case .seriesImport(let course, let shared):
             SeriesImportSheet(course: course,
                               initialFileURL: shared.flatMap(importFileURL),
                               initialText: shared?.text)
-        case .exercise(let exercise):
-            ExerciseSheet(exercise: exercise)
-        case .video(let video):
-            VideoDetailSheet(video: video)
         }
     }
 

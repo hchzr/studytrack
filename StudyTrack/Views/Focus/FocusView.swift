@@ -48,10 +48,6 @@ struct FocusView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingStats = true } label: { Image(systemName: "chart.bar.xaxis") }
-                        .accessibilityLabel("Bilan et sessions")
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
                             showingManual = true

@@ -459,11 +459,6 @@ struct ProfileView: View {
     private var dataSection: some View {
         Section {
             ICloudStatusRow(isSynced: app.isCloudSynced)
-            NavigationLink {
-                SessionHistoryView(embedded: true)
-            } label: {
-                Label("Historique des sessions", systemImage: "clock.arrow.circlepath")
-            }
 
             Button {
                 exportURL = DataExporter.writeFile(courses: courses, sessions: sessions)

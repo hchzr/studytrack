@@ -24,12 +24,10 @@ struct Deadline: Identifiable, Equatable {
     }
 
     /// Les échéances des `days` prochains jours (et celles du jour), triées.
-    @MainActor
     static func upcoming(in courses: [Course], from start: Date = DateUtils.startOfDay(Date()), days: Int) -> [Deadline] {
         between(courses, start, DateUtils.addDays(days, to: start))
     }
 
-    @MainActor
     static func between(_ courses: [Course], _ start: Date, _ end: Date) -> [Deadline] {
         var result: [Deadline] = []
         for course in courses {

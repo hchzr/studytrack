@@ -99,16 +99,45 @@ enum ProgressEngine {
     /// théorie non vue, exercices (hors bonus) non faits des semaines passées.
     /// C'est le « 1 en retard » d'une carte de cours — la semaine en cours n'y
     /// compte pas, elle n'est pas finie.
-    static func lateCount(for course: Course, currentWeek: Int? = nil) -> Int {
+    static func lateCount(for course: Course, currentWeek: Int? = nil, now: Date = Date()) -> Int {
         let week = currentWeek ?? course.currentWeek
-        guard week > 1 else { return 0 }
+        let corrections = correctionsDue(for: course, now: now)
+        guard week > 1 else { return corrections.toRedo }
         let theory = course.theoryItems.filter { $0.plannedWeek > 0 && $0.plannedWeek < week && !$0.isWatched }.count
-        let exercises = course.series
-            .filter { $0.plannedWeek > 0 && $0.plannedWeek < week }
+        let pastSeries = course.series.filter { $0.plannedWeek > 0 && $0.plannedWeek < week }
+        let exercises = pastSeries
             .flatMap(\.exercises)
             .filter { !$0.isBonus && !$0.isDone }
             .count
-        return theory + exercises
+        // Corriger fait partie du travail : un exercice d'une semaine passée,
+        // fait, dont le corrigé est publié et qui n'est toujours pas corrigé,
+        // est en retard — comme un exercice à refaire.
+        let uncorrected = pastSeries
+            .filter { $0.solutionsAt.map { $0 <= now } ?? true }
+            .flatMap(\.exercises)
+            .filter { !$0.isBonus && $0.isDone && !$0.isCorrected }
+            .count
+        return theory + exercises + uncorrected + corrections.toRedo
+    }
+
+    /// Les corrections en attente d'un cours : exercices faits à corriger (le
+    /// corrigé est publié) et exercices à refaire.
+    struct CorrectionsDue: Equatable {
+        var toCorrect = 0
+        var toRedo = 0
+        var isEmpty: Bool { toCorrect == 0 && toRedo == 0 }
+    }
+
+    static func correctionsDue(for course: Course, now: Date = Date()) -> CorrectionsDue {
+        var due = CorrectionsDue()
+        for series in course.series {
+            let published = series.solutionsAt.map { $0 <= now } ?? true
+            for exercise in series.exercises where !exercise.isBonus || exercise.isDone {
+                if exercise.redoRequired { due.toRedo += 1 }
+                else if published, exercise.isDone, !exercise.isCorrected { due.toCorrect += 1 }
+            }
+        }
+        return due
     }
 
     /// Ce qui est fait **en avance** : éléments des semaines à venir déjà faits.
@@ -182,5 +211,22 @@ enum ProgressEngine {
             .filter { $0.plannedWeek == week }
             .flatMap(\.sortedExercises)
             .filter { !$0.isDone }
+    }
+}
+
+/// Ce qu'une ligne de cours affiche, calculé une fois par rendu d'« Aujourd'hui » (iPhone et Mac).
+struct WeekCourseSummary {
+    let course: Course
+    let week: WeeklyProgress
+    let late: Int
+    let ahead: Int
+    let corrections: ProgressEngine.CorrectionsDue
+
+    init(course: Course, now: Date = Date()) {
+        self.course = course
+        week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
+        late = ProgressEngine.lateCount(for: course, now: now)
+        ahead = ProgressEngine.aheadCount(for: course)
+        corrections = ProgressEngine.correctionsDue(for: course, now: now)
     }
 }

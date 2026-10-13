@@ -193,14 +193,7 @@ struct TasksView: View {
     }
 
     private func toggle(_ task: LinkedTask) async {
-        let newValue = !task.isDone
-        task.isDone = newValue
-        task.updatedAt = Date()
-        try? context.save()
-
-        guard let externalID = task.externalID else { return }
-        let service = TaskServiceFactory.shared.service(for: task.provider, settings: app.settings)
-        _ = await service?.setCompleted(identifier: externalID, completed: newValue)
+        await TaskSync.setDone(task, !task.isDone, context: context, settings: app.settings)
     }
 
     private func sync() async {
