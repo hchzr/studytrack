@@ -620,6 +620,8 @@ create table if not exists public.group_session_members (
 alter table public.group_sessions enable row level security;
 alter table public.group_session_members enable row level security;
 
+grant select, insert, update, delete on public.group_sessions, public.group_session_members to authenticated;
+
 drop policy if exists group_sessions_read on public.group_sessions;
 create policy group_sessions_read on public.group_sessions
   for select to authenticated using (public.is_group_member(group_id));
