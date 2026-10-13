@@ -780,7 +780,7 @@ struct FocusTimerPanel: View {
             HStack(spacing: Layout.snug) {
                 Image(systemName: "sum")
                     .font(.caption)
-                Text("Aujourd'hui : \(DateUtils.hoursLabel(seconds: seconds)) · \(today.count) session\(today.count > 1 ? "s" : "")")
+                Text("Aujourd'hui : \(DateUtils.hoursLabel(seconds: seconds)) · \(Plural.count(today.count, "\(today.count) session", "\(today.count) sessions"))")
                     .font(.footnote)
                     .monospacedDigit()
             }

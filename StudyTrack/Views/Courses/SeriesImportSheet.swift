@@ -191,7 +191,7 @@ struct SeriesImportSheet: View {
                 stepRow(done: phase == .analyzing, running: phase == .reading,
                         title: "Lecture du document",
                         detail: phase == .reading ? sourceName
-                            : "\(sourceName)\(pageCount > 0 ? " · \(pageCount) page\(pageCount > 1 ? "s" : "")" : "") · \(localSummary)")
+                            : "\(sourceName)\(pageCount > 0 ? " · \(Plural.count(pageCount, "\(pageCount) page", "\(pageCount) pages"))" : "") · \(localSummary)")
                 if phase == .analyzing {
                     stepRow(done: false, running: true,
                             title: pageImages.isEmpty ? "Vérification par l'IA" : "Lecture des pages par l'IA",
@@ -243,7 +243,7 @@ struct SeriesImportSheet: View {
 
     private var localSummary: String {
         let exercises = localResult.reduce(0) { $0 + $1.exercises.count }
-        return "\(exercises) exercice\(exercises > 1 ? "s" : "") repéré\(exercises > 1 ? "s" : "")"
+        return Plural.count(exercises, "\(exercises) exercice repéré", "\(exercises) exercices repérés")
     }
 
     // MARK: 3. Relecture
@@ -627,10 +627,10 @@ struct SeriesImportSheet: View {
         let leaves = merged.flatMap(\.exercises).reduce(0) { $0 + max(1, $1.leafQuestionCount) }
         let changed = zip(local.flatMap(\.exercises), merged.flatMap(\.exercises))
             .filter { $0.number == $1.number && $0.subQuestions != $1.subQuestions }.count
-        var parts = ["\(after) exercice\(after > 1 ? "s" : ""), \(leaves) cases"]
+        var parts = ["\(Plural.count(after, "\(after) exercice", "\(after) exercices")), \(leaves) cases"]
         if changed > 0 { parts.append("questions relues pour \(changed)") }
-        if after > before { parts.append("\(after - before) ajouté\(after - before > 1 ? "s" : "")") }
-        if after < before { parts.append("\(before - after) repère\(before - after > 1 ? "s" : "") douteux écarté\(before - after > 1 ? "s" : "")") }
+        if after > before { parts.append(Plural.count(after - before, "\(after - before) ajouté", "\(after - before) ajoutés")) }
+        if after < before { parts.append(Plural.count(before - after, "\(before - after) repère douteux écarté", "\(before - after) repères douteux écartés")) }
         return parts.joined(separator: " · ") + " — \(source.label)"
     }
 

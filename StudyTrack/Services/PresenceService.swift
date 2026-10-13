@@ -86,7 +86,7 @@ final class PresenceService {
         do {
             try await social.publishPresence(entry, groupIDs: groupIDs)
             lastError = nil
-            publishedSummary = "\(entry.activityLabel.isEmpty ? "Travail en cours" : entry.activityLabel) · \(groupIDs.count) groupe\(groupIDs.count > 1 ? "s" : "")"
+            publishedSummary = "\(entry.activityLabel.isEmpty ? "Travail en cours" : entry.activityLabel) · \(Plural.count(groupIDs.count, "\(groupIDs.count) groupe", "\(groupIDs.count) groupes"))"
         } catch {
             lastError = GroupSync.explain(error)
             publishedSummary = nil

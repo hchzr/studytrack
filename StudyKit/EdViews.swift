@@ -424,7 +424,7 @@ struct EdPollCard: View {
         .task(id: id) { await load() }
     }
 
-    private func votes(_ count: Int) -> String { "\(count) vote\(count > 1 ? "s" : "")" }
+    private func votes(_ count: Int) -> String { Plural.count(count, "\(count) vote", "\(count) votes") }
 
     @ViewBuilder
     private func optionRow(_ poll: EdDiscussion.Poll, index: Int, option: String) -> some View {

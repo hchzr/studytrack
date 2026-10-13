@@ -16534,6 +16534,986 @@
           }
         }
       }
+    },
+    "%lld activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld activity"
+          }
+        }
+      }
+    },
+    "%lld activités" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld activities"
+          }
+        }
+      }
+    },
+    "%lld ajouté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld added"
+          }
+        }
+      }
+    },
+    "%lld ajoutée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld added"
+          }
+        }
+      }
+    },
+    "%lld ajoutées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld added"
+          }
+        }
+      }
+    },
+    "%lld ajoutés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld added"
+          }
+        }
+      }
+    },
+    "%lld ancien examen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld past exam"
+          }
+        }
+      }
+    },
+    "%lld anciens examens" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld past exams"
+          }
+        }
+      }
+    },
+    "%lld annale" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld past exam"
+          }
+        }
+      }
+    },
+    "%lld annales" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld past exams"
+          }
+        }
+      }
+    },
+    "%lld app permise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld app allowed"
+          }
+        }
+      }
+    },
+    "%lld apps permises" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld apps allowed"
+          }
+        }
+      }
+    },
+    "%lld bloc terminé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld block done"
+          }
+        }
+      }
+    },
+    "%lld blocs terminés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld blocks done"
+          }
+        }
+      }
+    },
+    "%lld carte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld card"
+          }
+        }
+      }
+    },
+    "%lld carte révisée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld card reviewed"
+          }
+        }
+      }
+    },
+    "%lld cartes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld cards"
+          }
+        }
+      }
+    },
+    "%lld cartes révisées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld cards reviewed"
+          }
+        }
+      }
+    },
+    "%lld case" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld box"
+          }
+        }
+      }
+    },
+    "%lld cases" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld boxes"
+          }
+        }
+      }
+    },
+    "%lld chapitre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld chapter"
+          }
+        }
+      }
+    },
+    "%lld chapitres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld chapters"
+          }
+        }
+      }
+    },
+    "%lld corrigé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld corrected"
+          }
+        }
+      }
+    },
+    "%lld corrigée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld fixed"
+          }
+        }
+      }
+    },
+    "%lld corrigées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld fixed"
+          }
+        }
+      }
+    },
+    "%lld corrigés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld corrected"
+          }
+        }
+      }
+    },
+    "%lld cours rattaché" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld course attached"
+          }
+        }
+      }
+    },
+    "%lld cours rattachés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld courses attached"
+          }
+        }
+      }
+    },
+    "%lld cours retrouvé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld course found"
+          }
+        }
+      }
+    },
+    "%lld cours retrouvés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld courses found"
+          }
+        }
+      }
+    },
+    "%lld document" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld document"
+          }
+        }
+      }
+    },
+    "%lld documents" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld documents"
+          }
+        }
+      }
+    },
+    "%lld essai" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld attempt"
+          }
+        }
+      }
+    },
+    "%lld essais" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld attempts"
+          }
+        }
+      }
+    },
+    "%lld exercice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercise"
+          }
+        }
+      }
+    },
+    "%lld exercice déjà fait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercise already done"
+          }
+        }
+      }
+    },
+    "%lld exercice repéré" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercise found"
+          }
+        }
+      }
+    },
+    "%lld exercices" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercises"
+          }
+        }
+      }
+    },
+    "%lld exercices déjà faits" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercises already done"
+          }
+        }
+      }
+    },
+    "%lld exercices repérés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercises found"
+          }
+        }
+      }
+    },
+    "%lld exo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercise"
+          }
+        }
+      }
+    },
+    "%lld exos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercises"
+          }
+        }
+      }
+    },
+    "%lld groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld group"
+          }
+        }
+      }
+    },
+    "%lld groupes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld groups"
+          }
+        }
+      }
+    },
+    "%lld jour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld day"
+          }
+        }
+      }
+    },
+    "%lld jour actif" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld active day"
+          }
+        }
+      }
+    },
+    "%lld jours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld days"
+          }
+        }
+      }
+    },
+    "%lld jours actifs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld active days"
+          }
+        }
+      }
+    },
+    "%lld ligne" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld line"
+          }
+        }
+      }
+    },
+    "%lld lignes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld lines"
+          }
+        }
+      }
+    },
+    "%lld membre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld member"
+          }
+        }
+      }
+    },
+    "%lld membres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld members"
+          }
+        }
+      }
+    },
+    "%lld modification envoyée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld change sent"
+          }
+        }
+      }
+    },
+    "%lld modification faite" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld change made"
+          }
+        }
+      }
+    },
+    "%lld modifications envoyées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld changes sent"
+          }
+        }
+      }
+    },
+    "%lld modifications faites" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld changes made"
+          }
+        }
+      }
+    },
+    "%lld nouveauté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new item"
+          }
+        }
+      }
+    },
+    "%lld nouveautés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new items"
+          }
+        }
+      }
+    },
+    "%lld nouvelle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new"
+          }
+        }
+      }
+    },
+    "%lld nouvelles" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new"
+          }
+        }
+      }
+    },
+    "%lld page" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld page"
+          }
+        }
+      }
+    },
+    "%lld pages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pages"
+          }
+        }
+      }
+    },
+    "%lld question cochée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld question checked"
+          }
+        }
+      }
+    },
+    "%lld question décochée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld question unchecked"
+          }
+        }
+      }
+    },
+    "%lld questions cochées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld questions checked"
+          }
+        }
+      }
+    },
+    "%lld questions décochées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld questions unchecked"
+          }
+        }
+      }
+    },
+    "%lld repère douteux écarté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld doubtful marker dropped"
+          }
+        }
+      }
+    },
+    "%lld repères douteux écartés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld doubtful markers dropped"
+          }
+        }
+      }
+    },
+    "%lld restant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld left"
+          }
+        }
+      }
+    },
+    "%lld restants" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld left"
+          }
+        }
+      }
+    },
+    "%lld retirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld removed"
+          }
+        }
+      }
+    },
+    "%lld retirées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld removed"
+          }
+        }
+      }
+    },
+    "%lld réponse" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld reply"
+          }
+        }
+      }
+    },
+    "%lld réponses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld replies"
+          }
+        }
+      }
+    },
+    "%lld résultat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld result"
+          }
+        }
+      }
+    },
+    "%lld résultats" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld results"
+          }
+        }
+      }
+    },
+    "%lld semaine" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld week"
+          }
+        }
+      }
+    },
+    "%lld semaines" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld weeks"
+          }
+        }
+      }
+    },
+    "%lld session" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld session"
+          }
+        }
+      }
+    },
+    "%lld sessions" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld sessions"
+          }
+        }
+      }
+    },
+    "%lld séance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld class"
+          }
+        }
+      }
+    },
+    "%lld séances" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld classes"
+          }
+        }
+      }
+    },
+    "%lld série" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld series"
+          }
+        }
+      }
+    },
+    "%lld série terminée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld series finished"
+          }
+        }
+      }
+    },
+    "%lld séries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld series"
+          }
+        }
+      }
+    },
+    "%lld séries terminées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld series finished"
+          }
+        }
+      }
+    },
+    "%lld vidéo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld video"
+          }
+        }
+      }
+    },
+    "%lld vidéos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld videos"
+          }
+        }
+      }
+    },
+    "%lld vote" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld vote"
+          }
+        }
+      }
+    },
+    "%lld votes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld votes"
+          }
+        }
+      }
+    },
+    "%lld échéance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld deadline"
+          }
+        }
+      }
+    },
+    "%lld échéances" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld deadlines"
+          }
+        }
+      }
+    },
+    "%lld élément" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld item"
+          }
+        }
+      }
+    },
+    "%lld élément rafraîchi" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld item refreshed"
+          }
+        }
+      }
+    },
+    "%lld éléments" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld items"
+          }
+        }
+      }
+    },
+    "%lld éléments rafraîchis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld items refreshed"
+          }
+        }
+      }
+    },
+    "Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : %lld modification faite ici ne peut pas être fusionnée. « Retélécharger la collection » repart de la version d'AnkiWeb." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your AnkiWeb collection was replaced by a full sync made elsewhere: %lld change made here can't be merged. “Redownload the collection” starts again from AnkiWeb's version."
+          }
+        }
+      }
+    },
+    "Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : %lld modifications faites ici ne peuvent pas être fusionnées. « Retélécharger la collection » repart de la version d'AnkiWeb." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your AnkiWeb collection was replaced by a full sync made elsewhere: %lld changes made here can't be merged. “Redownload the collection” starts again from AnkiWeb's version."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

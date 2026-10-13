@@ -86,7 +86,7 @@ struct TheoryTabView: View {
                 VStack(alignment: .leading, spacing: Layout.control) {
                     ProgressBar(progress: CourseProgress.ratio(done, weekItems.count), color: TaskType.theory.tint)
                     if remainingSeconds > 0 || videos > 0 {
-                        Text([videos > 0 ? "\(videos) vidéo\(videos > 1 ? "s" : "")" : nil,
+                        Text([videos > 0 ? Plural.count(videos, "\(videos) vidéo", "\(videos) vidéos") : nil,
                               remainingSeconds > 0 ? "\(DateUtils.durationLabel(seconds: remainingSeconds)) à regarder" : nil]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(.caption)

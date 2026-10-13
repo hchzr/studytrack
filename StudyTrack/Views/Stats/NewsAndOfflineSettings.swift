@@ -130,7 +130,7 @@ struct MoodleNewsSettingsSections: View {
             let count = report.news.reduce(0) { $0 + $1.items.count }
             result = count == 0
                 ? "Rien de neuf dans \(report.courses) cours."
-                : "\(count) nouveauté\(count > 1 ? "s" : "") : la notification arrive."
+                : "\(Plural.count(count, "\(count) nouveauté", "\(count) nouveautés")) : la notification arrive."
         }
         Haptics.tap()
     }
@@ -171,7 +171,7 @@ struct OfflineSettingsView: View {
                             HStack {
                                 Text("Utilisé")
                                 Spacer()
-                                Text("\(OfflinePlan.label(bytes: library.usedBytes)) · \(library.fileCount) document\(library.fileCount > 1 ? "s" : "")")
+                                Text("\(OfflinePlan.label(bytes: library.usedBytes)) · \(Plural.count(library.fileCount, "\(library.fileCount) document", "\(library.fileCount) documents"))")
                                     .foregroundStyle(Carnet.inkSecondary)
                                     .contentTransition(.numericText())
                             }

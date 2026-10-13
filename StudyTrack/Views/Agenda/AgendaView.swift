@@ -451,7 +451,7 @@ struct AgendaView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
-        .accessibilityLabel("\(DateUtils.fullDayLabel(day))\(isToday ? ", aujourd'hui" : ""), \(dayEntries.count) élément\(dayEntries.count > 1 ? "s" : "")")
+        .accessibilityLabel("\(DateUtils.fullDayLabel(day))\(isToday ? ", aujourd'hui" : ""), \(Plural.count(dayEntries.count, "\(dayEntries.count) élément", "\(dayEntries.count) éléments"))")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
@@ -841,7 +841,7 @@ struct AgendaView: View {
     /// Change le type de toutes les séances du créneau, et le dit.
     private func retype(_ event: LinkedCalendarEvent, as kind: CalendarEventKind) {
         let count = CalendarSync.setKind(kind, forSlotOf: event, context: context)
-        syncMessage = "\(count) séance\(count > 1 ? "s" : "") du même créneau : \(kind.label.lowercased())."
+        syncMessage = "\(Plural.count(count, "\(count) séance", "\(count) séances")) du même créneau : \(kind.label.lowercased())."
         Haptics.success()
     }
 
@@ -874,6 +874,6 @@ struct AgendaView: View {
                                        service: app.calendar)
         syncMessage = result.total == 0
             ? "Calendrier relu · aucun nouvel événement."
-            : "Calendrier relu · \(result.imported) ajouté\(result.imported > 1 ? "s" : ""), \(result.updated) mis à jour."
+            : "Calendrier relu · \(Plural.count(result.imported, "\(result.imported) ajouté", "\(result.imported) ajoutés")), \(result.updated) mis à jour."
     }
 }

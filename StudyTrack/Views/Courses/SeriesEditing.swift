@@ -87,7 +87,7 @@ struct SeriesDraftForm: View {
             HStack {
                 Text("Exercices")
                 Spacer()
-                Text("\(draft.exercises.count) · \(draft.leafCount) case\(draft.leafCount > 1 ? "s" : "")")
+                Text("\(draft.exercises.count) · \(Plural.count(draft.leafCount, "\(draft.leafCount) case", "\(draft.leafCount) cases"))")
                     .monospacedDigit()
             }
         } footer: {
@@ -322,7 +322,7 @@ struct ExerciseDraftEditor: View {
                     Text("Questions")
                     Spacer()
                     if !exercise.subQuestions.isEmpty {
-                        Text("\(exercise.leafCount) case\(exercise.leafCount > 1 ? "s" : "")").monospacedDigit()
+                        Text(Plural.count(exercise.leafCount, "\(exercise.leafCount) case", "\(exercise.leafCount) cases")).monospacedDigit()
                     }
                 }
             } footer: {
@@ -484,9 +484,9 @@ struct SeriesEditorSheet: View {
                 }
             } message: {
                 let done = series?.exercises.filter(\.isDone).count ?? 0
-                Text(done > 0 ? "\(done) exercice\(done > 1 ? "s" : "") déjà fait\(done > 1 ? "s" : "") seront perdus." : "Aucun exercice n'est encore fait.")
+                Text(done > 0 ? "\(Plural.count(done, "\(done) exercice déjà fait", "\(done) exercices déjà faits")) seront perdus." : "Aucun exercice n'est encore fait.")
             }
-            .confirmationDialog("Supprimer \(lostDone.count) exercice\(lostDone.count > 1 ? "s" : "") déjà fait\(lostDone.count > 1 ? "s" : "") ?",
+            .confirmationDialog("Supprimer \(Plural.count(lostDone.count, "\(lostDone.count) exercice déjà fait", "\(lostDone.count) exercices déjà faits")) ?",
                                 isPresented: $confirmingLoss, titleVisibility: .visible) {
                 Button("Enregistrer quand même", role: .destructive) { save() }
             } message: {

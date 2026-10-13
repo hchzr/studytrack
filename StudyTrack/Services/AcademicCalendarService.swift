@@ -36,10 +36,10 @@ enum AcademicCalendarService {
         var total = 0
 
         var message: String {
-            var parts: [String] = ["\(total) échéance\(total > 1 ? "s" : "") à jour"]
-            if added > 0 { parts.append("\(added) ajoutée\(added > 1 ? "s" : "")") }
-            if updated > 0 { parts.append("\(updated) corrigée\(updated > 1 ? "s" : "")") }
-            if removed > 0 { parts.append("\(removed) retirée\(removed > 1 ? "s" : "")") }
+            var parts: [String] = ["\(Plural.count(total, "\(total) échéance", "\(total) échéances")) à jour"]
+            if added > 0 { parts.append(Plural.count(added, "\(added) ajoutée", "\(added) ajoutées")) }
+            if updated > 0 { parts.append(Plural.count(updated, "\(updated) corrigée", "\(updated) corrigées")) }
+            if removed > 0 { parts.append(Plural.count(removed, "\(removed) retirée", "\(removed) retirées")) }
             return parts.joined(separator: " · ")
         }
     }

@@ -450,7 +450,7 @@ struct OnboardingView: View {
                 Card(title: "Déjà importé", icon: "checkmark.circle.fill") {
                     VStack(alignment: .leading, spacing: Layout.snug) {
                         ForEach(trackedCourses.filter { !$0.theoryItems.isEmpty || !$0.series.isEmpty }) { course in
-                            Text("\(course.displayCode) · \(course.theoryItems.count) théorie · \(course.series.count) série\(course.series.count > 1 ? "s" : "")")
+                            Text("\(course.displayCode) · \(course.theoryItems.count) théorie · \(Plural.count(course.series.count, "\(course.series.count) série", "\(course.series.count) séries"))")
                                 .font(.subheadline)
                         }
                     }

@@ -164,7 +164,7 @@ struct GroupHubView: View {
                             CarnetBar(value: Double(member.weeklySeconds) / Double(peak),
                                       tint: member.isMe ? Carnet.ink : Carnet.inkTertiary, height: 4)
                             if member.completedSeriesCount > 0 {
-                                Text("\(member.completedSeriesCount) série\(member.completedSeriesCount > 1 ? "s" : "") terminée\(member.completedSeriesCount > 1 ? "s" : "")")
+                                Text(Plural.count(member.completedSeriesCount, "\(member.completedSeriesCount) série terminée", "\(member.completedSeriesCount) séries terminées"))
                                     .font(.caption)
                                     .foregroundStyle(Carnet.inkSecondary)
                             }
@@ -331,7 +331,7 @@ struct GroupHubView: View {
                 }
                 Text(post.body).font(.body).foregroundStyle(Carnet.ink).lineLimit(3)
                 HStack(spacing: 10) {
-                    Label(replies == 0 ? "Répondre" : "\(replies) réponse\(replies > 1 ? "s" : "")",
+                    Label(replies == 0 ? "Répondre" : Plural.count(replies, "\(replies) réponse", "\(replies) réponses"),
                           systemImage: "arrowshape.turn.up.left")
                     if post.resolved {
                         Label("Résolu", systemImage: "checkmark.circle.fill").foregroundStyle(Carnet.correct)

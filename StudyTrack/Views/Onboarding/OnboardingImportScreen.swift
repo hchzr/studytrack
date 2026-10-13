@@ -80,7 +80,7 @@ struct ImportScreen: View {
         case .waiting, .outline:
             if course.sections.isEmpty { return "Lecture du plan du cours sur Moodle…" }
             let count = course.activities.count
-            return "Plan lu : \(course.sections.count) sections, \(count) activité\(count > 1 ? "s" : "")."
+            return "Plan lu : \(course.sections.count) sections, \(Plural.count(count, "\(count) activité", "\(count) activités"))."
         case .activities:
             return "Ouverture de chaque lien et fichier pour voir ce qu'il contient : \(course.openedCount) / \(max(course.openableCount, course.openedCount))."
         case .sources:
@@ -97,7 +97,7 @@ struct ImportScreen: View {
         case .writing, .done:
             let weeks = Set(course.placed.map(\.week)).count
             if course.placed.isEmpty { return "Rien à ranger dans ce cours pour l'instant." }
-            return "\(course.placed.count) éléments rangés dans \(weeks) semaine\(weeks > 1 ? "s" : "")."
+            return "\(course.placed.count) éléments rangés dans \(Plural.count(weeks, "\(weeks) semaine", "\(weeks) semaines"))."
         }
     }
 

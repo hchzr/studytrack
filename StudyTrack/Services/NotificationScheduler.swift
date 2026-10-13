@@ -35,7 +35,7 @@ final class NotificationScheduler {
             let fireDate = DateUtils.addDays(-days, to: examDate)
             guard fireDate > Date() else { continue }
             let content = UNMutableNotificationContent()
-            content.title = "Échéance dans \(days) jour\(days > 1 ? "s" : "")"
+            content.title = "Échéance dans \(Plural.count(days, "\(days) jour", "\(days) jours"))"
             content.body = title
             content.sound = .default
             add(identifier: "exam-\(id.uuidString)-\(days)", content: content, date: fireDate)

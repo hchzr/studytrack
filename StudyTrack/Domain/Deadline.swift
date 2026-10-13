@@ -43,7 +43,7 @@ struct Deadline: Identifiable, Equatable {
                 if let due = series.dueDate, due >= start, due < end {
                     let left = series.requiredExercises.count - series.doneCount
                     result.append(Deadline(id: "due:\(series.id)", kind: .due, date: due, title: "\(name) à rendre",
-                                           detail: left > 0 ? "\(left) exercice\(left > 1 ? "s" : "") à faire" : "tout est fait",
+                                           detail: left > 0 ? "\(Plural.count(left, "\(left) exercice", "\(left) exercices")) à faire" : "tout est fait",
                                            courseID: course.id, courseCode: course.displayCode, colorHex: course.colorHex,
                                            targetID: series.sortedExercises.first { !$0.isDone }?.id))
                 }

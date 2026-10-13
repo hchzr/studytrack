@@ -27,7 +27,7 @@ struct DiagnosticsView: View {
         }
         let total = liveCount + examCount
         if total == 0 { return "Aucune activité en cours — l'îlot est vide, c'est normal." }
-        var text = "\(total) activité\(total > 1 ? "s" : "") en cours"
+        var text = "\(Plural.count(total, "\(total) activité", "\(total) activités")) en cours"
         if examCount > 0 { text += " (dont \(examCount) d'examen)" }
         return text + "."
     }
@@ -56,7 +56,7 @@ struct DiagnosticsView: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Section("\(shown.count) ligne\(shown.count > 1 ? "s" : "")") {
+                Section(Plural.count(shown.count, "\(shown.count) ligne", "\(shown.count) lignes")) {
                     ForEach(shown) { entry in
                         row(entry)
                     }

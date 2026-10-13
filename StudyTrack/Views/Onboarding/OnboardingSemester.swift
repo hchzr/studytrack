@@ -248,7 +248,7 @@ struct SemesterScreen: View {
         var parts = ["\(setup.feed.courses.count) cours"]
         if t.series > 0 { parts.append("\(t.series) séries") }
         if t.videos + t.theory > 0 { parts.append("\(t.videos + t.theory) chapitres") }
-        if t.deadlines > 0 { parts.append("\(t.deadlines) échéance\(t.deadlines > 1 ? "s" : "")") }
+        if t.deadlines > 0 { parts.append(Plural.count(t.deadlines, "\(t.deadlines) échéance", "\(t.deadlines) échéances")) }
         return parts.joined(separator: " · ") + ", sur \(setup.weeks) semaines."
     }
 }

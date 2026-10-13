@@ -206,7 +206,7 @@ struct AnkiSettingsView: View {
                     }
                 }
                 if unsynced > sync.pending.count {
-                    Label("\(unsynced - sync.pending.count) modification\(unsynced - sync.pending.count > 1 ? "s" : "") faite\(unsynced - sync.pending.count > 1 ? "s" : "") ici (révisions, cartes)",
+                    Label("\(Plural.count(unsynced - sync.pending.count, "\(unsynced - sync.pending.count) modification faite", "\(unsynced - sync.pending.count) modifications faites")) ici (révisions, cartes)",
                           systemImage: "tray.and.arrow.up")
                         .font(.subheadline)
                 }

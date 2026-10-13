@@ -148,7 +148,7 @@ struct GroupSeriesProgressView: View {
                              title: "membres", onCard: true)
                 }
                 if let gap {
-                    Label("\(gap.name) a \(gap.gap) exercice\(gap.gap > 1 ? "s" : "") d'avance sur toi",
+                    Label("\(gap.name) a \(Plural.count(gap.gap, "\(gap.gap) exercice", "\(gap.gap) exercices")) d'avance sur toi",
                           systemImage: "arrow.up.right")
                         .font(.caption)
                         .foregroundStyle(Color.orange.accessibleInk)
@@ -167,7 +167,7 @@ struct GroupSeriesProgressView: View {
         let isCurrent = board.plannedWeek == (course?.currentWeek ?? -1)
         return Card(title: board.title,
                     icon: isCurrent ? "star.circle.fill" : "list.number",
-                    trailing: "S\(board.plannedWeek) · \(board.total) exo\(board.total > 1 ? "s" : "")") {
+                    trailing: "S\(board.plannedWeek) · \(Plural.count(board.total, "\(board.total) exo", "\(board.total) exos"))") {
             VStack(alignment: .leading, spacing: Layout.block) {
                 HStack(spacing: Layout.snug) {
                     if isCurrent { Pill(text: "cette semaine", color: Theme.accent) }

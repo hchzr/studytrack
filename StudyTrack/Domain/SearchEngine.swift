@@ -244,6 +244,6 @@ enum SearchEngine {
         }
         let groups = grouped(hits)
         let parts = groups.map { "\($0.hits.count) \($0.kind.label.lowercased())" }
-        return "\(hits.count) résultat\(hits.count > 1 ? "s" : "") · " + parts.joined(separator: " · ")
+        return "\(Plural.count(hits.count, "\(hits.count) résultat", "\(hits.count) résultats")) · " + parts.joined(separator: " · ")
     }
 }

@@ -5258,6 +5258,11 @@ do {
     check(merged == ["1": ["a", "b", "c"], "2": ["x"]], "activités vues : union de tous les appareils")
 }
 
+// MARK: Pluriels : la règle de la langue
+check(Plural.usesSingular(0, language: "fr") && Plural.usesSingular(1, language: "fr") && !Plural.usesSingular(2, language: "fr"),
+      "français : 0 et 1 au singulier")
+check(!Plural.usesSingular(0, language: "en") && Plural.usesSingular(1, language: "en"), "anglais : seul 1 au singulier")
+
 // MARK: Chrono partagé : le cycle Pomodoro voyage avec la session
 do {
     let start = Date(timeIntervalSince1970: 1_800_000_000)

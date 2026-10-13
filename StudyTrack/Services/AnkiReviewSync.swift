@@ -53,7 +53,7 @@ enum AnkiReviewSync {
                                        startedAt: draft.start,
                                        durationSeconds: draft.seconds,
                                        isManual: false,
-                                       note: "Anki · \(draft.deck) · \(draft.reviewCount) carte\(draft.reviewCount > 1 ? "s" : "")")
+                                       note: "Anki · \(draft.deck) · \(Plural.count(draft.reviewCount, "\(draft.reviewCount) carte", "\(draft.reviewCount) cartes"))")
             session.sourceRaw = "anki"
             session.externalKey = draft.key
             context.insert(session)

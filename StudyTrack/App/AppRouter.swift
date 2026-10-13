@@ -33,6 +33,8 @@ final class AppRouter {
         case courses = 1
         case groups = 3
         case focus = 2
+        /// La recherche, rond détaché de la barre sur iOS 26.
+        case search = 6
 
         var title: String {
             switch self {
@@ -40,6 +42,7 @@ final class AppRouter {
             case .courses: return "Cours"
             case .groups: return "Groupes"
             case .focus: return "Chrono"
+            case .search: return "Recherche"
             }
         }
 
@@ -49,6 +52,7 @@ final class AppRouter {
             case .courses: return "books.vertical"
             case .groups: return "person.2"
             case .focus: return "timer"
+            case .search: return "magnifyingglass"
             }
         }
     }
@@ -128,6 +132,10 @@ final class AppRouter {
     var shortcut: ShortcutAction?
 
     /// Démarre le chrono sur ce contexte — pour un bouton qui dit « Démarrer ».
+    ///
+    /// Le chrono démarre **sur place** (`RootTabView`) : le mini-lecteur le
+    /// montre, l'écran qu'on lisait reste. Focus ne s'ouvre que s'il faut
+    /// choisir quoi faire de la session déjà en cours.
     func startFocus(courseID: UUID?, courseCode: String, taskType: TaskType,
                     targetID: UUID? = nil, label: String) {
         focusRequest = FocusRequest(courseID: courseID,
@@ -135,7 +143,6 @@ final class AppRouter {
                                     taskType: taskType,
                                     targetID: targetID,
                                     label: label)
-        showingFocus = true
     }
 
     /// Ouvre Focus sur un segment (« Manuel », « Journal »).

@@ -227,7 +227,9 @@ final class AnkiWebSync {
                 // Une synchronisation complète a été faite ailleurs : nos
                 // modifications ne peuvent pas être fusionnées. On ne jette rien
                 // sans le dire.
-                throw AnkiWebClient.Failure.unsupported("Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : \(pendingLocal) modification\(pendingLocal > 1 ? "s" : "") faite\(pendingLocal > 1 ? "s" : "") ici ne peu\(pendingLocal > 1 ? "vent" : "t") pas être fusionnée\(pendingLocal > 1 ? "s" : ""). « Retélécharger la collection » repart de la version d'AnkiWeb.")
+                throw AnkiWebClient.Failure.unsupported(Plural.count(pendingLocal,
+                    "Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : \(pendingLocal) modification faite ici ne peut pas être fusionnée. « Retélécharger la collection » repart de la version d'AnkiWeb.",
+                    "Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : \(pendingLocal) modifications faites ici ne peuvent pas être fusionnées. « Retélécharger la collection » repart de la version d'AnkiWeb."))
             }
             try await download(with: client)
             return
@@ -320,7 +322,7 @@ final class AnkiWebSync {
             defaults.set(modified, forKey: Key.serverMod)
             defaults.set(meta.usn + 1, forKey: Key.serverUsn)
             defaults.set(Date(), forKey: Key.lastRefresh)
-            status = sent > 0 ? "Synchronisé · \(sent) modification\(sent > 1 ? "s" : "") envoyée\(sent > 1 ? "s" : "")" : "Collection à jour"
+            status = sent > 0 ? "Synchronisé · \(Plural.count(sent, "\(sent) modification envoyée", "\(sent) modifications envoyées"))" : "Collection à jour"
         } catch {
             // Le serveur annule la transaction : sa collection reste intacte, et
             // nos lignes gardent `usn = -1` pour la prochaine fois.

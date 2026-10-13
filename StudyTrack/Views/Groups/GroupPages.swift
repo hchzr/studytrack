@@ -78,7 +78,7 @@ struct GroupMembersView: View {
                         }
                 }
             } header: {
-                Text("\(group.members.count) membre\(group.members.count > 1 ? "s" : "") · \(group.members.filter(\.isAdmin).count) admin")
+                Text("\(Plural.count(group.members.count, "\(group.members.count) membre", "\(group.members.count) membres")) · \(group.members.filter(\.isAdmin).count) admin")
             } footer: {
                 if iAmAdmin {
                     Text("Glisse une ligne vers la gauche pour gérer un membre.")
@@ -281,7 +281,7 @@ struct GroupStudyTimeView: View {
                                     .font(.subheadline.weight(member.isMe ? .bold : .regular))
                                     .lineLimit(1)
                                 if member.completedSeriesCount > 0 {
-                                    Pill(text: "\(member.completedSeriesCount) série\(member.completedSeriesCount > 1 ? "s" : "")",
+                                    Pill(text: Plural.count(member.completedSeriesCount, "\(member.completedSeriesCount) série", "\(member.completedSeriesCount) séries"),
                                          color: .green)
                                 }
                             }

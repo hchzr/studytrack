@@ -733,11 +733,11 @@ struct BatchReviewView: View {
 enum ContentDraftSummary {
     static func line(_ draft: ContentDraft) -> String {
         var parts: [String] = []
-        if draft.theoryCount > 0 { parts.append("\(draft.theoryCount) élément\(draft.theoryCount > 1 ? "s" : "") de théorie") }
-        if draft.videoCount > 0 { parts.append("\(draft.videoCount) vidéo\(draft.videoCount > 1 ? "s" : "")") }
-        if draft.seriesCount > 0 { parts.append("\(draft.seriesCount) série\(draft.seriesCount > 1 ? "s" : "")") }
-        if draft.deadlineCount > 0 { parts.append("\(draft.deadlineCount) échéance\(draft.deadlineCount > 1 ? "s" : "")") }
-        if draft.resourceCount > 0 { parts.append("\(draft.resourceCount) document\(draft.resourceCount > 1 ? "s" : "")") }
+        if draft.theoryCount > 0 { parts.append("\(Plural.count(draft.theoryCount, "\(draft.theoryCount) élément", "\(draft.theoryCount) éléments")) de théorie") }
+        if draft.videoCount > 0 { parts.append(Plural.count(draft.videoCount, "\(draft.videoCount) vidéo", "\(draft.videoCount) vidéos")) }
+        if draft.seriesCount > 0 { parts.append(Plural.count(draft.seriesCount, "\(draft.seriesCount) série", "\(draft.seriesCount) séries")) }
+        if draft.deadlineCount > 0 { parts.append(Plural.count(draft.deadlineCount, "\(draft.deadlineCount) échéance", "\(draft.deadlineCount) échéances")) }
+        if draft.resourceCount > 0 { parts.append(Plural.count(draft.resourceCount, "\(draft.resourceCount) document", "\(draft.resourceCount) documents")) }
         return parts.isEmpty ? "rien de reconnaissable" : parts.joined(separator: " · ")
     }
 }
@@ -1283,7 +1283,7 @@ struct ContentDraftSections: View {
                     value.kind == .series && !value.exercises.isEmpty ? "\(value.exercises.count) exercices, \(value.exercises.reduce(0) { $0 + max($1.questions.count, 1) }) questions" : nil,
                     value.kind == .series && !value.pdfURL.isEmpty && value.exercises.isEmpty ? "PDF à lire" : nil,
                     value.solutionsAt.map { "corrigé le \(DateUtils.shortDay.string(from: $0))" },
-                    value.kind == .theory && value.videoCount > 0 ? "\(value.videoCount) vidéo\(value.videoCount > 1 ? "s" : "")" : nil,
+                    value.kind == .theory && value.videoCount > 0 ? Plural.count(value.videoCount, "\(value.videoCount) vidéo", "\(value.videoCount) vidéos") : nil,
                     value.week != nil && value.week != section.week && value.kind != .ignore ? "semaine \(value.plannedWeek(in: section))" : nil
                 ].compactMap { $0 }
                 if !details.isEmpty {
@@ -1370,7 +1370,7 @@ struct ContentReviewView: View {
 
     private var importTitle: String {
         let total = draft.theoryCount + draft.seriesCount
-        return "Importer \(total) élément\(total > 1 ? "s" : "")"
+        return "Importer \(Plural.count(total, "\(total) élément", "\(total) éléments"))"
     }
 
     private var targetSection: some View {

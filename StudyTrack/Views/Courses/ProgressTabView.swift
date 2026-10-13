@@ -83,7 +83,7 @@ struct ProgressTabView: View {
                 axis("Corrigés", progress.correctedCount, progress.doneCount)
             }
             if progress.wrongOrRedoCount > 0 {
-                Label("\(progress.wrongOrRedoCount) exercice\(progress.wrongOrRedoCount > 1 ? "s" : "") à refaire",
+                Label("\(Plural.count(progress.wrongOrRedoCount, "\(progress.wrongOrRedoCount) exercice", "\(progress.wrongOrRedoCount) exercices")) à refaire",
                       systemImage: "arrow.counterclockwise")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Carnet.wrong)
@@ -96,7 +96,7 @@ struct ProgressTabView: View {
     private var lateDetail: String {
         var parts: [String] = []
         if !lateTheory.isEmpty { parts.append("\(lateTheory.count) de théorie") }
-        if !lateExercises.isEmpty { parts.append("\(lateExercises.count) exercice\(lateExercises.count > 1 ? "s" : "")") }
+        if !lateExercises.isEmpty { parts.append(Plural.count(lateExercises.count, "\(lateExercises.count) exercice", "\(lateExercises.count) exercices")) }
         return parts.joined(separator: " et ")
     }
 
@@ -283,7 +283,7 @@ struct ProgressTabView: View {
                             if week.isComplete {
                                 Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(Carnet.correct)
                             } else if isLate {
-                                Text("\(week.remainingCount) restant\(week.remainingCount > 1 ? "s" : "")")
+                                Text(Plural.count(week.remainingCount, "\(week.remainingCount) restant", "\(week.remainingCount) restants"))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(Carnet.review)
                             } else if isCurrent {

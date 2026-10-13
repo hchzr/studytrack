@@ -88,7 +88,7 @@ enum DataRepair {
         var summary: String {
             var parts: [String] = []
             if coursesAttached > 0 {
-                parts.append("\(coursesAttached) cours rattaché\(coursesAttached > 1 ? "s" : "") à leur semestre")
+                parts.append("\(Plural.count(coursesAttached, "\(coursesAttached) cours rattaché", "\(coursesAttached) cours rattachés")) à leur semestre")
             }
             if milestonesInstalled > 0 {
                 parts.append("\(milestonesInstalled) échéances de l'EPFL installées")

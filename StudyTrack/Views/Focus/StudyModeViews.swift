@@ -69,6 +69,31 @@ struct StudyModeEntry: View {
 
 // MARK: - L'écran plein
 
+/// « Mode étude » dans un menu (une série, un exercice) : la durée, et la
+/// session part sur ce qu'on regardait. Sur le Mac, le même geste est dans le
+/// menu de chaque cours ; sur l'iPhone, il n'était que dans le chrono.
+struct StudyModeMenu: View {
+    var courseID: UUID?
+    var targetID: UUID?
+
+    @Environment(AppContainer.self) private var app
+    @AppStorage("studyMode.blocking") private var blocking = true
+
+    var body: some View {
+        Menu {
+            ForEach(StudyMode.durations, id: \.self) { minutes in
+                Button(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h\(minutes % 60 == 0 ? "" : " \(minutes % 60)")") {
+                    app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: .exercise,
+                                         targetID: targetID, locks: blocking)
+                    app.router.showingStudyMode = true
+                }
+            }
+        } label: {
+            Label("Mode étude", systemImage: "moon.stars")
+        }
+    }
+}
+
 /// L'écran du mode étude sur l'iPhone : le temps qui reste, ce qu'on fait,
 /// les outils permis. Papier de nuit, comme sur le Mac.
 struct StudyModeScreen: View {

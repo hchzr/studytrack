@@ -99,7 +99,7 @@ enum GroupSync {
         repairedMemberships = await repairOwnedMemberships(context: context, social: social)
 
         if repairedMemberships > 0 {
-            summary.append("adhésion rétablie dans \(repairedMemberships) groupe\(repairedMemberships > 1 ? "s" : "")")
+            summary.append("adhésion rétablie dans \(Plural.count(repairedMemberships, "\(repairedMemberships) groupe", "\(repairedMemberships) groupes"))")
         }
 
         let pushed = await pushMyProgress(context: context, social: social, settings: settings)

@@ -278,10 +278,18 @@ struct StudyActivityProgressLine: View {
 
     var body: some View {
         if let pomodoro = state.pomodoro {
-            Text(pomodoro.isOnBreak ? pomodoro.breakLabel : "Bloc \(pomodoro.blockNumber) · \(pomodoro.completedBlocks) fait\(pomodoro.completedBlocks > 1 ? "s" : "")")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Paper.creamSecondary)
-                .lineLimit(1)
+            Group {
+                if pomodoro.isOnBreak {
+                    Text(pomodoro.breakLabel)
+                } else if pomodoro.completedBlocks == 1 {
+                    Text("Bloc \(pomodoro.blockNumber) · \(pomodoro.completedBlocks) fait")
+                } else {
+                    Text("Bloc \(pomodoro.blockNumber) · \(pomodoro.completedBlocks) faits")
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Paper.creamSecondary)
+            .lineLimit(1)
         } else if let label = state.questionsLabel, let progress = state.questionsProgress {
             HStack(spacing: 8) {
                 GeometryReader { proxy in

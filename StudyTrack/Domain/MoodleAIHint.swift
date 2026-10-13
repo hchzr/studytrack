@@ -128,7 +128,7 @@ enum MoodleCourseAI {
                     let chapterIndex = mooc.sections.firstIndex(where: { $0.id == id }).map { $0 + 1 } ?? 0
                     let lessons = chapter.items.enumerated().map { offset, lesson -> String in
                         let count = lesson.videoCount ?? (lesson.links ?? []).filter { $0.kind == .video }.count
-                        let what = count > 0 ? " (\(count) vidéo\(count > 1 ? "s" : ""))" : (MoocMerger.isExercise(lesson) ? " [exercices]" : "")
+                        let what = count > 0 ? " (\(Plural.count(count, "\(count) vidéo", "\(count) vidéos")))" : (MoocMerger.isExercise(lesson) ? " [exercices]" : "")
                         return "  · m\(index + 1).\(chapterIndex).\(offset + 1) \(lesson.title)\(what)"
                     }
                     return (["- id=\(id) : \(label) (\(videos) vidéos)"] + lessons).joined(separator: "\n")

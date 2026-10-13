@@ -216,7 +216,7 @@ struct EdXProblemCard: View {
                             .foregroundStyle(result.isCorrect ? Carnet.correct : Carnet.wrong)
                     }
                     Spacer()
-                    if problem.attempts > 0 { Text("\(problem.attempts) essai\(problem.attempts > 1 ? "s" : "")").font(.caption).foregroundStyle(Carnet.inkTertiary) }
+                    if problem.attempts > 0 { Text(Plural.count(problem.attempts, "\(problem.attempts) essai", "\(problem.attempts) essais")).font(.caption).foregroundStyle(Carnet.inkTertiary) }
                 }
             } else if failed {
                 Text("Exercice illisible.").font(.caption).foregroundStyle(Carnet.inkSecondary)

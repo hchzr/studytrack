@@ -56,37 +56,34 @@ struct MeView: View {
     private var identity: some View {
         let name = app.settings.displayName.trimmingCharacters(in: .whitespaces)
         let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map { String($0).uppercased() }.joined()
-        return NavigationLink {
-            ProfileView(isEmbedded: true)
-        } label: {
-            HStack(spacing: 14) {
-                Group {
-                    if initials.isEmpty {
-                        Image(systemName: "person.fill").font(.title3)
-                    } else {
-                        Text(initials).font(Carnet.serif(.title3, weight: .semibold))
-                    }
+        // Qui : une carte, pas un lien — les réglages (nom, section compris)
+        // ont leur ligne juste en dessous ; deux entrées menaient à la même page.
+        return HStack(spacing: 14) {
+            Group {
+                if initials.isEmpty {
+                    Image(systemName: "person.fill").font(.title3)
+                } else {
+                    Text(initials).font(Carnet.serif(.title3, weight: .semibold))
                 }
-                .foregroundStyle(Carnet.ground)
-                .frame(width: 52, height: 52)
-                .background(Carnet.ink, in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name.isEmpty ? "Profil" : name)
-                        .font(Carnet.serif(.title3))
-                        .foregroundStyle(Carnet.ink)
-                    if let section = app.settings.section?.name {
-                        Text(section)
-                            .font(.subheadline)
-                            .foregroundStyle(Carnet.inkSecondary)
-                    }
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Carnet.inkTertiary)
             }
-            .padding(14)
-            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+            .foregroundStyle(Carnet.ground)
+            .frame(width: 52, height: 52)
+            .background(Carnet.ink, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name.isEmpty ? "Profil" : name)
+                    .font(Carnet.serif(.title3))
+                    .foregroundStyle(Carnet.ink)
+                if let section = app.settings.section?.name {
+                    Text(section)
+                        .font(.subheadline)
+                        .foregroundStyle(Carnet.inkSecondary)
+                }
+            }
+            Spacer()
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: Carnet.sheetCorner, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Bilan
@@ -114,11 +111,11 @@ struct MeView: View {
             CarnetSectionTitle("Cette semaine")
             HStack(spacing: 8) {
                 CarnetStat(label: "Travail", value: DateUtils.hoursLabel(seconds: seconds),
-                           detail: "\(weekSessions.count) session\(weekSessions.count > 1 ? "s" : "")")
+                           detail: Plural.count(weekSessions.count, "\(weekSessions.count) session", "\(weekSessions.count) sessions"))
                 CarnetStat(label: "Fait", value: total == 0 ? "—" : "\(done)/\(total)",
                            detail: "prévu cette semaine")
                 CarnetStat(label: "Juste", value: corrected.isEmpty ? "—" : "\(Int((Double(right) / Double(corrected.count) * 100).rounded())) %",
-                           detail: corrected.isEmpty ? "rien de corrigé" : "\(corrected.count) corrigé\(corrected.count > 1 ? "s" : "")")
+                           detail: corrected.isEmpty ? "rien de corrigé" : Plural.count(corrected.count, "\(corrected.count) corrigé", "\(corrected.count) corrigés"))
             }
         }
     }

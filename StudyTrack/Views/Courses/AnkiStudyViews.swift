@@ -156,7 +156,7 @@ struct AnkiCourseRow: View {
         if counts.total == 0 { return "Rien à revoir aujourd'hui" }
         var parts: [String] = []
         if counts.review + counts.learning > 0 { parts.append("\(counts.review + counts.learning) à revoir") }
-        if counts.new > 0 { parts.append("\(counts.new) nouvelle\(counts.new > 1 ? "s" : "")") }
+        if counts.new > 0 { parts.append(Plural.count(counts.new, "\(counts.new) nouvelle", "\(counts.new) nouvelles")) }
         return parts.joined(separator: " · ")
     }
 
@@ -304,7 +304,7 @@ struct AnkiReviewView: View {
             Image(systemName: "checkmark.seal")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(Carnet.correct)
-            Text(reviewed > 0 ? "\(reviewed) carte\(reviewed > 1 ? "s" : "") révisée\(reviewed > 1 ? "s" : "")" : "Rien à revoir")
+            Text(reviewed > 0 ? Plural.count(reviewed, "\(reviewed) carte révisée", "\(reviewed) cartes révisées") : "Rien à revoir")
                 .font(Carnet.serif(.title2))
                 .foregroundStyle(Carnet.ink)
             if let waitUntil {

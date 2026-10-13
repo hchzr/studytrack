@@ -185,7 +185,7 @@ struct GroupsView: View {
 
     private var subtitle: String {
         guard let selected else { return "Travailler ensemble" }
-        var parts = ["\(selected.members.count) membre\(selected.members.count > 1 ? "s" : "")"]
+        var parts = [Plural.count(selected.members.count, "\(selected.members.count) membre", "\(selected.members.count) membres")]
         if !selected.subjectCodes.isEmpty { parts.append(selected.subjectCodes.prefix(3).joined(separator: ", ")) }
         return parts.joined(separator: " · ")
     }

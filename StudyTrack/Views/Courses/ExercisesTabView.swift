@@ -169,7 +169,7 @@ struct ExercisesTabView: View {
             }
         } message: { series in
             let done = series.exercises.filter(\.isDone).count
-            Text(done > 0 ? "\(done) exercice\(done > 1 ? "s" : "") déjà fait\(done > 1 ? "s" : "") seront perdus." : "Aucun exercice n'est encore fait.")
+            Text(done > 0 ? "\(Plural.count(done, "\(done) exercice déjà fait", "\(done) exercices déjà faits")) seront perdus." : "Aucun exercice n'est encore fait.")
         }
         .confirmationDialog("Supprimer l'exercice \(deletingExercise?.exerciseNumber ?? "") ?",
                             isPresented: Binding(get: { deletingExercise != nil }, set: { if !$0 { deletingExercise = nil } }),
@@ -371,6 +371,7 @@ struct ExercisesTabView: View {
                             Button { workspace = WorkspaceTarget(series: series, start: exercise) } label: {
                                 Label("Ouvrir la fiche", systemImage: "doc.text")
                             }
+                            StudyModeMenu(courseID: course.id, targetID: exercise.id)
                             Button { editingSeries = SeriesEditTarget(series: series) } label: {
                                 Label("Modifier la série…", systemImage: "pencil")
                             }
@@ -446,6 +447,11 @@ struct ExercisesTabView: View {
 
     @ViewBuilder
     private func seriesMenuItems(_ series: ExerciseSeries) -> some View {
+        if !series.exercises.isEmpty {
+            StudyModeMenu(courseID: course.id,
+                          targetID: (series.sortedExercises.first { !$0.isDone } ?? series.sortedExercises.first)?.id)
+            Divider()
+        }
         Button { editingSeries = SeriesEditTarget(series: series) } label: {
             Label("Modifier la série…", systemImage: "pencil")
         }

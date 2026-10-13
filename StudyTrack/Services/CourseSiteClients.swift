@@ -1113,7 +1113,7 @@ enum ExpliqueSupplement {
         let merged = ExpliqueImport.merge(lectures: fetched.lectures, exercises: fetched.exercises, into: draft,
                                           termStart: termStart, totalWeeks: totalWeeks)
         let lectures = fetched.lectures.count, exercises = fetched.exercises.count
-        let note = merged.added > 0 ? "+ Explique (\(lectures) vidéo\(lectures > 1 ? "s" : ""), \(exercises) exercice\(exercises > 1 ? "s" : ""))" : nil
+        let note = merged.added > 0 ? "+ Explique (\(Plural.count(lectures, "\(lectures) vidéo", "\(lectures) vidéos")), \(Plural.count(exercises, "\(exercises) exercice", "\(exercises) exercices")))" : nil
         return (merged.draft, note)
     }
 }
@@ -1316,7 +1316,7 @@ enum MediaSpaceSupplement {
                                week: CourseVideos.week(of: video.title, termStart: termStart, totalWeeks: totalWeeks, lecturesPerWeek: perWeek))
         }
         let merged = CourseVideos.merge(placed, into: draft, totalWeeks: totalWeeks, sourceLabel: "MediaSpace")
-        return (merged.draft, "+ MediaSpace (\(fresh.count) vidéo\(fresh.count > 1 ? "s" : ""))")
+        return (merged.draft, "+ MediaSpace (\(Plural.count(fresh.count, "\(fresh.count) vidéo", "\(fresh.count) vidéos")))")
     }
 }
 
@@ -1394,7 +1394,7 @@ enum MoocImport {
                                       termStart: termStart, totalWeeks: totalWeeks, plannedWeeks: plannedWeeks,
                                       plannedLessons: plannedLessons, ordinal: index + 1)
             let chapters = result.theoryCount - before
-            notes.append("+ MOOC \(mooc.course.title) (\(chapters) chapitre\(chapters > 1 ? "s" : "") à travailler)")
+            notes.append("+ MOOC \(mooc.course.title) (\(Plural.count(chapters, "\(chapters) chapitre", "\(chapters) chapitres")) à travailler)")
         }
         return (result, notes.isEmpty ? nil : notes.joined(separator: " · "))
     }

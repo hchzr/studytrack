@@ -93,6 +93,18 @@ struct MacRootView: View {
                 }
             }
             .paperPage()
+            // Sans cours, seule la page change : la barre latérale (chrono,
+            // agenda, bilan, réglages) reste utilisable.
+            .overlay {
+                if tracked.isEmpty, page == .today || page == nil {
+                    ContentUnavailableView {
+                        Label("Pas encore de cours", systemImage: "icloud.and.arrow.down")
+                    } description: {
+                        Text("Importe-les sur ton iPhone : ils arrivent ici par iCloud. Le chrono marche déjà.")
+                    }
+                    .background(Carnet.ground)
+                }
+            }
             .toolbar {
                 if page != .focus {
                     ToolbarItem(placement: .primaryAction) {
@@ -148,16 +160,6 @@ struct MacRootView: View {
             if !settings.keepInDock { NSApp.setActivationPolicy(.accessory) }
         }
         .onChange(of: page) { _, value in storedPage = Self.encode(value) }
-        .overlay {
-            if tracked.isEmpty {
-                ContentUnavailableView {
-                    Label("Pas encore de cours", systemImage: "icloud.and.arrow.down")
-                } description: {
-                    Text("Ajoute-les sur ton iPhone, ils arrivent ici.")
-                }
-                .background(Carnet.ground)
-            }
-        }
     }
 
     private func open(_ courseID: UUID, _ target: UUID?) {

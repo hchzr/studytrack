@@ -18,15 +18,15 @@ struct ContentImportResult: Equatable {
 
     var message: String {
         var parts: [String] = []
-        if theoryAdded > 0 { parts.append("\(theoryAdded) élément\(theoryAdded > 1 ? "s" : "") de théorie") }
-        if seriesAdded > 0 { parts.append("\(seriesAdded) série\(seriesAdded > 1 ? "s" : "")") }
-        if exercisesAdded > 0 { parts.append("\(exercisesAdded) exercice\(exercisesAdded > 1 ? "s" : "")") }
-        if deadlinesAdded > 0 { parts.append("\(deadlinesAdded) échéance\(deadlinesAdded > 1 ? "s" : "")") }
-        if pastExamsAdded > 0 { parts.append("\(pastExamsAdded) ancien\(pastExamsAdded > 1 ? "s" : "") examen\(pastExamsAdded > 1 ? "s" : "")") }
-        if documentsAdded > 0 { parts.append("\(documentsAdded) document\(documentsAdded > 1 ? "s" : "")") }
+        if theoryAdded > 0 { parts.append("\(Plural.count(theoryAdded, "\(theoryAdded) élément", "\(theoryAdded) éléments")) de théorie") }
+        if seriesAdded > 0 { parts.append(Plural.count(seriesAdded, "\(seriesAdded) série", "\(seriesAdded) séries")) }
+        if exercisesAdded > 0 { parts.append(Plural.count(exercisesAdded, "\(exercisesAdded) exercice", "\(exercisesAdded) exercices")) }
+        if deadlinesAdded > 0 { parts.append(Plural.count(deadlinesAdded, "\(deadlinesAdded) échéance", "\(deadlinesAdded) échéances")) }
+        if pastExamsAdded > 0 { parts.append(Plural.count(pastExamsAdded, "\(pastExamsAdded) ancien examen", "\(pastExamsAdded) anciens examens")) }
+        if documentsAdded > 0 { parts.append(Plural.count(documentsAdded, "\(documentsAdded) document", "\(documentsAdded) documents")) }
         let updated = theoryUpdated + seriesUpdated
         if parts.isEmpty {
-            return updated > 0 ? "Déjà à jour · \(updated) élément\(updated > 1 ? "s" : "") rafraîchi\(updated > 1 ? "s" : "")." : "Rien de nouveau."
+            return updated > 0 ? "Déjà à jour · \(Plural.count(updated, "\(updated) élément rafraîchi", "\(updated) éléments rafraîchis"))." : "Rien de nouveau."
         }
         return "Ajouté : " + parts.joined(separator: " et ") + (updated > 0 ? " · \(updated) mis à jour." : ".")
     }

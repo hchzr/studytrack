@@ -466,7 +466,7 @@ struct CourseDetailView: View {
         }
         if !mooc.isEmpty {
             let videos = mooc.reduce(0) { $0 + $1.links.filter { $0.kind == .video }.count }
-            parts.append("\(mooc.count) chapitre\(mooc.count > 1 ? "s" : "") du MOOC" + (videos > 0 ? " (\(videos) vidéos)" : ""))
+            parts.append("\(Plural.count(mooc.count, "\(mooc.count) chapitre", "\(mooc.count) chapitres")) du MOOC" + (videos > 0 ? " (\(videos) vidéos)" : ""))
         }
         return "À regarder : " + parts.joined(separator: " et ")
     }
@@ -594,7 +594,7 @@ struct CourseDetailView: View {
                                              @ViewBuilder label: () -> Label) -> some View {
         let pending = WeekCompletion.pending(in: weeks, of: course)
         return Menu {
-            SwiftUI.Section("\(title) : \(pending.theory) théorie, \(pending.exercises) exercice\(pending.exercises > 1 ? "s" : "") à cocher") {
+            SwiftUI.Section("\(title) : \(pending.theory) théorie, \(Plural.count(pending.exercises, "\(pending.exercises) exercice", "\(pending.exercises) exercices")) à cocher") {
                 Button { complete(weeks, scope: .all, title: title) } label: {
                     SwiftUI.Label("Tout marquer fait", systemImage: "checkmark.circle")
                 }
@@ -753,7 +753,7 @@ struct CourseDetailView: View {
             return course.exams.isEmpty ? "Ajoute le midterm et l'examen final" : "Évaluations passées et annales"
         }
         var parts = [DateUtils.fullDayLabel(next.date)]
-        if !course.pastExams.isEmpty { parts.append("\(course.pastExams.count) annale\(course.pastExams.count > 1 ? "s" : "")") }
+        if !course.pastExams.isEmpty { parts.append(Plural.count(course.pastExams.count, "\(course.pastExams.count) annale", "\(course.pastExams.count) annales")) }
         return parts.joined(separator: " · ")
     }
 

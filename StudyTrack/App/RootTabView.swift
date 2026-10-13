@@ -93,6 +93,9 @@ struct RootTabView: View {
         .onOpenURL { url in
             handle(url)
         }
+        .onChange(of: app.router.focusRequest) { _, request in
+            if let request { startInPlace(request) }
+        }
         // Les widgets suivent **chaque** enregistrement — une question cochée, une
         // série importée —, pas seulement le passage en arrière-plan.
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
@@ -215,11 +218,12 @@ struct RootTabView: View {
         })
     }
 
-    /// La barre **système** (Liquid Glass d'iOS 26) : quatre onglets et le
-    /// chrono, qui porte le rôle « recherche » — le système le détache en rond à
-    /// droite quand il le fait (iOS 26.0), sinon il reste le dernier onglet. Elle
-    /// se replie au défilement ; pendant une session, le mini-lecteur est son
-    /// accessoire, qui se range à côté de la barre repliée.
+    /// La barre **système** (Liquid Glass d'iOS 26) : trois onglets, le
+    /// chrono (un onglet qui ouvre Focus par-dessus l'onglet courant), et la
+    /// recherche dans le rond détaché — le rôle que le système lui réserve
+    /// (le chrono l'occupait : VoiceOver l'annonçait comme une recherche, et la
+    /// vraie recherche restait cachée dans « Cours »). Elle se replie au
+    /// défilement ; pendant une session, le mini-lecteur est son accessoire.
     ///
     /// Avant iOS 26 : notre barre (`CarnetTabBar`) sur matière translucide.
     @ViewBuilder
@@ -231,10 +235,11 @@ struct RootTabView: View {
                         tabContent(tab)
                     }
                 }
-                Tab(value: AppRouter.Tab.focus, role: .search) {
+                Tab(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon, value: AppRouter.Tab.focus) {
                     Color.clear
-                } label: {
-                    Label(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon)
+                }
+                Tab(value: AppRouter.Tab.search, role: .search) {
+                    SearchView(isTab: true)
                 }
             }
             .tabBarMinimizeBehavior(.onScrollDown)
@@ -249,6 +254,32 @@ struct RootTabView: View {
             }
             .modifier(CarnetTabBarInset())
         }
+    }
+
+    /// Un « Démarrer » venu d'un écran : le chrono part sans quitter l'écran.
+    /// Une session en cours sur autre chose ouvre Focus, qui demande quoi en
+    /// faire (la remplacer, ou la continuer).
+    private func startInPlace(_ request: FocusRequest) {
+        guard request.autoStart else { app.router.showingFocus = true; return }
+        var resolved = request
+        if resolved.courseID == nil, !request.courseCode.isEmpty {
+            let code = request.courseCode
+            resolved.courseID = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first {
+                $0.code.caseInsensitiveCompare(code) == .orderedSame
+                    || $0.displayCode.caseInsensitiveCompare(code) == .orderedSame
+            }?.id
+        }
+        let focus = app.focus
+        if focus.hasSession,
+           resolved.courseID != focus.state?.courseID || resolved.taskType != focus.state?.taskType {
+            app.router.focusRequest = resolved
+            app.router.showingFocus = true
+            return
+        }
+        app.router.focusRequest = nil
+        focus.start(courseID: resolved.courseID, taskType: resolved.taskType,
+                    targetID: resolved.targetID, label: resolved.label)
+        Haptics.success()
     }
 
     /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.
@@ -312,7 +343,7 @@ struct RootTabView: View {
         case .today: TodayView()
         case .courses: CoursesView()
         case .groups: GroupsView()
-        case .focus: EmptyView()
+        case .focus, .search: EmptyView()
         }
     }
 }

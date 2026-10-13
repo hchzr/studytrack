@@ -20,6 +20,8 @@ struct SearchView: View {
     /// Requête déjà saisie — utilisé par les captures du simulateur, qui ne
     /// peuvent pas taper dans la barre de recherche.
     var initialQuery: String = ""
+    /// L'onglet de recherche (iOS 26) : pas de bouton « Fermer ».
+    var isTab = false
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
@@ -76,8 +78,10 @@ struct SearchView: View {
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Cours, exercice, résumé, tâche…")
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Fermer") { dismiss() }
+                if !isTab {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fermer") { dismiss() }
+                    }
                 }
             }
             .navigationDestination(for: SearchRoute.self) { route in

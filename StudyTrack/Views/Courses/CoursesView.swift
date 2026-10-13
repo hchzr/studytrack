@@ -326,17 +326,20 @@ struct CoursesView: View {
         }
     }
 
-    /// Loupe, puis « + » : un cours à la main, son contenu depuis Moodle /
-    /// Courseware / Botafogo, ou l'horaire IS-Academia.
+    /// Loupe (avant iOS 26 ; ensuite, la recherche a son onglet), puis « + » :
+    /// un cours à la main, son contenu depuis Moodle / Courseware / Botafogo,
+    /// ou l'horaire IS-Academia.
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button {
-                showingSearch = true
-            } label: {
-                Image(systemName: "magnifyingglass")
+            if #unavailable(iOS 26.0) {
+                Button {
+                    showingSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Rechercher")
             }
-            .accessibilityLabel("Rechercher")
             Menu {
                 Button {
                     app.router.openContentImport()
@@ -541,7 +544,7 @@ struct CourseCardRow: View {
                                     weekProgress.doneCount, weekProgress.exerciseCount, TaskType.exercise.tint)
                     }
                     if redo > 0 {
-                        Label("\(redo) exercice\(redo > 1 ? "s" : "") à refaire", systemImage: "arrow.counterclockwise")
+                        Label("\(Plural.count(redo, "\(redo) exercice", "\(redo) exercices")) à refaire", systemImage: "arrow.counterclockwise")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(Color.red.accessibleInk)
                     }

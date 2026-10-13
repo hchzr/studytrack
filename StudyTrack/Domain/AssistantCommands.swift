@@ -129,7 +129,10 @@ enum AssistantCommandApplier {
             }
             for leaf in targets where leaf.isDone != done { leaf.toggle() }
             exercise.refreshCompletion()
-            return "\(exercise.displayNumber) : \(targets.count) question\(targets.count > 1 ? "s" : "") \(done ? "cochée" : "décochée")\(targets.count > 1 ? "s" : "") (\(exercise.subQuestionLabel ?? ""))"
+            let questions = done
+                ? Plural.count(targets.count, "\(targets.count) question cochée", "\(targets.count) questions cochées")
+                : Plural.count(targets.count, "\(targets.count) question décochée", "\(targets.count) questions décochées")
+            return "\(exercise.displayNumber) : \(questions) (\(exercise.subQuestionLabel ?? ""))"
 
         case "update_theory":
             let item = try findTheory(p, in: courses)
@@ -184,7 +187,7 @@ enum AssistantCommandApplier {
             SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
             if let title = p.title, !title.isEmpty,
                let series = course.series.first(where: { $0.seriesNumber == number }) { series.title = title }
-            return "\(course.displayCode) : série \(number) \(existed ? "complétée" : "ajoutée") (\(draft.exercises.count) exercice\(draft.exercises.count > 1 ? "s" : ""))"
+            return "\(course.displayCode) : série \(number) \(existed ? "complétée" : "ajoutée") (\(Plural.count(draft.exercises.count, "\(draft.exercises.count) exercice", "\(draft.exercises.count) exercices")))"
 
         case "add_exam":
             let course = try findCourse(p, in: courses)

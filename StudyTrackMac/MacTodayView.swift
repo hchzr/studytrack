@@ -99,8 +99,12 @@ struct MacTodayView: View {
         return label.prefix(1).uppercased() + label.dropFirst()
     }
 
+    /// Le semestre des cours suivis, lu comme sur l'iPhone (`AcademicTerm.resolve`) :
+    /// le premier cours de la liste pouvait appartenir à un autre semestre.
     private var weekTitle: String {
-        if let week = tracked.first?.currentWeek, week > 0 { return "Semaine \(week)" }
+        if let term = AcademicTerm.resolve(from: tracked.compactMap(\.term)), term.isRunning {
+            return "Semaine \(term.currentWeek)"
+        }
         return "Cette semaine"
     }
 

@@ -207,7 +207,7 @@ struct ProfileView: View {
                 StudyModeSettingsView()
             } label: {
                 settingsRow("Mode étude", icon: "moon.stars",
-                            value: StudyLock.shared.isAuthorized ? "\(StudyLock.shared.allowedAppCount) app\(StudyLock.shared.allowedAppCount > 1 ? "s" : "") permise\(StudyLock.shared.allowedAppCount > 1 ? "s" : "")" : "à configurer")
+                            value: StudyLock.shared.isAuthorized ? Plural.count(StudyLock.shared.allowedAppCount, "\(StudyLock.shared.allowedAppCount) app permise", "\(StudyLock.shared.allowedAppCount) apps permises") : "à configurer")
             }
             NavigationLink {
                 subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
@@ -235,7 +235,7 @@ struct ProfileView: View {
                 subpage("Données") { dataSection }
             } label: {
                 settingsRow("Données et sauvegarde", icon: "externaldrive",
-                            value: "\(sessions.count) session\(sessions.count > 1 ? "s" : "")")
+                            value: Plural.count(sessions.count, "\(sessions.count) session", "\(sessions.count) sessions"))
             }
             // L'accueil rejoué : connexion EPFL, cours lus sur Moodle, import.
             // Rien n'est effacé — un cours déjà là est retrouvé par son code et

@@ -380,7 +380,7 @@ struct StatsView: View {
     /// L'étude, l'amphi, et leur somme — trois chiffres, jamais mélangés.
     private var totals: some View {
         HStack(spacing: 0) {
-            total("Étude", seconds: studySeconds, detail: "\(studySessions.count) session\(studySessions.count > 1 ? "s" : "")")
+            total("Étude", seconds: studySeconds, detail: Plural.count(studySessions.count, "\(studySessions.count) session", "\(studySessions.count) sessions"))
             // Sans heures de cours sur la période, « Amphi 0 h » et un total égal
             // à l'étude n'apprennent rien : la colonne disparaît.
             if lectureSeconds > 0 {
@@ -400,7 +400,7 @@ struct StatsView: View {
 
     private var activeDaysLabel: String {
         let days = Set(studySessions.map { DateUtils.startOfDay($0.startedAt) }).count
-        return "\(days) jour\(days > 1 ? "s" : "") actif\(days > 1 ? "s" : "")"
+        return Plural.count(days, "\(days) jour actif", "\(days) jours actifs")
     }
 
     private func total(_ title: String, seconds: Int, detail: String) -> some View {
@@ -816,7 +816,7 @@ struct StatsView: View {
         let total = data.reduce(0) { $0 + $1.count }
         let selected = selectedVerdict.flatMap { value in data.first { value >= $0.start && value < $0.start + $0.count } }
         VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle("Corrections") { Text("\(total) exercice\(total > 1 ? "s" : "")") }
+            CarnetSectionTitle("Corrections") { Text(Plural.count(total, "\(total) exercice", "\(total) exercices")) }
             HStack(spacing: 20) {
                 ZStack {
                     Chart(data) { item in

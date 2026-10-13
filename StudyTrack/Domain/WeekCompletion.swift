@@ -31,9 +31,9 @@ enum WeekCompletion {
         var summary: String {
             var parts: [String] = []
             if !theory.isEmpty { parts.append("\(theory.count) théorie") }
-            if !exercises.isEmpty { parts.append("\(exercises.count) exercice\(exercises.count > 1 ? "s" : "")") }
+            if !exercises.isEmpty { parts.append(Plural.count(exercises.count, "\(exercises.count) exercice", "\(exercises.count) exercices")) }
             if !corrected.isEmpty, corrected.count != exercises.count {
-                parts.append("\(corrected.count) corrigé\(corrected.count > 1 ? "s" : "")")
+                parts.append(Plural.count(corrected.count, "\(corrected.count) corrigé", "\(corrected.count) corrigés"))
             }
             return parts.isEmpty ? "rien à cocher" : parts.joined(separator: ", ")
         }

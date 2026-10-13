@@ -71,7 +71,7 @@ final class SeriesAutoReader {
                     series.needsReread = false
                     if count > 0 {
                         try? context.save()
-                        report.append("\(course.displayCode) série \(series.seriesNumber) : \(count) exercice\(count > 1 ? "s" : "")")
+                        report.append("\(course.displayCode) série \(series.seriesNumber) : \(Plural.count(count, "\(count) exercice", "\(count) exercices"))")
                     }
                 } catch {
                     failures[series.id] = error.localizedDescription

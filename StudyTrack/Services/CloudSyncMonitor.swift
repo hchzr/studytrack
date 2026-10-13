@@ -37,7 +37,7 @@ enum CloudSyncMonitor {
             let tracked = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
             if !tracked.isEmpty {
                 settings.hasCompletedOnboarding = true
-                settings.contentRefreshNews = "iCloud : \(tracked.count) cours retrouvé\(tracked.count > 1 ? "s" : "")"
+                settings.contentRefreshNews = "iCloud : \(Plural.count(tracked.count, "\(tracked.count) cours retrouvé", "\(tracked.count) cours retrouvés"))"
             }
         }
         WidgetSnapshotWriter.refresh(context: ModelContext(container.modelContainer), settings: settings)

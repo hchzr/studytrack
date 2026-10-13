@@ -79,7 +79,7 @@ struct PomodoroDots: View {
                     .frame(width: 6, height: 6)
             }
         }
-        .help("\(completed) bloc\(completed > 1 ? "s" : "") terminé\(completed > 1 ? "s" : "")")
+        .help(Plural.count(completed, "\(completed) bloc terminé", "\(completed) blocs terminés"))
     }
 }
 

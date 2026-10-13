@@ -61,7 +61,7 @@ enum WidgetSnapshotWriter {
         let exercises = week.exerciseCount - week.doneCount
         var parts: [String] = []
         if theory > 0 { parts.append("\(theory) théorie") }
-        if exercises > 0 { parts.append("\(exercises) exo\(exercises > 1 ? "s" : "")") }
+        if exercises > 0 { parts.append(Plural.count(exercises, "\(exercises) exo", "\(exercises) exos")) }
         let summary = total == 0 ? "rien de prévu" : (parts.isEmpty ? "à jour" : "reste " + parts.joined(separator: " · "))
         return WidgetCourse(id: course.id.uuidString, code: course.displayCode, colorHex: course.colorHex,
                             done: done, total: total, summary: summary,
