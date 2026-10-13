@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreSpotlight
 import SwiftData
 
 /// Navigation principale. Tant que l'accueil n'est pas terminé, l'onboarding
@@ -93,6 +94,12 @@ struct RootTabView: View {
         .onOpenURL { url in
             handle(url)
         }
+        // Un résultat Spotlight (cours, série, exercice, théorie, notes) : le cours.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                  let destination = SpotlightIndexer.destination(of: identifier) else { return }
+            app.router.openCourse(destination.courseID, section: identifier.hasPrefix("theory:") ? .theory : .exercises)
+        }
         .onChange(of: app.router.focusRequest) { _, request in
             if let request { startInPlace(request) }
         }
@@ -107,6 +114,8 @@ struct RootTabView: View {
             StudyActivityController.refreshQuestions(container: app)
             // L'assistant lit ce qu'on vient de cocher, sans attendre.
             AssistantSync.scheduleSync(context: context, settings: app.settings)
+            // Spotlight suit les cours, séries, exercices et notes.
+            SpotlightIndexer.schedule(container: app.modelContainer)
         }
         // Un autre appareil a écrit (iCloud) : doublons fusionnés, widgets à jour.
         .onReceive(NotificationCenter.default.publisher(for: CloudSyncMonitor.remoteChange)) { _ in

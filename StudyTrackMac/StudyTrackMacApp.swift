@@ -44,6 +44,7 @@ struct StudyTrackMacApp: App {
         // mode étude suivent le chrono.
         let refreshWidgets = {
             WidgetSnapshotWriter.scheduleRefresh(context: ModelContext(store.container), settings: store.preferences)
+            SpotlightIndexer.schedule(container: store.container)
         }
         timer.onChange = {
             refreshWidgets()

@@ -143,5 +143,6 @@ final class AppContainer {
         await Task.detached(priority: .utility) {
             _ = CalendarSync.repair(context: ModelContext(container))
         }.value
+        SpotlightIndexer.schedule(container: modelContainer)
     }
 }

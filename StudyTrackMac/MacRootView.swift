@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreSpotlight
 import SwiftData
 
 /// La fenêtre : à gauche Aujourd'hui, le Chrono, l'Agenda, le Bilan et les
@@ -158,6 +159,12 @@ struct MacRootView: View {
             QuickNoteSheet(preferredCourseID: currentCourseID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .macQuickNote)) { _ in quickNote = true }
+        // Un résultat Spotlight : le cours, et l'exercice ou la théorie visés.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                  let destination = SpotlightIndexer.destination(of: identifier) else { return }
+            open(destination.courseID, destination.targetID)
+        }
         .sheet(isPresented: $addingCourse) {
             CourseFormView(course: nil, defaultSectionCode: settings.shared.sectionCode)
         }
