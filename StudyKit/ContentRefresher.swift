@@ -64,7 +64,7 @@ enum ContentRefresher {
         var news: [String] = []
 
         if !moodleCourses.isEmpty {
-            let client = MoodleClient()
+            let client = MoodleClient.background
             // La session Moodle de l'app expire en quelques jours : on se
             // reconnecte d'abord sans rien afficher (Microsoft s'en souvient),
             // sinon la mise à jour était sautée en silence pendant des semaines.

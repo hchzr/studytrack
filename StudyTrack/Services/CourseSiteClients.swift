@@ -145,6 +145,12 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
 ///   • `core_courseformat_get_state` rend le plan du cours en JSON.
 @MainActor
 final class MoodleClient {
+    /// Le client des lectures **en arrière-plan** (relecture des cours, énoncés,
+    /// accueil) : une seule page cachée pour toutes, au lieu d'une par appel.
+    /// Le bureau et le mode étude ont le leur (`SiteHub.shared.moodle`) : une
+    /// relecture ne doit pas interrompre la page qu'on lit.
+    static let background = MoodleClient()
+
     nonisolated static var home: URL { URL(string: Institution.current.moodleBase + "/my/")! }
     nonisolated static var login: URL { URL(string: Institution.current.moodleBase + "/login/index.php")! }
 
@@ -182,27 +188,14 @@ final class MoodleClient {
     /// demande de se reconnecter que si cette tentative échoue
     /// (`ConnectionCenter`).
     func ensureSignedIn() async -> Bool {
-        if await isSignedIn() {
-            ConnectionCenter.shared.report(.moodle, .connected)
-            return true
-        }
-        // Jamais connecté·e : il n'y a rien à rejouer, et rien n'a « expiré ».
-        guard ConnectionCenter.shared.state(of: .moodle) != .unknown else { return false }
-        do {
-            try await session.load(Self.login)
-            // La connexion EPFL passe par plusieurs redirections : on attend
-            // d'être revenu sur Moodle, hors de la page de connexion.
-            for _ in 0..<12 {
-                if let url = session.currentURL, url.host == Institution.current.moodleHostName, !url.path.hasPrefix("/login") { break }
-                try await Task.sleep(for: .seconds(1))
-            }
-        } catch {
-            // Hors ligne : on ne sait pas. Rien n'est demandé.
-            return false
-        }
+        if await isSignedIn() { return true }
+        // La même connexion que partout (`SchoolConnect`) : Microsoft s'en
+        // souvient, la session Moodle revient sans un écran. L'état (connecté,
+        // à reconnecter) est le sien : une seule source pour la bannière.
+        await SchoolConnect.shared.refresh(.moodle, prompting: false)
+        guard SchoolConnect.shared.state(.moodle) == .connected else { return false }
         isReady = false
         let signedIn = await isSignedIn()
-        ConnectionCenter.shared.report(.moodle, signedIn ? .connected : .expired)
         if signedIn { AppLog.record(.info, "connexion", "Moodle : reconnecté·e sans intervention") }
         return signedIn
     }

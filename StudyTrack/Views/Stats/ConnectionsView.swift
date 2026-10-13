@@ -128,7 +128,7 @@ struct ConnectionsList: View {
         defer { checking.remove(site) }
         let result: Bool
         switch site {
-        case .moodle: result = await MoodleClient().ensureSignedIn()
+        case .moodle: result = await MoodleClient.background.ensureSignedIn()
         case .courseware: result = await CoursewareClient().isSignedIn()
         case .explique: result = await ExpliqueClient().isSignedIn()
         case .mediaspace: result = await MediaSpaceClient().isSignedIn()

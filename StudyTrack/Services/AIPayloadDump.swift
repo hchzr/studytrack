@@ -21,7 +21,7 @@ enum AIPayloadDump {
         let context = ModelContext(container)
         let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? [])
             .filter { MoodleCourseMatcher.linkedID(in: $0.contentSources) != nil }
-        let client = MoodleClient()
+        let client = MoodleClient.background
         guard await client.ensureSignedIn() else { status("échec : Moodle non connecté"); return }
         let enrolled = (try? await client.enrolled()) ?? []
         for (index, course) in courses.enumerated() {
@@ -45,7 +45,7 @@ enum AIPayloadDump {
         let context = ModelContext(container)
         let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
         if courses.contains(where: { $0.series.contains { URL(string: $0.urlString)?.host?.contains("moodle") == true } }) {
-            _ = await MoodleClient().ensureSignedIn()
+            _ = await MoodleClient.background.ensureSignedIn()
         }
         var written = 0
         for course in courses {

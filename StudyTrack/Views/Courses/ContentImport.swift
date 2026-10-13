@@ -282,7 +282,7 @@ final class MoodleImportModel {
     var status: [UUID: String] = [:]
     var plans: [ContentImportPlan] = []
 
-    @ObservationIgnored private let client = MoodleClient()
+    @ObservationIgnored private let client = MoodleClient.background
     @ObservationIgnored private var pendingQuestions: [SectionQuestion] = []
     @ObservationIgnored private var term = TermInfo(start: nil, weeks: 14)
     @ObservationIgnored private var enrolled: [MoodleCourseRef] = []
@@ -534,7 +534,7 @@ struct SiteLoginSheet: View {
         Haptics.success()
         Task { await CookieKeeper.save() }
         if site == .moodle {
-            ConnectionCenter.shared.report(.moodle, .connected)
+            Task { await SchoolConnect.shared.refresh(.moodle, prompting: false) }
             SeriesAutoReader.shared.retryAll()
         }
         onSignedIn()
@@ -587,7 +587,7 @@ struct SiteLoginSheet: View {
             Haptics.success()
             Task { await CookieKeeper.save() }
             if site == .moodle {
-                ConnectionCenter.shared.report(.moodle, .connected)
+                Task { await SchoolConnect.shared.refresh(.moodle, prompting: false) }
                 // Ce qui avait échoué faute de session est retenté.
                 SeriesAutoReader.shared.retryAll()
             }

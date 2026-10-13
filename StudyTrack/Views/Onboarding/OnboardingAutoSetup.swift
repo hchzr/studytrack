@@ -11,7 +11,7 @@ import UserNotifications
 ///   1. les cours du semestre en cours sont lus dans les inscriptions Moodle et
 ///      créés (ou retrouvés) — reliés à leur page Moodle ;
 ///   2. Courseware, MediaSpace et Explique sont connectés en silence, s'ils le
-///      peuvent (`SiteAutoLogin`) ;
+///      peuvent (`SchoolConnect`) ;
 ///   3. chaque cours est importé : théorie, séries, échéances, consignes ;
 ///   4. les énoncés des séries se lisent en arrière-plan.
 ///
@@ -118,13 +118,14 @@ final class OnboardingAutoSetup {
         isPaused = false
         headline = "Connexion à Moodle…"
         observeLifecycle()
-        let client = MoodleClient()
+        let client = MoodleClient.background
         guard await client.ensureSignedIn() else {
             phase = .failed("Moodle ne te reconnaît pas encore. Réessaie la connexion, ou continue sans Moodle.")
             return
         }
-        ConnectionCenter.shared.report(.moodle, .connected)
-        let others = Task { @MainActor in await SiteAutoLogin.connectAll() }
+        // Les autres sites de l'école (Courseware, MediaSpace, Ed, Explique) par
+        // la même connexion, pendant la lecture des cours.
+        let others = Task { @MainActor in await SchoolConnect.shared.connectAll() }
 
         headline = "Lecture de tes cours…"
         var refs = (try? await client.enrolled(classification: "inprogress")) ?? []
@@ -211,7 +212,10 @@ final class OnboardingAutoSetup {
             SeriesAutoReading.start(courses: imported, context: context, settings: settings)
         }
         settings.contentLastRefresh = Date()
-        extraSites = await others.value.filter(\.value).map(\.key.label).sorted()
+        await others.value
+        extraSites = SchoolConnect.shared.sites
+            .filter { $0 != .moodle && SchoolConnect.shared.state($0) == .connected }
+            .map(\.title).sorted()
         headline = "C'est prêt"
         phase = .done
         finishActivity()

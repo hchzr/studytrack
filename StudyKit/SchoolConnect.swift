@@ -25,7 +25,7 @@ final class SchoolConnect {
     static let shared = SchoolConnect()
 
     enum Site: String, CaseIterable, Identifiable {
-        case moodle, courseware, mediaspace, ed
+        case moodle, courseware, mediaspace, ed, explique
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -33,6 +33,7 @@ final class SchoolConnect {
             case .courseware: return "Courseware"
             case .mediaspace: return "MediaSpace"
             case .ed: return "Ed"
+            case .explique: return "Explique"
             }
         }
     }
@@ -75,6 +76,7 @@ final class SchoolConnect {
             case .courseware: return school.openEdX != nil
             case .mediaspace: return school.video != nil
             case .ed: return school.ed != nil
+            case .explique: return school.extras["explique"] != nil
             }
         }
     }
@@ -155,9 +157,9 @@ final class SchoolConnect {
 
     /// La session d'un site a expiré en cours de lecture : on s'y reconnecte
     /// (sans rien afficher), sauf s'il attend déjà la personne.
-    func refresh(_ site: Site) async {
+    func refresh(_ site: Site, prompting: Bool = true) async {
         if state(site) == .connected { states[site] = nil }
-        await ensure(site)
+        await ensure(site, prompting: prompting)
     }
 
     func connect(_ site: Site) async {
@@ -220,6 +222,21 @@ final class SchoolConnect {
                     return false
                 }
                 await Self.answerMicrosoft(view, email: email)
+                return false
+            }
+        case .explique:
+            // Explique (outils de cours de l'EPFL) : la page de connexion n'a
+            // qu'un bouton d'école, touché à la place de la personne ; jamais
+            // de saisie.
+            done = await driver.run(start: URL(string: school.expliqueBase + "/")!) { url, view in
+                if url.host == URL(string: school.expliqueBase)?.host {
+                    if url.path.hasPrefix("/login") {
+                        _ = try? await view.callAsyncJavaScript(Self.ssoButton, contentWorld: .page)
+                        return false
+                    }
+                    return (try? await view.evaluateJavaScript(Self.expliqueSignedIn)) as? Bool == true
+                }
+                await Self.answerMicrosoft(view, email: self.email)
                 return false
             }
         }
@@ -318,6 +335,23 @@ final class SchoolConnect {
         """
     }
     static var chooseWAYFEPFL: String { chooseWAYF(Institution.current.video?.identityProvider ?? "") }
+    static let expliqueSignedIn = "!location.pathname.startsWith('/login') && (/@epfl\\.ch/.test(document.body.innerText) || !!document.querySelector('h2'))"
+    /// Le bouton d'authentification de l'école d'une page de connexion, s'il
+    /// y en a **un seul** candidat évident. Ne remplit aucun champ.
+    static let ssoButton = #"""
+    if (document.querySelector('input[type=password]')) return 'form';
+    const label = e => ((e.innerText || e.value || e.getAttribute('aria-label') || e.title || '') + '').replace(/\s+/g, ' ').trim();
+    const target = e => (e.getAttribute('href') || e.getAttribute('formaction') || (e.form && e.form.action) || '');
+    const says = t => /(\bEPFL\b|tequila|microsoft|single sign|\bsso\b|se connecter avec|sign in with|log ?in with|edu-?id)/i.test(t);
+    const auth = h => /(tequila|saml|shibboleth|oauth|openid|\bsso\b|\/login|\/auth|wayf|microsoftonline|idp)/i.test(h);
+    const strong = [...document.querySelectorAll('a, button, input[type=submit]')]
+      .filter(e => e.offsetParent !== null)
+      .filter(e => says(label(e) + ' ' + target(e)) && (auth(target(e)) || e.tagName !== 'A'));
+    const distinct = [...new Set(strong.map(e => target(e) || label(e)))];
+    if (distinct.length !== 1) return 'none';
+    strong[0].click();
+    return 'clicked';
+    """#
     static let mediaspaceSignedIn = "!!document.querySelector('a[href*=\"/user/logout\"]')"
     static let edLogin = """
     const r = await fetch('https://' + region + '.edstem.org/api/login_type', { method: 'POST', headers: { 'Content-Type': 'application/json' },

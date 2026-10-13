@@ -65,11 +65,22 @@ final class ConnectionCenter {
         }
     }
 
-    func state(of account: Account) -> State { states[account] ?? .unknown }
+    /// Moodle se lit dans la connexion de l'école (`SchoolConnect`), la seule
+    /// qui s'y connecte ; les autres comptes, dans ce qu'ils ont signalé.
+    func state(of account: Account) -> State {
+        if account == .moodle {
+            switch SchoolConnect.shared.state(.moodle) {
+            case .connected: return .connected
+            case .needsYou, .failed: return .expired
+            case .unknown, .connecting: return .unknown
+            }
+        }
+        return states[account] ?? .unknown
+    }
 
     /// Un service dit ce qu'il a constaté. Une reconnexion efface le « plus tard ».
     func report(_ account: Account, _ state: State) {
-        guard states[account] != state else { return }
+        guard account != .moodle, states[account] != state else { return }
         states[account] = state
         defaults.set(state.rawValue, forKey: Self.stateKey(account))
         if state == .connected { defaults.removeObject(forKey: Self.snoozeKey(account)) }

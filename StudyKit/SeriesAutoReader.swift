@@ -58,7 +58,7 @@ final class SeriesAutoReader {
         let needsMoodle = courses.contains { course in
             course.series.contains { URL(string: $0.urlString)?.host?.contains("moodle") == true && ($0.exercises.isEmpty || MoodleLinks.activityModule(of: URL(string: $0.urlString)!) != nil) }
         }
-        let moodleReady = needsMoodle ? await MoodleClient().ensureSignedIn() : false
+        let moodleReady = needsMoodle ? await MoodleClient.background.ensureSignedIn() : false
         if moodleReady { await repairLinks(courses: courses, context: context) }
         for course in courses {
             for series in course.sortedSeries where (series.exercises.isEmpty || series.needsReread) && failures[series.id] == nil {
