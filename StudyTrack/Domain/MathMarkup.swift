@@ -258,3 +258,182 @@ enum MathMarkup {
         }
     }
 }
+
+// MARK: - TeX pour la mise en page native
+
+/// Le TeX des sites (MathJax, KaTeX : Courseware, Moodle, Ed, Botafogo) → le
+/// TeX que le moteur de formules natif (SwiftMath) sait mettre en page.
+///
+/// Ce moteur ne connaît pas tout : `\dfrac`, `\operatorname`, l'environnement
+/// `array`, `\mathscr`… y échouaient, et il **efface** en silence les symboles
+/// Unicode (`≤`, `ℝ`). On traduit ce qui a un équivalent ; s'il reste un
+/// caractère qu'il effacerait, `nil` : la formule garde l'affichage en ligne
+/// (`MathMarkup`), lisible à défaut d'être mise en page. Pur, testé.
+enum TeXNormalizer {
+
+    static func normalize(_ source: String) -> String? {
+        var text = source
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+        text = environments(text)
+        text = commands(text)
+        text = unicode(text)
+        // Un moins en tête de case (`& -1`) : le moteur l'espace comme une
+        // soustraction (« − 1 ») ; rapproché, il se lit comme en LaTeX.
+        text = text.replacingOccurrences(of: #"(&|\\\\|\\begin\{[a-zA-Z*]+\})(\s*)-(?!\\!)"#, with: #"$1$2-\\!\\!"#, options: .regularExpression)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.unicodeScalars.contains(where: { $0.value > 0xFF }) else { return nil }
+        return trimmed
+    }
+
+    // MARK: Environnements
+
+    private static func environments(_ source: String) -> String {
+        var text = source
+        // `array` : une matrice dont on ignore l'alignement des colonnes.
+        text = text.replacingOccurrences(of: #"\\begin\{array\}\s*(\[[a-z]\])?\s*\{[^{}]*\}"#, with: #"\\begin{matrix}"#, options: .regularExpression)
+        text = text.replacingOccurrences(of: #"\\begin\{alignat\*?\}\s*\{\d+\}"#, with: #"\\begin{aligned}"#, options: .regularExpression)
+        let renamed: [String: String?] = [
+            "array": "matrix", "smallmatrix": "matrix",
+            "align": "aligned", "align*": "aligned", "flalign": "aligned", "flalign*": "aligned",
+            "eqnarray": "aligned", "eqnarray*": "aligned", "alignat": "aligned", "alignat*": "aligned", "alignedat": "aligned",
+            "gather*": "gather", "multline": "gather", "multline*": "gather", "gathered": "gather",
+            "dcases": "cases", "rcases": "cases",
+            // Un seul bloc de formule : l'environnement n'ajoute que le numéro.
+            "equation": nil, "equation*": nil, "displaymath": nil, "math": nil
+        ]
+        for (name, replacement) in renamed {
+            for side in ["begin", "end"] {
+                let tag = "\\\(side){\(name)}"
+                text = text.replacingOccurrences(of: tag, with: replacement.map { "\\\(side){\($0)}" } ?? " ")
+            }
+        }
+        return text
+    }
+
+    // MARK: Commandes
+
+    /// Commande → son équivalent (sans la barre oblique de tête, sauf mention).
+    static let renamed: [String: String] = [
+        "dfrac": "\\frac", "tfrac": "\\frac", "cfrac": "\\frac",
+        "mathscr": "\\mathcal", "boldsymbol": "\\mathbf", "pmb": "\\mathbf", "mathbold": "\\mathbf",
+        "operatorname": "\\mathrm", "mathop": "\\mathrm",
+        "textnormal": "\\text", "textup": "\\text", "mbox": "\\text", "hbox": "\\text", "textmd": "\\text",
+        "overrightarrow": "\\vec", "overleftarrow": "\\vec", "overline": "\\overline",
+        "varnothing": "\\emptyset", "leqslant": "\\leq", "geqslant": "\\geq",
+        "lvert": "|", "rvert": "|", "lVert": "\\Vert", "rVert": "\\Vert",
+        "implies": "\\Longrightarrow", "impliedby": "\\Longleftarrow",
+        "intercal": "\\top", "transpose": "\\top",
+        "bmod": "\\mathrm{mod}", "dots": "\\ldots", "dotsc": "\\ldots", "dotsb": "\\cdots", "dotsm": "\\cdots", "dotso": "\\ldots",
+        "hookrightarrow": "\\rightarrow", "xrightarrow": "\\longrightarrow", "xleftarrow": "\\longleftarrow",
+        "smallsetminus": "\\setminus", "hline": "",
+        "lbrack": "[", "rbrack": "]", "lparen": "(", "rparen": ")",
+        "R": "\\mathbb{R}", "N": "\\mathbb{N}", "Z": "\\mathbb{Z}", "Q": "\\mathbb{Q}", "C": "\\mathbb{C}",
+        "bR": "\\mathbb{R}", "bC": "\\mathbb{C}", "bN": "\\mathbb{N}", "bZ": "\\mathbb{Z}", "bQ": "\\mathbb{Q}",
+        "enspace": "\\quad", "thinspace": "\\,", "medspace": "\\;", "thickspace": "\\;",
+        "bigl": "", "bigr": "", "Bigl": "", "Bigr": "", "biggl": "", "biggr": "", "Biggl": "", "Biggr": "",
+        "big": "", "Big": "", "bigg": "", "Bigg": "", "bigm": "", "Bigm": "",
+        "nonumber": "", "notag": "", "nolimits": "", "ensuremath": "", "boxed": "",
+        "overbrace": "", "underbrace": "", "displaylimits": "", "middle": ""
+    ]
+
+    /// Commandes dont l'argument n'a pas d'équivalent affichable : retirées avec lui.
+    static let droppedWithArgument: Set<String> = ["label", "tag", "cline", "vspace", "phantom", "hphantom", "vphantom", "ref", "eqref"]
+
+    private static func commands(_ source: String) -> String {
+        let chars = Array(source)
+        var out = ""
+        var i = 0
+        func skipSpaces() { while i < chars.count, chars[i] == " " { i += 1 } }
+        /// L'argument entre accolades qui suit (sans les accolades), et avance après lui.
+        func readGroup() -> String? {
+            skipSpaces()
+            guard i < chars.count, chars[i] == "{" else { return nil }
+            var depth = 0
+            let start = i
+            while i < chars.count {
+                if chars[i] == "\\" { i += 2; continue }
+                if chars[i] == "{" { depth += 1 }
+                if chars[i] == "}" { depth -= 1; if depth == 0 { i += 1; return String(chars[(start + 1)..<(i - 1)]) } }
+                i += 1
+            }
+            return String(chars[(start + 1)...])
+        }
+        while i < chars.count {
+            let char = chars[i]
+            guard char == "\\", i + 1 < chars.count, chars[i + 1].isLetter else {
+                // `\\`, `\{`, `\,` : recopiés tels quels, par deux.
+                if char == "\\", i + 1 < chars.count { out.append(char); out.append(chars[i + 1]); i += 2; continue }
+                out.append(char); i += 1; continue
+            }
+            var j = i + 1
+            while j < chars.count, chars[j].isLetter { j += 1 }
+            let name = String(chars[(i + 1)..<j])
+            i = j
+            if i < chars.count, chars[i] == "*", ["operatorname", "tag", "hspace", "vspace"].contains(name) { i += 1 }
+            if droppedWithArgument.contains(name) {
+                _ = readGroup()
+            } else if name == "hspace" {
+                _ = readGroup()
+                out += "\\quad "
+            } else if name == "dfrac", let top = readGroup(), let bottom = readGroup() {
+                // La fraction « de display » au milieu d'une phrase reste grande.
+                out += "{\\displaystyle\\frac{" + commands(top) + "}{" + commands(bottom) + "}}"
+            } else if name == "pmod" {
+                out += "\\quad(\\mathrm{mod}\\ " + commands(readGroup() ?? "") + ")"
+            } else if let replacement = renamed[name] {
+                out += replacement
+                // Ne pas coller la commande suivante à des lettres : `\R x` → `\mathbb{R} x`.
+                if replacement.last?.isLetter == true, i < chars.count, chars[i].isLetter { out += " " }
+            } else {
+                out += "\\" + name
+            }
+        }
+        return out
+    }
+
+    // MARK: Unicode
+
+    /// Les symboles qu'un texte copié (ou Ed) met dans une formule.
+    static let unicodeCommands: [Character: String] = {
+        var map: [Character: String] = [
+            "ℝ": "\\mathbb{R}", "ℂ": "\\mathbb{C}", "ℕ": "\\mathbb{N}", "ℤ": "\\mathbb{Z}", "ℚ": "\\mathbb{Q}",
+            "−": "-", "–": "-", "′": "'", "″": "''", "⩽": "\\leq", "⩾": "\\geq", "‖": "\\Vert", "∣": "\\mid",
+            "≤": "\\leq", "≥": "\\geq", "≠": "\\neq", "≈": "\\approx", "≡": "\\equiv", "∼": "\\sim", "≃": "\\simeq", "≅": "\\cong",
+            "∈": "\\in", "∉": "\\notin", "∋": "\\ni", "⊂": "\\subset", "⊆": "\\subseteq", "⊃": "\\supset", "⊇": "\\supseteq",
+            "∪": "\\cup", "∩": "\\cap", "∅": "\\emptyset", "∀": "\\forall", "∃": "\\exists", "¬": "\\neg", "∧": "\\wedge", "∨": "\\vee",
+            "→": "\\to", "←": "\\leftarrow", "↦": "\\mapsto", "⇒": "\\Rightarrow", "⇐": "\\Leftarrow", "⇔": "\\Leftrightarrow",
+            "⟶": "\\longrightarrow", "⟹": "\\Longrightarrow", "⟺": "\\Longleftrightarrow", "↔": "\\leftrightarrow",
+            "×": "\\times", "·": "\\cdot", "⋅": "\\cdot", "÷": "\\div", "±": "\\pm", "∓": "\\mp", "∘": "\\circ", "⊗": "\\otimes", "⊕": "\\oplus",
+            "∞": "\\infty", "∑": "\\sum", "∏": "\\prod", "∫": "\\int", "∮": "\\oint", "∂": "\\partial", "∇": "\\nabla", "√": "\\sqrt",
+            "…": "\\ldots", "⋯": "\\cdots", "⋮": "\\vdots", "⋱": "\\ddots", "ℓ": "\\ell", "⊥": "\\perp", "∖": "\\setminus",
+            "⟨": "\\langle", "⟩": "\\rangle", "⌊": "\\lfloor", "⌋": "\\rfloor", "⌈": "\\lceil", "⌉": "\\rceil", "°": "^\\circ",
+            "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta", "ε": "\\varepsilon", "ϵ": "\\epsilon", "ζ": "\\zeta",
+            "η": "\\eta", "θ": "\\theta", "ϑ": "\\vartheta", "ι": "\\iota", "κ": "\\kappa", "λ": "\\lambda", "μ": "\\mu", "ν": "\\nu",
+            "ξ": "\\xi", "π": "\\pi", "ρ": "\\rho", "σ": "\\sigma", "τ": "\\tau", "υ": "\\upsilon", "φ": "\\varphi", "ϕ": "\\phi",
+            "χ": "\\chi", "ψ": "\\psi", "ω": "\\omega", "Γ": "\\Gamma", "Δ": "\\Delta", "Θ": "\\Theta", "Λ": "\\Lambda", "Ξ": "\\Xi",
+            "Π": "\\Pi", "Σ": "\\Sigma", "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega"
+        ]
+        map["\u{2009}"] = "\\,"
+        map["\u{202F}"] = "\\,"
+        return map
+    }()
+
+    private static func unicode(_ source: String) -> String {
+        guard source.unicodeScalars.contains(where: { $0.value > 0x7F }) else { return source }
+        var out = ""
+        let chars = Array(source)
+        for (index, char) in chars.enumerated() {
+            if let command = unicodeCommands[char] {
+                out += command
+                // `αx` → `\alpha x`, pas `\alphax`.
+                if command.last?.isLetter == true, index + 1 < chars.count, chars[index + 1].isLetter { out += " " }
+            } else {
+                out.append(char)
+            }
+        }
+        return out
+    }
+}

@@ -5866,6 +5866,37 @@ do {
           [.text("Le "), .bold("point"), .text(" clé : "), .math("x_n"), .text(", "), .code("f"), .text(" et "), .italic("vite"), .text(".")],
           "en ligne : gras, formule, code, italique")
     check(RichMarkup.inlines("nom_de_variable et 5\\$") == [.text("nom_de_variable et 5$")], "pas d'italique dans un mot, dollar échappé")
+
+    // Courseware : la formule isolée arrive au milieu du paragraphe.
+    let quiz = RichMarkup.blocks("les matrices \\[ A_1=\\begin{pmatrix} 0 & 1 \\\\ 0 & 0 \\end{pmatrix} \\] Parmi les possibilités suivantes")
+    check(quiz == [.paragraph("les matrices"), .math("A_1=\\begin{pmatrix} 0 & 1 \\\\ 0 & 0 \\end{pmatrix}"), .paragraph("Parmi les possibilités suivantes")],
+          "formule \\[…\\] au milieu d'une ligne : sur sa propre ligne")
+    check(RichMarkup.blocks("Soit $$x^2$$ donc") == [.paragraph("Soit"), .math("x^2"), .paragraph("donc")], "formule $$…$$ au milieu d'une ligne")
+    check(RichMarkup.blocks("On a \\begin{align} a &= b \\end{align} fin").contains(.math("\\begin{align} a &= b \\end{align}")),
+          "environnement align hors délimiteur : formule isolée")
+    check(RichMarkup.blocks("```\n\\[ x \\]\n```") == [.code("\\[ x \\]")], "pas de formule dans un bloc de code")
+    check(RichMarkup.inlines("Voir [le corrigé](https://moodle.epfl.ch/x.pdf) ici") ==
+          [.text("Voir "), .link("le corrigé", url: "https://moodle.epfl.ch/x.pdf"), .text(" ici")], "lien Markdown")
+    check(RichMarkup.inlines("l'intervalle [0, 1](x) reste") == [.text("l'intervalle [0, 1](x) reste")], "crochets qui ne sont pas un lien")
+
+    // Le TeX des sites, pour le moteur natif.
+    check(TeXNormalizer.normalize("\\dfrac{1}{2}") == "{\\displaystyle\\frac{1}{2}}", "TeX : \\dfrac reste grand")
+    check(TeXNormalizer.normalize("\\tfrac{1}{2}") == "\\frac{1}{2}", "TeX : \\tfrac → \\frac")
+    check(TeXNormalizer.normalize("\\begin{pmatrix} -1 & -2 \\\\ -3 & 4 \\end{pmatrix}") == "\\begin{pmatrix} -\\!\\!1 & -\\!\\!2 \\\\ -\\!\\!3 & 4 \\end{pmatrix}",
+          "TeX : moins en tête de case rapproché")
+    check(TeXNormalizer.normalize("a - b") == "a - b", "TeX : soustraction intacte")
+    check(TeXNormalizer.normalize("\\operatorname{rg}(A)") == "\\mathrm{rg}(A)", "TeX : \\operatorname → \\mathrm")
+    check(TeXNormalizer.normalize("\\mathscr{B}=(v_1,\\ldots,v_n)") == "\\mathcal{B}=(v_1,\\ldots,v_n)", "TeX : \\mathscr")
+    check(TeXNormalizer.normalize("\\left[\\begin{array}{cc|c} 1 & 2 & 3 \\end{array}\\right]") == "\\left[\\begin{matrix} 1 & 2 & 3 \\end{matrix}\\right]",
+          "TeX : array → matrix")
+    check(TeXNormalizer.normalize("\\begin{align*} a &= b \\label{eq} \\end{align*}") == "\\begin{aligned} a &= b  \\end{aligned}", "TeX : align*, label retiré")
+    check(TeXNormalizer.normalize("\\begin{equation} x \\end{equation}") == "x", "TeX : equation sans numéro")
+    check(TeXNormalizer.normalize("x \\in \\R") == "x \\in \\mathbb{R}", "TeX : macro \\R")
+    check(TeXNormalizer.normalize("a ≤ b, x ∈ ℝ") == "a \\leq b, x \\in \\mathbb{R}", "TeX : symboles Unicode → commandes")
+    check(TeXNormalizer.normalize("a &amp; b \\\\ c") == "a & b \\\\ c", "TeX : entités et retour à la ligne gardé")
+    check(TeXNormalizer.normalize("a \\pmod{n}") == "a \\quad(\\mathrm{mod}\\ n)", "TeX : \\pmod")
+    check(TeXNormalizer.normalize("x ⊞ y") == nil, "TeX : symbole inconnu → affichage en ligne")
+    check(TeXNormalizer.normalize("\\Re z") == "\\Re z", "TeX : \\Re n'est pas \\R")
 }
 
 // MARK: Sites du cours lus en natif (SiteContent)
@@ -5892,6 +5923,10 @@ do {
     check(blocks.contains(.markdown("- Date · Salle\n- lundi · CE1")), "HTML : un tableau en lignes")
     check(blocks.contains(.markdown("```\nlet x = 1\n```")), "HTML : du code")
     check(blocks.last == .markdown("été & co"), "HTML : entités décodées")
+    // Un bloc écrit en Markdown dans la page : sa mise en page est gardée.
+    let markdownPage = SiteHTML.blocks("<div class=\"md\">\n  ## Objectifs\n  - lire le **chapitre 4**\n  - voir [la vidéo](https://example.org/v)\n</div>")
+    check(markdownPage == [.markdown("## Objectifs\n- lire le **chapitre 4**\n- voir [la vidéo](https://example.org/v)")], "HTML : texte Markdown gardé ligne par ligne")
+    check(!SiteHTML.looksLikeMarkdown("\n   Soient \\(V\\) un espace\n   vectoriel. "), "HTML : texte indenté ordinaire, pas du Markdown")
 
     check(SiteRouter.route("https://moodle.epfl.ch/mod/page/view.php?id=42") == .moodle(module: "page", id: 42), "lien : page Moodle")
     check(SiteRouter.route("https://moodle.epfl.ch/mod/resource/view.php?id=42") == .pdf, "lien : fichier Moodle → PDF")

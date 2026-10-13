@@ -54,6 +54,10 @@ enum ContentRefresher {
 
         if !moodleCourses.isEmpty {
             let client = MoodleClient()
+            // La session Moodle de l'app expire en quelques jours : on se
+            // reconnecte d'abord sans rien afficher (Microsoft s'en souvient),
+            // sinon la mise à jour était sautée en silence pendant des semaines.
+            await SchoolConnect.shared.ensure(.moodle, prompting: false)
             if await client.ensureSignedIn() {
                 let enrolled = (try? await client.enrolled()) ?? []
                 for course in moodleCourses {

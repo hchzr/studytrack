@@ -20,6 +20,28 @@ enum SiteBlock: Equatable {
 
 enum SiteHTML {
 
+    /// Un texte brut qui est du Markdown : plusieurs lignes, dont au moins un
+    /// titre, une liste, un bloc de code ou une citation.
+    static func looksLikeMarkdown(_ text: String) -> Bool {
+        guard text.contains("\n") else { return false }
+        let lines = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard lines.count >= 2 else { return false }
+        let structural = lines.filter {
+            $0.range(of: #"^(#{1,6} |[-*+] |\d+[.)] |```|> )"#, options: .regularExpression) != nil
+        }
+        return !structural.isEmpty
+    }
+
+    /// Retire l'indentation commune (le texte est souvent indenté comme le HTML autour).
+    static func dedent(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let indents = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { $0.prefix { $0 == " " || $0 == "\t" }.count }
+        let common = indents.min() ?? 0
+        return lines.map { String($0.dropFirst(min(common, $0.prefix { $0 == " " || $0 == "\t" }.count))) }
+            .joined(separator: "\n").trimmingCharacters(in: .newlines)
+    }
+
     /// Une page HTML → des blocs. `base` résout les adresses relatives.
     static func blocks(_ html: String, base: URL? = nil) -> [SiteBlock] {
         var parser = Parser(base: base)
@@ -74,6 +96,14 @@ enum SiteHTML {
             guard skipping.isEmpty else { return }
             let decoded = BotafogoParser.decode(raw)
             if pre != nil { pre! += decoded; return }
+            // Un texte écrit en Markdown (titres, listes, liens sur plusieurs
+            // lignes) : ses retours à la ligne portent la mise en page, on le
+            // garde tel quel au lieu de tout mettre bout à bout.
+            if cell == nil, link == nil, heading == nil, SiteHTML.looksLikeMarkdown(decoded) {
+                flush()
+                blocks.append(.markdown(SiteHTML.dedent(decoded)))
+                return
+            }
             let collapsed = decoded.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             if cell != nil { cell! += collapsed; return }
             if link != nil { link!.text += collapsed }
@@ -661,6 +691,8 @@ enum EdDiscussion {
         text = replace(text, #"<snippet[^>]*>"#) { _ in "<pre>" }
         text = replace(text, #"</snippet>"#) { _ in "</pre>" }
         text = replace(text, #"<web-snippet[^>]*>.*?</web-snippet>"#) { _ in "" }
+        text = replace(text, #"<link(\s[^>]*)>"#) { "<a\($0[1])>" }
+        text = text.replacingOccurrences(of: "</link>", with: "</a>")
         let tags = [("paragraph", "p"), ("bold", "b"), ("italic", "i"), ("underline", "span"), ("list-item", "li"),
                     ("callout", "blockquote"), ("spoiler", "div"), ("document", "div"), ("pre", "pre")]
         for (ed, html) in tags {
@@ -688,6 +720,7 @@ enum EdDiscussion {
                 case .italic(let t): out += "<italic>" + escape(t) + "</italic>"
                 case .code(let t): out += "<code>" + escape(t) + "</code>"
                 case .math(let t): out += "<math>" + escape(t) + "</math>"
+                case .link(let t, let url): out += "<link href=\"" + escape(url) + "\">" + escape(t) + "</link>"
                 }
             }
             return out

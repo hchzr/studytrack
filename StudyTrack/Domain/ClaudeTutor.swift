@@ -582,6 +582,7 @@ enum RichMarkup {
     }
 
     static func blocks(_ text: String) -> [Block] {
+        let text = isolatingDisplayMath(text)
         var result: [Block] = []
         var paragraph: [String] = []
         var code: [String]?
@@ -650,13 +651,67 @@ enum RichMarkup {
         return result
     }
 
-    /// Un morceau de texte en ligne : normal, gras, italique, code, formule.
+    /// Une formule isolée au milieu d'une ligne (`… matrices \[ A = … \] Parmi…`,
+    /// comme l'écrit Courseware), ou un environnement `\begin{align}` hors de
+    /// tout délimiteur, passe sur sa propre ligne, entre `$$` : le découpage en
+    /// blocs la trouve alors. Les blocs de code ne sont pas touchés.
+    static func isolatingDisplayMath(_ text: String) -> String {
+        guard text.contains("\\[") || text.contains("$$") || text.contains("\\begin{") else { return text }
+        let chars = Array(text)
+        var out = ""
+        var i = 0
+        var inCode = false
+        var lineStart = true
+        func starts(_ marker: String, at index: Int) -> Bool {
+            let m = Array(marker)
+            return index + m.count <= chars.count && Array(chars[index..<index + m.count]) == m
+        }
+        func find(_ marker: String, from index: Int) -> Int? {
+            var j = index
+            while j < chars.count { if starts(marker, at: j) { return j }; j += 1 }
+            return nil
+        }
+        func emit(_ formula: String) {
+            let flat = formula.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            guard !flat.isEmpty else { return }
+            while out.hasSuffix(" ") { out.removeLast() }
+            if !out.isEmpty, !out.hasSuffix("\n") { out += "\n" }
+            out += "$$" + flat + "$$\n"
+        }
+        while i < chars.count {
+            if lineStart, starts("```", at: i) { inCode.toggle() }
+            lineStart = chars[i] == "\n"
+            if inCode { out.append(chars[i]); i += 1; continue }
+            if chars[i] == "\\", i + 1 < chars.count, chars[i + 1] == "$" { out += "\\$"; i += 2; continue }
+            if starts("\\[", at: i), i == 0 || chars[i - 1] != "\\", let end = find("\\]", from: i + 2) {
+                emit(String(chars[(i + 2)..<end])); i = end + 2; while i < chars.count, chars[i] == " " { i += 1 }; continue
+            }
+            if starts("$$", at: i), let end = find("$$", from: i + 2) {
+                emit(String(chars[(i + 2)..<end])); i = end + 2; while i < chars.count, chars[i] == " " { i += 1 }; continue
+            }
+            if starts("\\begin{", at: i), let close = find("}", from: i + 7) {
+                let name = String(chars[(i + 7)..<close])
+                if ["equation", "equation*", "align", "align*", "gather", "gather*", "multline", "multline*",
+                    "eqnarray", "eqnarray*", "displaymath", "flalign", "flalign*"].contains(name),
+                   let end = find("\\end{\(name)}", from: close) {
+                    emit(String(chars[i..<(end + 6 + name.count)])); i = end + 6 + name.count; while i < chars.count, chars[i] == " " { i += 1 }; continue
+                }
+            }
+            out.append(chars[i])
+            i += 1
+        }
+        return out
+    }
+
+    /// Un morceau de texte en ligne : normal, gras, italique, code, formule, lien.
     enum Inline: Equatable {
         case text(String)
         case bold(String)
         case italic(String)
         case code(String)
         case math(String)
+        case link(String, url: String)
     }
 
     /// `Le **point** est $x_n$ et `code`` → morceaux.
@@ -693,6 +748,13 @@ enum RichMarkup {
             }
             if c == "\\", i + 1 < chars.count, chars[i + 1] == "(", let end = closing("\\)", from: i + 2) {
                 flush(); result.append(.math(String(chars[i + 2..<end]))); i = end + 2; continue
+            }
+            // [titre](https://…) : un lien, comme en Markdown.
+            if c == "[", let close = closing("](", from: i + 1), close > i + 1, let end = closing(")", from: close + 2), end > close + 2 {
+                let url = String(chars[close + 2..<end])
+                if url.hasPrefix("http") || url.hasPrefix("/") || url.hasPrefix("mailto:"), !url.contains(" ") {
+                    flush(); result.append(.link(String(chars[i + 1..<close]), url: url)); i = end + 1; continue
+                }
             }
             if (c == "*" || c == "_"), i + 1 < chars.count, chars[i + 1] != " ",
                let end = closing(String(c), from: i + 1), end > i + 1, chars[end - 1] != " " {

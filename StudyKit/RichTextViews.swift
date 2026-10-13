@@ -71,11 +71,8 @@ struct RichTextView: View {
                 Self.inline(body, size: size).foregroundStyle(Carnet.ink).fixedSize(horizontal: false, vertical: true)
             }
         case .math(let formula):
-            MacMathText(formula, size: size * 1.2, design: .serif)
+            DisplayMathView(tex: formula, size: size)
                 .foregroundStyle(Carnet.ink)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Carnet.sheetRaised.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         case .code(let code):
             Text(code)
                 .font(.system(size: size * 0.9, design: .monospaced))
@@ -88,7 +85,8 @@ struct RichTextView: View {
         }
     }
 
-    /// Une ligne : gras, italique, code, formules.
+    /// Une ligne : gras, italique, code, formules (mises en page), liens.
+    @MainActor
     static func inline(_ text: String, size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Text {
         RichMarkup.inlines(text).reduce(Text("")) { result, piece in
             switch piece {
@@ -101,7 +99,13 @@ struct RichTextView: View {
             case .code(let value):
                 return result + Text(value).font(.system(size: size * 0.92, design: .monospaced))
             case .math(let value):
-                return result + MacMathText.text(value, size: size, design: .serif, weight: weight)
+                return result + (MathTypeset.inline(value, size: size)
+                    ?? MacMathText.text(value, size: size, design: .serif, weight: weight))
+            case .link(let title, let url):
+                var link = AttributedString(title)
+                link.link = URL(string: url)
+                link.underlineStyle = .single
+                return result + Text(link).font(.system(size: size, weight: weight, design: design))
             }
         }
     }

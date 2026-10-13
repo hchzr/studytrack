@@ -128,7 +128,8 @@ final class SchoolConnect {
     /// Avant de lire un site : connecté·e, ou on s'y connecte sans rien afficher
     /// (en attendant la connexion déjà en cours, s'il y en a une).
     func ensure(_ site: Site, prompting: Bool = true) async {
-        while isRunning, state(site) != .connected { try? await Task.sleep(for: .milliseconds(400)) }
+        // On n'attend que ce site : Courseware prêt n'attend pas Ed.
+        while isRunning, [.unknown, .connecting].contains(state(site)) { try? await Task.sleep(for: .milliseconds(400)) }
         if state(site) != .connected, !waiting.contains(site.rawValue) { await connect(site) }
         if prompting { prompt() }
     }
