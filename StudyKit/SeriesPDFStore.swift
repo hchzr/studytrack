@@ -1,6 +1,8 @@
 import Foundation
 import PDFKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Le PDF de chaque série, gardé sur l'appareil, et l'énoncé de chaque
 /// exercice découpé dedans.
@@ -56,6 +58,7 @@ final class SeriesPDFStore {
         entries[seriesID] = nil
     }
 
+    #if canImport(UIKit)
     /// Les bandes de page de l'énoncé d'un exercice, rendues en images.
     func statementImages(for exercise: Exercise, width: CGFloat) async throws -> [UIImage] {
         guard let series = exercise.series else { throw Failure.noDocument }
@@ -65,6 +68,7 @@ final class SeriesPDFStore {
         }
         return slices.compactMap { render($0, of: entry.document, width: width) }
     }
+    #endif
 
     /// Peut-on espérer un PDF pour cette série ?
     func hasDocument(for series: ExerciseSeries) -> Bool {
@@ -80,11 +84,13 @@ final class SeriesPDFStore {
         let remote = Self.documentURL(series)
         let task = Task<Entry, Error> { @MainActor in
             let local = Self.file(for: id)
+            #if os(iOS)
             // Gardé hors ligne : pas de réseau à attendre.
             if !FileManager.default.fileExists(atPath: local.path), let remote,
                let offline = OfflineLibrary.shared.localFile(for: remote) {
                 try? FileManager.default.copyItem(at: offline, to: local)
             }
+            #endif
             if !FileManager.default.fileExists(atPath: local.path) {
                 guard let remote else { throw Failure.noDocument }
                 let downloaded = try await Self.download(remote)
@@ -148,6 +154,7 @@ final class SeriesPDFStore {
         return temporary
     }
 
+    #if canImport(UIKit)
     /// Une bande de page, à la largeur voulue (en points, rendue en @3x).
     private func render(_ slice: ExerciseRegions.Slice, of document: PDFDocument, width: CGFloat) -> UIImage? {
         guard let page = document.page(at: slice.page) else { return nil }
@@ -173,4 +180,5 @@ final class SeriesPDFStore {
             page.draw(with: .mediaBox, to: cg)
         }
     }
+    #endif
 }

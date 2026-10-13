@@ -36,12 +36,12 @@ struct PastExamFormSheet: View {
                     }
                     TextField("Lien du sujet (PDF, Moodle…)", text: $urlString)
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                        .noAutocapitalization()
+                        .urlField()
                     TextField("Lien du corrigé (optionnel)", text: $solutionURLString)
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                        .noAutocapitalization()
+                        .urlField()
                 }
 
                 Section {
@@ -76,7 +76,7 @@ struct PastExamFormSheet: View {
             }
             .carnetBackground()
             .navigationTitle(isEditing ? "Modifier l'annale" : "Nouvelle annale")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }

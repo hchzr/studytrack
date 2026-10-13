@@ -104,7 +104,7 @@ struct CourseDetailView: View {
         .toolbar { toolbar }
         .sheet(isPresented: $showingEditor) { CourseFormView(course: course) }
         .sheet(isPresented: $showingSeriesImport) { SeriesImportSheet(course: course) }
-        .sheet(isPresented: $showingAddTheory) { AddVideoSheet(course: course) }
+        .sheet(isPresented: $showingAddTheory) { TheoryItemForm(course: course) }
         .sheet(isPresented: $showingAddExam) { ExamFormSheet(course: course) }
         .sheet(item: $openedExercise) { exercise in ExerciseSheet(exercise: exercise) }
         .sheet(item: $openedVideo) { video in VideoDetailSheet(video: video) }

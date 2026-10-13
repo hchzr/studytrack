@@ -176,7 +176,7 @@ struct CourseChip: View {
 }
 
 /// Des pastilles qui passent à la ligne.
-struct FlowChips: Layout {
+struct FlowChips: SwiftUI.Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

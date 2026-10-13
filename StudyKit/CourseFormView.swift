@@ -9,7 +9,7 @@ struct CourseFormView: View {
     var course: Course?
     var defaultSectionCode: String = ""
 
-    @Environment(AppContainer.self) private var app
+    @Environment(SettingsStore.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \AcademicTerm.startDate, order: .reverse) private var terms: [AcademicTerm]
@@ -37,7 +37,7 @@ struct CourseFormView: View {
             Form {
                 Section("Identification") {
                     TextField("Code (ex : CS-250)", text: $code)
-                        .textInputAutocapitalization(.characters)
+                        
                         .autocorrectionDisabled()
                     TextField("Nom du cours", text: $name)
                     // Le nom complet ne tient pas dans une rangée : l'abréviation
@@ -83,7 +83,9 @@ struct CourseFormView: View {
                             Text("\(section.name) (\(section.code))").tag(section.code)
                         }
                     }
+                    #if os(iOS)
                     .pickerStyle(.navigationLink)
+                    #endif
                 }
 
                 Section("Couleur") {
@@ -129,13 +131,13 @@ struct CourseFormView: View {
                 Section("Lien (optionnel)") {
                     TextField("URL du cours", text: $link)
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                        .noAutocapitalization()
+                        .urlField()
                 }
             }
             .carnetBackground()
             .navigationTitle(isEditing ? "Modifier le cours" : "Nouveau cours")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
@@ -156,7 +158,7 @@ struct CourseFormView: View {
     private func load() {
         guard let course else {
             colorHex = Theme.coursePalette[abs((code + name).hashValue) % Theme.coursePalette.count]
-            sectionCode = defaultSectionCode.isEmpty ? app.settings.sectionCode : defaultSectionCode
+            sectionCode = defaultSectionCode.isEmpty ? settings.sectionCode : defaultSectionCode
             selectedTermID = AcademicTerm.resolve(from: terms)?.id ?? terms.first?.id
             return
         }
@@ -182,7 +184,7 @@ struct CourseFormView: View {
         let term = terms.first { $0.id == selectedTermID } ?? AcademicTerm.resolve(from: terms)
         let weeks = Double(max(term?.totalWeeks ?? 14, 1))
         let framed = (hasLectures ? lectureHours : 0) + exerciseHours
-        return max(0, credits * app.settings.hoursPerCredit / weeks - framed)
+        return max(0, credits * settings.hoursPerCredit / weeks - framed)
     }
 
     private func save() {

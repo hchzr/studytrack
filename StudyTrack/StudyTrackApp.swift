@@ -222,6 +222,7 @@ struct StudyTrackApp: App {
         WindowGroup {
             RootTabView()
                 .environment(container)
+                .environment(container.settings)
                 .modelContainer(container.modelContainer)
                 .tint(Theme.accent)
                 .toggleStyle(CarnetSwitchStyle())

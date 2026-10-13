@@ -3,6 +3,8 @@ import UserNotifications
 
 /// Planificateur de notifications locales : rappels de session, échéances, récap hebdo.
 final class NotificationScheduler {
+    /// Le même planificateur pour l'app entière (iPhone et Mac).
+    static let shared = NotificationScheduler()
 
     private let center = UNUserNotificationCenter.current()
 
@@ -219,6 +221,8 @@ extension NotificationScheduler {
         // le temps, pas par un geste : le raccord se fait là où les rappels sont
         // replanifiés — c'est le seul endroit que l'app traverse de toute façon
         // quand les évaluations changent.
+        #if os(iOS)
         ExamActivityController.reconcile(exams: exams)
+        #endif
     }
 }

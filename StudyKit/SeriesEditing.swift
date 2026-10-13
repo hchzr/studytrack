@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 import SwiftData
 
 // MARK: - Formulaire d'une série
@@ -185,7 +186,7 @@ struct ExerciseDraftEditor: View {
                     HStack(spacing: 0) {
                         Text("\(seriesNumber).").foregroundStyle(.secondary)
                         TextField("n°", text: $exercise.minor)
-                            .keyboardType(.numbersAndPunctuation)
+                            
                             .frame(width: 48)
                     }
                     .font(.body.monospacedDigit())
@@ -214,7 +215,7 @@ struct ExerciseDraftEditor: View {
                     TextField("1(a-d) 2(a-e) 3 +", text: $outline)
                         .font(.body.monospaced())
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .noAutocapitalization()
                         .focused($outlineFocused)
                         .submitLabel(.done)
                         .onSubmit(applyOutline)
@@ -333,7 +334,7 @@ struct ExerciseDraftEditor: View {
         }
         .carnetBackground()
         .navigationTitle("Exercice \(seriesNumber).\(exercise.minor)")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineTitle()
         .onAppear { outline = SubQuestionTree.outline(exercise.subQuestions) }
         .onChange(of: exercise.subQuestions) { _, new in
             if !outlineFocused { outline = SubQuestionTree.outline(new) }
@@ -457,11 +458,11 @@ struct SeriesEditorSheet: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .groupedList()
             .scrollDismissesKeyboard(.interactively)
             .carnetBackground()
             .navigationTitle(series == nil ? "Nouvelle série" : "Modifier la série")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
@@ -473,9 +474,11 @@ struct SeriesEditorSheet: View {
                     .fontWeight(.semibold)
                     .disabled(!draft.problems(takenNumbers: takenNumbers).isEmpty)
                 }
+                #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
+                #endif
             }
             .confirmationDialog("Supprimer la série \(draft.number) ?", isPresented: $confirmingDelete,
                                 titleVisibility: .visible) {
@@ -538,7 +541,7 @@ struct SourcePreviewSheet: View {
         NavigationStack {
             ScrollView {
                 if let image {
-                    Image(uiImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .scaledToFit()
                         .background(Color.white)
@@ -552,29 +555,49 @@ struct SourcePreviewSheet: View {
             .background(Theme.softBackground)
             .carnetBackground()
             .navigationTitle(preview.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("OK") { dismiss() }
                 }
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItem(placement: Self.bottomPlacement) {
                     Toggle("Page entière", isOn: $showWholePage)
                         .toggleStyle(.button)
                         .disabled(preview.top == nil)
                 }
             }
         }
+        #if os(iOS)
         .presentationDetents([.medium, .large])
+        #else
+        .frame(minWidth: 520, minHeight: 560)
+        #endif
     }
 
-    private var image: UIImage? {
-        guard preview.page < pages.count, let full = UIImage(data: pages[preview.page]) else { return nil }
-        guard !showWholePage, let top = preview.top, let cg = full.cgImage else { return full }
+    #if os(iOS)
+    private static let bottomPlacement = ToolbarItemPlacement.bottomBar
+    #else
+    private static let bottomPlacement = ToolbarItemPlacement.automatic
+    #endif
+
+    private var image: PlatformImage? {
+        guard preview.page < pages.count,
+              let source = CGImageSourceCreateWithData(pages[preview.page] as CFData, nil),
+              let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        guard !showWholePage, let top = preview.top else { return Self.image(cg) }
         let height = Double(cg.height)
         let start = max(0, top - 0.02)
         let end = min(1, max(start + 0.12, (preview.bottom ?? min(1, top + 0.45)) + 0.01))
         let rect = CGRect(x: 0, y: start * height, width: Double(cg.width), height: (end - start) * height)
-        guard let cropped = cg.cropping(to: rect.integral) else { return full }
-        return UIImage(cgImage: cropped)
+        guard let cropped = cg.cropping(to: rect.integral) else { return Self.image(cg) }
+        return Self.image(cropped)
+    }
+
+    private static func image(_ cg: CGImage) -> PlatformImage {
+        #if os(iOS)
+        UIImage(cgImage: cg)
+        #else
+        NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        #endif
     }
 }

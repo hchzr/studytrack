@@ -59,7 +59,7 @@ struct TheoryTabView: View {
             VideoDetailSheet(video: video)
         }
         .sheet(isPresented: $showingAdd) {
-            AddVideoSheet(course: course)
+            TheoryItemForm(course: course)
         }
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
     }
@@ -387,86 +387,5 @@ struct VideoDetailSheet: View {
                 durationMinutes = video.durationMinutes
             }
         }
-    }
-}
-
-/// Ajout rapide d'une vidéo depuis l'onglet Théorie.
-struct AddVideoSheet: View {
-    let course: Course
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-
-    @State private var kind: TheoryKind = .video
-    @State private var number = ""
-    @State private var title = ""
-    @State private var minutes = 45
-    @State private var week = 1
-    @State private var section = 1
-    @State private var useAutoSection = true
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker("Support", selection: $kind) {
-                        ForEach(TheoryKind.allCases) { value in
-                            Label(value.label, systemImage: value.icon).tag(value)
-                        }
-                    }
-                    TextField("Numéro (ex : 1.4)", text: $number)
-                        .keyboardType(.numbersAndPunctuation)
-                    TextField("Titre", text: $title)
-                    if kind.hasDuration {
-                        Stepper("Durée : \(minutes) min", value: $minutes, in: 1...300, step: 5)
-                    }
-                } header: {
-                    Text("Support")
-                }
-                Section {
-                    Stepper("Semaine : \(week)", value: $week, in: 1...30)
-                    Toggle("Déduire la section du numéro", isOn: $useAutoSection)
-                    if !useAutoSection {
-                        Stepper("Section : \(section)", value: $section, in: 1...40)
-                    }
-                } header: {
-                    Text("Planification")
-                }
-            }
-            .carnetBackground()
-            .navigationTitle("Ajouter de la théorie")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Ajouter") { add() }
-                        .disabled(number.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            .onAppear { week = course.currentWeek }
-        }
-    }
-
-    private func add() {
-        let value = number.trimmingCharacters(in: .whitespaces)
-        guard !value.isEmpty else { return }
-        let resolvedSection = useAutoSection
-            ? (Int(value.split(separator: ".").first ?? "1") ?? 1)
-            : section
-        let item = TheoryItem(course: course,
-                              sectionNumber: resolvedSection,
-                              number: value,
-                              title: title,
-                              kind: kind,
-                              // Un support sans durée n'en invente pas une.
-                              durationSeconds: kind.hasDuration ? minutes * 60 : 0,
-                              plannedWeek: week,
-                              sortOrder: course.theoryItems.count)
-        context.insert(item)
-        try? context.save()
-        Haptics.success()
-        dismiss()
     }
 }

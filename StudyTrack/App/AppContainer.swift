@@ -102,7 +102,7 @@ final class AppContainer {
 
         let settings = SettingsStore()
         self.settings = settings
-        self.notifications = NotificationScheduler()
+        self.notifications = NotificationScheduler.shared
 
         // La configuration vient de la **build**, jamais des réglages : l'étudiant·e
         // n'a pas à connaître l'URL du projet ni la clé anonyme, qui est publique

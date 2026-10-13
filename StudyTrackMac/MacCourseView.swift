@@ -19,6 +19,27 @@ struct MacCourseView: View {
     @State private var selection: UUID?
     /// Fermé tant que rien n'est choisi : la liste garde toute la largeur.
     @State private var showingInspector = false
+    /// Ce qui s'édite, dans une feuille (les mêmes formulaires que l'iPhone).
+    @State private var editor: Editor?
+    @State private var dropTargeted = false
+
+    enum Editor: Identifiable {
+        case course
+        case series(ExerciseSeries?)
+        case importPDF(URL?)
+        case theory(TheoryItem?)
+        case exam(Exam?)
+
+        var id: String {
+            switch self {
+            case .course: return "course"
+            case .series(let series): return "series-\(series?.id.uuidString ?? "new")"
+            case .importPDF(let url): return "pdf-\(url?.path ?? "")"
+            case .theory(let item): return "theory-\(item?.id.uuidString ?? "new")"
+            case .exam(let exam): return "exam-\(exam?.id.uuidString ?? "new")"
+            }
+        }
+    }
 
     @Environment(MacTimer.self) private var timer
     @Environment(\.modelContext) private var context
@@ -93,10 +114,48 @@ struct MacCourseView: View {
                 .frame(width: 150)
             }
             ToolbarItem {
+                Menu {
+                    Button("Importer une série (PDF)…") { editor = .importPDF(nil) }
+                    Button("Nouvelle série…") { editor = .series(nil) }
+                    Button("Ajouter de la théorie…") { editor = .theory(nil) }
+                    Button("Nouvelle évaluation…") { editor = .exam(nil) }
+                    Divider()
+                    Button("Modifier le cours…") { editor = .course }
+                } label: {
+                    Label("Ajouter", systemImage: "plus")
+                }
+                .help("Ajouter une série, de la théorie, une évaluation")
+            }
+            ToolbarItem {
                 Button { showingInspector.toggle() } label: {
                     Label("Inspecteur", systemImage: "sidebar.trailing")
                 }
                 .help("Inspecteur")
+            }
+        }
+        .sheet(item: $editor) { editor in
+            switch editor {
+            case .course: CourseFormView(course: course)
+            case .series(let series): SeriesEditorSheet(course: course, series: series)
+            case .importPDF(let url): SeriesImportSheet(course: course, initialFileURL: url)
+            case .theory(let item): TheoryItemForm(course: course, item: item)
+            case .exam(let exam): ExamFormSheet(course: course, exam: exam)
+            }
+        }
+        // Un PDF de série glissé sur le cours : l'import, avec sa relecture.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let pdf = urls.first(where: { $0.pathExtension.lowercased() == "pdf" }) else { return false }
+            editor = .importPDF(pdf)
+            return true
+        } isTargeted: { dropTargeted = $0 }
+        .overlay {
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(tint, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .padding(8)
+                    .overlay(Label("Déposer le PDF de la série", systemImage: "doc.badge.plus")
+                        .padding(10).background(.regularMaterial, in: Capsule()))
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -174,6 +233,10 @@ struct MacCourseView: View {
                 }
             } header: {
                 SeriesHeader(series: item, tint: tint)
+                    .contextMenu {
+                        Button("Modifier la série…") { editor = .series(item) }
+                        Button("Réimporter un PDF…") { editor = .importPDF(nil) }
+                    }
             }
         }
     }
@@ -192,6 +255,9 @@ struct MacCourseView: View {
         }
         Divider()
         Button("Chronométrer") { time(exercise.id, .exercise) }
+        if let series = exercise.series {
+            Button("Modifier la série…") { editor = .series(series) }
+        }
         if let url = web(exercise.statementURLString) ?? web(exercise.series?.urlString ?? "") {
             Link("Ouvrir l'énoncé", destination: url)
         }
@@ -219,6 +285,8 @@ struct MacCourseView: View {
                             }
                             Button("Chronométrer") { time(item.id, .theory) }
                             if let url = web(item.urlString) { Link("Ouvrir", destination: url) }
+                            Divider()
+                            Button("Modifier…") { editor = .theory(item) }
                         }
                 }
             } header: {

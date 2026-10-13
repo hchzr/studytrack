@@ -17,6 +17,7 @@ struct MacRootView: View {
     @SceneStorage("mac.page") private var storedPage: String = "today"
     @State private var page: Page? = .today
     @State private var showingPalette = false
+    @State private var addingCourse = false
     /// L'exercice ou l'élément de théorie à montrer à l'ouverture d'un cours
     /// (un résultat de recherche, une ligne « À faire »).
     @State private var focusTarget: UUID?
@@ -48,7 +49,7 @@ struct MacRootView: View {
                         Label("Claude", systemImage: "sparkle").tag(Page.claude)
                     }
                 }
-                Section("Cours") {
+                Section {
                     ForEach(tracked) { course in
                         CourseSidebarRow(course: course, isTimed: timer.phase != .idle && timer.courseID == course.id)
                             .tag(Page.course(course.id))
@@ -56,7 +57,20 @@ struct MacRootView: View {
                                 Button("Chronométrer") { time(course) }
                                 Button("Mode étude…") { StudyModeController.shared.presentSetup(courseID: course.id) }
                                 Button("Ouvrir") { page = .course(course.id) }
+                                Divider()
+                                Button("Archiver") {
+                                    course.isTracked = false
+                                    if page == .course(course.id) { page = .today }
+                                }
                             }
+                    }
+                } header: {
+                    HStack {
+                        Text("Cours")
+                        Spacer()
+                        Button { addingCourse = true } label: { Image(systemName: "plus") }
+                            .buttonStyle(.plain)
+                            .help("Ajouter un cours")
                     }
                 }
             }
@@ -139,6 +153,9 @@ struct MacRootView: View {
             }
         }
         .animation(.spring(duration: 0.22, bounce: 0.1), value: showingPalette)
+        .sheet(isPresented: $addingCourse) {
+            CourseFormView(course: nil, defaultSectionCode: settings.shared.sectionCode)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .macFocusSearch)) { _ in showingPalette = true }
         .onReceive(NotificationCenter.default.publisher(for: .macGoTo)) { note in
             guard let raw = note.object as? String else { return }

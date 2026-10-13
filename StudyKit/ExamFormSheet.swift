@@ -14,7 +14,7 @@ struct ExamFormSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @Environment(AppContainer.self) private var app
+    @Environment(SettingsStore.self) private var settings
 
     @State private var kind: ExamKind = .midterm
     @State private var title = ""
@@ -75,7 +75,7 @@ struct ExamFormSheet: View {
             }
             .carnetBackground()
             .navigationTitle(isEditing ? "Modifier l'évaluation" : "Nouvelle évaluation")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
@@ -120,7 +120,7 @@ struct ExamFormSheet: View {
             exam.weightPercent = hasWeight ? weight : nil
             exam.location = location.trimmingCharacters(in: .whitespaces)
             exam.notes = notes
-            app.notifications.cancelExam(id: exam.id)
+            NotificationScheduler.shared.cancelExam(id: exam.id)
             scheduleReminder(for: exam)
         } else {
             let created = Exam(course: course,
@@ -139,14 +139,14 @@ struct ExamFormSheet: View {
     }
 
     private func scheduleReminder(for exam: Exam) {
-        app.notifications.scheduleExamReminders(id: exam.id,
+        NotificationScheduler.shared.scheduleExamReminders(id: exam.id,
                                                 title: "\(course.displayCode) · \(exam.title)",
                                                 examDate: exam.date)
     }
 
     private func delete() {
         guard let exam else { return }
-        app.notifications.cancelExam(id: exam.id)
+        NotificationScheduler.shared.cancelExam(id: exam.id)
         context.delete(exam)
         try? context.save()
         Haptics.removed()

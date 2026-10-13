@@ -21,7 +21,7 @@ struct SeriesImportSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @Environment(AppContainer.self) private var app
+    @Environment(SettingsStore.self) private var settings
     @Query(sort: \Course.code) private var courses: [Course]
 
     @State private var selectedCourseID: UUID?
@@ -91,7 +91,7 @@ struct SeriesImportSheet: View {
             }
             .carnetBackground()
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") {
@@ -163,7 +163,7 @@ struct SeriesImportSheet: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .groupedList()
     }
 
     private func bigChoice(icon: String, title: String, detail: String) -> some View {
@@ -218,7 +218,7 @@ struct SeriesImportSheet: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .groupedList()
     }
 
     private func stepRow(done: Bool, running: Bool, title: String, detail: String) -> some View {
@@ -295,7 +295,7 @@ struct SeriesImportSheet: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .groupedList()
         .scrollDismissesKeyboard(.interactively)
     }
 
@@ -386,7 +386,7 @@ struct SeriesImportSheet: View {
                 Button("Choisir un autre fichier") { showingPicker = true }
             }
         }
-        .listStyle(.insetGrouped)
+        .groupedList()
     }
 
     private func failedStep(_ message: String) -> some View {
@@ -400,7 +400,7 @@ struct SeriesImportSheet: View {
                 Button("Choisir un autre fichier") { showingPicker = true }
             }
         }
-        .listStyle(.insetGrouped)
+        .groupedList()
     }
 
     // MARK: Collage
@@ -421,7 +421,7 @@ struct SeriesImportSheet: View {
             }
             .carnetBackground()
             .navigationTitle("Coller un énoncé")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { showingPaste = false }
@@ -556,7 +556,7 @@ struct SeriesImportSheet: View {
             : (preferredSeries.map { "[Indice : ce document semble être la série \($0)]\n" } ?? "")
                 + (SeriesDocumentInference.languageHint(language).map { $0 + "\n" } ?? "")
                 + SeriesAIParsing.prepare(lines.map(\.text).joined(separator: "\n"))
-        if app.settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(app.settings) != nil {
+        if settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(settings) != nil {
             phase = .analyzing
             runAI()
         } else {
@@ -581,7 +581,7 @@ struct SeriesImportSheet: View {
             do {
                 let result = try await SeriesAIExtractor.extract(prepared: input, pageImages: pages,
                                                                  seriesHint: preferred, language: language,
-                                                                 settings: app.settings)
+                                                                 settings: settings)
                 guard !Task.isCancelled else { return }
                 let merged = SeriesAIParsing.merge(heuristic: base, ai: result.series, preferredSeries: preferred,
                                                    aiReadsLayout: result.source.readsLayout)

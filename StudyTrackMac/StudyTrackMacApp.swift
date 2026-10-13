@@ -97,6 +97,7 @@ struct StudyTrackMacApp: App {
                 .environment(timer)
                 .environment(store)
                 .environment(settings)
+                .environment(settings.shared)
                 .frame(minWidth: 900, minHeight: 580)
         }
         .modelContainer(store.container)
@@ -135,6 +136,7 @@ struct StudyTrackMacApp: App {
         Settings {
             MacSettingsView()
                 .environment(settings)
+                .environment(settings.shared)
                 .environment(store)
                 .modelContainer(store.container)
         }
