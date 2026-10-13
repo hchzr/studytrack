@@ -320,14 +320,16 @@ struct SyncFooter: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            Label(Self.describe(store.syncState, synced: store.isCloudSynced, now: context.date), systemImage: icon)
+            Label(store.storeError ?? Self.describe(store.syncState, synced: store.isCloudSynced, now: context.date),
+                  systemImage: icon)
                 .font(.caption)
                 .foregroundStyle(isFailure ? AnyShapeStyle(Carnet.wrong) : AnyShapeStyle(.secondary))
-                .lineLimit(2)
+                .lineLimit(3)
         }
     }
 
     private var isFailure: Bool {
+        if store.storeError != nil { return true }
         if case .failed = store.syncState { return true }
         return false
     }

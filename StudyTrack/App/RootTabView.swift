@@ -62,12 +62,9 @@ struct RootTabView: View {
             // épreuve passée doit disparaître, et une épreuve qui arrive dans les
             // douze heures doit s'afficher sans attendre un passage en arrière-plan.
             ExamActivityController.reconcileFromStore(context: context)
-            // L'horaire lu deux fois (import `.ics` et calendrier de l'iPhone
-            // abonné au même flux) et les séances d'exercices rangées comme
-            // cours magistraux comptaient d'office dans les heures d'amphi :
-            // doublons retirés et séances reclassées, une fois ici.
-            CalendarSync.repair(context: context)
-            try? context.save()
+            // Le travail de fond (doublons iCloud, horaire), hors du fil
+            // principal et après le premier écran.
+            await app.settleAfterLaunch()
             #if DEBUG
             if let address = PreviewLaunch.string(PreviewLaunch.browseFlag), let url = URL(string: address) {
                 try? await Task.sleep(for: .milliseconds(400))
@@ -166,15 +163,16 @@ struct RootTabView: View {
                         app.router.selectedTab = .today
                         app.router.pendingImport = shared
                     }
-                    // Le temps passé dans Anki arrive tout seul, étiqueté.
-                    await AnkiReviewSync.syncIfDue(context: context, settings: app.settings)
-                    // La série de la semaine, publiée sur Moodle depuis la
-                    // dernière fois, arrive toute seule elle aussi.
+                    // Indépendants, menés de front : le temps passé dans Anki,
+                    // ce que l'assistant a demandé pendant que l'app dormait…
+                    // (sur le fil principal, comme le contexte qu'ils écrivent).
+                    let anki = Task { @MainActor in _ = await AnkiReviewSync.syncIfDue(context: context, settings: app.settings) }
+                    let assistant = Task { @MainActor in _ = await AssistantSync.sync(context: context, settings: app.settings) }
+                    // …et la série de la semaine publiée sur Moodle, puis ses
+                    // énoncés gardés pour le métro (qui en dépendent).
                     await ContentRefresher.refreshIfDue(context: context, settings: app.settings)
-                    // Ses énoncés, gardés pour le métro (si on l'a demandé).
                     await OfflineLibrary.shared.sync(context: context, settings: app.settings)
-                    // Ce que l'assistant a demandé pendant que l'app dormait.
-                    await AssistantSync.sync(context: context, settings: app.settings)
+                    _ = await (anki.value, assistant.value)
                 }
             }
         }

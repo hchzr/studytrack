@@ -1422,8 +1422,8 @@ do {
 
     let session = StudySession(taskType: .exercise, durationSeconds: 1200, exercise: e1)
     context.insert(session)
-    check(ExerciseFlow.seconds(on: e1.id, sessions: [session], live: 30) == 1230, "temps d'un exercice : sessions + chrono en cours")
-    check(ExerciseFlow.seconds(on: flowSeries, sessions: [session]) == 1200, "temps d'une série")
+    check(ExerciseFlow.seconds(on: e1, live: 30) == 1230, "temps d'un exercice : sessions + chrono en cours")
+    check(ExerciseFlow.seconds(on: flowSeries) == 1200, "temps d'une série")
     context.delete(session)
     for question in [q1, q2] { context.delete(question) }
     for exercise in all { context.delete(exercise) }

@@ -15,6 +15,8 @@ final class MacStore {
 
     let container: ModelContainer
     let isCloudSynced: Bool
+    /// Pourquoi la base n'est pas celle d'iCloud, s'il y a lieu (barre latérale).
+    let storeError: String?
     /// Les réglages communs à l'iPhone (relecture des cours, IA de lecture,
     /// nouveautés annoncées) : le même type, pour la même chaîne d'import.
     let preferences = SettingsStore()
@@ -43,10 +45,11 @@ final class MacStore {
             // `cloudKitDatabase: .none` est indispensable : par défaut (`.automatic`),
             // une base « en mémoire » d'une app qui a le droit iCloud se
             // synchronise quand même — le cours d'essai de `-previewSeed` est
-            // ainsi parti dans le vrai iCloud (`PreviewSeedCleanup` le retire).
+            // ainsi parti dans le vrai iCloud.
             container = try! ModelContainer(for: schema, configurations: [
                 ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
             isCloudSynced = false
+            storeError = nil
             if CommandLine.arguments.contains("-previewSeed") {
                 let container = self.container
                 Task { @MainActor in Self.seedPreview(container.mainContext) }
@@ -60,19 +63,40 @@ final class MacStore {
                                  cloudKitDatabase: .private(Self.cloudContainerID))
             : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL,
                                  cloudKitDatabase: .private(Self.cloudContainerID))
+        var failure: String?
         if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
                                                configurations: [cloud]) {
             self.container = container
             isCloudSynced = true
         } else {
+            // Comme sur l'iPhone : la même base, locale, **avec** le plan de
+            // migration ; sans lui en dernier recours ; et un échec se voit.
             let local = MacSandboxMigration.isSandboxed
                 ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
                 : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL, cloudKitDatabase: .none)
-            self.container = (try? ModelContainer(for: schema, configurations: [local]))
-                ?? (try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)]))
+            if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self, configurations: [local]) {
+                self.container = container
+                failure = "iCloud indisponible : base locale, rien ne se synchronise."
+            } else if let container = try? ModelContainer(for: schema, configurations: [local]) {
+                self.container = container
+                failure = "La migration du schéma a échoué ; la base a été ouverte sans plan de migration."
+            } else {
+                self.container = try! ModelContainer(for: schema, configurations: [
+                    ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                failure = "La base n'a pas pu être ouverte : cette session ne sera pas conservée."
+            }
             isCloudSynced = false
         }
-        SyncDeduplicator.run(in: ModelContext(container))
+        storeError = failure
+        if let failure { AppLog.record(.error, AppLog.Category.storage, "Base de données", detail: failure) }
+        // Les mêmes réparations que l'iPhone, une fois par version ; la fusion
+        // des doublons, hors du fil principal.
+        DataRepair.run(in: ModelContext(container))
+        let launched = container
+        Task { @MainActor [weak self] in
+            _ = await SyncDeduplicator.runInBackground(launched)
+            self?.onDataChange?()
+        }
         observers.append(NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
                                                                 queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.remoteChangeArrived() }
@@ -116,7 +140,7 @@ final class MacStore {
         pendingMerge = Task { @MainActor [container, weak self] in
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            SyncDeduplicator.run(in: ModelContext(container))
+            _ = await SyncDeduplicator.runInBackground(container)
             self?.onDataChange?()
         }
     }

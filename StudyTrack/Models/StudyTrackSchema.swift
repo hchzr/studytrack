@@ -101,10 +101,16 @@ enum DataRepair {
     ///
     /// Idempotent par construction : chaque étape ne touche que ce qui est cassé.
     /// Le marqueur évite simplement de relire toute la base à chaque lancement.
+    /// Augmente quand une réparation s'ajoute : elle est alors jouée une fois.
+    static let repairVersion = 2
+    static let repairKey = "dataRepair.version"
+
     @discardableResult
     static func run(in context: ModelContext, defaults: UserDefaults = .standard) -> Outcome {
         var outcome = Outcome()
-        let stored = defaults.integer(forKey: StudyTrackSchema.versionKey)
+        // Le marqueur arrête **vraiment** les réparations : avant, il n'était
+        // qu'écrit, et toute la base était relue à chaque lancement.
+        guard defaults.integer(forKey: repairKey) < repairVersion else { return outcome }
 
         // Les cours importés avant la correction n'ont aucun semestre : ils
         // affichaient « semaine 1 » en pleine semaine 2.
@@ -113,9 +119,8 @@ enum DataRepair {
         // Le calendrier académique doit être là hors ligne, dès l'installation.
         outcome.milestonesInstalled = AcademicMilestone.installSnapshotIfNeeded(in: context)
 
-        if stored < StudyTrackSchema.currentVersion {
-            defaults.set(StudyTrackSchema.currentVersion, forKey: StudyTrackSchema.versionKey)
-        }
+        defaults.set(StudyTrackSchema.currentVersion, forKey: StudyTrackSchema.versionKey)
+        defaults.set(repairVersion, forKey: repairKey)
         try? context.save()
         return outcome
     }

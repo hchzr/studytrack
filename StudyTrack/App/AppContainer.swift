@@ -114,14 +114,7 @@ final class AppContainer {
         self.focus = FocusController()
 
         // Réparations de données, nommées et jouées une fois par version.
-        let repairContext = ModelContext(self.modelContainer)
-        DataRepair.run(in: repairContext)
-        // Les doublons arrivés d'un autre appareil (ou laissés par une
-        // synchronisation interrompue) sont fusionnés dès l'ouverture.
-        let merged = SyncDeduplicator.run(in: repairContext)
-        if merged.total > 0 {
-            AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)
-        }
+        DataRepair.run(in: ModelContext(self.modelContainer))
         focus.app = self
         focus.startRelay()
         // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
@@ -131,4 +124,21 @@ final class AppContainer {
         StudyActivityController.observePushTokens()
     }
 
+    /// Le travail de fond du lancement, **après** le premier écran : les
+    /// doublons arrivés d'un autre appareil (ou laissés par une synchronisation
+    /// interrompue) sont fusionnés hors du fil principal, puis l'horaire réparé.
+    func settleAfterLaunch() async {
+        let merged = await SyncDeduplicator.runInBackground(modelContainer)
+        if merged.total > 0 {
+            AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)
+        }
+        // L'horaire lu deux fois (import `.ics` et calendrier de l'iPhone abonné
+        // au même flux) et les séances d'exercices rangées comme cours
+        // magistraux comptaient d'office dans les heures d'amphi : doublons
+        // retirés et séances reclassées.
+        let container = modelContainer
+        await Task.detached(priority: .utility) {
+            _ = CalendarSync.repair(context: ModelContext(container))
+        }.value
+    }
 }

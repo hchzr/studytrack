@@ -32,6 +32,15 @@ enum SyncDeduplicator {
         }
     }
 
+    /// La même fusion, **hors du fil principal** : elle relit toutes les
+    /// familles d'objets, ce qui ne doit ni retarder le premier écran ni figer
+    /// l'interface quand iCloud apporte un lot. Le contexte vit dans la tâche.
+    static func runInBackground(_ container: ModelContainer) async -> Report {
+        await Task.detached(priority: .utility) {
+            run(in: ModelContext(container))
+        }.value
+    }
+
     @discardableResult
     static func run(in context: ModelContext) -> Report {
         var report = Report()

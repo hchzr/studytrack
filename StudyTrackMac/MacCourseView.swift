@@ -450,8 +450,7 @@ private struct ExerciseInspector: View {
             }
 
             Section {
-                let sessions = exercise.targetedSessions ?? []
-                LabeledContent("Temps passé", value: DateUtils.hoursLabel(seconds: sessions.reduce(0) { $0 + $1.durationSeconds }))
+                LabeledContent("Temps passé", value: DateUtils.hoursLabel(seconds: ExerciseFlow.seconds(on: exercise)))
                 Button(action: time) { Label("Chronométrer", systemImage: "play.circle") }
                 if let url = URL(string: exercise.statementURLString.isEmpty ? (exercise.series?.urlString ?? "") : exercise.statementURLString),
                    url.scheme?.hasPrefix("http") == true {

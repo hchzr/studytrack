@@ -22,13 +22,13 @@ enum CloudSyncMonitor {
         pending = Task { @MainActor in
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            settle(container: container)
+            await settle(container: container)
         }
     }
 
-    static func settle(container: AppContainer) {
+    static func settle(container: AppContainer) async {
+        let merged = await SyncDeduplicator.runInBackground(container.modelContainer)
         let context = ModelContext(container.modelContainer)
-        let merged = SyncDeduplicator.run(in: context)
         if merged.total > 0 {
             AppLog.record(.info, AppLog.Category.storage, "Doublons iCloud fusionnés", detail: merged.summary)
         }

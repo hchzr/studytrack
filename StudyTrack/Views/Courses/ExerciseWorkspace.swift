@@ -340,7 +340,6 @@ struct ExerciseWorkspace: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(AppContainer.self) private var app
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
 
     @State private var editingSeries = false
     @State private var deleting: Exercise?
@@ -363,7 +362,6 @@ struct ExerciseWorkspace: View {
             Group {
                 if let current {
                     ExerciseDetailContent(exercise: current,
-                                          sessions: sessions,
                                           onOpenLink: { browsing = $0 })
                         .id(current.id)
                 } else {
@@ -375,7 +373,6 @@ struct ExerciseWorkspace: View {
                     ExerciseStepBar(exercise: current,
                                     previous: exercises.indices.contains(index - 1) ? exercises[index - 1] : nil,
                                     next: exercises.indices.contains(index + 1) ? exercises[index + 1] : nil,
-                                    sessions: sessions,
                                     onStep: step)
                 }
             }
@@ -488,7 +485,6 @@ struct ExerciseWorkspace: View {
 /// occupe le haut de l'écran et la liste des questions reste sous le pouce.
 private struct ExerciseDetailContent: View {
     @Bindable var exercise: Exercise
-    let sessions: [StudySession]
     var onOpenLink: (BrowsedLink) -> Void
 
     @Environment(\.modelContext) private var context
@@ -887,7 +883,7 @@ private struct ExerciseDetailContent: View {
     }
 
     private var timeBlock: some View {
-        let spent = ExerciseFlow.seconds(on: exercise.id, sessions: sessions, live: 0)
+        let spent = ExerciseFlow.seconds(on: exercise)
         return Group {
             if spent >= 60 {
                 Label("\(DateUtils.durationLabel(seconds: spent)) passées sur cet exercice", systemImage: "clock")
@@ -947,7 +943,6 @@ private struct ExerciseStepBar: View {
     @Bindable var exercise: Exercise
     let previous: Exercise?
     let next: Exercise?
-    let sessions: [StudySession]
     var onStep: (Int) -> Void
 
     @Environment(AppContainer.self) private var app
@@ -1000,7 +995,7 @@ private struct ExerciseStepBar: View {
             let onThis = focus.hasSession && state?.targetID == exercise.id
             let running = onThis && state?.isRunning == true
             let live = onThis ? (state?.allocation(at: timeline.date).first { $0.targetID == exercise.id }?.seconds ?? 0) : 0
-            let spent = ExerciseFlow.seconds(on: exercise.id, sessions: sessions, live: live)
+            let spent = ExerciseFlow.seconds(on: exercise, live: live)
             Button {
                 if onThis, let state {
                     if state.isRunning { focus.pause() } else { focus.resume() }

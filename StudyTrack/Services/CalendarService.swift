@@ -240,19 +240,20 @@ enum CalendarSync {
     @discardableResult
     static func repair(context: ModelContext) -> Int {
         let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
-        let imported = events.filter { $0.sourceCalendarID == "ics" }
+        // Les séances importées, rangées par cours : chaque séance du calendrier
+        // ne se compare qu'à celles de son cours (avant : à toutes, deux fois).
+        let imported = Dictionary(grouping: events.filter { $0.sourceCalendarID == "ics" && $0.course != nil },
+                                  by: { $0.course!.id })
         let learned = learnedKinds(events)
         var changes = 0
         for event in events where event.sourceCalendarID != "ics" {
-            if imported.contains(where: { TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
-                                                                          courseB: event.course?.id, startB: event.startsAt) }) {
+            if let twin = event.course.flatMap({ imported[$0.id] })?.first(where: {
+                TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
+                                                  courseB: event.course?.id, startB: event.startsAt) }) {
                 // Le doublon garde ce qu'on y avait noté : un amphi marqué
                 // manqué le reste.
-                if let twin = imported.first(where: { TimetableClassifier.isSameSession(courseA: $0.course?.id, startA: $0.startsAt,
-                                                                                       courseB: event.course?.id, startB: event.startsAt) }) {
-                    if event.isSkipped { twin.isSkipped = true }
-                    if event.kindIsManual, !twin.kindIsManual { twin.kind = event.kind; twin.kindIsManual = true }
-                }
+                if event.isSkipped { twin.isSkipped = true }
+                if event.kindIsManual, !twin.kindIsManual { twin.kind = event.kind; twin.kindIsManual = true }
                 context.delete(event)
                 changes += 1
                 continue

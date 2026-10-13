@@ -14,9 +14,17 @@ struct MeView: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    /// Les sessions de la semaine (et un peu avant, au passage du lundi).
+    @Query private var sessions: [StudySession]
     /// `-settings` (captures) : ouvre les réglages à l'arrivée.
     @State private var debugSettings = false
+
+    init(onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+        let since = DateUtils.addDays(-7, to: DateUtils.startOfWeek(Date()))
+        _sessions = Query(filter: #Predicate<StudySession> { $0.startedAt >= since },
+                          sort: \StudySession.startedAt, order: .reverse)
+    }
 
     var body: some View {
         NavigationStack {

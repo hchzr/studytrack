@@ -11,7 +11,6 @@ struct ExercisesTabView: View {
     let course: Course
 
     @Environment(\.modelContext) private var context
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
     /// La série ouverte dans l'espace de travail, et l'exercice où l'ouvrir.
     @State private var workspace: WorkspaceTarget?
     @State private var editingSeries: SeriesEditTarget?
@@ -357,7 +356,7 @@ struct ExercisesTabView: View {
                 VStack(spacing: 0) {
                     ForEach(series.sortedExercises) { exercise in
                         ExerciseRow(exercise: exercise,
-                                    seconds: ExerciseFlow.seconds(on: exercise.id, sessions: sessions),
+                                    seconds: ExerciseFlow.seconds(on: exercise),
                                     showsQuestions: showsQuestions(exercise),
                                     onToggleDone: { toggleDone(exercise) },
                                     onCorrect: { result in correct(exercise, result) },
@@ -440,7 +439,7 @@ struct ExercisesTabView: View {
         if series.exercises.isEmpty { parts.append("exercices à importer") }
         if let due = series.dueDate { parts.append("à rendre le \(DateUtils.shortDay.string(from: due))") }
         if !series.bonusExercises.isEmpty { parts.append("\(series.bonusExercises.count) bonus") }
-        let spent = ExerciseFlow.seconds(on: series, sessions: sessions)
+        let spent = ExerciseFlow.seconds(on: series)
         if spent >= 60 { parts.append(DateUtils.hoursLabel(seconds: spent)) }
         return parts.joined(separator: " · ")
     }

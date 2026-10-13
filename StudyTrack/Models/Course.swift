@@ -59,7 +59,7 @@ final class Course {
     var documentsRaw: String = ""
 
     var documents: [CourseDocument] {
-        get { CourseDocument.decodeList(documentsRaw) }
+        get { documentsRaw.isEmpty ? [] : CourseDocument.decodeList(documentsRaw) }
         set { documentsRaw = CourseDocument.encodeList(newValue) }
     }
 
@@ -79,7 +79,8 @@ final class Course {
 
     var weekGuide: [Int: String] {
         get {
-            guard let data = weekGuideRaw.data(using: .utf8),
+            // La plupart des cours n'en ont pas : ne pas lancer de décodeur pour rien.
+            guard !weekGuideRaw.isEmpty, let data = weekGuideRaw.data(using: .utf8),
                   let raw = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
             return Dictionary(raw.compactMap { key, value in Int(key).map { ($0, value) } }, uniquingKeysWith: { first, _ in first })
         }

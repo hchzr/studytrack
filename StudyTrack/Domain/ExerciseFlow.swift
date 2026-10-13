@@ -93,19 +93,16 @@ enum ExerciseFlow {
 
     /// Le temps passé sur un exercice : ses sessions enregistrées, plus ce que
     /// le chrono compte **en ce moment** sur lui.
-    static func seconds(on exerciseID: UUID, sessions: [StudySession], live: TimeInterval = 0) -> Int {
-        sessions.reduce(0) { total, session in
-            session.exercise?.id == exerciseID ? total + session.durationSeconds : total
-        } + Int(live)
+    ///
+    /// Lu par la relation inverse (`targetedSessions`) : l'écran de l'exercice
+    /// relisait **toutes** les sessions jamais enregistrées, chaque seconde.
+    static func seconds(on exercise: Exercise, live: TimeInterval = 0) -> Int {
+        (exercise.targetedSessions ?? []).reduce(0) { $0 + $1.durationSeconds } + Int(live)
     }
 
     /// Le temps passé sur une série entière.
-    static func seconds(on series: ExerciseSeries, sessions: [StudySession]) -> Int {
-        let ids = Set(series.exercises.map(\.id))
-        return sessions.reduce(0) { total, session in
-            guard let id = session.exercise?.id, ids.contains(id) else { return total }
-            return total + session.durationSeconds
-        }
+    static func seconds(on series: ExerciseSeries) -> Int {
+        series.exercises.reduce(0) { $0 + seconds(on: $1) }
     }
 }
 

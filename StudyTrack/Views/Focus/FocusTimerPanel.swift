@@ -20,8 +20,22 @@ struct FocusTimerPanel: View {
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
-    @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
+    /// Les sessions et l'horaire d'hier à demain : le total du jour et le
+    /// contexte de l'horaire n'ont besoin de rien d'autre.
+    @Query private var sessions: [StudySession]
+    @Query private var events: [LinkedCalendarEvent]
+
+    init(isAdjusting: Binding<Bool>, showingPomodoroSettings: Binding<Bool>, showingShortcutEditor: Binding<Bool>) {
+        _isAdjusting = isAdjusting
+        _showingPomodoroSettings = showingPomodoroSettings
+        _showingShortcutEditor = showingShortcutEditor
+        let since = DateUtils.addDays(-1, to: DateUtils.startOfDay(Date()))
+        let until = DateUtils.addDays(3, to: since)
+        _sessions = Query(filter: #Predicate<StudySession> { $0.startedAt >= since },
+                          sort: \StudySession.startedAt, order: .reverse)
+        _events = Query(filter: #Predicate<LinkedCalendarEvent> { $0.startsAt >= since && $0.startsAt < until },
+                        sort: \LinkedCalendarEvent.startsAt)
+    }
 
     // Brouillon d'une session pas encore démarrée.
     @State private var draftCourseID: UUID?
