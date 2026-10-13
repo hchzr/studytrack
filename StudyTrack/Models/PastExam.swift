@@ -101,9 +101,9 @@ enum PastExamProgress {
         var ratio: Double { total == 0 ? 0 : Double(worked) / Double(total) }
 
         var label: String {
-            guard total > 0 else { return "Aucune annale" }
-            if isComplete { return "\(total)/\(total) travaillées" }
-            return "\(worked)/\(total) travaillées"
+            guard total > 0 else { return String(localized: "Aucune annale") }
+            if isComplete { return String(localized: "\(total)/\(total) travaillées") }
+            return String(localized: "\(worked)/\(total) travaillées")
         }
     }
 

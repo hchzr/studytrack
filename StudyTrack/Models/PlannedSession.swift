@@ -63,9 +63,9 @@ enum RSVPStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .going: return "Je participe"
-        case .maybe: return "Peut-être"
-        case .declined: return "Je ne peux pas"
+        case .going: return String(localized: "Je participe")
+        case .maybe: return String(localized: "Peut-être")
+        case .declined: return String(localized: "Je ne peux pas")
         }
     }
     var icon: String {

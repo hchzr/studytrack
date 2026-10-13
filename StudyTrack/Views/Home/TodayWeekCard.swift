@@ -83,7 +83,7 @@ struct WeekTimeCard: View {
 
     private var todayLine: String {
         let today = days.indices.contains(todayIndex) ? days[todayIndex] : 0
-        return today > 0 ? "dont \(DateUtils.durationLabel(seconds: today)) aujourd'hui" : "rien encore aujourd'hui"
+        return today > 0 ? String(localized: "dont \(DateUtils.durationLabel(seconds: today)) aujourd'hui") : String(localized: "rien encore aujourd'hui")
     }
 
     private func axis(_ title: String, _ value: (done: Int, total: Int)) -> some View {

@@ -154,9 +154,9 @@ enum ProgressEngine {
 
     /// « À jour », « 3 en retard », « 2 d'avance » : l'état d'un cours en mots.
     static func standingLabel(late: Int, ahead: Int) -> String {
-        if late > 0 { return "\(late) en retard" }
-        if ahead > 0 { return "\(ahead) d'avance" }
-        return "À jour"
+        if late > 0 { return String(localized: "\(late) en retard") }
+        if ahead > 0 { return String(localized: "\(ahead) d'avance") }
+        return String(localized: "À jour")
     }
 
     // MARK: Par semaine

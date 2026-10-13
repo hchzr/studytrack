@@ -27,21 +27,21 @@ enum DateUtils {
 
     static let shortDay: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_CH")
+        f.locale = appLocale
         f.dateFormat = "EEE d MMM"
         return f
     }()
 
     static let fullDay: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_CH")
+        f.locale = appLocale
         f.dateFormat = "EEEE d MMMM"
         return f
     }()
 
     static let time: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_CH")
+        f.locale = appLocale
         f.dateFormat = "HH:mm"
         return f
     }()
@@ -235,9 +235,19 @@ enum DateUtils {
     }
 
     /// « 2,5 h » (1 décimale, virgule suisse).
+    /// La langue de l'interface (français par défaut, anglais si l'app l'est),
+    /// avec les formats suisses : les dates et les heures suivent les textes.
+    static let appLocale: Locale = {
+        // Sans traductions embarquées (la validation), le français de toujours.
+        let language = Bundle.main.localizations.count > 1 ? (Bundle.main.preferredLocalizations.first ?? "fr") : "fr"
+        return Locale(identifier: language.hasPrefix("en") ? "en_CH" : "fr_CH")
+    }()
+
+    static var usesDecimalComma: Bool { appLocale.language.languageCode?.identifier != "en" }
+
     static func hoursLabel(seconds: Int) -> String {
         let hours = Double(seconds) / 3600
-        let formatted = String(format: "%.1f", hours).replacingOccurrences(of: ".", with: ",")
+        let formatted = String(format: "%.1f", hours).replacingOccurrences(of: ".", with: usesDecimalComma ? "," : ".")
         return "\(formatted) h"
     }
 
@@ -255,22 +265,22 @@ enum DateUtils {
 
     static func relativeLabel(_ date: Date) -> String {
         let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Aujourd'hui" }
-        if cal.isDateInTomorrow(date) { return "Demain" }
-        if cal.isDateInYesterday(date) { return "Hier" }
+        if cal.isDateInToday(date) { return String(localized: "Aujourd'hui") }
+        if cal.isDateInTomorrow(date) { return String(localized: "Demain") }
+        if cal.isDateInYesterday(date) { return String(localized: "Hier") }
         let days = daysBetween(Date(), date)
-        if days > 0 && days < 7 { return "Dans \(days) j" }
-        if days < 0 && days > -7 { return "Il y a \(-days) j" }
+        if days > 0 && days < 7 { return String(localized: "Dans \(days) j") }
+        if days < 0 && days > -7 { return String(localized: "Il y a \(-days) j") }
         return shortDay.string(from: date)
     }
 
     /// « J-12 », « Aujourd'hui », « Passé ».
     static func countdownLabel(to date: Date) -> String {
         let days = daysBetween(Date(), date)
-        if days == 0 { return "Aujourd'hui" }
-        if days == 1 { return "Demain" }
-        if days > 1 { return "J-\(days)" }
-        return "Passé"
+        if days == 0 { return String(localized: "Aujourd'hui") }
+        if days == 1 { return String(localized: "Demain") }
+        if days > 1 { return String(localized: "J-\(days)") }
+        return String(localized: "Passé")
     }
 
     /// Numéro du mois (1 = janvier). Sert à décider de la saison d'un semestre.
@@ -280,7 +290,7 @@ enum DateUtils {
 
     static func weekdayInitial(_ date: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_CH")
+        f.locale = appLocale
         f.dateFormat = "EEEEE"
         return f.string(from: date).uppercased()
     }

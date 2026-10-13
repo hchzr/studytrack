@@ -39,17 +39,17 @@ struct Deadline: Identifiable, Equatable {
                                        courseID: course.id, courseCode: course.displayCode, colorHex: course.colorHex))
             }
             for series in course.series {
-                let name = series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title
+                let name = series.title.isEmpty ? String(localized: "Série \(series.seriesNumber)") : series.title
                 if let due = series.dueDate, due >= start, due < end {
                     let left = series.requiredExercises.count - series.doneCount
-                    result.append(Deadline(id: "due:\(series.id)", kind: .due, date: due, title: "\(name) à rendre",
-                                           detail: left > 0 ? "\(Plural.count(left, "\(left) exercice", "\(left) exercices")) à faire" : "tout est fait",
+                    result.append(Deadline(id: "due:\(series.id)", kind: .due, date: due, title: String(localized: "\(name) à rendre"),
+                                           detail: left > 0 ? "\(Plural.count(left, "\(left) exercice à faire", "\(left) exercices à faire"))" : String(localized: "tout est fait"),
                                            courseID: course.id, courseCode: course.displayCode, colorHex: course.colorHex,
                                            targetID: series.sortedExercises.first { !$0.isDone }?.id))
                 }
                 if let open = series.solutionsAt, open >= start, open < end {
-                    result.append(Deadline(id: "sol:\(series.id)", kind: .solutions, date: open, title: "Corrigé de la \(name.lowercased())",
-                                           detail: "à corriger ensuite",
+                    result.append(Deadline(id: "sol:\(series.id)", kind: .solutions, date: open, title: String(localized: "Corrigé de la \(name.lowercased())"),
+                                           detail: String(localized: "à corriger ensuite"),
                                            courseID: course.id, courseCode: course.displayCode, colorHex: course.colorHex))
                 }
             }

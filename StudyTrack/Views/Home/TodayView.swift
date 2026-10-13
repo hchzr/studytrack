@@ -307,7 +307,7 @@ struct TodayView: View {
     @ViewBuilder
     private func weekCourses(_ state: TodayState) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            CarnetSectionTitle(state.term.map { $0.isRunning ? "Semaine \($0.currentWeek)" : "Cours" } ?? "Cours") {
+            CarnetSectionTitle(state.term.map { $0.isRunning ? String(localized: "Semaine \($0.currentWeek)") : String(localized: "Cours") } ?? String(localized: "Cours")) {
                 Button {
                     app.router.selectedTab = .courses
                 } label: {
@@ -573,7 +573,7 @@ struct TodayView: View {
     private func dateLine(_ state: TodayState) -> String {
         var parts = [DateUtils.fullDayLabel(Date()).capitalizedFirst]
         if let term = state.term {
-            parts.append(term.hasEnded ? "semestre terminé" : (term.hasNotStarted ? "semestre à venir" : "semaine \(term.currentWeek) sur \(term.totalWeeks)"))
+            parts.append(term.hasEnded ? String(localized: "semestre terminé") : (term.hasNotStarted ? String(localized: "semestre à venir") : String(localized: "semaine \(term.currentWeek) sur \(term.totalWeeks)")))
         }
         return parts.joined(separator: " · ")
     }

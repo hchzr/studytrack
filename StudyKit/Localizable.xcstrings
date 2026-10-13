@@ -8,19 +8,54 @@
 
     },
     "—" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "—"
+          }
+        }
+      }
     },
     "…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "…"
+          }
+        }
+      }
     },
     "·" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "·"
+          }
+        }
+      }
     },
     "· %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· %@"
+          }
+        }
+      }
     },
     "›" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "›"
+          }
+        }
+      }
     },
     "« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct." : {
       "localizations" : {
@@ -86,7 +121,14 @@
       }
     },
     "{code} {cours} {serie} {titre} {exercice} : remplacés par la session en cours." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "{code} {cours} {serie} {titre} {exercice}: replaced by the current session."
+          }
+        }
+      }
     },
     "**Essayée en premier.** Le texte du PDF est envoyé à la fonction `extract-series` du projet Supabase de l'app, qui interroge un modèle servi (Groq par défaut). C'est le moteur qui lit le mieux les séries réelles : numéros, bonus, intitulés. Elle doit être **déployée** une fois (voir `Support/SUPABASE.md`) ; sans cela, l'analyse se rabat sur le modèle de l'appareil, puis sur la lecture par motifs." : {
       "extractionState" : "stale",
@@ -103,19 +145,47 @@
 
     },
     "/ %lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/ %lld"
+          }
+        }
+      }
     },
     "/%lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/%lld"
+          }
+        }
+      }
     },
     "#%lld" : {
 
     },
     "%" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%"
+          }
+        }
+      }
     },
     "%@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        }
+      }
     },
     "%@\n%@ – %@" : {
       "localizations" : {
@@ -128,10 +198,24 @@
       }
     },
     "%@ — %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — %@"
+          }
+        }
+      }
     },
     "%@ : %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : %@"
+          }
+        }
+      }
     },
     "%@ : %lld exercices sur %lld" : {
       "localizations" : {
@@ -195,13 +279,34 @@
       }
     },
     "%@ · %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %@"
+          }
+        }
+      }
     },
     "%@ · %@ · %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %@ · %@"
+          }
+        }
+      }
     },
     "%@ · %@ · %@%@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %@ · %@%@"
+          }
+        }
+      }
     },
     "%@ · %lld document%@" : {
       "extractionState" : "stale",
@@ -268,22 +373,64 @@
       }
     },
     "%@ · YouTube" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · YouTube"
+          }
+        }
+      }
     },
     "%@ (%@)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (%@)"
+          }
+        }
+      }
     },
     "%@ (⌘%@)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (⌘%@)"
+          }
+        }
+      }
     },
     "%@ / %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ / %@"
+          }
+        }
+      }
     },
     "%@ %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ %@"
+          }
+        }
+      }
     },
     "%@ = %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ = %@"
+          }
+        }
+      }
     },
     "%@ à %@" : {
       "localizations" : {
@@ -482,10 +629,24 @@
       }
     },
     "%@, %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %@"
+          }
+        }
+      }
     },
     "%@, %@, %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %@, %@"
+          }
+        }
+      }
     },
     "%@, %@, depuis %@" : {
       "extractionState" : "stale",
@@ -551,13 +712,34 @@
       }
     },
     "%@. %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@. %@"
+          }
+        }
+      }
     },
     "%@…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@…"
+          }
+        }
+      }
     },
     "%@(%@)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@(%@)"
+          }
+        }
+      }
     },
     "%@%@" : {
 
@@ -574,10 +756,24 @@
       }
     },
     "%lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
+          }
+        }
+      }
     },
     "%lld · %lld admin" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld · %lld admin"
+          }
+        }
+      }
     },
     "%lld · %lld case%@" : {
       "extractionState" : "stale",
@@ -591,16 +787,44 @@
       }
     },
     "%lld / %lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld / %lld"
+          }
+        }
+      }
     },
     "%lld / %lld min" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld / %lld min"
+          }
+        }
+      }
     },
     "%lld %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %@"
+          }
+        }
+      }
     },
     "%lld %%" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %%"
+          }
+        }
+      }
     },
     "%lld à faire" : {
       "extractionState" : "stale",
@@ -1283,10 +1507,24 @@
       }
     },
     "%lld h" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h"
+          }
+        }
+      }
     },
     "%lld h %lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h %lld"
+          }
+        }
+      }
     },
     "%lld h par crédit ECTS" : {
       "localizations" : {
@@ -1299,7 +1537,14 @@
       }
     },
     "%lld h%@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h%@"
+          }
+        }
+      }
     },
     "%lld j" : {
       "localizations" : {
@@ -1425,7 +1670,14 @@
       }
     },
     "%lld min" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld min"
+          }
+        }
+      }
     },
     "%lld min de concentration. Le chrono continue tant que tu ne le mets pas en pause." : {
       "extractionState" : "stale",
@@ -1946,13 +2198,34 @@
       }
     },
     "%lld." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld."
+          }
+        }
+      }
     },
     "%lld.%@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld.%@"
+          }
+        }
+      }
     },
     "%lld/%lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld"
+          }
+        }
+      }
     },
     "%lld/%lld cours" : {
       "extractionState" : "stale",
@@ -1986,16 +2259,44 @@
       }
     },
     "%lld%%" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        }
+      }
     },
     "•" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "•"
+          }
+        }
+      }
     },
     "⇧⌘E" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧⌘E"
+          }
+        }
+      }
     },
     "+ %lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ %lld"
+          }
+        }
+      }
     },
     "+ %lld autres" : {
       "localizations" : {
@@ -2019,10 +2320,24 @@
       }
     },
     "+%lld" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld"
+          }
+        }
+      }
     },
     "−5…5" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "−5…5"
+          }
+        }
+      }
     },
     "≈ %@ h d'étude / sem." : {
       "localizations" : {
@@ -2035,13 +2350,34 @@
       }
     },
     "⌘%@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘%@"
+          }
+        }
+      }
     },
     "◦" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "◦"
+          }
+        }
+      }
     },
     "0" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "0"
+          }
+        }
+      }
     },
     "1 élément des semaines passées à rattraper" : {
       "localizations" : {
@@ -2064,7 +2400,14 @@
       }
     },
     "1(a-d) 2(a-e) 3 +" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1(a-d) 2(a-e) 3 +"
+          }
+        }
+      }
     },
     "3 exercices" : {
       "localizations" : {
@@ -2117,7 +2460,14 @@
       }
     },
     "25 min" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "25 min"
+          }
+        }
+      }
     },
     "À" : {
       "localizations" : {
@@ -2705,7 +3055,14 @@
       }
     },
     "Ajoute-en un avec +." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add one with +."
+          }
+        }
+      }
     },
     "Ajoute-les sur ton iPhone, ils arrivent ici." : {
       "extractionState" : "stale",
@@ -3086,7 +3443,14 @@
       }
     },
     "Angles" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angles"
+          }
+        }
+      }
     },
     "Animation : l'app lit une page Moodle, ouvre chaque fichier et le range dans sa semaine." : {
       "localizations" : {
@@ -3099,7 +3463,14 @@
       }
     },
     "Anki" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anki"
+          }
+        }
+      }
     },
     "Anki Desktop sur le réseau local" : {
       "extractionState" : "stale",
@@ -3351,7 +3722,14 @@
       }
     },
     "Aucun bouton choisi" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No button selected"
+          }
+        }
+      }
     },
     "Aucun cours" : {
       "localizations" : {
@@ -4110,7 +4488,14 @@
       }
     },
     "Base" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Database"
+          }
+        }
+      }
     },
     "Bien" : {
       "localizations" : {
@@ -4195,16 +4580,44 @@
       }
     },
     "bonus" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bonus"
+          }
+        }
+      }
     },
     "Bonus" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bonus"
+          }
+        }
+      }
     },
     "Botafogo" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Botafogo"
+          }
+        }
+      }
     },
     "Boutons" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buttons"
+          }
+        }
+      }
     },
     "Brancher ton assistant" : {
       "localizations" : {
@@ -4474,7 +4887,14 @@
       }
     },
     "Celui de la conversation" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The conversation's"
+          }
+        }
+      }
     },
     "Certains membres apparaissent anonymement." : {
       "localizations" : {
@@ -5072,10 +5492,24 @@
       }
     },
     "Claude" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude"
+          }
+        }
+      }
     },
     "Claude Code" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        }
+      }
     },
     "Claude réfléchit…" : {
       "localizations" : {
@@ -5173,7 +5607,14 @@
       }
     },
     "Code" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
+          }
+        }
+      }
     },
     "Code (ex : CS-250)" : {
       "localizations" : {
@@ -5446,7 +5887,14 @@
       }
     },
     "Confirmer que c'est toi" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm it's you"
+          }
+        }
+      }
     },
     "Connecté" : {
       "localizations" : {
@@ -5589,7 +6037,14 @@
       }
     },
     "Connexion à %@…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in to %@…"
+          }
+        }
+      }
     },
     "Connexion à Moodle" : {
       "localizations" : {
@@ -5714,7 +6169,14 @@
       }
     },
     "Conversation" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversation"
+          }
+        }
+      }
     },
     "Copié" : {
       "localizations" : {
@@ -5777,7 +6239,14 @@
       }
     },
     "Correction" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correction"
+          }
+        }
+      }
     },
     "Correction : %@" : {
       "localizations" : {
@@ -5866,7 +6335,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Corrected"
+            "value" : "Graded"
           }
         }
       }
@@ -6033,7 +6502,14 @@
       }
     },
     "Courseware" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Courseware"
+          }
+        }
+      }
     },
     "Couverture du suivi" : {
       "extractionState" : "stale",
@@ -6211,7 +6687,14 @@
       }
     },
     "Cycle" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cycle"
+          }
+        }
+      }
     },
     "D" : {
       "localizations" : {
@@ -6256,7 +6739,14 @@
       }
     },
     "Dans la série" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the series"
+          }
+        }
+      }
     },
     "Dans le cours" : {
       "localizations" : {
@@ -6269,7 +6759,14 @@
       }
     },
     "Date" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date"
+          }
+        }
+      }
     },
     "Date clé" : {
       "localizations" : {
@@ -6474,7 +6971,14 @@
       }
     },
     "deg" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deg"
+          }
+        }
+      }
     },
     "Déjà faits" : {
       "localizations" : {
@@ -6775,7 +7279,14 @@
       }
     },
     "Diagnostics" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostics"
+          }
+        }
+      }
     },
     "Document scanné : crée la série à la main, avec le plan « 1(a-d) 2 3 »." : {
       "localizations" : {
@@ -6788,10 +7299,24 @@
       }
     },
     "Documents" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documents"
+          }
+        }
+      }
     },
     "Documents · %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documents · %@"
+          }
+        }
+      }
     },
     "Documents et actions" : {
       "localizations" : {
@@ -6999,10 +7524,24 @@
       }
     },
     "Ed" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ed"
+          }
+        }
+      }
     },
     "Ed Discussion" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ed Discussion"
+          }
+        }
+      }
     },
     "Effacer la recherche" : {
       "localizations" : {
@@ -7077,7 +7616,14 @@
       }
     },
     "Email" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email"
+          }
+        }
+      }
     },
     "En attente d'envoi" : {
       "extractionState" : "stale",
@@ -7561,10 +8107,24 @@
       }
     },
     "EPFL" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPFL"
+          }
+        }
+      }
     },
     "EPFL-XXXX" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPFL-XXXX"
+          }
+        }
+      }
     },
     "Essaie f(x) = x^2 - 2" : {
       "localizations" : {
@@ -7699,7 +8259,14 @@
       }
     },
     "Europe" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Europe"
+          }
+        }
+      }
     },
     "Évaluation" : {
       "localizations" : {
@@ -7885,7 +8452,14 @@
       }
     },
     "f" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "f"
+          }
+        }
+      }
     },
     "facultatif" : {
       "extractionState" : "stale",
@@ -8195,7 +8769,14 @@
       }
     },
     "Format" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format"
+          }
+        }
+      }
     },
     "Formules : \\( … \\)." : {
       "localizations" : {
@@ -8290,7 +8871,14 @@
       }
     },
     "GeoGebra" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GeoGebra"
+          }
+        }
+      }
     },
     "Gérer" : {
       "localizations" : {
@@ -8439,7 +9027,14 @@
       }
     },
     "h" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "h"
+          }
+        }
+      }
     },
     "Heure" : {
       "localizations" : {
@@ -8588,7 +9183,14 @@
       }
     },
     "https://…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://…"
+          }
+        }
+      }
     },
     "https://… ou webcal://…" : {
       "localizations" : {
@@ -8633,7 +9235,14 @@
       }
     },
     "iCloud" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud"
+          }
+        }
+      }
     },
     "iCloud (privé)" : {
       "localizations" : {
@@ -8646,7 +9255,14 @@
       }
     },
     "Icône" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Icon"
+          }
+        }
+      }
     },
     "ID de la base de données" : {
       "localizations" : {
@@ -8793,7 +9409,14 @@
       }
     },
     "Importe-les sur ton iPhone : ils arrivent ici par iCloud. Le chrono marche déjà." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import them on your iPhone: they arrive here through iCloud. The timer already works."
+          }
+        }
+      }
     },
     "Importer" : {
       "localizations" : {
@@ -9060,7 +9683,14 @@
       }
     },
     "Indices" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hints"
+          }
+        }
+      }
     },
     "indices : %@ · système : %@" : {
       "localizations" : {
@@ -9073,7 +9703,14 @@
       }
     },
     "Indices (%@)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hints (%@)"
+          }
+        }
+      }
     },
     "Inspecteur" : {
       "localizations" : {
@@ -9311,7 +9948,14 @@
       }
     },
     "Joindre un fichier" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attach a file"
+          }
+        }
+      }
     },
     "Joindre un fichier…" : {
       "localizations" : {
@@ -9606,7 +10250,14 @@
       }
     },
     "La série" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The series"
+          }
+        }
+      }
     },
     "La série %lld existe déjà (%lld exercices) : les exercices de même numéro sont mis à jour, les autres ajoutés. Tes coches sont conservées." : {
       "localizations" : {
@@ -9821,7 +10472,14 @@
       }
     },
     "Le système" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system"
+          }
+        }
+      }
     },
     "Le temps compté ne sera pas enregistré." : {
       "localizations" : {
@@ -10097,7 +10755,14 @@
       }
     },
     "Libellé" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Label"
+          }
+        }
+      }
     },
     "Libre · %@" : {
       "localizations" : {
@@ -10494,7 +11159,14 @@
       }
     },
     "MATH-101" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MATH-101"
+          }
+        }
+      }
     },
     "Matière" : {
       "localizations" : {
@@ -10537,7 +11209,14 @@
       }
     },
     "max" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "max"
+          }
+        }
+      }
     },
     "Meilleur jour : %@" : {
       "extractionState" : "stale",
@@ -10633,7 +11312,14 @@
       }
     },
     "Message" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message"
+          }
+        }
+      }
     },
     "Met en pause ou relance la session en cours." : {
       "extractionState" : "stale",
@@ -10677,10 +11363,24 @@
       }
     },
     "Microsoft demande de confirmer que c'est toi." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Microsoft is asking you to confirm it's you."
+          }
+        }
+      }
     },
     "min" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "min"
+          }
+        }
+      }
     },
     "min, jusqu'à" : {
       "localizations" : {
@@ -10693,10 +11393,24 @@
       }
     },
     "Minutes" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutes"
+          }
+        }
+      }
     },
     "Mode" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mode"
+          }
+        }
+      }
     },
     "Mode étude" : {
       "localizations" : {
@@ -10932,10 +11646,24 @@
       }
     },
     "Moodle" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moodle"
+          }
+        }
+      }
     },
     "Moodle (https://…)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moodle (https://…)"
+          }
+        }
+      }
     },
     "Moodle, Courseware, MediaSpace et Ed se connectent tout seuls." : {
       "localizations" : {
@@ -10972,7 +11700,14 @@
       }
     },
     "Mot de passe edu-ID" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "edu-ID password"
+          }
+        }
+      }
     },
     "Moteur utilisé" : {
       "extractionState" : "stale",
@@ -11180,10 +11915,24 @@
       }
     },
     "Note" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
+          }
+        }
+      }
     },
     "Note (optionnel)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note (optional)"
+          }
+        }
+      }
     },
     "Noter" : {
       "localizations" : {
@@ -11196,7 +11945,14 @@
       }
     },
     "Notes" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes"
+          }
+        }
+      }
     },
     "Notifications" : {
       "extractionState" : "stale",
@@ -11507,7 +12263,14 @@
       }
     },
     "OK" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
     },
     "On attaque ?" : {
       "localizations" : {
@@ -11540,7 +12303,14 @@
       }
     },
     "Open edX (https://…)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open edX (https://…)"
+          }
+        }
+      }
     },
     "ou ajouter un cours à la main" : {
       "localizations" : {
@@ -11939,7 +12709,14 @@
       }
     },
     "Par défaut" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
     },
     "Par exemple 3.2" : {
       "localizations" : {
@@ -12348,7 +13125,14 @@
       }
     },
     "Pause (⌘T)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause (⌘T)"
+          }
+        }
+      }
     },
     "pause conseillée" : {
       "extractionState" : "stale",
@@ -12646,7 +13430,14 @@
       }
     },
     "Plusieurs réponses possibles" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Several answers allowed"
+          }
+        }
+      }
     },
     "Poids : %lld %% de la note" : {
       "localizations" : {
@@ -12659,7 +13450,14 @@
       }
     },
     "Point" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point"
+          }
+        }
+      }
     },
     "Point de la question précédente" : {
       "localizations" : {
@@ -12672,7 +13470,14 @@
       }
     },
     "Points" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Points"
+          }
+        }
+      }
     },
     "Polycopiés en ligne" : {
       "localizations" : {
@@ -12685,7 +13490,14 @@
       }
     },
     "Pomodoro" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomodoro"
+          }
+        }
+      }
     },
     "Pomodoro %lld/%lld" : {
       "extractionState" : "stale",
@@ -12719,7 +13531,14 @@
       }
     },
     "Post-mortem" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post-mortem"
+          }
+        }
+      }
     },
     "Pour choisir ton propre modèle : n'importe quelle API compatible OpenAI (Groq et OpenRouter ont un palier gratuit, Ollama tourne sur un Mac). La clé reste sur l'appareil. Ce maillon n'est utilisé que si les deux précédents ont échoué." : {
       "extractionState" : "stale",
@@ -12952,10 +13771,24 @@
       }
     },
     "Proposer des verdicts à noter" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggest verdicts to record"
+          }
+        }
+      }
     },
     "Proposer une photo d'abord" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggest a photo first"
+          }
+        }
+      }
     },
     "Publication…" : {
       "extractionState" : "stale",
@@ -13032,7 +13865,14 @@
       }
     },
     "Question" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Question"
+          }
+        }
+      }
     },
     "Question « %@ » : pas encore lisible ici." : {
       "localizations" : {
@@ -13065,7 +13905,14 @@
       }
     },
     "Questions · %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questions · %@"
+          }
+        }
+      }
     },
     "Qui en est où" : {
       "extractionState" : "stale",
@@ -13129,7 +13976,14 @@
       }
     },
     "rad" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rad"
+          }
+        }
+      }
     },
     "rangé" : {
       "localizations" : {
@@ -13324,7 +14178,14 @@
       }
     },
     "Refresh token" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh token"
+          }
+        }
+      }
     },
     "Regarder" : {
       "localizations" : {
@@ -14474,7 +15335,14 @@
       }
     },
     "Section" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Section"
+          }
+        }
+      }
     },
     "Section : %lld" : {
       "localizations" : {
@@ -14782,7 +15650,14 @@
       }
     },
     "Session" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session"
+          }
+        }
+      }
     },
     "Session de %@ planifiée le %@ à %@." : {
       "localizations" : {
@@ -14989,7 +15864,14 @@
       }
     },
     "Solution" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solution"
+          }
+        }
+      }
     },
     "Son temps sera retiré de tes statistiques." : {
       "extractionState" : "stale",
@@ -15003,7 +15885,14 @@
       }
     },
     "Sondage illisible." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poll can't be read."
+          }
+        }
+      }
     },
     "Sons" : {
       "localizations" : {
@@ -15079,7 +15968,14 @@
       }
     },
     "sparkle" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sparkle"
+          }
+        }
+      }
     },
     "Statistiques" : {
       "extractionState" : "stale",
@@ -15146,7 +16042,14 @@
       }
     },
     "StudyTrack" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StudyTrack"
+          }
+        }
+      }
     },
     "StudyTrack — suivi du temps d'étude EPFL : théorie par vidéos, exercices et corrections, charge attendue, agenda, groupes et intégrations." : {
       "extractionState" : "stale",
@@ -15160,7 +16063,14 @@
       }
     },
     "studytrack.json" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "studytrack.json"
+          }
+        }
+      }
     },
     "Suivante" : {
       "localizations" : {
@@ -15737,10 +16647,24 @@
       }
     },
     "Système" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
     },
     "Système (%@)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System (%@)"
+          }
+        }
+      }
     },
     "Ta collection AnkiWeb a été remplacée par une synchronisation complète faite ailleurs : %lld modification faite ici ne peut pas être fusionnée. « Retélécharger la collection » repart de la version d'AnkiWeb." : {
       "localizations" : {
@@ -16522,7 +17446,14 @@
       }
     },
     "Total" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        }
+      }
     },
     "Total : %@ — fin à %@." : {
       "localizations" : {
@@ -16967,7 +17898,14 @@
       }
     },
     "Type" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        }
+      }
     },
     "Type de note" : {
       "localizations" : {
@@ -17343,7 +18281,14 @@
       }
     },
     "Version" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
     },
     "Verso" : {
       "localizations" : {
@@ -17367,7 +18312,14 @@
       }
     },
     "Vidéo" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
+      }
     },
     "Vidéos du cours" : {
       "localizations" : {
@@ -17512,7 +18464,14 @@
       }
     },
     "Voter" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vote"
+          }
+        }
+      }
     },
     "Vu" : {
       "localizations" : {
@@ -17535,16 +18494,44 @@
       }
     },
     "wolframalpha.com" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wolframalpha.com"
+          }
+        }
+      }
     },
     "x" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "x"
+          }
+        }
+      }
     },
     "x^2 - 2, z^3 = i, det([[1,2],[3,4]])" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "x^2 - 2, z^3 = i, det([[1,2],[3,4]])"
+          }
+        }
+      }
     },
     "y" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "y"
+          }
+        }
+      }
     },
     "Zéro" : {
       "extractionState" : "stale",
@@ -17553,6 +18540,1066 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zero"
+          }
+        }
+      }
+    },
+    "%@ %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ %lld/%lld"
+          }
+        }
+      }
+    },
+    "%@, %lld %%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %lld %%"
+          }
+        }
+      }
+    },
+    "Bloc %lld · %lld fait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block %lld · %lld done"
+          }
+        }
+      }
+    },
+    "Bloc %lld · %lld faits" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block %lld · %lld done"
+          }
+        }
+      }
+    },
+    "%@ questions" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ questions"
+          }
+        }
+      }
+    },
+    "0:00" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "0:00"
+          }
+        }
+      }
+    },
+    "Note rapide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick note"
+          }
+        }
+      }
+    },
+    "Ce que tu veux retenir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you want to remember"
+          }
+        }
+      }
+    },
+    "Ranger" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "%@ · %lld théorie · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld theory · %@"
+          }
+        }
+      }
+    },
+    "%@ seront perdus." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ will be lost."
+          }
+        }
+      }
+    },
+    "%@ a %@ d'avance sur toi" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is %@ ahead of you"
+          }
+        }
+      }
+    },
+    "%lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld · %@"
+          }
+        }
+      }
+    },
+    "Supprimer %@ ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete %@?"
+          }
+        }
+      }
+    },
+    "Notes · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes · %@"
+          }
+        }
+      }
+    },
+    "%@ : %lld théorie, %@ à cocher" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: %lld theory, %@ to check off"
+          }
+        }
+      }
+    },
+    "%@ · %lld admin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld admin"
+          }
+        }
+      }
+    },
+    "%@ à refaire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ to redo"
+          }
+        }
+      }
+    },
+    "Un chrono commun : les pauses et les blocs tombent au même moment pour tout le monde, chacun sur son propre travail." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One shared timer: breaks and blocks happen at the same moment for everyone, each on their own work."
+          }
+        }
+      }
+    },
+    "Tu y es" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're in"
+          }
+        }
+      }
+    },
+    "Terminer pour tous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End for everyone"
+          }
+        }
+      }
+    },
+    "Partager mon chrono avec le groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share my timer with the group"
+          }
+        }
+      }
+    },
+    "Lancer une session ensemble" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a session together"
+          }
+        }
+      }
+    },
+    "/ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/ %@"
+          }
+        }
+      }
+    },
+    "Ajouter une note à un cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a note to a course"
+          }
+        }
+      }
+    },
+    "Ajoute une ligne datée aux notes d'un cours StudyTrack." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a dated line to a StudyTrack course's notes."
+          }
+        }
+      }
+    },
+    "Rangé dans les notes de %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved in the %@ notes."
+          }
+        }
+      }
+    },
+    "Cours introuvable." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Course not found."
+          }
+        }
+      }
+    },
+    "La note est vide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The note is empty."
+          }
+        }
+      }
+    },
+    "Note de cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Course note"
+          }
+        }
+      }
+    },
+    "%@%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@%@, %@"
+          }
+        }
+      }
+    },
+    "%@ ici (révisions, cartes)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ here (reviews, cards)"
+          }
+        }
+      }
+    },
+    "Modifier la théorie" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit theory"
+          }
+        }
+      }
+    },
+    "Lien (facultatif)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link (optional)"
+          }
+        }
+      }
+    },
+    "Le temps déjà passé dessus reste, sans cible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time already spent on it stays, without a target."
+          }
+        }
+      }
+    },
+    "Session ensemble · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session together · %@"
+          }
+        }
+      }
+    },
+    "Aujourd'hui : %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today: %@ · %@"
+          }
+        }
+      }
+    },
+    "Ce qui ne rentre nulle part ailleurs : le barème, ce que le prof a dit en amphi, l'erreur du corrigé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What fits nowhere else: the grading scale, what the professor said in class, the mistake in the solutions."
+          }
+        }
+      }
+    },
+    "Markdown : **gras**, *italique*, - listes, $formules$" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown: **bold**, *italic*, - lists, $formulas$"
+          }
+        }
+      }
+    },
+    "Écrire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write"
+          }
+        }
+      }
+    },
+    "Objectif de la semaine : charge EPFL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly goal: EPFL workload"
+          }
+        }
+      }
+    },
+    "Objectif de la semaine : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly goal: %@"
+          }
+        }
+      }
+    },
+    "L'horaire du jour et les prochaines échéances." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today's schedule and upcoming deadlines."
+          }
+        }
+      }
+    },
+    "Note rapide…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick note…"
+          }
+        }
+      }
+    },
+    "Note rapide (⇧⌘N)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick note (⇧⌘N)"
+          }
+        }
+      }
+    },
+    "Ajouter une série, de la théorie, une évaluation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a series, theory, an exam"
+          }
+        }
+      }
+    },
+    "Importer une série (PDF)…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a series (PDF)…"
+          }
+        }
+      }
+    },
+    "Nouvelle série…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New series…"
+          }
+        }
+      }
+    },
+    "Ajouter de la théorie…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add theory…"
+          }
+        }
+      }
+    },
+    "Nouvelle évaluation…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New exam…"
+          }
+        }
+      }
+    },
+    "Modifier le cours…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit course…"
+          }
+        }
+      }
+    },
+    "Déposer le PDF de la série" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop the series PDF"
+          }
+        }
+      }
+    },
+    "Amphi" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture"
+          }
+        }
+      }
+    },
+    "Aucune annale" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No past exams"
+          }
+        }
+      }
+    },
+    "Automne" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autumn"
+          }
+        }
+      }
+    },
+    "Calendrier EPFL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPFL calendar"
+          }
+        }
+      }
+    },
+    "Chapitre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chapter"
+          }
+        }
+      }
+    },
+    "Chapitres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chapters"
+          }
+        }
+      }
+    },
+    "Corr." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Corr."
+          }
+        }
+      }
+    },
+    "Dans %lld j" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In %lld d"
+          }
+        }
+      }
+    },
+    "Demain" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow"
+          }
+        }
+      }
+    },
+    "Devoir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assignment"
+          }
+        }
+      }
+    },
+    "Diapositives" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slides"
+          }
+        }
+      }
+    },
+    "Examen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exam"
+          }
+        }
+      }
+    },
+    "Google Tasks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google Tasks"
+          }
+        }
+      }
+    },
+    "Hier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
+          }
+        }
+      }
+    },
+    "Il y a %lld j" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld d ago"
+          }
+        }
+      }
+    },
+    "J-%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "D-%lld"
+          }
+        }
+      }
+    },
+    "Je ne peux pas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't make it"
+          }
+        }
+      }
+    },
+    "Je participe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm in"
+          }
+        }
+      }
+    },
+    "Lecture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading"
+          }
+        }
+      }
+    },
+    "Lectures" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Readings"
+          }
+        }
+      }
+    },
+    "Midterm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Midterm"
+          }
+        }
+      }
+    },
+    "Moyennement juste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partly right"
+          }
+        }
+      }
+    },
+    "Moyennement sûr·e" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Somewhat sure"
+          }
+        }
+      }
+    },
+    "Notion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notion"
+          }
+        }
+      }
+    },
+    "Orange" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orange"
+          }
+        }
+      }
+    },
+    "Pas sûr·e" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sure"
+          }
+        }
+      }
+    },
+    "Passé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Past"
+          }
+        }
+      }
+    },
+    "Personnel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal"
+          }
+        }
+      }
+    },
+    "Peut-être" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maybe"
+          }
+        }
+      }
+    },
+    "Printemps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spring"
+          }
+        }
+      }
+    },
+    "Quiz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quiz"
+          }
+        }
+      }
+    },
+    "Rouge" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Red"
+          }
+        }
+      }
+    },
+    "Session d'étude" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Study session"
+          }
+        }
+      }
+    },
+    "Session planifiée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned session"
+          }
+        }
+      }
+    },
+    "Séance d'exercices" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exercise session"
+          }
+        }
+      }
+    },
+    "Sûr·e" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sure"
+          }
+        }
+      }
+    },
+    "Things 3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Things 3"
+          }
+        }
+      }
+    },
+    "TickTick" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TickTick"
+          }
+        }
+      }
+    },
+    "Todoist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todoist"
+          }
+        }
+      }
+    },
+    "Vert" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Green"
+          }
+        }
+      }
+    },
+    "Vidéos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videos"
+          }
+        }
+      }
+    },
+    "Webhook" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Webhook"
+          }
+        }
+      }
+    },
+    "%lld/%lld travaillées" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld worked"
+          }
+        }
+      }
+    },
+    "%@ à rendre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ due"
+          }
+        }
+      }
+    },
+    "tout est fait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all done"
+          }
+        }
+      }
+    },
+    "Corrigé de la %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solutions for %@"
+          }
+        }
+      }
+    },
+    "à corriger ensuite" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "to correct next"
+          }
+        }
+      }
+    },
+    "%lld exercice à faire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercise to do"
+          }
+        }
+      }
+    },
+    "%lld exercices à faire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exercises to do"
+          }
+        }
+      }
+    },
+    "semestre terminé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semester over"
+          }
+        }
+      }
+    },
+    "semestre à venir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semester ahead"
+          }
+        }
+      }
+    },
+    "semaine %lld sur %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "week %lld of %lld"
+          }
+        }
+      }
+    },
+    "dont %@ aujourd'hui" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ of it today"
+          }
+        }
+      }
+    },
+    "rien encore aujourd'hui" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nothing yet today"
           }
         }
       }

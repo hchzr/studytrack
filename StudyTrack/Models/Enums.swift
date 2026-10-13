@@ -35,23 +35,23 @@ enum TaskType: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch canonical {
-        case .lecture: return "Cours en amphi"
-        case .exercise: return "Séries"
-        case .theory: return "Théorie"
-        case .flashcards: return "Anki"
-        case .correction: return "Correction"
-        default: return "Autre"
+        case .lecture: return String(localized: "Cours en amphi")
+        case .exercise: return String(localized: "Séries")
+        case .theory: return String(localized: "Théorie")
+        case .flashcards: return String(localized: "Anki")
+        case .correction: return String(localized: "Correction")
+        default: return String(localized: "Autre")
         }
     }
 
     var shortLabel: String {
         switch canonical {
-        case .lecture: return "Amphi"
-        case .exercise: return "Séries"
-        case .theory: return "Théorie"
-        case .flashcards: return "Anki"
-        case .correction: return "Corr."
-        default: return "Autre"
+        case .lecture: return String(localized: "Amphi")
+        case .exercise: return String(localized: "Séries")
+        case .theory: return String(localized: "Théorie")
+        case .flashcards: return String(localized: "Anki")
+        case .correction: return String(localized: "Corr.")
+        default: return String(localized: "Autre")
         }
     }
 
@@ -91,17 +91,17 @@ enum ConfidenceLevel: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .high: return "Sûr·e"
-        case .medium: return "Moyennement sûr·e"
-        case .low: return "Pas sûr·e"
+        case .high: return String(localized: "Sûr·e")
+        case .medium: return String(localized: "Moyennement sûr·e")
+        case .low: return String(localized: "Pas sûr·e")
         }
     }
 
     var shortLabel: String {
         switch self {
-        case .high: return "Vert"
-        case .medium: return "Orange"
-        case .low: return "Rouge"
+        case .high: return String(localized: "Vert")
+        case .medium: return String(localized: "Orange")
+        case .low: return String(localized: "Rouge")
         }
     }
 
@@ -138,17 +138,17 @@ enum Correctness: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .correct: return "Juste"
-        case .partial: return "Moyennement juste"
-        case .wrong: return "Faux"
+        case .correct: return String(localized: "Juste")
+        case .partial: return String(localized: "Moyennement juste")
+        case .wrong: return String(localized: "Faux")
         }
     }
 
     var shortLabel: String {
         switch self {
-        case .correct: return "Juste"
-        case .partial: return "Moyen"
-        case .wrong: return "Faux"
+        case .correct: return String(localized: "Juste")
+        case .partial: return String(localized: "Moyen")
+        case .wrong: return String(localized: "Faux")
         }
     }
 
@@ -178,12 +178,12 @@ enum ExamKind: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .midterm: return "Midterm"
-        case .exam: return "Examen"
-        case .quiz: return "Quiz"
-        case .project: return "Projet"
-        case .assignment: return "Devoir"
-        case .other: return "Autre"
+        case .midterm: return String(localized: "Midterm")
+        case .exam: return String(localized: "Examen")
+        case .quiz: return String(localized: "Quiz")
+        case .project: return String(localized: "Projet")
+        case .assignment: return String(localized: "Devoir")
+        case .other: return String(localized: "Autre")
         }
     }
 
@@ -219,8 +219,8 @@ enum TermSeason: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .autumn: return "Automne"
-        case .spring: return "Printemps"
+        case .autumn: return String(localized: "Automne")
+        case .spring: return String(localized: "Printemps")
         }
     }
 }
@@ -239,20 +239,20 @@ enum TheoryKind: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .video: return "Vidéo"
-        case .reading: return "Lecture"
-        case .chapter: return "Chapitre"
-        case .slides: return "Diapositives"
+        case .video: return String(localized: "Vidéo")
+        case .reading: return String(localized: "Lecture")
+        case .chapter: return String(localized: "Chapitre")
+        case .slides: return String(localized: "Diapositives")
         }
     }
 
     /// Au pluriel, pour les en-têtes de section.
     var pluralLabel: String {
         switch self {
-        case .video: return "Vidéos"
-        case .reading: return "Lectures"
-        case .chapter: return "Chapitres"
-        case .slides: return "Diapositives"
+        case .video: return String(localized: "Vidéos")
+        case .reading: return String(localized: "Lectures")
+        case .chapter: return String(localized: "Chapitres")
+        case .slides: return String(localized: "Diapositives")
         }
     }
 
@@ -287,13 +287,13 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .reminders: return "Rappels"
-        case .todoist: return "Todoist"
-        case .things: return "Things 3"
-        case .notion: return "Notion"
-        case .webhook: return "Webhook"
-        case .googleTasks: return "Google Tasks"
-        case .tickTick: return "TickTick"
+        case .reminders: return String(localized: "Rappels")
+        case .todoist: return String(localized: "Todoist")
+        case .things: return String(localized: "Things 3")
+        case .notion: return String(localized: "Notion")
+        case .webhook: return String(localized: "Webhook")
+        case .googleTasks: return String(localized: "Google Tasks")
+        case .tickTick: return String(localized: "TickTick")
         }
     }
 
@@ -365,14 +365,14 @@ enum CalendarEventKind: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .lecture: return "Cours"
-        case .exerciseSession: return "Séance d'exercices"
-        case .midterm: return "Midterm"
-        case .exam: return "Examen"
-        case .study: return "Session d'étude"
-        case .personal: return "Personnel"
-        case .task: return "Tâche"
-        case .other: return "Autre"
+        case .lecture: return String(localized: "Cours")
+        case .exerciseSession: return String(localized: "Séance d'exercices")
+        case .midterm: return String(localized: "Midterm")
+        case .exam: return String(localized: "Examen")
+        case .study: return String(localized: "Session d'étude")
+        case .personal: return String(localized: "Personnel")
+        case .task: return String(localized: "Tâche")
+        case .other: return String(localized: "Autre")
         }
     }
 
@@ -410,11 +410,11 @@ enum AgendaItemKind: String, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .milestone: return "Calendrier EPFL"
-        case .exam: return "Évaluation"
-        case .calendar: return "Calendrier"
-        case .planned: return "Session planifiée"
-        case .task: return "Tâche"
+        case .milestone: return String(localized: "Calendrier EPFL")
+        case .exam: return String(localized: "Évaluation")
+        case .calendar: return String(localized: "Calendrier")
+        case .planned: return String(localized: "Session planifiée")
+        case .task: return String(localized: "Tâche")
         }
     }
 }

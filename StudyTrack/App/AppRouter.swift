@@ -38,11 +38,11 @@ final class AppRouter {
 
         var title: String {
             switch self {
-            case .today: return "Aujourd'hui"
-            case .courses: return "Cours"
-            case .groups: return "Groupes"
-            case .focus: return "Chrono"
-            case .search: return "Recherche"
+            case .today: return String(localized: "Aujourd'hui")
+            case .courses: return String(localized: "Cours")
+            case .groups: return String(localized: "Groupes")
+            case .focus: return String(localized: "Chrono")
+            case .search: return String(localized: "Recherche")
             }
         }
 
