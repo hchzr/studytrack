@@ -27,6 +27,14 @@ final class RealtimeClient {
         case presence = "presence"
         case members = "group_members"
         case keyShares = "group_key_shares"
+        case sessions = "group_sessions"
+        case sessionMembers = "group_session_members"
+
+        /// Les tables du canal de groupe historique.
+        static let groupTables: [Table] = [.posts, .presence, .members, .keyShares]
+        /// Les tables des sessions de groupe, sur un canal **à part** : un
+        /// serveur où elles n'existent pas encore refuse ce canal-là seulement.
+        static let sessionTables: [Table] = [.sessions, .sessionMembers]
     }
 
     typealias Handler = (Table) -> Void
@@ -61,14 +69,14 @@ final class RealtimeClient {
 
     /// S'abonne aux changements d'un groupe. Garder le jeton rendu et le passer
     /// à `unsubscribe` quand l'écran disparaît.
-    func subscribe(groupID: String, handler: @escaping Handler) -> UUID {
+    func subscribe(groupID: String, sessions: Bool = false, handler: @escaping Handler) -> UUID {
         let id = UUID()
-        let topic = Self.topic(groupID)
+        let topic = sessions ? Self.sessionTopic(groupID) : Self.topic(groupID)
         listeners[topic, default: [:]][id] = handler
         if socket == nil {
             connect()
         } else if !joinedTopics.contains(topic) {
-            join(topic, groupID: groupID)
+            join(topic)
         }
         return id
     }
@@ -113,6 +121,15 @@ final class RealtimeClient {
     // MARK: Connexion
 
     private static func topic(_ groupID: String) -> String { "realtime:group-\(groupID.lowercased())" }
+    private static func sessionTopic(_ groupID: String) -> String { "realtime:groupsession-\(groupID.lowercased())" }
+
+    /// Le groupe et les tables d'un sujet.
+    private static func parse(_ topic: String) -> (groupID: String, tables: [Table]) {
+        if topic.hasPrefix("realtime:groupsession-") {
+            return (String(topic.dropFirst("realtime:groupsession-".count)), Table.sessionTables)
+        }
+        return (String(topic.dropFirst("realtime:group-".count)), Table.groupTables)
+    }
 
     private func connect() {
         guard tokenProvider() != nil else { return }
@@ -124,7 +141,7 @@ final class RealtimeClient {
         task.resume()
         receive(on: task)
         for topic in listeners.keys {
-            join(topic, groupID: String(topic.dropFirst("realtime:group-".count)))
+            join(topic)
         }
         heartbeat?.cancel()
         heartbeat = Task { [weak self] in
@@ -147,10 +164,11 @@ final class RealtimeClient {
         if !keepListeners { listeners = [:] }
     }
 
-    private func join(_ topic: String, groupID: String) {
+    private func join(_ topic: String) {
         guard let token = tokenProvider() else { return }
+        let (groupID, tables) = Self.parse(topic)
         let filter = "group_id=eq.\(groupID)"
-        let changes = Table.allCases.map { table -> [String: Any] in
+        let changes = tables.map { table -> [String: Any] in
             ["event": "*", "schema": "public", "table": table.rawValue, "filter": filter]
         }
         let payload: [String: Any] = [
@@ -229,7 +247,7 @@ final class RealtimeClient {
             // Le serveur a fermé le canal (jeton expiré, redémarrage) : on le
             // rouvre au lieu de rester sourd jusqu'à la prochaine ouverture.
             guard joinedTopics.remove(topic) != nil, listeners[topic] != nil else { return }
-            join(topic, groupID: String(topic.dropFirst("realtime:group-".count)))
+            join(topic)
         case "system":
             if payload["status"] as? String == "error" {
                 realtimeTrace.error("realtime \(topic, privacy: .public) : \(payload["message"] as? String ?? "", privacy: .public)")

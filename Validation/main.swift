@@ -5258,6 +5258,30 @@ do {
     check(merged == ["1": ["a", "b", "c"], "2": ["x"]], "activités vues : union de tous les appareils")
 }
 
+// MARK: Session de groupe : l'horloge commune, le travail à soi
+do {
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    var host = FocusTimerState(sessionStartedAt: start, pomodoro: true)
+    host.cycle = PomodoroSettings(focusMinutes: 50, shortBreakMinutes: 10)
+    host.start(at: start)
+    let clock = GroupClock(host)
+    let link = GroupSessionLink(sessionID: "s", groupID: "g", groupName: "BA3")
+    let joinedAt = start.addingTimeInterval(20 * 60)
+    let course = UUID()
+    var joiner = clock.joining(link: link, courseID: course, taskTypeRaw: TaskType.exercise.rawValue, targetID: nil, at: joinedAt)
+    check(joiner.blockEndDate(settings: joiner.cycle(or: PomodoroSettings())) == host.blockEndDate(settings: host.cycle!),
+          "le membre qui rejoint finit le bloc au même instant que l'hôte")
+    let end = start.addingTimeInterval(45 * 60)
+    let own = joiner.allocatedSeconds(at: end).filter { $0.segment.excluded != true }
+    check(own.reduce(0) { $0 + $1.seconds } == 25 * 60 && own.allSatisfy { $0.segment.courseID == course },
+          "seul le temps depuis son arrivée est à lui (25 min sur 45), sur son cours")
+    var paused = host
+    paused.pause(at: start.addingTimeInterval(30 * 60))
+    GroupClock(paused).apply(to: &joiner)
+    check(!joiner.isRunning && joiner.courseID == course && joiner.groupSession == link,
+          "une pause de l'hôte arrête le chrono du membre, qui garde son cours et son lien")
+}
+
 // MARK: Pluriels : la règle de la langue
 check(Plural.usesSingular(0, language: "fr") && Plural.usesSingular(1, language: "fr") && !Plural.usesSingular(2, language: "fr"),
       "français : 0 et 1 au singulier")

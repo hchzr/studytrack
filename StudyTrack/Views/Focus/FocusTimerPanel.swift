@@ -117,6 +117,14 @@ struct FocusTimerPanel: View {
 
     var body: some View {
         VStack(spacing: 22) {
+            if let link = focus.state?.groupSession {
+                // Une session de groupe : l'horloge est commune, le travail à soi.
+                Label("Session ensemble · \(link.groupName)", systemImage: "person.2.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Carnet.ink)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Carnet.sheetRaised, in: Capsule())
+            }
             contextSection
             targetCard
 

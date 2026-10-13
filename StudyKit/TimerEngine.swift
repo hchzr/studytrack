@@ -35,6 +35,8 @@ final class TimerEngine {
         case gesture(presence: Bool)
         /// Un état venu d'un autre appareil, adopté.
         case remote
+        /// L'horloge de la session de groupe a changé (un autre membre a agi).
+        case group
         /// Une fin de bloc, de pause ou de mode étude, déduite de l'heure.
         case boundary(events: [PomodoroEvent], studyEnded: Bool)
         /// Rien n'a changé dans l'état, mais ce qu'il montre (une question cochée).
@@ -306,14 +308,21 @@ final class TimerEngine {
     @discardableResult
     func finish() -> Finished? {
         guard let current = state else { return nil }
-        let seconds = Int(current.elapsed())
         defer { close() }
-        var result = Finished(startedAt: current.sessionStartedAt, endedAt: Date(), totalSeconds: seconds, parts: [])
-        guard !isolated, seconds >= Self.minimumRecordedSeconds, let container else { return result }
+        // Dans une session de groupe rejointe en cours de route, le temps d'avant
+        // l'arrivée est compté par l'horloge commune mais n'est pas le sien.
+        let parts = current.allocatedSeconds()
+        let own = parts.filter { $0.segment.excluded != true }.reduce(0) { $0 + $1.seconds }
+        var result = Finished(startedAt: current.sessionStartedAt, endedAt: Date(), totalSeconds: own, parts: [])
+        guard !isolated, own >= Self.minimumRecordedSeconds, let container else { return result }
         let context = ModelContext(container)
         var start = current.sessionStartedAt
         var courses: [UUID: Course] = [:]
-        for (index, part) in current.allocatedSeconds().enumerated() {
+        for (index, part) in parts.enumerated() {
+            guard part.segment.excluded != true else {
+                start = start.addingTimeInterval(TimeInterval(part.seconds))
+                continue
+            }
             let course = part.segment.courseID.flatMap { id in
                 courses[id] ?? Self.course(id, in: context).map { courses[id] = $0; return $0 }
             }
@@ -323,7 +332,8 @@ final class TimerEngine {
                                        startedAt: start,
                                        durationSeconds: part.seconds,
                                        isManual: false,
-                                       note: index == 0 ? current.note : "",
+                                       note: current.groupSession.map { "Session « \($0.groupName) »" + (index == 0 && !current.note.isEmpty ? " · " + current.note : "") }
+                                           ?? (index == 0 ? current.note : ""),
                                        exercise: target.exercise,
                                        theoryItem: target.theoryItem)
             context.insert(session)
@@ -344,6 +354,44 @@ final class TimerEngine {
     /// cochée change « 3/9 » sur l'îlot).
     func refresh() {
         host?.timerDidChange(.refresh)
+    }
+
+    // MARK: Session de groupe
+
+    /// Lie le chrono à une session de groupe qu'on vient de **lancer** : son
+    /// horloge devient celle du groupe (elle démarre si rien ne tournait).
+    func hostGroupSession(_ link: GroupSessionLink, courseID: UUID?, taskType: TaskType, targetID: UUID?) {
+        if !hasSession { start(courseID: courseID, taskType: taskType, targetID: targetID) }
+        guard var current = state else { return }
+        current.groupSession = link
+        state = current
+        commit(presence: true)
+    }
+
+    /// **Rejoint** une session de groupe en cours : la session personnelle
+    /// ouverte est d'abord enregistrée, puis le chrono prend l'horloge du
+    /// groupe en gardant son propre cours et sa cible.
+    func joinGroupSession(_ link: GroupSessionLink, clock: GroupClock,
+                          courseID: UUID?, taskType: TaskType, targetID: UUID?) {
+        if hasSession, state?.groupSession?.sessionID != link.sessionID { finish() }
+        state = clock.joining(link: link, courseID: courseID, taskTypeRaw: taskType.rawValue, targetID: targetID)
+        lastEvent = nil
+        commit(presence: true)
+    }
+
+    /// L'horloge du groupe a changé ailleurs (un membre a mis en pause, repris,
+    /// écourté la pause) : elle se pose ici, sans être renvoyée au groupe.
+    func applyGroupClock(_ clock: GroupClock) {
+        guard var current = state, current.groupSession != nil, GroupClock(current) != clock else { return }
+        clock.apply(to: &current)
+        state = current
+        lastEvent = nil
+        if !isolated {
+            FocusTimerStore.save(state)
+            if !applyingRemote, let state { CloudRelay.publishTimer(state) }
+        }
+        scheduleBoundary()
+        host?.timerDidChange(.group)
     }
 
     // MARK: Mode étude

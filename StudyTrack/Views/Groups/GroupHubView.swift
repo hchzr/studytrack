@@ -44,6 +44,7 @@ struct GroupHubView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
+            if isOnline { GroupSessionCard(group: group) }
             liveCard
             ranking
             whoIsWhere
@@ -426,6 +427,9 @@ struct GroupHubView: View {
             // Une clé m'a peut-être été transmise : la prendre, et relire en clair.
             encryption = await app.social.prepareEncryption(groupID: groupID)
             await reloadPosts()
+        case .sessions, .sessionMembers:
+            // Sur leur propre canal (`GroupSessionService`).
+            break
         }
     }
 
@@ -711,5 +715,102 @@ struct HelpThread: View {
         } catch {
             self.error = GroupSync.explain(error)
         }
+    }
+}
+
+
+/// « Session ensemble » : un chrono commun aux membres du groupe.
+///
+/// Lancer, rejoindre, et voir qui y est. Chacun garde son cours et son exercice
+/// (choisis dans le chrono) ; la marche, les pauses et les blocs sont communs.
+struct GroupSessionCard: View {
+    let group: StudyGroup
+    @Environment(AppContainer.self) private var app
+
+    private var service: GroupSessionService { app.groupSessions }
+    private var session: RemoteGroupSession? { group.remoteID.flatMap { service.live[$0] } }
+    private var isMine: Bool {
+        guard let link = app.focus.state?.groupSession else { return false }
+        return link.groupID == group.remoteID && link.sessionID == session?.id
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CarnetSectionTitle("Session ensemble")
+            CarnetSheet {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let session {
+                        HStack(spacing: 12) {
+                            Image(systemName: session.clock.runningSince != nil ? "timer" : "pause.circle")
+                                .font(.title3)
+                                .foregroundStyle(Carnet.ink)
+                            VStack(alignment: .leading, spacing: 2) {
+                                TimelineView(.periodic(from: .now, by: 1)) { context in
+                                    Text(TimerText.clock(session.clock.elapsed(at: context.date)))
+                                        .font(Carnet.mono(.title3, weight: .medium))
+                                        .foregroundStyle(Carnet.ink)
+                                }
+                                Text(participants(session))
+                                    .font(.footnote)
+                                    .foregroundStyle(Carnet.inkSecondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                            if isMine {
+                                Label("Tu y es", systemImage: "checkmark.circle.fill")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(Carnet.correct)
+                            } else {
+                                Button("Rejoindre") { Task { await service.join(session, group: group) } }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(service.isWorking)
+                            }
+                        }
+                        if isMine {
+                            HStack {
+                                Button("Ouvrir le chrono") { app.router.openFocus() }
+                                Spacer()
+                                if session.host_id == app.social.userID {
+                                    Button("Terminer pour tous", role: .destructive) {
+                                        Task { await service.endForEveryone(groupID: session.group_id) }
+                                    }
+                                }
+                            }
+                            .font(.footnote.weight(.medium))
+                        }
+                    } else {
+                        Text("Un chrono commun : les pauses et les blocs tombent au même moment pour tout le monde, chacun sur son propre travail.")
+                            .font(.footnote)
+                            .foregroundStyle(Carnet.inkSecondary)
+                        Button {
+                            Task { await service.start(group: group) }
+                        } label: {
+                            Label(app.focus.hasSession ? "Partager mon chrono avec le groupe" : "Lancer une session ensemble",
+                                  systemImage: "person.2.wave.2")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(service.isWorking)
+                    }
+                    if let error = service.lastError {
+                        Text(error).font(.caption).foregroundStyle(Carnet.wrong)
+                    }
+                }
+                .padding(Carnet.rowInset)
+            }
+        }
+        .task(id: group.remoteID) {
+            guard let id = group.remoteID else { return }
+            service.watch(groupID: id)
+        }
+        .onDisappear {
+            if let id = group.remoteID { service.unwatch(groupID: id) }
+        }
+    }
+
+    private func participants(_ session: RemoteGroupSession) -> String {
+        let names = session.present.map { member in
+            member.user_id == app.social.userID ? "toi" : (member.profiles?.display_name ?? "un membre")
+        }
+        return names.isEmpty ? "personne pour l'instant" : names.joined(separator: ", ")
     }
 }

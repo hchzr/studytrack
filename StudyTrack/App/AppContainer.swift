@@ -15,6 +15,8 @@ final class AppContainer {
     let presence: PresenceService
     /// Le chrono : un seul, partagé par Focus, le dock et l'écran verrouillé.
     let focus: FocusController
+    /// Les sessions de groupe (un chrono commun à plusieurs membres).
+    let groupSessions = GroupSessionService()
     /// L'import du semestre de l'accueil : détenu ici, pas par l'écran, pour
     /// qu'il continue quand on quitte l'accueil ou que l'app passe en arrière-plan.
     let semesterImport = OnboardingAutoSetup()
@@ -116,6 +118,7 @@ final class AppContainer {
         // Réparations de données, nommées et jouées une fois par version.
         DataRepair.run(in: ModelContext(self.modelContainer))
         focus.app = self
+        groupSessions.app = self
         focus.startRelay()
         // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
         if isCloudSynced { TimerLink.shared.startFromBundle(containerID: Self.cloudContainerID) }

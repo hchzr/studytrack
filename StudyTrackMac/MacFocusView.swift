@@ -22,6 +22,13 @@ struct MacFocusView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
+                if let link = timer.state?.groupSession {
+                    // Lancée ou rejointe sur l'iPhone : l'horloge est celle du groupe.
+                    Label("Session ensemble · \(link.groupName)", systemImage: "person.2.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(Carnet.ink)
+                        .padding(.top, 12)
+                }
                 dial
                     .padding(.top, 12)
                 TimerControls(size: 64, tint: tint)

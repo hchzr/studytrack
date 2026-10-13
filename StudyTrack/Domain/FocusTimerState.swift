@@ -58,6 +58,9 @@ struct FocusTimerState: Codable, Equatable {
     /// par le Mac) contredisait l'app. `nil` : un état publié avant ce champ —
     /// les réglages de l'appareil s'appliquent, comme avant.
     var cycle: PomodoroSettings?
+    /// La session de groupe à laquelle ce chrono est lié, s'il l'est : son
+    /// horloge (marche, pause, pauses Pomodoro) est celle du groupe.
+    var groupSession: GroupSessionLink?
 
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,
@@ -199,11 +202,15 @@ struct FocusSegment: Codable, Equatable {
     var taskTypeRaw: String
     var targetID: UUID?
     var seconds: TimeInterval
+    /// Le temps d'une session de groupe **avant** qu'on la rejoigne : compté par
+    /// l'horloge commune, jamais enregistré pour soi. Optionnel (états d'avant).
+    var excluded: Bool? = nil
 
     var taskType: TaskType { TaskType(rawValue: taskTypeRaw) ?? .other }
 
     func sameTarget(as other: FocusSegment) -> Bool {
         courseID == other.courseID && taskTypeRaw == other.taskTypeRaw && targetID == other.targetID
+            && (excluded ?? false) == (other.excluded ?? false)
     }
 }
 
@@ -265,3 +272,75 @@ extension FocusTimerState {
     }
 }
 
+
+
+// MARK: - Session de groupe
+
+/// Le lien d'un chrono à une session de groupe.
+struct GroupSessionLink: Codable, Equatable {
+    var sessionID: String
+    var groupID: String
+    var groupName: String
+}
+
+/// L'horloge **commune** d'une session de groupe : ce qui se partage (la
+/// marche, les pauses, le cycle Pomodoro), sans ce qui est à chacun (le cours,
+/// l'exercice, la note). Tous les chronos liés ont la même : les blocs et les
+/// pauses tombent au même instant chez tout le monde.
+struct GroupClock: Codable, Equatable {
+    var sessionStartedAt: Date
+    var accumulated: TimeInterval
+    var runningSince: Date?
+    var pomodoro: Bool
+    var cycle: PomodoroSettings?
+    var breakKindRaw: String?
+    var breakStartedAt: Date?
+    var breakEndsAt: Date?
+
+    init(_ state: FocusTimerState) {
+        sessionStartedAt = state.sessionStartedAt
+        accumulated = state.accumulated
+        runningSince = state.runningSince
+        pomodoro = state.pomodoro
+        cycle = state.cycle
+        breakKindRaw = state.breakKindRaw
+        breakStartedAt = state.breakStartedAt
+        breakEndsAt = state.breakEndsAt
+    }
+
+    /// Le temps compté par l'horloge à l'instant `now`.
+    func elapsed(at now: Date = Date()) -> TimeInterval {
+        accumulated + (runningSince.map { max(0, now.timeIntervalSince($0)) } ?? 0)
+    }
+
+    /// Pose l'horloge sur un chrono, sans toucher à son cours, sa cible ni ses
+    /// segments.
+    func apply(to state: inout FocusTimerState) {
+        state.sessionStartedAt = sessionStartedAt
+        state.accumulated = accumulated
+        state.runningSince = runningSince
+        state.pomodoro = pomodoro
+        state.cycle = cycle
+        state.breakKindRaw = breakKindRaw
+        state.breakStartedAt = breakStartedAt
+        state.breakEndsAt = breakEndsAt
+    }
+
+    /// Le chrono de quelqu'un qui **rejoint** la session maintenant : l'horloge
+    /// du groupe, son propre travail, et le temps déjà écoulé mis de côté (il
+    /// n'a pas travaillé avant d'arriver).
+    func joining(link: GroupSessionLink, courseID: UUID?, taskTypeRaw: String, targetID: UUID?,
+                 at now: Date = Date()) -> FocusTimerState {
+        var state = FocusTimerState(sessionStartedAt: sessionStartedAt, courseID: courseID,
+                                    taskTypeRaw: taskTypeRaw, targetID: targetID, pomodoro: pomodoro)
+        apply(to: &state)
+        let before = elapsed(at: now)
+        if before >= 1 {
+            state.segments = [FocusSegment(courseID: nil, taskTypeRaw: TaskType.other.rawValue, targetID: nil,
+                                           seconds: before, excluded: true)]
+        }
+        state.currentTargetSince = before
+        state.groupSession = link
+        return state
+    }
+}

@@ -31,6 +31,8 @@ final class FocusController: TimerEngineHost {
     func timerDidChange(_ change: TimerEngine.Change) {
         StudyLock.shared.sync(state)
         guard let app else { return }
+        // Une session de groupe suit les gestes faits ici (ou sur mon Mac).
+        app.groupSessions.timerDidChange(change)
         switch change {
         case .closed(let session):
             StudyActivityController.end(session: session)
@@ -48,7 +50,7 @@ final class FocusController: TimerEngineHost {
         case .saved:
             // Une note tapée : rien de visible ailleurs.
             return
-        case .gesture, .remote, .refresh:
+        case .gesture, .remote, .group, .refresh:
             break
         }
         guard let state else { return }

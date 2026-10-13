@@ -205,6 +205,30 @@ struct RemotePlannedSession: Codable, Identifiable {
 }
 
 /// Un message d'entraide : une question sur un exercice, ou sa réponse.
+/// Une session de groupe (`group_sessions`) et ses participants.
+struct RemoteGroupSession: Decodable, Identifiable, Equatable {
+    struct Member: Decodable, Equatable {
+        struct Profile: Decodable, Equatable { var display_name: String? }
+        var user_id: String
+        var joined_at: String?
+        var left_at: String?
+        var profiles: Profile?
+    }
+
+    var id: String
+    var group_id: String
+    var host_id: String
+    var clock: GroupClock
+    var updated_by: String
+    var updated_at: String
+    var ended_at: String?
+    var group_session_members: [Member]?
+
+    /// Ceux qui y sont encore.
+    var present: [Member] { (group_session_members ?? []).filter { $0.left_at == nil } }
+    var isLive: Bool { ended_at == nil }
+}
+
 struct RemotePost: Codable, Identifiable, Equatable {
     var id: String
     var groupId: String
@@ -744,6 +768,77 @@ final class SocialService {
         guard let data else { return [] }
         let rows = (try? JSONDecoder().decode([RemotePresence].self, from: data)) ?? []
         return rows.compactMap { $0.entry(meID: client.userID) }
+    }
+
+    // MARK: Sessions de groupe
+
+    private static func clockJSON(_ clock: GroupClock) throws -> Any {
+        try JSONSerialization.jsonObject(with: JSONEncoder().encode(clock))
+    }
+
+    private static func decodeSessions(_ data: Data?) -> [RemoteGroupSession] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([RemoteGroupSession].self, from: data)) ?? []
+    }
+
+    /// La session en cours d'un groupe, s'il y en a une.
+    func fetchLiveSession(groupID: String) async throws -> RemoteGroupSession? {
+        guard let client else { throw SupabaseError.notConfigured }
+        let data = try await client.select("group_sessions", query: [
+            URLQueryItem(name: "group_id", value: "eq.\(groupID)"),
+            URLQueryItem(name: "ended_at", value: "is.null"),
+            URLQueryItem(name: "select", value: "*,group_session_members(user_id,joined_at,left_at,profiles(display_name))")
+        ])
+        return Self.decodeSessions(data).first
+    }
+
+    /// Lance la session d'un groupe — ou rend celle qu'un autre membre vient de
+    /// lancer (une seule par groupe).
+    func createGroupSession(groupID: String, clock: GroupClock) async throws -> RemoteGroupSession {
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let me = client.userID else { throw SupabaseError.notSignedIn }
+        do {
+            let data = try await client.insert("group_sessions", values: [
+                "group_id": groupID, "host_id": me, "updated_by": me, "clock": try Self.clockJSON(clock)
+            ])
+            guard let created = Self.decodeSessions(data).first else { throw SupabaseError.server(status: 500, message: "session introuvable") }
+            try await joinGroupSession(sessionID: created.id, groupID: groupID)
+            return try await fetchLiveSession(groupID: groupID) ?? created
+        } catch let error as SupabaseError {
+            if case .server(_, let message) = error, message.contains("23505") || message.lowercased().contains("duplicate"),
+               let existing = try await fetchLiveSession(groupID: groupID) {
+                return existing
+            }
+            throw error
+        }
+    }
+
+    func joinGroupSession(sessionID: String, groupID: String) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let me = client.userID else { throw SupabaseError.notSignedIn }
+        _ = try await client.upsert("group_session_members",
+                                    rows: [["session_id": sessionID, "group_id": groupID, "user_id": me,
+                                            "joined_at": ISO8601DateFormatter().string(from: Date()), "left_at": NSNull()]],
+                                    onConflict: "session_id,user_id", returning: false)
+    }
+
+    func leaveGroupSession(sessionID: String) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let me = client.userID else { throw SupabaseError.notSignedIn }
+        _ = try await client.update("group_session_members",
+                                    query: [URLQueryItem(name: "session_id", value: "eq.\(sessionID)"),
+                                            URLQueryItem(name: "user_id", value: "eq.\(me)")],
+                                    values: ["left_at": ISO8601DateFormatter().string(from: Date())])
+    }
+
+    /// Fait avancer l'horloge commune (un geste d'ici), ou termine la session.
+    func updateGroupSession(id: String, clock: GroupClock?, ended: Bool = false) async throws {
+        guard let client else { throw SupabaseError.notConfigured }
+        guard let me = client.userID else { throw SupabaseError.notSignedIn }
+        var values: [String: Any] = ["updated_by": me, "updated_at": ISO8601DateFormatter().string(from: Date())]
+        if let clock { values["clock"] = try Self.clockJSON(clock) }
+        if ended { values["ended_at"] = ISO8601DateFormatter().string(from: Date()) }
+        _ = try await client.update("group_sessions", query: [URLQueryItem(name: "id", value: "eq.\(id)")], values: values)
     }
 
     // MARK: Classement & avancement
