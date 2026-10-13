@@ -112,15 +112,6 @@ enum TimerText {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    /// « 1 h 30 », pour l'affichage long.
-    static func longText(from seconds: TimeInterval) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        if hours == 0 { return "\(total / 60) min" }
-        return minutes == 0 ? "\(hours) h" : "\(hours) h \(String(format: "%02d", minutes))"
-    }
-
     /// Les minutes d'un fragment : « 30 », « 30m », « 30.5 ».
     private static func minutesValue(_ raw: String) -> Double? {
         var text = raw

@@ -30,8 +30,6 @@ final class ExerciseSeries {
         set { exercisesStore = newValue }
     }
 
-
-
     init(id: UUID = UUID(),
          course: Course? = nil,
          seriesNumber: Int,
@@ -266,12 +264,6 @@ final class Exercise {
         set { correctnessRaw = newValue?.rawValue }
     }
 
-    /// Score formaté : « 4/5 ».
-    var scoreLabel: String? {
-        guard let score else { return nil }
-        if let maxScore { return "\(Int(score))/\(Int(maxScore))" }
-        return "\(Int(score))"
-    }
 }
 
 /// Une sous-question d'un exercice : « 1. », « 2. », « (a) », « (b) ».

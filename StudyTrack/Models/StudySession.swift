@@ -65,6 +65,5 @@ final class StudySession {
 
     var endedAt: Date { startedAt.addingTimeInterval(TimeInterval(durationSeconds)) }
     var durationMinutes: Int { durationSeconds / 60 }
-    var durationHours: Double { Double(durationSeconds) / 3600 }
     var durationLabel: String { DateUtils.durationLabel(seconds: durationSeconds) }
 }

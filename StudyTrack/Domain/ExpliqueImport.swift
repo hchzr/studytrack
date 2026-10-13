@@ -73,13 +73,6 @@ enum ExpliqueImport {
         return Int(title[range])
     }
 
-    /// Le titre sans ses variantes : « (2026) », « (view on speaker) ».
-    static func baseTitle(_ title: String) -> String {
-        title.replacingOccurrences(of: #"\s*\((?:\d{4}|view on speaker|speaker view|vue (?:sur l'|de l')orateur)\)"#,
-                                   with: "", options: [.regularExpression, .caseInsensitive])
-            .trimmingCharacters(in: .whitespaces)
-    }
-
     /// Ajoute les cours (en replay) et les exercices d'Explique au brouillon
     /// Moodle, dans leurs semaines.
     ///

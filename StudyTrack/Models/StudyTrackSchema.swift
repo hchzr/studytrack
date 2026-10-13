@@ -85,8 +85,6 @@ enum DataRepair {
         var coursesAttached = 0
         var milestonesInstalled = 0
 
-        var didSomething: Bool { coursesAttached > 0 || milestonesInstalled > 0 }
-
         var summary: String {
             var parts: [String] = []
             if coursesAttached > 0 {

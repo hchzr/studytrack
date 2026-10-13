@@ -160,10 +160,6 @@ struct RootTabView: View {
                     TimerLink.shared.resume()
                     app.focus.applyRemote()
                     FocusTimerCommandHandler.consumePending(container: app)
-                    // Les coches faites dans un widget pendant que l'app dormait.
-                    if WidgetSnapshotWriter.applyPendingCompletions(context: context) > 0 {
-                        WidgetSnapshotWriter.refresh(context: context, settings: app.settings)
-                    }
                     // Un PDF partagé depuis une autre app : l'accueil ouvre
                     // l'import. Il était auparavant retiré du dépôt… et jeté.
                     if let shared = PendingImportBridge.take() {
@@ -318,7 +314,6 @@ struct RootTabView: View {
         case .today: TodayView()
         case .courses: CoursesView()
         case .groups: GroupsView()
-        case .me: MeView()
         case .focus: EmptyView()
         }
     }

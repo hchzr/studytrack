@@ -967,21 +967,6 @@ final class SocialService {
                                     values: ["resolved": resolved])
     }
 
-    func deletePost(postID: String) async throws {
-        guard let client else { throw SupabaseError.notConfigured }
-        _ = try await client.delete("group_posts", query: [URLQueryItem(name: "id", value: "eq.\(postID)")])
-    }
-
-    func setRSVP(sessionID: String, status: RSVPStatus) async {
-        guard let client, let userID = client.userID else { return }
-        _ = try? await client.upsert("session_rsvps",
-                                     rows: [[
-                                        "session_id": sessionID,
-                                        "user_id": userID,
-                                        "status": status.rawValue
-                                     ]],
-                                     onConflict: "session_id,user_id")
-    }
 }
 
 /// Helper Sign in with Apple (nonce + hachage).

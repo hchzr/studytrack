@@ -48,11 +48,4 @@ enum SessionStats {
         }
     }
 
-    /// Moyenne quotidienne sur les jours **actifs** seulement : une moyenne qui
-    /// compte les jours à zéro ne dit rien sur la longueur d'une séance.
-    static func averageActiveDaySeconds(_ totals: [DayTotal]) -> Int {
-        let active = totals.filter { !$0.isEmpty }
-        guard !active.isEmpty else { return 0 }
-        return active.reduce(0) { $0 + $1.seconds } / active.count
-    }
 }

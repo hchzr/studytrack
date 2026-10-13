@@ -77,17 +77,6 @@ enum EPFLCatalog {
         }
     }
 
-    /// Facultés distinctes, dans l'ordre du catalogue.
-    static var faculties: [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for section in sections where !seen.contains(section.faculty) {
-            seen.insert(section.faculty)
-            result.append(section.faculty)
-        }
-        return result
-    }
-
     static func sections(inFaculty faculty: String) -> [EPFLSection] {
         sections.filter { $0.faculty == faculty }
     }

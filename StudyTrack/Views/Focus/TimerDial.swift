@@ -25,8 +25,6 @@ struct TimerDial: View {
     var isAdjusting: Bool = false
     /// Variation à appliquer, en secondes (positive ou négative).
     var onAdjust: ((TimeInterval) -> Void)?
-    /// Remise à zéro, proposée dans le mode ajustement.
-    var onReset: (() -> Void)?
     /// Fixe le temps **absolu** — c'est ce qu'un champ éditable demande.
     var onSet: ((TimeInterval) -> Void)??
 

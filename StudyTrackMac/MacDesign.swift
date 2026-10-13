@@ -19,7 +19,6 @@ enum MacStyle {
     static let breakTint = Carnet.correct
     /// L'objectif du jour.
     static let goalTint = Carnet.review
-    static let cardRadius: CGFloat = Carnet.sheetCorner
 }
 
 // MARK: - Anneau

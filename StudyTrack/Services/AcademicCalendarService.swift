@@ -54,16 +54,6 @@ enum AcademicCalendarService {
         AcademicMilestone.installSnapshotIfNeeded(in: context)
     }
 
-    /// Réinstalle l'instantané **en complément** de ce qui existe.
-    ///
-    /// Utile après une relecture qui aurait échoué, ou si la base a été vidée de
-    /// ses échéances officielles.
-    @discardableResult
-    static func restoreSnapshot(_ context: ModelContext) -> Int {
-        let result = AcademicMilestone.upsert(EPFLCalendarSnapshot.milestones(), in: context)
-        return result.added
-    }
-
     // MARK: Relecture
 
     /// Relit la page publique et met le calendrier à jour.
@@ -132,24 +122,4 @@ enum AcademicCalendarService {
         upcoming(milestones.filter { $0.kind.isStructural }, from: reference).first
     }
 
-    /// La borne d'enseignement qui encadre une date : la dernière passée et la
-    /// prochaine. Sert à situer « où on en est » dans le semestre.
-    static func teachingBounds(_ milestones: [AcademicMilestone],
-                               around reference: Date = Date())
-        -> (start: AcademicMilestone?, end: AcademicMilestone?) {
-        let starts = milestones
-            .filter { $0.kind == .teachingStart && $0.date <= reference }
-            .sorted { $0.date > $1.date }
-        let ends = milestones
-            .filter { $0.kind == .teachingEnd && $0.date >= reference }
-            .sorted { $0.date < $1.date }
-        return (starts.first, ends.first)
-    }
-
-    /// Le semestre officiel en cours d'après l'EPFL, s'il est connu.
-    ///
-    /// Permet de **sourcer** la date de rentrée au lieu de la déduire d'une règle.
-    static func officialTeachingStart(forAutumnYear year: Int) -> Date? {
-        EPFLCalendarSnapshot.autumnTeachingStart(year: year)
-    }
 }

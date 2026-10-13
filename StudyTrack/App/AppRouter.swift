@@ -19,20 +19,19 @@ struct FocusRequest: Equatable {
 /// Navigation applicative partagée (onglet actif, demandes de chrono, feuilles).
 @Observable
 final class AppRouter {
-    /// Quatre onglets, et le chrono à part.
+    /// Trois onglets, et le chrono à part.
     ///
     /// « Carnet de verre » : Aujourd'hui (travailler), Cours (tout le contenu),
-    /// Groupes (ensemble), Moi (bilan, liens, réglages). L'agenda n'est plus un
-    /// onglet : il s'ouvre depuis l'horaire du jour. Le chrono est le rond de
+    /// Groupes (ensemble). Moi (bilan, réglages) s'ouvre depuis l'avatar,
+    /// l'agenda depuis l'horaire du jour. Le chrono est le rond de
     /// verre à droite de la barre (le rôle « recherche » d'iOS 26 le détache) :
     /// le toucher ouvre Focus par-dessus l'onglet courant, sans le quitter.
     enum Tab: Int, Hashable, CaseIterable {
         // Les valeurs brutes ne bougent pas — liens et captures en dépendent
-        // (2 était Focus, 4 l'agenda).
+        // (4 était l’agenda, 5 Moi).
         case today = 0
         case courses = 1
         case groups = 3
-        case me = 5
         case focus = 2
 
         var title: String {
@@ -40,7 +39,6 @@ final class AppRouter {
             case .today: return "Aujourd'hui"
             case .courses: return "Cours"
             case .groups: return "Groupes"
-            case .me: return "Moi"
             case .focus: return "Chrono"
             }
         }
@@ -50,7 +48,6 @@ final class AppRouter {
             case .today: return "sun.max"
             case .courses: return "books.vertical"
             case .groups: return "person.2"
-            case .me: return "person.crop.circle"
             case .focus: return "timer"
             }
         }
@@ -138,18 +135,6 @@ final class AppRouter {
                                     taskType: taskType,
                                     targetID: targetID,
                                     label: label)
-        showingFocus = true
-    }
-
-    /// Ouvre Focus **prêt** sur ce contexte, sans démarrer : c'est au bouton
-    /// « Démarrer » de le faire.
-    func prepareFocus(courseID: UUID?, courseCode: String, taskType: TaskType, targetID: UUID? = nil) {
-        focusRequest = FocusRequest(courseID: courseID,
-                                    courseCode: courseCode,
-                                    taskType: taskType,
-                                    targetID: targetID,
-                                    label: "",
-                                    autoStart: false)
         showingFocus = true
     }
 

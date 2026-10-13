@@ -68,17 +68,6 @@ enum PomodoroEngine {
                               completedBlocks: completed)
     }
 
-    /// Le nombre de blocs entiers restants pour atteindre un objectif de session.
-    ///
-    /// Sert à dire « encore 2 blocs », qui est plus parlant que « encore 47 min »
-    /// quand on travaille par blocs.
-    static func blocksRemaining(elapsed: TimeInterval,
-                                targetBlocks: Int,
-                                focusMinutes: Int) -> Int {
-        let block = blockDuration(minutes: focusMinutes)
-        let done = Int(max(0, elapsed) / block)
-        return max(0, targetBlocks - done)
-    }
 }
 
 // MARK: - Le cycle : travail, pause, travail

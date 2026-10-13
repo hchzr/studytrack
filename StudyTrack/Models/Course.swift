@@ -246,8 +246,4 @@ final class Course {
         return term.isRunning
     }
 
-    /// La semaine est-elle dans la plage planifiée du cours ?
-    func isPlanningRelevant(week: Int) -> Bool {
-        isTermRunning && week >= 1 && week <= (term?.totalWeeks ?? 14)
-    }
 }

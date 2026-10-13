@@ -13,26 +13,15 @@ struct WorkloadDelta: Equatable {
     /// Réel − attendu (négatif = en retard sur la charge EPFL).
     var deltaSeconds: Int { actualSeconds - expectedSeconds }
 
-    var expectedHours: Double { Double(expectedSeconds) / 3600 }
-    var actualHours: Double { Double(actualSeconds) / 3600 }
-    var deltaHours: Double { Double(deltaSeconds) / 3600 }
-
     /// Ratio réel / attendu (1.0 = pile dans les temps).
     var completion: Double {
         expectedSeconds <= 0 ? 0 : Double(actualSeconds) / Double(expectedSeconds)
     }
 
-    var isOnTrack: Bool { completion >= 0.9 }
     var isBehind: Bool { completion < 0.75 }
-
-    var deltaLabel: String {
-        let sign = deltaSeconds >= 0 ? "+" : "−"
-        return "\(sign)\(DateUtils.hoursLabel(seconds: abs(deltaSeconds)))"
-    }
 
     var expectedLabel: String { DateUtils.hoursLabel(seconds: expectedSeconds) }
     var actualLabel: String { DateUtils.hoursLabel(seconds: actualSeconds) }
-    var classLabel: String { DateUtils.hoursLabel(seconds: classSeconds) }
 }
 
 /// Moteur de charge de travail EPFL (fonctions pures).
@@ -51,15 +40,6 @@ enum WorkloadEngine {
     /// Charge totale attendue sur tout le semestre (secondes).
     static func expectedTotalSeconds(for course: Course, hoursPerCredit: Double) -> Int {
         Int((course.credits * hoursPerCredit * 3600).rounded())
-    }
-
-    /// Part « amphi » attendue sur le semestre.
-    ///
-    /// Vaut **zéro** pour un cours sans heures de cours magistral : c'est ce qui
-    /// permet de répondre honnêtement à « choisir les classes qui ont cours ».
-    static func expectedLectureSeconds(for course: Course) -> Int {
-        guard course.hasLectures else { return 0 }
-        return Int((course.weeklyLectureHours * Double(totalWeeks(for: course)) * 3600).rounded())
     }
 
     /// Charge attendue bornée à `weeks` semaines écoulées / à venir.
@@ -242,12 +222,4 @@ enum WorkloadEngine {
         return total
     }
 
-    /// Charge attendue « à ce stade du semestre » pour un cours.
-    static func expectedToDate(for course: Course, hoursPerCredit: Double) -> WorkloadDelta {
-        guard let term = course.term else {
-            return delta(for: course, hoursPerCredit: hoursPerCredit)
-        }
-        let elapsed = DateUtils.weekNumber(for: Date(), term: term)
-        return delta(for: course, hoursPerCredit: hoursPerCredit, weeks: elapsed)
-    }
 }

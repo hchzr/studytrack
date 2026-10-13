@@ -11,52 +11,18 @@ enum WidgetSnapshotWriter {
 
     static func refresh(context: ModelContext, settings: SettingsStore) {
         let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
-        let exams = (try? context.fetch(FetchDescriptor<Exam>())) ?? []
-
         let tracked = courses.filter(\.isTracked)
-        let weekStart = DateUtils.dateRange(days: 7).start
-        let weekSeconds = sessions
-            .filter { $0.startedAt >= weekStart }
-            .reduce(0) { $0 + $1.durationSeconds }
-
-        let allTodos = DailyPlanner.todos(for: tracked, limit: 100)
-        let nextExam = exams
-            .filter { $0.date >= DateUtils.startOfDay(Date()) }
-            .min { $0.date < $1.date }
         let snapshot = WidgetSnapshot(
             updatedAt: Date(),
-            weekSeconds: weekSeconds,
-            // Champs gardés pour que l'instantané reste lisible par un widget
-            // d'une version précédente ; la gamification n'existe plus.
-            streak: 0,
-            level: 0,
-            xp: 0,
-            todoCount: allTodos.count,
-            todos: allTodos.prefix(5).map {
-                WidgetTodo(id: $0.id,
-                           courseCode: $0.courseCode,
-                           title: "\($0.title) · \($0.detail)",
-                           kind: $0.kind.label,
-                           colorHex: $0.colorHex)
-            },
-            nextExamTitle: nextExam?.title,
-            nextExamCourse: nextExam?.course?.code,
-            nextExamDate: nextExam?.date,
-            next: NextActionEngine.actions(for: tracked, limit: 1).first.map(widgetAction),
             courses: tracked.map(widgetCourse),
             timer: widgetTimer(FocusTimerStore.load(), courses: courses),
-            week: widgetWeek(tracked: tracked, sessions: sessions, settings: settings),
-            schedule: schedule(context: context, exams: exams),
-            deadlines: exams
-                .filter { $0.date >= Date() }
-                .sorted { $0.date < $1.date }
+            week: widgetWeek(tracked: tracked, context: context, settings: settings),
+            schedule: schedule(context: context),
+            deadlines: Deadline.upcoming(in: tracked, days: 60)
+                .filter { $0.kind != .solutions && $0.date >= Date() }
                 .prefix(3)
-                .map { WidgetDeadline(id: $0.id.uuidString,
-                                      title: $0.title.isEmpty ? $0.kind.label : $0.title,
-                                      courseCode: $0.course?.displayCode ?? "",
-                                      date: $0.date,
-                                      colorHex: $0.course?.colorHex ?? "#6B655A") })
+                .map { WidgetDeadline(id: $0.id, title: $0.title, courseCode: $0.courseCode,
+                                      date: $0.date, colorHex: $0.colorHex) })
 
         // Rien de visible n'a changé (une note de correction, un titre de
         // session) : pas de rechargement. iOS accorde aux widgets un budget de
@@ -84,26 +50,6 @@ enum WidgetSnapshotWriter {
         }
     }
 
-    private static func widgetAction(_ action: NextAction) -> WidgetAction {
-        let kind: String?
-        switch action.reason {
-        case .exam: kind = nil
-        case .planned(let planned) where planned == .video: kind = "theory"
-        case .planned(let planned) where planned == .correction: kind = nil
-        default: kind = "exercise"
-        }
-        return WidgetAction(targetKind: action.targetID == nil ? nil : kind,
-                            targetID: action.targetID?.uuidString,
-                            courseID: action.courseID.uuidString,
-                            courseCode: action.courseCode,
-                            title: MathMarkup.plain(action.title),
-                            detail: MathMarkup.plain(action.detail),
-                            reason: action.reasonLabel,
-                            colorHex: action.colorHex,
-                            taskType: action.taskType.rawValue,
-                            icon: action.icon)
-    }
-
     private static func widgetCourse(_ course: Course) -> WidgetCourse {
         let week = ProgressEngine.weekProgress(for: course, week: course.currentWeek)
         let total = week.videoCount + week.exerciseCount
@@ -122,33 +68,34 @@ enum WidgetSnapshotWriter {
                             late: ProgressEngine.lateCount(for: course))
     }
 
-    private static func widgetWeek(tracked: [Course], sessions: [StudySession],
+    private static func widgetWeek(tracked: [Course], context: ModelContext,
                                    settings: SettingsStore) -> WidgetWeek {
         let start = DateUtils.startOfWeek(Date())
         let end = DateUtils.addDays(7, to: start)
-        var days = Array(repeating: 0, count: 7)
-        for session in sessions where session.startedAt >= start && session.startedAt < end {
-            let index = DateUtils.daysBetween(start, session.startedAt)
-            if days.indices.contains(index) { days[index] += session.durationSeconds }
-        }
+        // La même somme qu'« Aujourd'hui » : sessions et cours suivis.
+        let blocks = StudyTime.blocks(in: context, from: start, to: end)
         let workload = WorkloadEngine.aggregateWeekly(courses: tracked, hoursPerCredit: settings.hoursPerCredit,
                                                       from: start, to: end)
         let term = AcademicTerm.resolve(from: tracked.compactMap(\.term))
         return WidgetWeek(weekStart: start,
                           number: term.flatMap { $0.isRunning ? $0.currentWeek : nil },
                           totalWeeks: term?.totalWeeks,
-                          actualSeconds: workload.actualSeconds,
+                          actualSeconds: StudyTime.total(blocks),
                           expectedSeconds: workload.expectedSeconds,
-                          days: days)
+                          days: StudyTime.days(of: blocks, weekStart: start))
     }
 
     /// Aujourd'hui et demain : séances de l'horaire, sessions planifiées,
     /// évaluations.
-    private static func schedule(context: ModelContext, exams: [Exam]) -> [WidgetEvent] {
+    private static func schedule(context: ModelContext) -> [WidgetEvent] {
         let start = DateUtils.startOfDay(Date())
         let end = DateUtils.addDays(2, to: start)
-        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>())) ?? []
-        let planned = (try? context.fetch(FetchDescriptor<PlannedSession>())) ?? []
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>(
+            predicate: #Predicate { $0.startsAt >= start && $0.startsAt < end }))) ?? []
+        let planned = (try? context.fetch(FetchDescriptor<PlannedSession>(
+            predicate: #Predicate { $0.startsAt >= start && $0.startsAt < end }))) ?? []
+        let exams = (try? context.fetch(FetchDescriptor<Exam>(
+            predicate: #Predicate { $0.date >= start && $0.date < end }))) ?? []
         var items: [WidgetEvent] = []
         // Les événements « toute la journée » (anniversaires, congés) ne sont pas
         // un horaire : ils remplissaient le widget de « 00:00 – 23:59 ».
@@ -189,32 +136,5 @@ enum WidgetSnapshotWriter {
                            isRunning: state.isRunning, elapsedWhenPaused: elapsed,
                            breakEndsAt: state.currentBreak?.endsAt,
                            breakLabel: state.currentBreak?.kind.label)
-    }
-
-    /// Applique les coches faites dans un widget pendant que l'app dormait.
-    static func applyPendingCompletions(context: ModelContext) -> Int {
-        var applied = 0
-        for (kind, raw) in PendingWidgetActions.take() {
-            guard let id = UUID(uuidString: raw) else { continue }
-            switch kind {
-            case "exercise":
-                let descriptor = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
-                if let exercise = try? context.fetch(descriptor).first, !exercise.isDone {
-                    exercise.setDone(true)
-                    if exercise.redoRequired { exercise.redoRequired = false }
-                    applied += 1
-                }
-            case "theory":
-                let descriptor = FetchDescriptor<TheoryItem>(predicate: #Predicate { $0.id == id })
-                if let item = try? context.fetch(descriptor).first, item.watchedAt == nil {
-                    item.watchedAt = Date()
-                    applied += 1
-                }
-            default:
-                continue
-            }
-        }
-        if applied > 0 { try? context.save() }
-        return applied
     }
 }

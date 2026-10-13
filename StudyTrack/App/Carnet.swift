@@ -399,35 +399,6 @@ extension CarnetRow where Trailing == EmptyView {
     }
 }
 
-/// Un anneau d'avancement, avec son libellé au centre (« 3/7 »).
-struct CarnetRing: View {
-    let value: Double
-    var tint: Color = Carnet.ink
-    var label: String?
-    var size: CGFloat = 52
-    var lineWidth: CGFloat = 5
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(Carnet.rule, lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: max(0, min(value, 1)))
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(Motion.progress, value: value)
-            if let label {
-                Text(label)
-                    .font(Carnet.mono(.caption, weight: .medium))
-                    .foregroundStyle(Carnet.ink)
-                    .minimumScaleFactor(0.6)
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityElement()
-        .accessibilityLabel(label ?? "\(Int(value * 100)) %")
-    }
-}
-
 /// Une barre fine d'avancement, sur trait de papier.
 struct CarnetBar: View {
     let value: Double

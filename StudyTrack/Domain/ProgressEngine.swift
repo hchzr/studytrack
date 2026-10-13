@@ -18,8 +18,6 @@ struct CourseProgress: Equatable {
 
     /// Théorie : vidéos regardées / total.
     var theoryPercent: Double { Self.ratio(watchedCount, videoCount) }
-    /// Résumés : vidéos résumées / vidéos regardées.
-    var summaryPercent: Double { Self.ratio(summarizedCount, watchedCount) }
     /// Exercices : exos (hors bonus) faits / total.
     var exercisePercent: Double { Self.ratio(doneCount, exerciseCount) }
     /// Corrections : exos corrigés / exos faits.
@@ -38,9 +36,6 @@ struct CourseProgress: Equatable {
         Self.ratio(watchedCount + doneCount, videoCount + exerciseCount)
     }
 
-    var hasTheory: Bool { videoCount > 0 }
-    var hasExercises: Bool { exerciseCount > 0 }
-    var hasCorrections: Bool { doneCount > 0 }
     var remainingVideos: Int { max(0, videoCount - watchedCount) }
     var remainingExercises: Int { max(0, exerciseCount - doneCount) }
 }
@@ -67,11 +62,6 @@ struct WeeklyProgress: Identifiable, Equatable {
 
     /// Numéros des séries planifiées cette semaine (« Série 3 »).
     var seriesNumbers: [Int] = []
-
-    /// Corrections rapportées aux **exercices de la semaine**, pas aux exercices
-    /// faits : « 2/8 corrigés » se lit comme les deux autres axes, et une semaine
-    /// où rien n'est fait n'affiche pas une correction « à 0 % de 0 ».
-    var correctionOfAllPercent: Double { CourseProgress.ratio(correctedCount, exerciseCount) }
 
     /// Ce qui reste, tous axes confondus (théorie non vue + exercices non faits).
     var remainingCount: Int { (videoCount - watchedCount) + (exerciseCount - doneCount) }
@@ -179,21 +169,7 @@ enum ProgressEngine {
         course.sortedTheoryItems.filter { $0.plannedWeek <= 0 }
     }
 
-    /// Toutes les semaines qui contiennent au moins une vidéo ou un exercice.
-    static func weeklyProgress(for course: Course) -> [WeeklyProgress] {
-        var weeks = Set(course.theoryItems.map(\.plannedWeek))
-        weeks.formUnion(course.series.map(\.plannedWeek))
-        weeks = weeks.filter { $0 > 0 }
-        return weeks.sorted().map { weekProgress(for: course, week: $0) }
-    }
-
     // MARK: Durées de vidéo
-
-    /// Total de vidéo à regarder pour une semaine donnée (toutes vidéos planifiées).
-    static func plannedVideoSeconds(for course: Course, week: Int) -> Int {
-        course.theoryItems.filter { $0.plannedWeek == week }
-            .reduce(0) { $0 + $1.durationSeconds }
-    }
 
     /// Vidéos restantes pour une semaine, triées.
     static func remainingVideos(for course: Course, week: Int) -> [TheoryItem] {

@@ -11,21 +11,26 @@ struct StudyTrackEntry: TimelineEntry {
     var snapshot: WidgetSnapshot?
 
     static var placeholder: StudyTrackEntry {
-        StudyTrackEntry(date: Date(), snapshot: WidgetSnapshot(
-            updatedAt: Date(),
-            weekSeconds: 12 * 3600 + 1800,
-            streak: 6,
-            level: 3,
-            xp: 240,
-            todoCount: 7,
-            todos: [
-                WidgetTodo(id: "1", courseCode: "CS-250", title: "Vidéo 2.1 · Récurrences", kind: "Vidéo", colorHex: "#4F46E5"),
-                WidgetTodo(id: "2", courseCode: "CS-250", title: "Exercice 2.2", kind: "Exercice", colorHex: "#4F46E5"),
-                WidgetTodo(id: "3", courseCode: "MATH-101", title: "Vidéo 1.2 · Continuité", kind: "Vidéo", colorHex: "#0EA5E9")
+        let now = Date()
+        let monday = Calendar(identifier: .iso8601).dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        return StudyTrackEntry(date: now, snapshot: WidgetSnapshot(
+            updatedAt: now,
+            courses: [
+                WidgetCourse(id: "1", code: "CS-250", colorHex: "#4F46E5", done: 3, total: 5, summary: "reste 1 théorie · 1 exo",
+                             name: "Algorithms I", theoryDone: 1, theoryTotal: 2, exercisesDone: 2, exercisesTotal: 3, late: 0),
+                WidgetCourse(id: "2", code: "MATH-101", colorHex: "#0EA5E9", done: 2, total: 6, summary: "reste 2 théorie · 2 exos",
+                             name: "Analyse I", theoryDone: 1, theoryTotal: 3, exercisesDone: 1, exercisesTotal: 3, late: 2)
             ],
-            nextExamTitle: "Midterm",
-            nextExamCourse: "CS-250",
-            nextExamDate: Date().addingTimeInterval(12 * 86400)))
+            week: WidgetWeek(weekStart: monday, number: 5, totalWeeks: 14, actualSeconds: 12 * 3600 + 1800,
+                             expectedSeconds: 18 * 3600, days: [7200, 9000, 5400, 10800, 12600, 0, 0]),
+            schedule: [
+                WidgetEvent(id: "a", start: now.addingTimeInterval(3600), end: now.addingTimeInterval(3 * 3600),
+                            title: "Algorithms I", subtitle: "CS-250 · CO1", colorHex: "#4F46E5")
+            ],
+            deadlines: [
+                WidgetDeadline(id: "d", title: "Midterm", courseCode: "CS-250",
+                               date: now.addingTimeInterval(12 * 86400), colorHex: "#4F46E5")
+            ]))
     }
 }
 
@@ -398,7 +403,6 @@ struct StudyActivityLockView: View {
     }
 }
 
-
 /// Le compteur : vivant tant que la session tourne, figé en pause.
 ///
 /// **La largeur de l'îlot replié se décide ici.** `Text(timerInterval:)` ne
@@ -756,21 +760,6 @@ struct StudyTrackWidgetsBundle: WidgetBundle {
 // MARK: - Aides locales (le widget ne dépend pas des types de l'app)
 
 extension Color {
-    /// Encre lisible pour du texte de cette teinte, sur le fond du widget.
-    ///
-    /// L'extension ne peut pas importer la couche `Palette` de l'app : elle
-    /// utilise le solveur partagé et sa propre surface de référence.
-    var widgetInk: Color {
-        Color(uiColor: UIColor { traits in
-            let style = traits.userInterfaceStyle
-            let tc = UITraitCollection(userInterfaceStyle: style)
-            let hue = UIColor(self).resolvedColor(with: tc).contrastRGB
-            let surface = ContrastSurface.widgetRGB(for: style)
-            return ColorContrast.accessibleVariant(of: hue,
-                                                   against: surface,
-                                                   target: ColorContrast.textTarget).uiColor
-        })
-    }
 }
 
 extension Color {

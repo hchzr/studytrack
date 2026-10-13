@@ -70,7 +70,6 @@ final class MacStore {
             isCloudSynced = false
         }
         SyncDeduplicator.run(in: ModelContext(container))
-        PreviewSeedCleanup.run(in: ModelContext(container))
         observers.append(NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
                                                                 queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.remoteChangeArrived() }
@@ -115,7 +114,6 @@ final class MacStore {
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             SyncDeduplicator.run(in: ModelContext(container))
-        PreviewSeedCleanup.run(in: ModelContext(container))
             self?.onDataChange?()
         }
     }

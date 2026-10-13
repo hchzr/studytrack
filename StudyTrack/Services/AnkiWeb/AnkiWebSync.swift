@@ -96,7 +96,6 @@ final class AnkiWebSync {
 
     var username: String { defaults.string(forKey: Key.username) ?? "" }
     var isSignedIn: Bool { AnkiKeychain.hostKey != nil }
-    var hasCollection: Bool { AnkiCollection.exists }
     var lastRefresh: Date? { defaults.object(forKey: Key.lastRefresh) as? Date }
 
     private func client() -> AnkiWebClient {

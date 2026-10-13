@@ -266,16 +266,6 @@ private struct StudySettingsPane: View {
         NSWorkspace.shared.open(url)
     }
 
-    private func chooseNotesFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.prompt = "Choisir"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        NotesStore.shared.chosenFolder = url.path
-        Task { await NotesStore.shared.refresh(force: true) }
-    }
-
     private func chooseFolder() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true

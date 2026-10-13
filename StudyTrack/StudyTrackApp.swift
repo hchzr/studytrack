@@ -42,18 +42,12 @@ enum PreviewLaunch {
     static let groupSubjectFlag = "-groupSubject"
     /// Avec `-group`, ouvre une sous-page (`members`, `time`, `series`, `planning`).
     static let groupPageFlag = "-groupPage"
-    /// Avec `-group`, ouvre la feuille d'invitation (QR code et lien).
-    static let groupInviteFlag = "-groupInvite"
-    /// Avec `-group`, ouvre l'éditeur des matières du groupe.
-    static let groupSubjectsFlag = "-groupSubjects"
     /// Ouvre « Section et semestre » depuis le profil.
     static let schoolFlag = "-school"
     /// Ouvre « Import intelligent » depuis le profil.
     static let aiImportFlag = "-aiImport"
     /// Ouvre Profil › Intelligence artificielle › Assistant IA.
     static let assistantFlag = "-assistant"
-    /// Avec `-stats`, ouvre en plus « Vie de l'EPFL ».
-    static let epflLifeFlag = "-epflLife"
     /// Avec `-course` et l'onglet exercices, ouvre le détail de l'exercice
     /// portant ce numéro (`-exerciseDetail 3.1`).
     static let exerciseDetailFlag = "-exerciseDetail"

@@ -36,10 +36,6 @@ struct PresenceEntry: Identifiable, Equatable, Sendable {
     /// Bat un battement toutes les cinq minutes.
     static let heartbeat: TimeInterval = 300
 
-    /// Au-delà, on cesse complètement d'interroger le serveur : plus personne ne
-    /// peut être en ligne.
-    static let staleHorizon: TimeInterval = heartbeat * 2.4
-
     /// « 1 h 12 » — depuis combien de temps il travaille.
     func elapsedLabel(at now: Date) -> String {
         DateUtils.hoursLabel(seconds: Int(elapsed(at: now)))

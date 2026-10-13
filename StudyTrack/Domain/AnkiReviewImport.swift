@@ -34,18 +34,6 @@ enum AnkiReviewImport {
     /// En dessous, ce n'est pas une session : une carte révisée en passant.
     static let minimumSeconds = 60
 
-    /// La réponse brute de `cardReviews` : une liste de 9-uplets
-    /// `[reviewTime, cardID, usn, ease, ivl, lastIvl, factor, time(ms), type]`.
-    static func reviews(from outcome: AnkiOutcome, deck: String) -> [AnkiReview] {
-        guard case .value(.array(let rows)) = outcome else { return [] }
-        return rows.compactMap { row in
-            guard case .array(let fields) = row, fields.count >= 8,
-                  case .number(let id) = fields[0],
-                  case .number(let time) = fields[7] else { return nil }
-            return AnkiReview(id: Int64(id), durationMs: Int(time), deck: deck)
-        }
-    }
-
     /// Regroupe des révisions en sessions, paquet par paquet.
     ///
     /// Une révision présente dans deux paquets (un paquet parent et son sous-

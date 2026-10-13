@@ -155,11 +155,5 @@ enum ContrastSurface {
             : (ColorContrast.rgb(fromHex: "#FFFDF8") ?? ColorContrast.RGB(r: 1, g: 1, b: 1))
     }
 
-    /// Surface d'un widget : le système y applique son propre fond.
-    static func widgetRGB(for style: UIUserInterfaceStyle) -> ColorContrast.RGB {
-        style == .dark
-            ? ColorContrast.RGB(r: 0.11, g: 0.11, b: 0.12)
-            : ColorContrast.RGB(r: 1, g: 1, b: 1)
-    }
 }
 #endif

@@ -72,16 +72,12 @@ for course in courses.sorted(by: { $0.code < $1.code }) {
     check((0...1).contains(p.correctionPercent), "\(course.code) corrections ∈ [0,1]")
     check(p.exerciseCount == course.allExercises.filter { !$0.isBonus }.count,
           "\(course.code) : les bonus sont exclus du dénominateur")
-    let weeks = ProgressEngine.weeklyProgress(for: course)
-    check(!weeks.isEmpty, "\(course.code) : \(weeks.count) semaines planifiées")
-    check(weeks.allSatisfy { (0...1).contains($0.overallPercent) },
-          "\(course.code) : pourcentages hebdo valides")
 }
 
 print("== WorkloadEngine (EPFL) ==")
 for course in courses.sorted(by: { $0.code < $1.code }) {
     let d = WorkloadEngine.delta(for: course, hoursPerCredit: 30)
-    print("  \(course.code) : attendu \(d.expectedLabel) = cours \(DateUtils.hoursLabel(seconds: d.lectureSeconds)) + perso \(DateUtils.hoursLabel(seconds: d.exerciseSeconds)) · réel \(d.actualLabel) (dont amphi \(d.classLabel)) · écart \(d.deltaLabel)")
+    print("  \(course.code) : attendu \(d.expectedLabel) = cours \(DateUtils.hoursLabel(seconds: d.lectureSeconds)) + perso \(DateUtils.hoursLabel(seconds: d.exerciseSeconds)) · réel \(d.actualLabel) (dont amphi \(DateUtils.hoursLabel(seconds: d.classSeconds)))")
     check(d.expectedSeconds > 0, "\(course.code) charge attendue > 0")
     check(d.lectureSeconds + d.exerciseSeconds == d.expectedSeconds,
           "\(course.code) split cours+perso = attendu")
@@ -133,7 +129,7 @@ if let sample = courses.first {
     sample.weeklySelfStudyHours = saved
 }
 check(aggregate.expectedSeconds > 0 && aggregate.actualSeconds > 0,
-      "agrégat : attendu \(aggregate.expectedLabel) / réel \(aggregate.actualLabel) / écart \(aggregate.deltaLabel)")
+      "agrégat : attendu \(aggregate.expectedLabel) / réel \(aggregate.actualLabel)")
 
 print("== Théorie typée (cours sans vidéo) ==")
 let projectCourse = courses.first { $0.code == "PROJ-101" }
@@ -160,8 +156,6 @@ check(Set(TheoryKind.allCases.map(\.label)).count == 4,
 
 print("== Durée de vidéo par semaine ==")
 let cs = courses.first { $0.code == "CS-250" }!
-let week1 = ProgressEngine.plannedVideoSeconds(for: cs, week: 1)
-check(week1 == 2700 + 3120 + 2400, "CS-250 semaine 1 = \(DateUtils.durationLabel(seconds: week1))")
 check(!ProgressEngine.remainingVideos(for: cs, week: 2).isEmpty,
       "CS-250 semaine 2 : vidéos restantes (\(ProgressEngine.remainingVideos(for: cs, week: 2).count))")
 
@@ -513,9 +507,6 @@ check(TimerText.text(from: 5400) == "1:30", "écriture heures:minutes — \(Time
 check(TimerText.text(from: 2700) == "0:45", "moins d'une heure")
 check(TimerText.text(from: 0) == "0:00", "zéro")
 check(TimerText.text(from: -10) == "0:00", "un négatif s'affiche zéro")
-check(TimerText.longText(from: 5400) == "1 h 30", "écriture longue — \(TimerText.longText(from: 5400))")
-check(TimerText.longText(from: 3600) == "1 h", "une heure pile")
-check(TimerText.longText(from: 2700) == "45 min", "moins d'une heure")
 
 // Aller-retour : ce que le champ écrit doit se relire tel quel.
 for seconds in [0.0, 60.0, 600.0, 2700.0, 5400.0, 7200.0] {
@@ -655,116 +646,6 @@ check(emptyExport["format"] as? String == "studytrack.assistant",
       "un export vide garde son format")
 check((emptyExport["courses"] as? [[String: Any]])?.isEmpty == true,
       "…et une liste de cours vide plutôt qu'absente")
-
-print("== Anki : AnkiConnect ==")
-// L'adresse : on accepte ce que les gens tapent vraiment.
-check(AnkiConnect.normalizeEndpoint("192.168.1.42:8765") == "http://192.168.1.42:8765",
-      "un hôte sans schéma reçoit « http:// »")
-check(AnkiConnect.normalizeEndpoint("http://127.0.0.1:8765/") == "http://127.0.0.1:8765",
-      "la barre finale est retirée")
-check(AnkiConnect.normalizeEndpoint("  http://mac.local:8765  ") == "http://mac.local:8765",
-      "les espaces sont ignorés")
-check(AnkiConnect.normalizeEndpoint("") == nil, "une adresse vide ne donne rien")
-check(AnkiConnect.normalizeEndpoint("   ") == nil, "une adresse blanche non plus")
-check(AnkiConnect.normalizeEndpoint("http://pas une url") == nil, "une adresse invalide est refusée")
-
-// La requête : le format exact attendu par AnkiConnect.
-let ankiRequest = AnkiConnect.requestData(action: "deckNames")
-check(ankiRequest != nil, "la requête est sérialisable")
-if let ankiRequest,
-   let object = try? JSONSerialization.jsonObject(with: ankiRequest) as? [String: Any] {
-    check(object["action"] as? String == "deckNames", "l'action est portée telle quelle")
-    check(object["version"] as? Int == AnkiConnect.protocolVersion,
-          "la version du protocole est annoncée (\(object["version"] ?? "-"))")
-    check(object["params"] != nil, "les paramètres sont présents, même vides")
-}
-let addRequest = AnkiConnect.requestData(action: "addNote",
-                                         params: ["note": ["deckName": "Test"]])
-if let addRequest,
-   let object = try? JSONSerialization.jsonObject(with: addRequest) as? [String: Any],
-   let params = object["params"] as? [String: Any] {
-    check(params["note"] != nil, "les paramètres sont imbriqués sous « params »")
-}
-
-// La réponse : AnkiConnect signale ses erreurs **dans** un corps HTTP 200.
-func ankiOutcome(_ json: String) -> AnkiOutcome {
-    AnkiConnect.outcome(from: Data(json.utf8))
-}
-check(ankiOutcome(#"{"result": 6, "error": null}"#).isSuccess, "une réponse sans erreur réussit")
-check(ankiOutcome(#"{"result": ["Default", "StudyTrack"], "error": null}"#).stringList
-        == ["Default", "StudyTrack"],
-      "une liste de paquets est lue")
-check(ankiOutcome(#"{"result": null, "error": null}"#).isSuccess, "un résultat nul est valide")
-check(ankiOutcome(#"{"result": null, "error": "collection is not available"}"#).errorMessage != nil,
-      "une erreur non vide est retenue")
-check(ankiOutcome(#"{"result": null, "error": ""}"#).isSuccess,
-      "une erreur vide n'est pas une erreur")
-check(ankiOutcome("pas du json").errorMessage != nil, "une réponse illisible est signalée")
-check(ankiOutcome(#"{"autre": 1}"#).errorMessage != nil, "une réponse sans résultat est signalée")
-
-// Les booléens arrivent en `1` dans `NSNumber` : il ne faut pas les confondre.
-check(AnyJSON(raw: true) == .bool(true), "un vrai booléen est un booléen")
-check(AnyJSON(raw: 1) == .number(1), "un nombre reste un nombre")
-check(AnyJSON(raw: 1.5) == .number(1.5), "un décimal aussi")
-
-// Les messages d'Anki supposent qu'on sait de quoi ils parlent.
-check(AnkiConnect.explain("collection is not available").contains("collection"),
-      "« collection is not available » est expliqué")
-check(AnkiConnect.explain("deck was not found: Test").contains("paquet"),
-      "« deck was not found » est expliqué")
-check(AnkiConnect.explain("cannot create note because it is a duplicate").contains("existe déjà"),
-      "un doublon est expliqué")
-check(AnkiConnect.explain("erreur inconnue") == "erreur inconnue",
-      "un message inconnu est rendu tel quel, sans invention")
-
-// ── Les cartes ──────────────────────────────────────────────────────────────
-let noteSeries = ExerciseSeries(course: courses.first { $0.code == "CS-250" }, seriesNumber: 3)
-let noteExercise = Exercise(series: noteSeries, exerciseNumber: "3.2", title: "Tri fusion")
-noteExercise.redoRequired = true
-noteExercise.correctionNote = "Diviser puis fusionner en O(n log n)."
-let exerciseNote = AnkiNoteFactory.exercise(noteExercise, deck: "StudyTrack")
-check(exerciseNote.deckName == "StudyTrack", "le paquet est celui demandé")
-check(exerciseNote.modelName == "Basic", "le modèle par défaut est Basic")
-check(exerciseNote.fields["Front"]?.contains("CS-250") == true,
-      "le recto porte le cours — \(exerciseNote.fields["Front"] ?? "-")")
-check(exerciseNote.fields["Front"]?.contains("Exercice 3.2") == true, "…et le numéro")
-check(exerciseNote.fields["Back"]?.contains("O(n log n)") == true,
-      "le verso porte la note de correction")
-check(exerciseNote.tags.contains("StudyTrack"), "l'étiquette StudyTrack est posée")
-check(exerciseNote.tags.contains("à-refaire"), "…et une étiquette « à refaire »")
-
-let plainExercise = Exercise(series: noteSeries, exerciseNumber: "3.3")
-let plainNote = AnkiNoteFactory.exercise(plainExercise, deck: "StudyTrack")
-check(plainNote.fields["Back"] == "À compléter.",
-      "sans contenu, le verso invite à compléter au lieu d'être vide")
-// Série de démonstration : détachée du cours, sinon elle entre dans la base
-// du semestre d'exemple (et dans la sauvegarde testée plus bas).
-noteSeries.course = nil
-context.delete(noteSeries)
-
-let noteCourse = courses.first { $0.code == "CS-250" }!
-let theoryItem = TheoryItem(course: noteCourse, sectionNumber: 1, number: "1.2",
-                            title: "Analyse asymptotique")
-let unsentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
-check(unsentTheory.fields["Front"]?.contains("Théorie 1.2") == true,
-      "le recto porte la catégorie et le numéro — \(unsentTheory.fields["Front"] ?? "-")")
-check(unsentTheory.fields["Back"] == "À résumer.", "sans résumé, le verso invite à résumer")
-check(unsentTheory.tags.contains("à-résumer"), "l'étiquette « à résumer » est posée")
-
-theoryItem.summaryText = "La complexité se décrit en grand O."
-let sentTheory = AnkiNoteFactory.theory(theoryItem, deck: "StudyTrack")
-check(sentTheory.fields["Back"]?.contains("grand O") == true, "le résumé devient le verso")
-theoryItem.course = nil
-context.delete(theoryItem)
-
-// Le corps envoyé à AnkiConnect.
-let payload = exerciseNote.payload
-if let note = payload["note"] as? [String: Any] {
-    check(note["deckName"] as? String == "StudyTrack", "le corps porte le paquet")
-    check(note["fields"] != nil, "…les champs")
-    check((note["options"] as? [String: Any])?["allowDuplicate"] as? Bool == false,
-          "les doublons sont refusés : Anki le fait mieux que nous")
-}
 
 print("== Live Activity : le compteur ne repart pas de zéro ==")
 // Le bogue : l'état portait `accumulated` **et** `runningSince`, et le compteur
@@ -1760,10 +1641,6 @@ check(third.label == "Bloc 3", "libellé du bloc")
 
 check(PomodoroEngine.status(elapsed: -5, focusMinutes: 25).blockNumber == 1,
       "un temps négatif ne produit pas un bloc négatif")
-check(PomodoroEngine.blocksRemaining(elapsed: 1500, targetBlocks: 4, focusMinutes: 25) == 3,
-      "trois blocs restants sur un objectif de quatre")
-check(PomodoroEngine.blocksRemaining(elapsed: 1500 * 5, targetBlocks: 4, focusMinutes: 25) == 0,
-      "un objectif dépassé ne donne pas de blocs négatifs")
 
 print("== Raccourcis du chrono ==")
 let defaultShortcuts = FocusShortcutDefaults.make(from: ["CS-250", "MATH-101"])
@@ -2084,146 +1961,6 @@ check(snapshot.contains { $0.kind == .holiday }, "l'instantané contient les jou
 check(snapshot.contains { $0.kind == .deadline }, "…et les délais")
 check(snapshot.filter(\.isApproximate).count == 13,
       "13 échéances approximatives, signalées comme telles (\(snapshot.filter(\.isApproximate).count))")
-
-print("== Couverture du suivi : qu'est-ce qui échappe à l'app ? ==")
-// Un cours modèle, volontairement sain : tout est là, rien à signaler.
-func healthyCourse(code: String = "OK-100") -> CourseCoverageInput {
-    CourseCoverageInput(code: code, name: "Cours modèle", isTracked: true, hasTerm: true,
-                        hasLectures: true, currentWeek: 5, termWeeks: 14,
-                        theoryCount: 8, theoryWithoutDuration: 0, theoryWatchedNotSummarized: 0,
-                        seriesNumbersWithNoExercise: [], overdueSeries: [], misplannedSeries: [],
-                        exerciseCount: 20, notDoneExerciseCount: 4,
-                        doneNotCorrectedCount: 0, toRedoCount: 0,
-                        examCount: 1, upcomingExamCount: 1)
-}
-check(CoverageEngine.audit(healthyCourse()).isHealthy,
-      "un cours complet ne produit aucun manque")
-check(CoverageEngine.audit(healthyCourse()).findings.isEmpty,
-      "…et exactement aucun constat")
-
-// Un cours archivé n'a pas à être complet : il n'est plus suivi.
-var archived = healthyCourse(code: "OLD-100")
-archived.isTracked = false
-archived.theoryCount = 0
-archived.examCount = 0
-check(CoverageEngine.audit(archived).findings.isEmpty,
-      "un cours archivé n'est pas audité")
-check(CoverageEngine.audit(archived).isTracked == false, "…et reste distinguable")
-
-// Chaque famille de manque, isolément.
-var noTerm = healthyCourse(); noTerm.hasTerm = false
-check(CoverageEngine.audit(noTerm).blocking.contains { $0.category == .foundation },
-      "cours sans semestre = manque bloquant")
-
-var empty = healthyCourse(); empty.theoryCount = 0; empty.exerciseCount = 0
-check(CoverageEngine.audit(empty).blocking.contains { $0.title.contains("vide") },
-      "cours sans aucun contenu = manque bloquant")
-check(CoverageEngine.audit(empty).blocking.allSatisfy { !$0.title.contains("OK-100") },
-      "le titre du constat ne porte pas le code : l'écran l'affiche à part")
-check(CoverageEngine.audit(empty).blocking.allSatisfy { $0.courseCode == "OK-100" },
-      "…mais le constat sait de quel cours il parle")
-
-var emptySeries = healthyCourse(); emptySeries.seriesNumbersWithNoExercise = [3, 4]
-let emptySeriesFindings = CoverageEngine.audit(emptySeries).findings
-check(emptySeriesFindings.contains { $0.category == .content && $0.title.contains("2 séries") },
-      "séries sans exercice signalées — \(emptySeriesFindings.first { $0.category == .content }?.title ?? "-")")
-
-var overdue = healthyCourse(); overdue.overdueSeries = [3]
-check(CoverageEngine.audit(overdue).warnings.contains { $0.category == .planning },
-      "série en retard = avertissement de planification")
-
-var misplanned = healthyCourse(); misplanned.misplannedSeries = [22]
-check(CoverageEngine.audit(misplanned).findings.contains { $0.category == .planning && $0.severity == .info },
-      "série planifiée hors semestre = remarque, pas un défaut")
-
-var notCorrected = healthyCourse(); notCorrected.doneNotCorrectedCount = 7
-check(CoverageEngine.audit(notCorrected).warnings.contains { $0.category == .correction },
-      "exercices faits non corrigés = incomplet")
-
-var toRedo = healthyCourse(); toRedo.toRedoCount = 2
-check(CoverageEngine.audit(toRedo).warnings.contains { $0.category == .correction },
-      "exercices à refaire = incomplet")
-
-var noExam = healthyCourse(); noExam.examCount = 0; noExam.upcomingExamCount = 0
-check(CoverageEngine.audit(noExam).warnings.contains { $0.category == .exams },
-      "cours sans évaluation = incomplet")
-
-var pastExams = healthyCourse(); pastExams.upcomingExamCount = 0
-let pastFindings = CoverageEngine.audit(pastExams).findings
-check(pastFindings.contains { $0.category == .exams && $0.severity == .info },
-      "évaluations toutes passées = remarque, pas un défaut")
-
-var unwatched = healthyCourse()
-unwatched.theoryWatchedNotSummarized = 3
-unwatched.theoryWithoutDuration = 2
-let theoryFindings = CoverageEngine.audit(unwatched).findings.filter { $0.category == .theory }
-check(theoryFindings.count == 2, "les deux remarques de théorie sont distinctes (\(theoryFindings.count))")
-check(theoryFindings.allSatisfy { $0.severity == .info },
-      "…et aucune n'est comptée comme un manque réel")
-
-// Le cours sain ne doit pas être « incomplet » : c'est tout l'intérêt du score.
-check(CoverageEngine.audit(healthyCourse()).isHealthy,
-      "les remarques de confort ne rendent pas un cours incomplet")
-
-// ── Rapport global ──────────────────────────────────────────────────────────
-let healthyReport = CoverageEngine.report(courses: [healthyCourse()],
-                                          hasTerm: true, hasTimetable: true)
-check(healthyReport.isComplete, "rapport complet quand tout est là")
-check(healthyReport.coverage == 1, "couverture à 100 % — \(Int(healthyReport.coverage * 100)) %")
-check(healthyReport.healthyCourses == 1, "un cours sain compté")
-
-let noTermReport = CoverageEngine.report(courses: [healthyCourse()],
-                                         hasTerm: false, hasTimetable: true)
-check(noTermReport.globalFindings.contains { $0.severity == .blocking },
-      "sans semestre, un manque bloquant est remonté au niveau global")
-check(noTermReport.coverage == 1,
-      "…sans artificiellement pénaliser les cours, qui n'y sont pour rien")
-
-let noTimetableReport = CoverageEngine.report(courses: [healthyCourse()],
-                                              hasTerm: true, hasTimetable: false)
-check(noTimetableReport.globalFindings.contains { $0.id == "socle.horaire" },
-      "sans horaire importé, une suggestion est proposée")
-check(noTimetableReport.globalFindings.allSatisfy { $0.severity != .blocking },
-      "…et ce n'est pas un manque bloquant")
-
-let emptyReport = CoverageEngine.report(courses: [], hasTerm: true, hasTimetable: true)
-check(emptyReport.coverage == 0, "sans cours suivi, la couverture est nulle sans division par zéro")
-check(emptyReport.globalFindings.contains { $0.id == "socle.cours" }, "…et l'absence de cours est dite")
-
-let mixedReport = CoverageEngine.report(courses: [healthyCourse(code: "A-100"),
-                                                  healthyCourse(code: "B-100"),
-                                                  noExam],
-                                        hasTerm: true, hasTimetable: true)
-check(mixedReport.trackedCount == 3, "trois cours suivis")
-check(mixedReport.healthyCourses == 2, "deux cours sans manque (\(mixedReport.healthyCourses))")
-check(abs(mixedReport.coverage - 2.0 / 3.0) < 0.001,
-      "couverture = 2/3 — \(String(format: "%.3f", mixedReport.coverage))")
-check(mixedReport.count(.warning) >= 1, "les avertissements sont comptés (\(mixedReport.count(.warning)))")
-check(mixedReport.allFindings.first?.severity == .blocking
-      || mixedReport.count(.blocking) == 0,
-      "le tri met les manques bloquants en tête")
-check(mixedReport.findings(in: .exams).count == 1, "regroupement par famille")
-
-// ── Lecture des modèles ─────────────────────────────────────────────────────
-let coverageCourse = courses.first { $0.code == "CS-250" }
-if let coverageCourse {
-    let input = CoverageBuilder.input(for: coverageCourse)
-    check(input.code == coverageCourse.displayCode, "code lu depuis le modèle")
-    check(input.hasTerm, "le cours d'exemple a bien un semestre")
-    check(input.exerciseCount == coverageCourse.allExercises.count,
-          "exercices comptés (\(input.exerciseCount))")
-    check(input.examCount == coverageCourse.exams.count, "évaluations comptées (\(input.examCount))")
-    check(input.doneNotCorrectedCount <= input.exerciseCount,
-          "les exercices non corrigés forment un sous-ensemble des exercices")
-    check(input.seriesNumbersWithNoExercise.count <= coverageCourse.series.count,
-          "les séries vides forment un sous-ensemble des séries")
-}
-let modelReport = CoverageBuilder.report(courses: courses,
-                                         term: AcademicTerm.resolve(from: [builderTerm]),
-                                         hasTimetable: true)
-check(modelReport.trackedCount == courses.filter(\.isTracked).count,
-      "tous les cours suivis sont audités (\(modelReport.trackedCount))")
-check(modelReport.courses.count == courses.count, "tous les cours sont représentés")
 
 print("== Diagnostic des erreurs Supabase ==")
 // Ce traducteur a menti deux fois : « politiques RLS » sans dire quelle table, et
@@ -3045,8 +2782,6 @@ let todos = DailyPlanner.todos(for: courses.filter(\.isTracked), limit: 20)
 check(!todos.isEmpty, "des tâches à faire sont proposées (\(todos.count))")
 check(todos.allSatisfy { $0.week >= 1 }, "chaque tâche porte une semaine valide")
 check(todos == todos.sorted { $0.kind.rank < $1.kind.rank }, "tâches triées par priorité")
-let weeklyVideoMinutes = DailyPlanner.weeklyVideoMinutes(for: courses)
-check(weeklyVideoMinutes >= 0, "durée de vidéo hebdomadaire : \(weeklyVideoMinutes) min")
 
 print("== ICSParser (horaire EPFL) ==")
 let ics = """
@@ -3366,26 +3101,17 @@ do {
     check(groups.first!.day > groups.last!.day, "le plus récent d'abord")
     check(groups.allSatisfy { g in g.sessions.allSatisfy { cal.isDate($0.startedAt, inSameDayAs: g.day) } },
           "chaque session est dans le bon jour")
-    let avg = SessionStats.averageActiveDaySeconds(totals)
-    check(avg > 0 && avg == sum / totals.filter { !$0.isEmpty }.count, "moyenne sur les jours actifs seulement")
-    check(SessionStats.averageActiveDaySeconds([]) == 0, "moyenne vide = 0")
 }
 
 print("== WidgetFormat : heures en dixièmes arrondis ==")
-// Un instantané écrit par la version précédente (sans `next`, `courses`,
-// `timer`) doit se relire : sinon, après une mise à jour, les widgets restent
+// Un instantané écrit par une version précédente (champs retirés ou absents) doit se relire : sinon, après une mise à jour, les widgets restent
 // vides jusqu'à la prochaine ouverture de l'app.
 let oldSnapshot = #"{"updatedAt":"2026-09-20T10:00:00Z","weekSeconds":3600,"streak":2,"level":1,"xp":10,"todoCount":1,"todos":[]}"#
 let snapshotDecoder = JSONDecoder()
 snapshotDecoder.dateDecodingStrategy = .iso8601
 let decodedOld = try? snapshotDecoder.decode(WidgetSnapshot.self, from: Data(oldSnapshot.utf8))
-check(decodedOld?.weekSeconds == 3600 && decodedOld?.next == nil && decodedOld?.courses == nil,
+check(decodedOld != nil && decodedOld?.courses == nil,
       "un instantané de la version précédente se relit")
-let startLink = WidgetLink.start(WidgetAction(targetKind: "exercise", targetID: "X", courseID: "C", courseCode: "CS-250",
-                                          title: "Exercice 3.2", detail: "", reason: "À refaire", colorHex: "#000000",
-                                          taskType: "exercise", icon: "timer"))
-check(startLink.absoluteString.hasPrefix("studytrack://focus?course=CS-250&type=exercise&label="),
-      "le lien « démarrer » porte le cours, le type et le libellé — \(startLink.absoluteString)")
 check(WidgetFormat.hours(45 * 60) == "45 min", "45 min")
 check(WidgetFormat.hours(2 * 3600) == "2 h", "2 h")
 check(WidgetFormat.hours(95 * 60) == "1,6 h", "1 h 35 → 1,6 h (l'ancien code donnait 1,3 h)")
@@ -3599,39 +3325,6 @@ do {
     check(r("prix _ unitaire") == ["prix _ unitaire"], "un « _ » isolé entre espaces reste du texte")
     check(M.plain("\\unknown{x}") == "unknownx", "commande inconnue : son nom, pas un trou")
     check(!M.hasMarkup("Montrer la borne"), "texte sans formule : rien à faire")
-}
-
-print("== NextActionEngine : une seule prochaine action ==")
-do {
-    let now = Date()
-    let course = Course(code: "NXT-101", name: "Next", credits: 5)
-    course.isTracked = true
-    let later = ExerciseSeries(course: course, seriesNumber: 1, title: "Série 1", plannedWeek: 1)
-    let soon = ExerciseSeries(course: course, seriesNumber: 2, title: "Série 2", plannedWeek: 2,
-                              dueDate: now.addingTimeInterval(20 * 3600))
-    let e1 = Exercise(series: later, exerciseNumber: "1.1", sortOrder: 0)
-    e1.redoRequired = true
-    e1.doneAt = now
-    let e2 = Exercise(series: soon, exerciseNumber: "2.1", sortOrder: 0)
-    e2.doneAt = now
-    let e3 = Exercise(series: soon, exerciseNumber: "2.2", sortOrder: 1)
-    later.exercises = [e1]
-    soon.exercises = [e2, e3]
-    course.series = [later, soon]
-    let exam = Exam(course: course, kind: .midterm, title: "Midterm", date: now.addingTimeInterval(3 * 86400))
-    course.exams = [exam]
-
-    let actions = NextActionEngine.actions(for: [course], now: now)
-    check(actions.first?.title == e3.displayNumber, "la série à rendre dans 20 h passe en premier — \(actions.first?.title ?? "-")")
-    if case .seriesDue = actions.first?.reason {} else { check(false, "raison : série à rendre") }
-    check(actions.first?.detail.contains("1 exercice restant") == true, "…avec ce qui reste — \(actions.first?.detail ?? "")")
-    check(actions.dropFirst().first?.reason == .redo, "puis l'exercice à refaire")
-    check(actions.contains { if case .exam = $0.reason { return true } else { return false } }, "une évaluation dans 3 jours propose une révision")
-    check(Set(actions.map(\.id)).count == actions.count, "aucune action en double")
-    soon.dueDate = now.addingTimeInterval(5 * 86400)
-    check(NextActionEngine.actions(for: [course], now: now).first?.reason == .redo,
-          "une échéance lointaine ne passe plus devant « à refaire »")
-    check(NextActionEngine.relativeDay(now.addingTimeInterval(86400), now: now) == "demain", "« demain »")
 }
 
 print("== SeriesAIParsing : lecture de la réponse d'un modèle ==")
@@ -4152,9 +3845,9 @@ do {
 
 print("== Temps Anki relevé automatiquement ==")
 do {
-    let raw = #"{"result": [[1727510000000, 1, -1, 3, 1, 0, 2500, 20000, 1], [1727510060000, 2, -1, 3, 1, 0, 2500, 45000, 1], [1727513000000, 3, -1, 3, 1, 0, 2500, 70000, 1]], "error": null}"#
-    let parsed = AnkiReviewImport.reviews(from: ankiOutcome(raw), deck: "EPFL::MATH-101 Analyse I")
-    check(parsed.count == 3 && parsed[1].durationMs == 45000, "révisions lues dans la réponse de cardReviews")
+    let parsed = [AnkiReview(id: 1727510000000, durationMs: 20000, deck: "EPFL::MATH-101 Analyse I"),
+                  AnkiReview(id: 1727510060000, durationMs: 45000, deck: "EPFL::MATH-101 Analyse I"),
+                  AnkiReview(id: 1727513000000, durationMs: 70000, deck: "EPFL::MATH-101 Analyse I")]
     let drafts = AnkiReviewImport.sessions(from: parsed)
     check(drafts.count == 2, "deux sessions : 49 min d'écart coupent la série (\(drafts.count))")
     check(drafts.first?.seconds == 65 && drafts.first?.reviewCount == 2,
@@ -4561,8 +4254,6 @@ do {
           "échéance « Tuesday 29 September at 17:00 »")
     check(ExpliqueImport.lectureNumber("Lecture 5: Proofs (view on speaker)") == 5 && ExpliqueImport.lectureNumber("Proofs - 1") == nil,
           "numéro de cours")
-    check(ExpliqueImport.baseTitle("Lecture 3: Propositional/Predicate Logic (2026)") == "Lecture 3: Propositional/Predicate Logic",
-          "variantes retirées du titre")
     // Relevé réel (semaine 3 de CS-101) : trois enregistrements du cours 5, un du 6, deux vidéos à part.
     let lectures: [ExpliqueImport.Lecture] = [
         .init(week: 3, title: "Lecture 5: Proofs (view on speaker)", url: "https://explique.epfl.ch/cs101/v/a"),
@@ -6218,36 +5909,6 @@ do {
     check(old?.studyLocks == nil, "un état d'avant se lit (champ absent)")
 }
 
-// MARK: Cours d'essai parti dans iCloud (PreviewSeedCleanup)
-do {
-    let seedPDF = "file:///Users/x/studytrack/Analyse%20I%20Serie%2003.pdf"
-    check(PreviewSeedCleanup.isLeakedSeed(name: "Analyse I (classe inversée)", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
-                                          seriesAddresses: [seedPDF]), "cours d'essai reconnu")
-    check(!PreviewSeedCleanup.isLeakedSeed(name: "Analyse I classe inversée", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
-                                           seriesAddresses: [seedPDF]), "le vrai cours (autre nom) est gardé")
-    check(!PreviewSeedCleanup.isLeakedSeed(name: "Analyse I (classe inversée)", contentSources: ["https://botafogo.epfl.ch/analyse-1-flipped/"],
-                                           seriesAddresses: ["https://moodle.epfl.ch/pluginfile.php/1/serie3.pdf"]), "sans le PDF du dépôt : gardé")
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-    if let container = try? ModelContainer(for: schema, configurations: [config]) {
-        let context = ModelContext(container)
-        let real = Course(code: "MATH-101", name: "Analyse I classe inversée", colorHex: "#000000")
-        let seed = Course(code: "MATH-101", name: "Analyse I (classe inversée)", colorHex: "#4F46E5")
-        seed.contentSources = ["https://botafogo.epfl.ch/analyse-1-flipped/"]
-        context.insert(real); context.insert(seed)
-        context.insert(ExerciseSeries(course: seed, seriesNumber: 3, title: "Série 3", plannedWeek: 1, urlString: seedPDF))
-        let session = StudySession(course: seed, taskType: .exercise, startedAt: Date(), durationSeconds: 600)
-        context.insert(session)
-        try? context.save()
-        check(PreviewSeedCleanup.run(in: context) == 1, "cours d'essai supprimé")
-        let left = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
-        check(left.map(\.name) == ["Analyse I classe inversée"], "seul le vrai cours reste")
-        check(sessions.count == 1 && sessions.first?.course?.name == "Analyse I classe inversée", "son temps rejoint le vrai cours")
-    } else {
-        check(false, "base de test")
-    }
-}
-
 // MARK: Botafogo : noms et macros
 do {
     check(MathMarkup.plain("$x \\in \\bR$") == "x ∈ ℝ", "macro Botafogo \\bR → ℝ")
@@ -6373,9 +6034,6 @@ func runBenchmark() {
     let planner = measure("DailyPlanner.todos(limit: 12)") {
         _ = DailyPlanner.todos(for: benchTracked, limit: 12)
     }
-    let weeklyVideo = measure("DailyPlanner.weeklyVideoMinutes") {
-        _ = DailyPlanner.weeklyVideoMinutes(for: benchTracked)
-    }
     let workload = measure("WorkloadEngine.aggregate") {
         _ = WorkloadEngine.aggregate(courses: benchTracked, hoursPerCredit: 30)
     }
@@ -6405,10 +6063,10 @@ func runBenchmark() {
     let beforeTracked = 6 + benchTracked.count
 
     let before = Double(beforeTodos) * planner
-        + weeklyVideo + Double(beforeWorkload) * workload
+        + Double(beforeWorkload) * workload
         + weekWindow + Double(beforeTracked) * trackedFilter
         + progress
-    let after = planner + weeklyVideo + workload
+    let after = planner + workload
         + weekWindow + trackedFilter
         + progress
 

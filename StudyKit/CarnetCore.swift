@@ -238,7 +238,6 @@ struct PaperButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == InkButtonStyle {
     static var ink: InkButtonStyle { InkButtonStyle() }
-    static var inkLarge: InkButtonStyle { InkButtonStyle(large: true) }
 }
 
 extension ButtonStyle where Self == PaperButtonStyle {

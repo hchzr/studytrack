@@ -52,19 +52,6 @@ extension Color {
         }
     }
 
-    /// Remplissage d'une pastille de **verdict** (sureté, correction).
-    ///
-    /// Résolu plus strictement que `accessibleMark` (4.5:1 contre la carte) pour
-    /// que le glyphe évidé conserve lui aussi 4.5:1 : le contraste du glyphe
-    /// n'est autre que celui du remplissage contre la surface. Choisir blanc ou
-    /// noir à la main échouait — blanc sur `systemGreen` ne donne que 2.2:1 en
-    /// mode sombre.
-    var verdictFill: Color {
-        resolved { hue, surface in
-            ColorContrast.accessibleVariant(of: hue, against: surface, target: ColorContrast.textTarget)
-        }
-    }
-
     /// **Remplissage** d'une pastille de cette teinte : explicite, opaque, et
     /// identique quel que soit l'arrière-plan.
     var badgeFill: Color {

@@ -762,41 +762,6 @@ struct CourseDetailView: View {
     }
 }
 
-/// « Théorie  3/5  ▬▬▬▬░░ », une ligne par axe de la semaine.
-struct WeekAxisRow: View {
-    var title: String
-    var done: Int
-    var total: Int
-    var tint: Color
-    var trailing: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Layout.tight) {
-            HStack(alignment: .firstTextBaseline, spacing: Layout.inline) {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                if let trailing {
-                    Text(trailing)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: Layout.inline)
-                Text(total == 0 ? "—" : "\(done)/\(total)")
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(total > 0 && done == total ? Color.green.accessibleInk : .primary)
-                    .contentTransition(.numericText())
-            }
-            ProgressBar(progress: CourseProgress.ratio(done, total), color: tint, height: 6)
-                .opacity(total == 0 ? 0.35 : 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) : \(done) sur \(total)")
-    }
-}
-
 /// Les documents d'un cours, rangés par leur section d'origine sur Moodle.
 struct CourseDocumentsView: View {
     let course: Course

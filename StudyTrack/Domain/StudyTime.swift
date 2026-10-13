@@ -1,7 +1,9 @@
 import Foundation
+import SwiftData
 
 /// Le temps de travail **réel**, compté partout de la même façon : Aujourd'hui,
-/// le bilan, la charge EPFL et le classement des groupes.
+/// Moi, le bilan, la charge EPFL, les widgets, le Mac et les groupes —
+/// les sessions (chrono, saisies, Anki) **plus** les cours suivis.
 ///
 /// La règle :
 ///   • une heure de **cours** (amphi) de l'horaire compte toute seule, une fois
@@ -76,6 +78,24 @@ enum StudyTime {
         sessions.map { Block(start: $0.startedAt, seconds: $0.durationSeconds,
                              courseCode: $0.course?.code, taskType: $0.taskTypeRaw) }
             + lectureBlocks(events: events, sessions: sessions)
+    }
+
+    /// Tout ce qui compte entre deux dates, lu dans la base avec des
+    /// prédicats : seules les sessions et les séances de la fenêtre sont chargées.
+    ///
+    /// C'est **la** définition du temps de travail : Aujourd'hui, Moi, le
+    /// bilan, les widgets (iPhone et Mac) et la barre des menus l'utilisent.
+    static func blocks(in context: ModelContext, from start: Date, to end: Date) -> [Block] {
+        let sessions = (try? context.fetch(FetchDescriptor<StudySession>(
+            predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end }))) ?? []
+        let events = (try? context.fetch(FetchDescriptor<LinkedCalendarEvent>(
+            predicate: #Predicate { $0.startsAt >= start && $0.startsAt < end }))) ?? []
+        return blocks(events: events, sessions: sessions)
+    }
+
+    /// La somme des secondes de ces blocs.
+    static func total(_ blocks: [Block]) -> Int {
+        blocks.reduce(0) { $0 + $1.seconds }
     }
 
     /// Les secondes par jour d'une semaine (lundi = 0).

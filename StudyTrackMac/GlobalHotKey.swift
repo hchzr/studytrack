@@ -16,8 +16,6 @@ final class GlobalHotKey {
         self.action = action
     }
 
-    var isRegistered: Bool { reference != nil }
-
     func register() {
         guard reference == nil else { return }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))

@@ -46,13 +46,6 @@ enum DateUtils {
         return f
     }()
 
-    static let monthLabel: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_CH")
-        f.dateFormat = "MMMM yyyy"
-        return f
-    }()
-
     // MARK: Parsing
 
     /// Parse « 2025-02-17 », « 2025-02-17T08:00:00Z » ou avec fraction de seconde.
@@ -77,12 +70,6 @@ enum DateUtils {
         cal.firstWeekday = 2 // lundi
         let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
         return cal.date(from: comps).map { cal.startOfDay(for: $0) } ?? startOfDay(date)
-    }
-
-    static func isoWeekOfYear(_ date: Date) -> Int {
-        var cal = Calendar(identifier: .iso8601)
-        cal.firstWeekday = 2
-        return cal.component(.weekOfYear, from: date)
     }
 
     /// Numéro de semaine (1-based) d'une date relative au début du semestre.

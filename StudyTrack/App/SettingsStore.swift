@@ -34,10 +34,6 @@ final class SettingsStore {
         static let trackAttendance = "settings.trackAttendance"
         static let hasSeededSampleData = "settings.hasSeededSampleData"
         static let focusShortcuts = "settings.focusShortcuts"
-        static let ankiEndpoint = "settings.ankiEndpoint"
-        static let ankiDeck = "settings.ankiDeck"
-        static let ankiModel = "settings.ankiModel"
-        static let ankiLastReviewID = "settings.ankiLastReviewID"
         static let ankiLastSync = "settings.ankiLastSync"
         static let aiExtractionEnabled = "settings.aiExtractionEnabled"
         /// Anciennes clés du « service perso » (clé d'API saisie), retiré :
@@ -136,22 +132,6 @@ final class SettingsStore {
     var aiExtractionEnabled: Bool { didSet { defaults.set(aiExtractionEnabled, forKey: Key.aiExtractionEnabled) } }
 
     // MARK: Anki
-    /// Adresse d'AnkiConnect. Vide = fonctionnalité éteinte.
-    ///
-    /// Ce n'est pas `127.0.0.1` par défaut : sur un iPhone, cette adresse désigne
-    /// le téléphone lui-même, pas le Mac où tourne Anki. On laisse le champ vide
-    /// et l'écran explique quoi y mettre, plutôt que de proposer une valeur qui ne
-    /// peut pas marcher.
-    var ankiEndpoint: String { didSet { defaults.set(ankiEndpoint, forKey: Key.ankiEndpoint) } }
-    var ankiDeck: String { didSet { defaults.set(ankiDeck, forKey: Key.ankiDeck) } }
-    /// Modèle de note Anki. « Basic » est le nom par défaut d'Anki.
-    var ankiModel: String { didSet { defaults.set(ankiModel, forKey: Key.ankiModel) } }
-
-    var isAnkiConfigured: Bool { AnkiConnect.normalizeEndpoint(ankiEndpoint) != nil }
-
-    /// Dernière révision Anki déjà relevée (ms depuis 1970) : l'import suivant
-    /// ne demande que les révisions plus récentes.
-    var ankiLastReviewID: Double { didSet { defaults.set(ankiLastReviewID, forKey: Key.ankiLastReviewID) } }
     /// Dernier relevé réussi du temps Anki.
     var ankiLastSync: Date? { didSet { defaults.set(ankiLastSync, forKey: Key.ankiLastSync) } }
 
@@ -244,10 +224,6 @@ final class SettingsStore {
         self.timetableURLString = defaults.string(forKey: Key.timetableURLString) ?? ""
         self.hasSeededSampleData = defaults.bool(forKey: Key.hasSeededSampleData)
         self.focusShortcutsRaw = defaults.string(forKey: Key.focusShortcuts) ?? ""
-        self.ankiEndpoint = defaults.string(forKey: Key.ankiEndpoint) ?? ""
-        self.ankiDeck = defaults.string(forKey: Key.ankiDeck) ?? "StudyTrack"
-        self.ankiModel = defaults.string(forKey: Key.ankiModel) ?? "Basic"
-        self.ankiLastReviewID = defaults.double(forKey: Key.ankiLastReviewID)
         self.ankiLastSync = defaults.object(forKey: Key.ankiLastSync) as? Date
         self.contentAutoRefresh = defaults.object(forKey: Key.contentAutoRefresh) as? Bool ?? true
         self.contentLastRefresh = defaults.object(forKey: Key.contentLastRefresh) as? Date
@@ -268,13 +244,4 @@ final class SettingsStore {
         for key in Key.legacyAI { defaults.removeObject(forKey: key) }
     }
 
-    /// Vrai quand la **build** porte une configuration Supabase — ce n'est plus un
-    /// réglage d'utilisateur (voir `SupabaseConfig`).
-    var isSupabaseConfigured: Bool {
-        SupabaseConfig.isConfigured
-    }
-
-    var hasTimetableURL: Bool {
-        !timetableURLString.trimmingCharacters(in: .whitespaces).isEmpty
-    }
 }

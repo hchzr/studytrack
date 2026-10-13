@@ -18,7 +18,6 @@ extension Carnet {
 }
 
 extension NSAppearance {
-    var isDark: Bool { bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
 }
 
 // MARK: - Pastilles

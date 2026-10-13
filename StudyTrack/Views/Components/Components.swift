@@ -233,29 +233,6 @@ struct LabeledProgress: View {
     }
 }
 
-/// Les trois axes d'un cours, empilés verticalement (jamais serrés sur une ligne).
-struct ProgressStack: View {
-    var progress: CourseProgress
-    var showsCounts: Bool = true
-
-    var body: some View {
-        VStack(spacing: 12) {
-            LabeledProgress(title: "Théorie",
-                            progress: progress.theoryPercent,
-                            color: TaskType.video.tint,
-                            countLabel: showsCounts ? "\(progress.watchedCount)/\(progress.videoCount) vidéos" : nil)
-            LabeledProgress(title: "Exercices",
-                            progress: progress.exercisePercent,
-                            color: TaskType.exercise.tint,
-                            countLabel: showsCounts ? "\(progress.doneCount)/\(progress.exerciseCount) faits" : nil)
-            LabeledProgress(title: "Corrections",
-                            progress: progress.correctionPercent,
-                            color: TaskType.correction.tint,
-                            countLabel: showsCounts ? "\(progress.correctedCount)/\(progress.doneCount) corrigés" : nil)
-        }
-    }
-}
-
 // MARK: - Contrôles
 
 /// Coche tactile de 44 pt.
@@ -285,54 +262,6 @@ struct CheckCircleButton: View {
         .buttonStyle(PressableStyle())
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "fait" : "à faire")
-    }
-}
-
-/// Sélecteur de sureté **visible** (vert / orange / rouge).
-///
-/// Le code couleur est l'information centrale du suivi d'exercices : il ne doit
-/// pas être caché derrière un menu. La teinte **ne porte jamais le sens seule** —
-/// la pastille sélectionnée porte aussi un glyphe (✓ / = / ?), parce que
-/// vert-orange-rouge est exactement la triade que le daltonisme rouge-vert
-/// confond. Les remplissages sont résolus pour rester lisibles sur la carte.
-struct ConfidenceControl: View {
-    var value: ConfidenceLevel?
-    var isEnabled: Bool = true
-    var onChange: (ConfidenceLevel?) -> Void
-
-    var body: some View {
-        HStack(spacing: Layout.tight) {
-            ForEach(ConfidenceLevel.allCases) { level in
-                let isOn = value == level
-                Button {
-                    Haptics.soft()
-                    onChange(isOn ? nil : level)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isOn ? level.color.verdictFill : level.color.badgeFill)
-                        if isOn {
-                            Image(systemName: level.glyph)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Theme.knockedOutInk)
-                                .transition(.scale(scale: 0.6).combined(with: .opacity))
-                        } else {
-                            Circle()
-                                .stroke(level.color.accessibleMark, lineWidth: 1.5)
-                        }
-                    }
-                    .frame(width: 26, height: 26)
-                    .frame(width: Layout.minTouch, height: Layout.minTouch)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!isEnabled)
-                .accessibilityLabel("Sureté \(level.label)")
-                .accessibilityAddTraits(isOn ? [.isSelected] : [])
-            }
-        }
-        .animation(.snappy(duration: 0.2), value: value)
-        .opacity(isEnabled ? 1 : 0.35)
     }
 }
 
@@ -377,67 +306,6 @@ struct Card<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-    }
-}
-
-/// Carte d'action principale : une seule chose à faire, un seul bouton.
-struct ActionCard: View {
-    var icon: String
-    var title: String
-    var subtitle: String
-    var actionTitle: String
-    var tint: Color = Theme.accent
-    /// Un sur-titre (« Maintenant ») : il dit **pourquoi** cette carte est là.
-    var eyebrow: String? = nil
-    var actionIcon: String = "play.fill"
-    var action: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let eyebrow {
-                Text(eyebrow.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.2)
-                    // Neutre : c'est l'icône qui porte le verdict. Un sur-titre
-                    // rouge criait « alerte » au-dessus d'un simple exercice.
-                    .foregroundStyle(.secondary)
-            }
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle().fill(tint.badgeFill).frame(width: 46, height: 46)
-                    Image(systemName: icon).font(.title3).foregroundStyle(tint.badgeInk)
-                }
-                VStack(alignment: .leading, spacing: Layout.tight) {
-                    Text(title)
-                        .font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            Button {
-                Haptics.tap()
-                action()
-            } label: {
-                Label(actionTitle, systemImage: actionIcon)
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.carnetPrimary)
-            .buttonBorderShape(.roundedRectangle(radius: 12))
-            // Le bouton est une **action** : toujours l'encre de l'app. La teinte
-            // de l'icône porte le verdict (à refaire, à jour) ; un grand bouton
-            // rouge criait « danger » là où il fallait lire « démarrer ».
-            .tint(Theme.accent)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.softBackground, in: RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
     }
 }
@@ -572,21 +440,6 @@ struct ConfidenceDot: View {
     }
 }
 
-/// Ligne « icône + texte » compacte.
-struct IconLabel: View {
-    var icon: String
-    var text: String
-    var tint: Color = .secondary
-
-    var body: some View {
-        HStack(spacing: Layout.tight) {
-            Image(systemName: icon).font(.caption2)
-            Text(text).font(.caption)
-        }
-        .foregroundStyle(tint.accessibleInk)
-    }
-}
-
 /// En-tête de section de liste.
 struct SectionHeader: View {
     var title: String
@@ -657,7 +510,6 @@ struct ChoiceCard: View {
         .buttonStyle(PressableStyle(scale: 0.98))
     }
 }
-
 
 // MARK: - Disposition en lignes
 

@@ -143,14 +143,6 @@ enum DailyPlanner {
             .map { $0 }
     }
 
-    /// Total de vidéo restante à regarder pour la semaine en cours, tous cours suivis.
-    static func weeklyVideoMinutes(for courses: [Course]) -> Int {
-        courses.filter(\.isTracked).reduce(0) { total, course in
-            total + ProgressEngine.remainingVideos(for: course, week: course.currentWeek)
-                .reduce(0) { $0 + $1.durationMinutes }
-        }
-    }
-
     private static func makeTodo(kind: StudyTodo.Kind,
                                  course: Course,
                                  targetID: UUID,

@@ -150,14 +150,6 @@ final class StudyGroup {
         subjectCodes.contains(code.uppercased())
     }
 
-    var sortedMembers: [GroupMember] {
-        members.sorted { $0.weeklySeconds > $1.weeklySeconds }
-    }
-
-    var membersSortedByTotal: [GroupMember] {
-        members.sorted { $0.totalSeconds > $1.totalSeconds }
-    }
-
     /// Mes matières communes : celles du groupe que je suis réellement.
     ///
     /// Un groupe peut travailler cinq matières dont je n'en suis que deux — les

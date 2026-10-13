@@ -43,8 +43,6 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         /// L'app arrêtée en dernier, pour le dire.
         var blockedName: String?
         var blockedAt: Date?
-        /// Le site refusé en dernier par le navigateur.
-        var refusedHost: String?
     }
 
     let screen = Screen()

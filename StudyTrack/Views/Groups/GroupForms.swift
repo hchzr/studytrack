@@ -441,3 +441,18 @@ struct PlanSessionView: View {
         dismiss()
     }
 }
+
+/// Ce qu'une session planifiée entraîne ailleurs — calendrier système et rappel —
+/// et qu'il faut défaire avec elle. Partagé par l'agenda et le planning de groupe.
+enum PlannedSessionActions {
+    @MainActor
+    static func delete(_ session: PlannedSession, context: ModelContext, app: AppContainer) {
+        if !session.externalCalendarEventID.isEmpty {
+            app.calendar.deleteEvent(identifier: session.externalCalendarEventID)
+        }
+        app.notifications.cancelSession(id: session.id)
+        context.delete(session)
+        try? context.save()
+        Haptics.tap()
+    }
+}

@@ -63,10 +63,6 @@ final class AcademicTerm {
     /// Semaine courante bornée à `1...totalWeeks`.
     var currentWeek: Int { DateUtils.clampedWeek(for: Date(), term: self) }
 
-    var weeksRemaining: Int { max(0, totalWeeks - currentWeek + 1) }
-
-    var weeksElapsed: Int { min(max(currentWeek, 0), max(totalWeeks, 1)) }
-
     /// État lisible pour l'interface.
     var statusLabel: String {
         if hasEnded { return "Terminé" }

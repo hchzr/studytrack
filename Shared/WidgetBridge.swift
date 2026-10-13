@@ -7,64 +7,17 @@ import Foundation
 /// Foundation, et sert de contrat unique entre l'app et le widget.
 struct WidgetSnapshot: Codable, Equatable {
     var updatedAt: Date
-    var weekSeconds: Int
-    var streak: Int
-    var level: Int
-    var xp: Int
-    var todoCount: Int
-    var todos: [WidgetTodo]
-    var nextExamTitle: String?
-    var nextExamCourse: String?
-    var nextExamDate: Date?
-    /// La prochaine action — la même que l'accueil et le dock (`NextActionEngine`).
-    /// Facultatifs : un instantané écrit par une version précédente se relit.
-    var next: WidgetAction?
     /// Avancement de la semaine, cours par cours.
-    var courses: [WidgetCourse]?
+    var courses: [WidgetCourse]? = nil
     /// Chrono en cours, pour l'écran verrouillé.
-    var timer: WidgetTimer?
+    var timer: WidgetTimer? = nil
     /// Le temps de la semaine (lundi → dimanche) et l'attendu EPFL.
-    var week: WidgetWeek?
+    var week: WidgetWeek? = nil
     /// Ce qui a une heure aujourd'hui **et demain** : le widget passe au
     /// lendemain à minuit sans attendre l'app.
-    var schedule: [WidgetEvent]?
+    var schedule: [WidgetEvent]? = nil
     /// Les prochaines évaluations (trois au plus).
-    var deadlines: [WidgetDeadline]?
-
-    static let empty = WidgetSnapshot(updatedAt: .distantPast,
-                                      weekSeconds: 0,
-                                      streak: 0,
-                                      level: 1,
-                                      xp: 0,
-                                      todoCount: 0,
-                                      todos: [],
-                                      nextExamTitle: nil,
-                                      nextExamCourse: nil,
-                                      nextExamDate: nil)
-
-    var hasContent: Bool {
-        updatedAt != .distantPast
-    }
-}
-
-/// Une action à faire, avec de quoi la cocher ou la démarrer depuis un widget.
-struct WidgetAction: Codable, Equatable {
-    /// `exercise` ou `theory` quand elle se coche d'un geste ; `nil` sinon
-    /// (réviser pour une évaluation ne se « coche » pas).
-    var targetKind: String?
-    var targetID: String?
-    var courseID: String
-    var courseCode: String
-    var title: String
-    var detail: String
-    var reason: String
-    var colorHex: String
-    var taskType: String
-    var icon: String
-    /// Déjà cochée depuis le widget, en attente de l'app.
-    var isDone: Bool = false
-
-    var canComplete: Bool { targetKind != nil && targetID != nil }
+    var deadlines: [WidgetDeadline]? = nil
 }
 
 struct WidgetCourse: Codable, Equatable, Identifiable {
@@ -126,14 +79,6 @@ struct WidgetTimer: Codable, Equatable {
     var breakEndsAt: Date? = nil
     /// « Pause », « Pause longue ».
     var breakLabel: String? = nil
-}
-
-struct WidgetTodo: Codable, Equatable, Identifiable {
-    var id: String
-    var courseCode: String
-    var title: String
-    var kind: String
-    var colorHex: String
 }
 
 /// Lecture / écriture de l'instantané dans le conteneur partagé.
@@ -221,17 +166,6 @@ enum WidgetLink {
     static let today = URL(string: "studytrack://today")!
     static let courses = URL(string: "studytrack://courses")!
     static let agenda = URL(string: "studytrack://agenda")!
-
-    /// Démarre le chrono sur cette action : `studytrack://focus?course=…&type=…&label=…`.
-    static func start(_ action: WidgetAction) -> URL {
-        var components = URLComponents()
-        components.scheme = "studytrack"
-        components.host = "focus"
-        components.queryItems = [URLQueryItem(name: "course", value: action.courseCode),
-                                 URLQueryItem(name: "type", value: action.taskType),
-                                 URLQueryItem(name: "label", value: "\(action.courseCode) · \(action.title)")]
-        return components.url ?? focus
-    }
 
     /// Ouvre un cours : `studytrack://course?id=…`.
     static func course(_ id: String) -> URL {

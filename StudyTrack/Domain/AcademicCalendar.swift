@@ -61,13 +61,6 @@ enum MilestoneKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Les natures qu'un étudiant veut voir **en premier** dans l'agenda.
-    var isActionable: Bool {
-        switch self {
-        case .deadline, .examStart, .teachingStart: return true
-        default: return false
-        }
-    }
 }
 
 /// Une échéance du calendrier académique, indépendante de la persistance.

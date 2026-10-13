@@ -548,11 +548,5 @@ struct OnboardingView: View {
 }
 
 extension AppContainer {
-    /// Nom lisible de la section, avec repli quand aucune n'est choisie.
-    func sectionDisplayName(_ code: String) -> String {
-        guard !code.isEmpty else { return "Non renseignée" }
-        return EPFLCatalog.section(code: code).map { "\($0.name) (\($0.code))" } ?? code
-    }
 }
-
 

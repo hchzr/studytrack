@@ -323,9 +323,6 @@ enum TaskProvider: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Ce fournisseur permet-il de **créer** des tâches ?
-    var supportsWriting: Bool { true }
-
     /// Clé de réglage associée (jeton, URL…).
     var credentialLabel: String? {
         switch self {
@@ -424,31 +421,3 @@ enum AgendaItemKind: String, Identifiable {
 
 // MARK: - Période pour les récaps visuels
 
-enum StatsPeriod: String, CaseIterable, Identifiable {
-    case day, week, month
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .day: return "Jour"
-        case .week: return "Semaine"
-        case .month: return "Mois"
-        }
-    }
-    var days: Int {
-        switch self {
-        case .day: return 1
-        case .week: return 7
-        case .month: return 30
-        }
-    }
-
-    /// Ce que couvrent les totaux, en toutes lettres : « Semaine » seul laissait
-    /// croire à la semaine du calendrier, et les totaux contredisaient le graphique.
-    var rangeLabel: String {
-        switch self {
-        case .day: return "Aujourd'hui"
-        case .week: return "7 derniers jours"
-        case .month: return "30 derniers jours"
-        }
-    }
-}

@@ -17,7 +17,6 @@ struct AnkiSettingsView: View {
     @State private var password = ""
     @State private var collection: AnkiCollection?
     @State private var refreshToken = UUID()
-    @State private var showingLocal = false
     @State private var redownloading = false
 
     private var sync: AnkiWebSync { AnkiWebSync.shared }
@@ -39,15 +38,6 @@ struct AnkiSettingsView: View {
                     signInSection
                 }
                 statusSection
-                Section {
-                    DisclosureGroup("Anki Desktop sur le réseau local", isExpanded: $showingLocal) {
-                        TextField("Adresse AnkiConnect (192.168.1.42:8765)", text: $settings.ankiEndpoint)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                    }
-                    .tint(Carnet.ink)
-                }
             }
             .listRowBackground(Carnet.sheet)
         }
