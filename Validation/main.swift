@@ -5863,7 +5863,7 @@ do {
     <img src="/pluginfile.php/12/fig.png" alt="">
     <iframe src="https://api.cast.switch.ch/p/113/embedPlaykitJs/uiconf_id/1?iframeembed=true&amp;entry_id=0_5f16lokn" title="Cours 1"></iframe>
     <table><tr><th>Date</th><th>Salle</th></tr><tr><td>lundi</td><td>CE1</td></tr></table>
-    <pre>let x = 1</pre><p>&eacute;t&eacute; &amp; co</p></div>
+    <pre>let x = 1</pre><a href="#main" class="sr-only">Passer au contenu principal</a><p>&eacute;t&eacute; &amp; co</p></div>
     """
     let blocks = SiteHTML.blocks(html, base: base)
     check(blocks.first == .markdown("### Consignes"), "HTML : un titre")
@@ -5976,6 +5976,111 @@ do {
     }
     let doc = #"<document version="2.0"><heading level="2">Titre</heading><list style="bullet"><list-item><paragraph>un</paragraph></list-item></list><snippet language="py">print(1)</snippet></document>"#
     check(EdDiscussion.blocks(doc) == [.markdown("### Titre"), .markdown("- un"), .markdown("```\nprint(1)\n```")], "Ed : titre, liste, code")
+}
+
+// MARK: Ed : écrire, leçons, quiz
+do {
+    let doc = EdDiscussion.document(fromMarkdown: "Pourquoi **ça** marche si $x_n < 1$ ?\n\n- un\n- deux\n\n```\nprint(1)\n```")
+    check(doc == #"<document version="2.0"><paragraph>Pourquoi <bold>ça</bold> marche si <math>x_n &lt; 1</math> ?</paragraph><list style="bullet"><list-item><paragraph>un</paragraph></list-item><list-item><paragraph>deux</paragraph></list-item></list><snippet language="none" runnable="false" line-numbers="true">print(1)</snippet></document>"#,
+          "Ed : Markdown → document")
+    check(EdDiscussion.blocks(doc).first == .markdown("Pourquoi **ça** marche si \\(x_n < 1\\) ?"), "Ed : aller-retour du document")
+    check(EdDiscussion.categories(courseJSON: Data(#"{"course":{"settings":{"discussion":{"categories":[{"name":"General"},{"name":"Exercises"}]}}}}"#.utf8))
+          == ["General", "Exercises"], "Ed : catégories du forum")
+    let lessons = EdDiscussion.lessons(json: Data(#"{"lessons":[{"id":9,"title":"Quiz 1","module_id":3,"status":"attempted"}],"modules":[{"id":3,"name":"Semaine 1"}]}"#.utf8))
+    check(lessons == [.init(id: 9, title: "Quiz 1", module: "Semaine 1", status: "attempted")], "Ed : leçons et modules")
+    let slides = EdDiscussion.slides(lessonJSON: Data(#"{"lesson":{"slides":[{"id":1,"type":"document","title":"Intro","content":"<document/>","status":"completed"},{"id":2,"type":"quiz","title":"Q"}]}}"#.utf8))
+    check(slides.map(\.type) == ["document", "quiz"] && slides[0].isCompleted, "Ed : diapositives")
+    let questions = EdDiscussion.questions(json: Data(#"{"questions":[{"id":7,"data":{"type":"multiple-choice","content":"<document/>","answers":["<document>A</document>","<document>B</document>"],"multiple_selection":true}},{"id":8,"data":{"type":"true-false","content":"x"}},{"id":10,"data":{"type":"numerical","content":"y"}}]}"#.utf8))
+    check(questions.map(\.kind) == [.choice(multiple: true), .choice(multiple: false), .number] && questions[1].answers == ["Vrai", "Faux"],
+          "Ed : questions de quiz")
+    check((EdDiscussion.response(choices: [2, 0], text: "", for: .choice(multiple: true)) as? [Int]) == [0, 2]
+          && (EdDiscussion.response(choices: [], text: "3,5", for: .number) as? Double) == 3.5, "Ed : la réponse envoyée")
+}
+
+// MARK: Courseware : problèmes et navigation
+do {
+    let problem = EdXProblem.decode(#"{"url":"https://c/handler/xmodule_handler","title":"Question 1","prompt":"<p>?</p>","groups":[{"name":"input_x_2_1[]","type":"checkbox","options":[{"value":"choice_0","label":"A"},{"value":"choice_1","label":"B"}]}],"score":0,"total":1,"attempts":2}"#)
+    check(problem?.groups.first?.options.count == 2 && problem?.attempts == 2, "Courseware : un problème lu")
+    check(EdXProblem.formBody(["input_x_2_1[]": ["choice_0", "choice_1"]]) == "input_x_2_1%5B%5D=choice_0&input_x_2_1%5B%5D=choice_1",
+          "Courseware : le formulaire envoyé")
+    check(EdXProblem.result(json: Data(#"{"success":"correct","current_score":1.0,"total_possible":1.0}"#.utf8))?.isCorrect == true
+          && EdXProblem.result(json: Data(#"{"success":"incorrect"}"#.utf8))?.isCorrect == false, "Courseware : le verdict")
+    let edx = #"{"root":"r","blocks":{"r":{"type":"course","children":["c"]},"c":{"type":"chapter","display_name":"Ch","children":["s"]},"s":{"type":"sequential","display_name":"S","children":["u0","u1","u2"]},"u0":{"type":"vertical","display_name":"Accueil","completion":0,"children":[]},"u1":{"type":"vertical","display_name":"U1","completion":1,"children":[]},"u2":{"type":"vertical","display_name":"U2","completion":0,"children":[]}}}"#
+    if let outline = EdXOutline.parse(json: Data(edx.utf8)) {
+        check(outline.units.map(\.id) == ["u0", "u1", "u2"] && outline.units[1].completed && outline.resumeUnit?.id == "u2",
+              "Courseware : reprise après la dernière unité faite")
+        check(outline.place(of: "u2")?.sequence.title == "S", "Courseware : chapitre et séquence d'une unité")
+    } else { check(false, "Courseware : plan lisible") }
+}
+
+// MARK: Calcul : comme sur papier (MathWorkbench)
+do {
+    var session = MathWorkbench.Session()
+    func run(_ line: String) -> MathWorkbench.Output? { try? MathWorkbench.run(line, in: &session) }
+    check(run("x^2 - 2") == .plotted("f(x) = x^2 - 2") && session.engine.functions["f"] != nil, "une inconnue libre : tracée, sans « x n'est pas défini »")
+    check(run("sin(t)") == .plotted("g(t) = sin(t)"), "une deuxième fonction : g")
+    check(run("x^2 = 2") == .solutions(variable: "x", ["-1.41421", "1.41421"]) || {
+        if case .solutions(_, let roots)? = run("x^2 = 2") { return roots.count == 2 }; return false }(), "équation du second degré")
+    if case .solutions(_, let roots)? = run("z^5 = 1") {
+        check(roots.count == 5 && roots.contains("1") && roots.contains("e^(i·2π/5)"), "z⁵ = 1 : cinq racines, dont 1 et e^(i·2π/5)")
+    } else { check(false, "z⁵ = 1 résolu") }
+    if case .solutions(_, let roots)? = run("z^2 = -3+4i") {
+        check(Set(roots) == ["1 + 2i", "-1 - 2i"], "z² = -3+4i : ±(1+2i)")
+    } else { check(false, "z² = -3+4i résolu") }
+    if case .solutions(_, let roots)? = run("cos(x) = x") {
+        check(roots.count == 1 && roots[0].hasPrefix("0.739"), "cos(x) = x : racine numérique")
+    } else { check(false, "cos(x) = x résolu") }
+    check(run("(1+2i)/(3-i)") == .complex("1/10 + 7/10i", polar: Complex(re: 0.1, im: 0.7).polar), "division complexe exacte")
+    if case .complex(let value, _)? = run("e^(i*pi)") { check(value == "-1", "e^(iπ) = -1") } else { check(false, "e^(iπ)") }
+    check(Complex(re: 1, im: 1).polar == "1.41421·e^(i·1π/4)" || Complex(re: 1, im: 1).polar.contains("π/4"), "forme polaire")
+    check(run("a = 3") == .value("3") && run("2a + 1") == .value("7"), "les définitions marchent toujours")
+    check(run("A = [[1,2],[3,4]]") == .matrix([["1", "2"], ["3", "4"]]), "matrice définie")
+    check(run("det(A)") == .value("-2"), "déterminant")
+    check(run("inv(A)") == .matrix([["-2", "1"], ["3/2", "-1/2"]]), "inverse, en fractions")
+    check(run("A*A") == .matrix([["7", "10"], ["15", "22"]]) && run("2A") == .matrix([["2", "4"], ["6", "8"]]), "produit, scalaire")
+    check(run("rref([[1,2,3],[2,4,6]])") == .matrix([["1", "2", "3"], ["0", "0", "0"]]) && run("rank([[1,2,3],[2,4,6]])") == .value("1"),
+          "forme échelonnée réduite, rang")
+    check(run("solve(A, [5,6])") == .matrix([["-4"], ["9/2"]]), "système A·x = b")
+    check((try? MathWorkbench.run("inv([[1,2],[2,4]])", in: &session)) == nil, "matrice non inversible refusée")
+    check(MathWorkbench.format(0.75) == "3/4" && MathWorkbench.format(2) == "2" && MathWorkbench.format(.pi) == MathEngine.format(.pi), "fractions quand c'en est")
+}
+
+// MARK: Notes (GoodNotes → Google Drive)
+do {
+    let courses: [NotesLibrary.CourseKey] = [
+        .init(code: "CS-101", name: "Advanced information, computation, communication I"),
+        .init(code: "CS-107", name: "Introduction à la programmation"),
+        .init(code: "MATH-101", name: "Analyse I classe inversée"),
+        .init(code: "MATH-111", name: "Algèbre linéaire classe inversée"),
+        .init(code: "PHYS-101", name: "Physique générale : mécanique anglais"),
+    ]
+    func course(_ folder: String) -> String? { NotesLibrary.course(forNotebook: folder, among: courses)?.code }
+    check(course("MATH-111 Algèbre linéaire") == "MATH-111" && course("PHYS-101 Mécanique") == "PHYS-101", "cahier : par le code")
+    check(course("Algèbre Linéaire") == "MATH-111" && course("Mécanique") == "PHYS-101" && course("Analyse") == "MATH-101"
+          && course("Programmation") == "CS-107", "cahier : par le nom")
+    check(course("AICC") == "CS-101", "cahier : par l'acronyme")
+    check(course("Photos") == nil, "cahier sans cours")
+    let now = Date()
+    let doc = NotesLibrary.document(path: "EPFL BA1/Algèbre Linéaire/Semaine 3/Série 3.pdf", modified: now)
+    check(doc?.notebook == "Algèbre Linéaire" && doc?.week == 3 && doc?.seriesNumber == 3 && doc?.isSolution == false, "document : cahier, semaine, série")
+    check(NotesLibrary.document(path: "EPFL BA1/Algèbre Linéaire/Semaine 3/Serie 03 Solutions.pdf", modified: now)?.isSolution == true,
+          "document : un corrigé")
+    check(NotesLibrary.seriesNumber("PS5 (1)") == 5 && NotesLibrary.seriesNumber("Séance et série 4") == 4
+          && NotesLibrary.seriesNumber("Problem Set 6") == 6 && NotesLibrary.seriesNumber("Lecture 5a") == nil, "numéro de série")
+    let docs = [
+        NotesLibrary.document(path: "N/Semaine 3/Série 3 poly.pdf", modified: now.addingTimeInterval(-100))!,
+        NotesLibrary.document(path: "N/Semaine 3/Série 3.pdf", modified: now)!,
+        NotesLibrary.document(path: "N/Semaine 3/Serie 03 Solutions.pdf", modified: now.addingTimeInterval(10))!,
+        NotesLibrary.document(path: "N/Semaine 5/Séance Et Série 5.pdf", modified: now)!,
+    ]
+    check(NotesLibrary.copy(seriesNumber: 3, week: 3, in: docs)?.title == "Série 3", "ta copie : la plus récente, pas le corrigé")
+    check(NotesLibrary.copy(seriesNumber: 9, week: 5, in: docs)?.title == "Séance Et Série 5", "ta copie : la série de la semaine")
+}
+
+// MARK: Formules : commandes de police
+do {
+    check(MathMarkup.plain("$z^2=-3+4\\mathsf{i}$") == "z2=-3+4i", "\\mathsf{i} → i")
+    check(MathMarkup.plain("$\\textbf{v}$ et $\\mathtt{x}$") == "v et x", "\\textbf, \\mathtt")
 }
 
 // MARK: Mode étude sans blocage

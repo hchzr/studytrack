@@ -9,9 +9,19 @@ struct ExercisePane: View {
     let course: Course?
     var desk: StudyDesk
     var openWeb: (URL, String) -> Void
+    /// Côte à côte avec le cours : sans la liste des exercices (le menu du
+    /// titre suffit), et une colonne plus étroite.
+    var compact = false
 
     @Environment(MacTimer.self) private var timer
+    @Query private var allCourses: [Course]
     @State private var seriesID: UUID?
+
+    /// Ta copie de la série, dans tes notes (GoodNotes → Google Drive…).
+    private func copy(_ series: ExerciseSeries) -> NotesLibrary.Document? {
+        guard let course else { return nil }
+        return NotesStore.shared.copy(for: series, course: course, among: allCourses)
+    }
 
     private var allSeries: [ExerciseSeries] { course?.sortedSeries.filter { !$0.exercises.isEmpty } ?? [] }
 
@@ -29,15 +39,49 @@ struct ExercisePane: View {
     var body: some View {
         if let course, let series {
             HStack(spacing: 0) {
-                list(series, course: course)
-                    .frame(width: 250)
-                Rectangle().fill(Carnet.rule).frame(width: 1)
-                VStack(spacing: 0) {
-                    document(series)
-                    if let exercise {
-                        Rectangle().fill(Carnet.rule).frame(height: 1)
-                        ExerciseDrawer(exercise: exercise, desk: desk, tint: Carnet.tint(course.colorHex))
+                if !compact {
+                    list(series, course: course)
+                        .frame(width: 230)
+                    Rectangle().fill(Carnet.rule).frame(width: 1)
+                }
+                if hasDocument(series) {
+                    // L'énoncé en PDF au centre, l'exercice toujours à côté : ses
+                    // questions, où on en est, les gestes.
+                    VStack(spacing: 0) {
+                        if copy(series) != nil {
+                            Picker("Afficher", selection: Binding(get: { desk.showingCopy }, set: { desk.showingCopy = $0 })) {
+                                Text("Énoncé").tag(false)
+                                Text("Ma copie").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .fixedSize()
+                            .padding(8)
+                        }
+                        document(series)
                     }
+                    .task { await NotesStore.shared.refresh() }
+                    if let exercise {
+                        Rectangle().fill(Carnet.rule).frame(width: 1)
+                        ScrollView {
+                            ExerciseSheet(exercise: exercise, series: series, desk: desk, tint: Carnet.tint(course.colorHex),
+                                          showStatement: false, copy: copy(series), next: { next in select(next, in: course) })
+                                .padding(18)
+                        }
+                        .frame(width: compact ? 300 : 360)
+                        .background(Carnet.ground)
+                    }
+                } else if let exercise {
+                    ScrollView {
+                        ExerciseSheet(exercise: exercise, series: series, desk: desk, tint: Carnet.tint(course.colorHex),
+                                      showStatement: true, copy: copy(series), next: { next in select(next, in: course) })
+                            .padding(32)
+                            .frame(maxWidth: 760, alignment: .leading)
+                            .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    ContentUnavailableView("Choisis un exercice", systemImage: "list.number")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         } else {
@@ -107,6 +151,18 @@ struct ExercisePane: View {
 
     // MARK: Document
 
+    private func address(_ series: ExerciseSeries) -> String {
+        if desk.showingCopy, let copy = copy(series), let url = NotesStore.shared.url(copy) { return url.absoluteString }
+        return exercise?.statementURLString.isEmpty == false ? exercise!.statementURLString : series.urlString
+    }
+
+    private func hasDocument(_ series: ExerciseSeries) -> Bool {
+        let address = address(series)
+        guard !address.isEmpty else { return false }
+        if case .failed? = desk.document(address) { return exercise?.statement.isEmpty != false }
+        return true
+    }
+
     @ViewBuilder
     private func document(_ series: ExerciseSeries) -> some View {
         let address = exercise?.statementURLString.isEmpty == false ? exercise!.statementURLString : series.urlString
@@ -118,15 +174,13 @@ struct ExercisePane: View {
                 PDFPane(url: file, search: searchTerms)
             case .needsLogin?:
                 loginPrompt(address)
-            case .failed(let message)?:
+            case .failed?:
                 VStack(spacing: 12) {
-                    nativeStatement
-                    HStack {
-                        Text(message).font(.caption).foregroundStyle(Carnet.inkSecondary)
-                        Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
-                    }
-                    .padding(.bottom, 12)
+                    Image(systemName: "doc.questionmark").font(.largeTitle).foregroundStyle(Carnet.inkTertiary)
+                    Text("Énoncé introuvable").foregroundStyle(Carnet.inkSecondary)
+                    Button("Réessayer") { desk.retry(address) }.buttonStyle(.paper)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .loading?, nil:
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -223,44 +277,82 @@ private struct ExerciseListRow: View {
     }
 }
 
-/// Sous le PDF : les questions, la correction, Claude.
-private struct ExerciseDrawer: View {
+/// L'exercice, en feuille : l'énoncé (quand il n'y a pas de PDF), les
+/// questions à cocher juste dessous, où on en est (fait, juste / moyen / faux,
+/// à refaire), le corrigé quand il est publié, et les gestes (indice, faire
+/// vérifier sa copie, exercice suivant).
+struct ExerciseSheet: View {
     @Bindable var exercise: Exercise
+    let series: ExerciseSeries
     var desk: StudyDesk
     var tint: Color
+    var showStatement: Bool
+    /// Ta copie dans tes notes, si on la trouve : « Vérifier ma copie » l'envoie.
+    var copy: NotesLibrary.Document?
+    var next: (Exercise) -> Void
+
+    private var nextExercise: Exercise? { ExerciseFlow.next(after: exercise, in: series.sortedExercises) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
-            if exercise.hasSubQuestions {
-                ScrollView {
-                    SubQuestionChecklist(exercise: exercise, tint: tint)
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 4) {
+                Kicker(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title, color: tint)
+                Text(exercise.displayNumber).font(Carnet.serif(showStatement ? 30 : 24)).foregroundStyle(Carnet.ink)
+                if !exercise.title.isEmpty, exercise.title != exercise.displayNumber {
+                    MacMathText(exercise.title, size: 14).foregroundStyle(Carnet.inkSecondary)
                 }
-                .frame(maxWidth: 420, maxHeight: 150)
+            }
+            if showStatement, !exercise.statement.isEmpty {
+                MacMathText(exercise.statement, size: 16).foregroundStyle(Carnet.ink).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !exercise.hint.isEmpty {
+                DisclosureGroup("Indication") {
+                    MacMathText(exercise.hint, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                }
+                .foregroundStyle(Carnet.inkSecondary)
+            }
+            if exercise.hasSubQuestions {
+                SubQuestionChecklist(exercise: exercise, tint: tint)
+                    .padding(14)
+                    .background(Carnet.sheetRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             VStack(alignment: .leading, spacing: 10) {
+                Kicker("Où j'en suis")
                 ExerciseQuickMark(exercise: exercise)
                 Toggle("À refaire", isOn: $exercise.redoRequired).toggleStyle(.checkbox)
             }
-            .frame(maxWidth: 300)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 8) {
-                Button {
-                    desk.ask(ClaudeTutor.QuickAction.hint.prompt)
-                } label: {
-                    Label("Un indice", systemImage: "lightbulb")
+            if !exercise.solution.isEmpty, series.solutionsAt.map({ $0 <= Date() }) ?? true {
+                DisclosureGroup("Corrigé") {
+                    MacMathText(exercise.solution, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
                 }
-                .buttonStyle(.ink)
-                Button {
-                    desk.ask(ClaudeTutor.QuickAction.check.prompt)
-                } label: {
-                    Label("Vérifier ma copie", systemImage: "camera.viewfinder")
+                .foregroundStyle(Carnet.inkSecondary)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Button { desk.ask(ClaudeTutor.QuickAction.hint.prompt) } label: { Label("Un indice", systemImage: "lightbulb") }
+                        .buttonStyle(.ink)
+                    Button {
+                        if let copy, let data = NotesStore.shared.attachmentData(copy) {
+                            desk.pendingAttachment = .init(kind: .pdf, data: data, name: copy.title)
+                        }
+                        desk.ask(ClaudeTutor.QuickAction.check.prompt, attachSeries: false)
+                    } label: { Label("Vérifier ma copie", systemImage: "checkmark.circle") }
+                        .buttonStyle(.paper)
+                        .help(copy.map { "Envoie « \($0.title) » à Claude" } ?? "Joins ta copie")
                 }
-                .buttonStyle(.paper)
-                .help("Montre ta copie à Claude")
+                if let nextExercise {
+                    Button { next(nextExercise) } label: {
+                        Label("\(nextExercise.displayNumber)", systemImage: "arrow.right")
+                    }
+                    .buttonStyle(.paper)
+                }
             }
         }
-        .padding(16)
-        .background(Carnet.ground)
     }
 }
 

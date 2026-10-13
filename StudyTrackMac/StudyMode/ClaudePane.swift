@@ -243,7 +243,7 @@ struct ClaudePane: View {
             Text(scope == .system ? "On fait quoi ?" : (series == nil ? "Une question ?" : "On attaque ?"))
                 .font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
             if scope == .series {
-                Text("Montre ta copie avec « Capturer ».")
+                Text("Joins ta copie GoodNotes, ou une photo prise à l'iPhone (clic droit).")
                     .foregroundStyle(Carnet.inkSecondary)
             }
             FlowChips(spacing: 8) { actionButtons(disabled: false, includeGeneric: true) }
@@ -366,7 +366,9 @@ struct ClaudePane: View {
             }
             HStack(alignment: .bottom, spacing: 10) {
                 Menu {
-                    Button("Capturer", systemImage: "camera.viewfinder", action: capture)
+                    if let copy = currentCopy {
+                        Button("Ma copie : \(copy.title)", systemImage: "pencil.and.scribble") { attach(copy) }
+                    }
                     Button("Joindre un fichier…", systemImage: "paperclip", action: pick)
                     Divider()
                     Toggle("Joindre la série", isOn: $attachSeries)
@@ -377,10 +379,12 @@ struct ClaudePane: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .foregroundStyle(Carnet.inkSecondary)
-                Button(action: capture) { Image(systemName: "camera.viewfinder").font(.title3) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .help("Capturer ta copie")
+                if let copy = currentCopy {
+                    Button { attach(copy) } label: { Image(systemName: "pencil.and.scribble").font(.title3) }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .help("Joindre ta copie (\(copy.title))")
+                }
                 TextField(scope == .system ? "Ta demande" : (chat.mode == .tutor ? "Où tu bloques ?" : "Ta question"), text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
@@ -411,6 +415,13 @@ struct ClaudePane: View {
             return true
         }
         .onPasteCommand(of: [.image, .png, .tiff]) { providers in drop(providers) }
+        // Continuity Camera : clic droit › « Prendre une photo » / « Numériser
+        // des documents » avec l'iPhone, sans quitter le mode étude.
+        .importsItemProviders([.image, .pdf]) { providers in
+            drop(providers)
+            return true
+        }
+        .task { await NotesStore.shared.refresh() }
     }
 
     // MARK: Gestes
@@ -419,10 +430,15 @@ struct ClaudePane: View {
         guard config != nil, let question = desk.pendingQuestion else { return }
         attachSeries = desk.pendingAttachSeries
         desk.pendingQuestion = nil
-        if question == ClaudeTutor.QuickAction.check.prompt {
-            // Vérifier : d'abord la copie.
+        if let attachment = desk.pendingAttachment {
+            // « Vérifier ma copie » : ta copie GoodNotes part avec la question.
+            desk.pendingAttachment = nil
+            attachments.append(attachment)
+            send(question)
+        } else if question == ClaudeTutor.QuickAction.check.prompt {
+            // Pas de copie trouvée dans tes notes : on te laisse la joindre.
             draft = question
-            capture()
+            pick()
         } else {
             send(question)
         }
@@ -479,6 +495,18 @@ struct ClaudePane: View {
                                    statement: exercise?.statement, questions: questions,
                                    doneQuestions: exercise?.subQuestionDoneCount ?? 0,
                                    correction: exercise?.correctness?.label, hint: exercise?.hint.isEmpty == false ? exercise?.hint : nil)
+    }
+
+    /// Ta copie de la série en cours, dans tes notes.
+    private var currentCopy: NotesLibrary.Document? {
+        guard scope == .series, let series, let course else { return nil }
+        return NotesStore.shared.copy(for: series, course: course, among: courses)
+    }
+
+    private func attach(_ copy: NotesLibrary.Document) {
+        guard let data = NotesStore.shared.attachmentData(copy) else { return }
+        attachments.append(.init(kind: .pdf, data: data, name: copy.title))
+        focused = true
     }
 
     /// La capture interactive du système (un viseur, comme ⇧⌘4).

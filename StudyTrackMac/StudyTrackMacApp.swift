@@ -88,6 +88,7 @@ struct StudyTrackMacApp: App {
                        let pane = StudyDesk.Pane(rawValue: CommandLine.arguments[index + 1]) {
                         StudyModeController.shared.desk.pane = pane
                     }
+                    if CommandLine.arguments.contains("-sideBySide") { StudyModeController.shared.desk.sideBySide = true }
                 }
             }
         }
@@ -139,7 +140,11 @@ struct StudyTrackMacApp: App {
         .modelContainer(store.container)
         .defaultSize(width: 1180, height: 760)
         .windowToolbarStyle(.unified)
-        .commands { MacCommands(timer: timer, settings: settings) }
+        .commands {
+            MacCommands(timer: timer, settings: settings)
+            // « Importer depuis l'iPhone » (photo, numérisation) : Continuity Camera.
+            ImportFromDevicesCommands()
+        }
 
         MenuBarExtra {
             MenuBarTimerView()

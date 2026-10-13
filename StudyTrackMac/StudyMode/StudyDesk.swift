@@ -49,6 +49,9 @@ final class StudyDesk {
         }
     }
 
+    /// Le cours et la série côte à côte (⌘\\).
+    var sideBySide = false
+
     var pane: Pane = .desk {
         didSet {
             #if DEBUG
@@ -76,6 +79,10 @@ final class StudyDesk {
     /// Une question préparée ailleurs (« Demander à Claude » sur un exercice).
     var pendingQuestion: String?
     var pendingAttachSeries = false
+    /// Une pièce jointe préparée avec la question (ta copie GoodNotes).
+    var pendingAttachment: ClaudeTutor.Attachment?
+    /// Montrer ta copie (GoodNotes) à la place de l'énoncé.
+    var showingCopy = false
 
     func ask(_ question: String, attachSeries: Bool = true) {
         pendingQuestion = question
@@ -85,8 +92,8 @@ final class StudyDesk {
 
     // MARK: Calcul
 
-    var calc = MathEngine.Environment()
-    var calcHistory: [(input: String, output: String, isError: Bool)] = []
+    var workbench = MathWorkbench.Session()
+    var calcHistory: [(input: String, result: Result<MathWorkbench.Output, CalcError>)] = []
 
     // MARK: Documents
 
@@ -182,10 +189,12 @@ final class StudyDesk {
     var edCourses: [EdDiscussion.Course]?
     var edNeedsLogin = false
     var edThreads: [Int: [EdDiscussion.Thread]] = [:]
+    var edLessons: [Int: [EdDiscussion.Lesson]] = [:]
 
     /// Lit les cours Ed une fois (et après une connexion).
     func loadEdCourses() async {
         guard edCourses == nil else { return }
+        await EPFLConnect.shared.ensure(.ed)
         do {
             edCourses = try await ed.courses()
             edNeedsLogin = false

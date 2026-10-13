@@ -120,6 +120,7 @@ enum SiteHTML {
             guard !name.isEmpty else { return }
             let attributes = closing ? [:] : Self.attributes(body)
             let ignored: Set<String> = ["script", "style", "head", "noscript", "button", "select", "textarea", "svg", "nav"]
+            if name == "a", closing, skipping.last == "a" { skipping.removeLast(); return }
             if ignored.contains(name) {
                 if closing { if let last = skipping.lastIndex(of: name) { skipping.remove(at: last) } }
                 else if !raw.hasSuffix("/") { skipping.append(name) }
@@ -168,6 +169,8 @@ enum SiteHTML {
                     if let open = link { finishLink(open) }
                     link = nil
                 } else if let href = attributes["href"] {
+                    // « Passer au contenu principal » et autres ancres de la page.
+                    if href.hasPrefix("#") || (attributes["class"] ?? "").contains("skip") { skipping.append("a"); return }
                     link = (href, "")
                 }
             case "img":
@@ -376,6 +379,8 @@ struct EdXOutline: Equatable {
         var id: String
         var title: String
         var blocks: [Block]
+        /// Achevée selon Courseware (`completion` = 1).
+        var completed: Bool = false
     }
     struct Sequence: Equatable, Identifiable {
         var id: String
@@ -401,6 +406,25 @@ struct EdXOutline: Equatable {
 
     var chapters: [Chapter]
 
+    /// Toutes les unités, dans l'ordre du cours (pour « précédente / suivante »).
+    var units: [Unit] { chapters.flatMap { $0.sequences.flatMap(\.units) } }
+
+    /// Où se trouve une unité : son chapitre et sa séquence.
+    func place(of unitID: String) -> (chapter: Chapter, sequence: Sequence)? {
+        for chapter in chapters {
+            for sequence in chapter.sequences where sequence.units.contains(where: { $0.id == unitID }) { return (chapter, sequence) }
+        }
+        return nil
+    }
+
+    /// Où reprendre : la première unité non faite **après** la dernière faite
+    /// (les pages d'accueil jamais « achevées » ne ramènent pas au début).
+    var resumeUnit: Unit? {
+        let all = units
+        guard let last = all.lastIndex(where: \.completed) else { return all.first }
+        return all[(last + 1)...].first { !$0.completed } ?? all.first { !$0.completed } ?? all.last
+    }
+
     static func parse(json: Data) -> EdXOutline? {
         guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
               let root = object["root"] as? String,
@@ -423,7 +447,8 @@ struct EdXOutline: Equatable {
         let chapters = children(root).map { chapterID in
             Chapter(id: chapterID, title: title(chapterID), sequences: children(chapterID).map { sequenceID in
                 Sequence(id: sequenceID, title: title(sequenceID), units: children(sequenceID).map { unitID in
-                    Unit(id: unitID, title: title(unitID), blocks: children(unitID).map(block))
+                    Unit(id: unitID, title: title(unitID), blocks: children(unitID).map(block),
+                         completed: (blocks[unitID]?["completion"] as? Double ?? 0) >= 1)
                 })
             })
         }
@@ -560,6 +585,8 @@ enum EdDiscussion {
 
     /// Un message (le fil lui-même, une réponse, un commentaire), avec ses réponses.
     struct Post: Equatable {
+        /// L'identifiant du fil (racine) ou du commentaire : pour y répondre.
+        var id: Int = 0
         var author: String
         var date: String
         /// Le contenu au format d'Ed (XML `<document>`).
@@ -598,7 +625,7 @@ enum EdDiscussion {
         func post(_ raw: [String: Any], answer: Bool) -> Post {
             let author = (raw["user_id"] as? Int).flatMap { names[$0] } ?? ((raw["is_anonymous"] as? Bool) == true ? "Anonyme" : "")
             let replies = (raw["comments"] as? [[String: Any]] ?? []).map { post($0, answer: false) }
-            return Post(author: author.isEmpty ? "Anonyme" : author, date: raw["created_at"] as? String ?? "",
+            return Post(id: raw["id"] as? Int ?? 0, author: author.isEmpty ? "Anonyme" : author, date: raw["created_at"] as? String ?? "",
                         content: raw["content"] as? String ?? "", isAnswer: answer,
                         isEndorsed: (raw["is_endorsed"] as? Bool) == true, replies: replies)
         }
@@ -638,6 +665,155 @@ enum EdDiscussion {
             text = text.replacingOccurrences(of: "</\(ed)>", with: "</\(html)>")
         }
         return SiteHTML.blocks(text, base: URL(string: "https://edstem.org/"))
+    }
+
+    // MARK: Écrire sur Ed (observé : `POST courses/<id>/threads {thread: …}`,
+    // `POST threads/<id>/comments {comment: {type, content, …}}`, le contenu au
+    // format `<document version="2.0">`)
+
+    /// Ce qu'on tape (Markdown léger, formules entre `$…$`) → le document d'Ed.
+    static func document(fromMarkdown text: String) -> String {
+        func escape(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+        }
+        func inline(_ s: String) -> String {
+            var out = ""
+            for piece in RichMarkup.inlines(s) {
+                switch piece {
+                case .text(let t): out += escape(t)
+                case .bold(let t): out += "<bold>" + escape(t) + "</bold>"
+                case .italic(let t): out += "<italic>" + escape(t) + "</italic>"
+                case .code(let t): out += "<code>" + escape(t) + "</code>"
+                case .math(let t): out += "<math>" + escape(t) + "</math>"
+                }
+            }
+            return out
+        }
+        var body = ""
+        var list: (ordered: Bool, items: [String])?
+        func closeList() {
+            guard let open = list else { return }
+            let style = open.ordered ? "number" : "bullet"
+            body += "<list style=\"\(style)\">" + open.items.map { "<list-item><paragraph>\($0)</paragraph></list-item>" }.joined() + "</list>"
+            list = nil
+        }
+        for block in RichMarkup.blocks(text) {
+            switch block {
+            case .bullet(let t, _):
+                if list?.ordered == true { closeList() }
+                if list == nil { list = (false, []) }
+                list?.items.append(inline(t))
+            case .numbered(let t, _):
+                if list?.ordered == false { closeList() }
+                if list == nil { list = (true, []) }
+                list?.items.append(inline(t))
+            default:
+                closeList()
+                switch block {
+                case .heading(let t, let level): body += "<heading level=\"\(min(max(level, 1), 3))\">" + inline(t) + "</heading>"
+                case .paragraph(let t): body += "<paragraph>" + inline(t) + "</paragraph>"
+                case .math(let t): body += "<paragraph><math>" + escape(t) + "</math></paragraph>"
+                case .code(let t): body += "<snippet language=\"none\" runnable=\"false\" line-numbers=\"true\">" + escape(t) + "</snippet>"
+                case .rule: body += "<paragraph>—</paragraph>"
+                default: break
+                }
+            }
+        }
+        closeList()
+        return "<document version=\"2.0\">" + body + "</document>"
+    }
+
+    /// Les catégories du forum d'un cours (`GET courses/<id>` → `settings.discussion.categories`).
+    static func categories(courseJSON: Data) -> [String] {
+        guard let object = try? JSONSerialization.jsonObject(with: courseJSON) as? [String: Any],
+              let course = object["course"] as? [String: Any],
+              let settings = course["settings"] as? [String: Any],
+              let discussion = settings["discussion"] as? [String: Any],
+              let categories = discussion["categories"] as? [[String: Any]] else { return [] }
+        return categories.compactMap { $0["name"] as? String }
+    }
+
+    // MARK: Leçons et quiz (routes observées : `courses/<id>/lessons`,
+    // `lessons/<id>?view=1`, `lessons/slides/<id>/questions`,
+    // `POST lessons/slides/questions/<id>/responses`). La forme d'une réponse
+    // (indices pour un choix multiple, texte sinon) est déduite du code d'Ed.
+
+    struct Lesson: Equatable, Identifiable {
+        var id: Int
+        var title: String
+        var module: String?
+        var status: String?
+    }
+
+    struct Slide: Equatable, Identifiable {
+        var id: Int
+        var type: String
+        var title: String
+        /// Le contenu d'une diapositive « document » (format d'Ed).
+        var content: String
+        var isCompleted: Bool
+    }
+
+    struct Question: Equatable, Identifiable {
+        enum Kind: Equatable { case choice(multiple: Bool), text, number, other(String) }
+        var id: Int
+        var kind: Kind
+        /// L'énoncé (format d'Ed).
+        var content: String
+        /// Les choix (format d'Ed), pour un choix multiple ou vrai/faux.
+        var answers: [String]
+    }
+
+    static func lessons(json: Data) -> [Lesson] {
+        guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else { return [] }
+        var modules: [Int: String] = [:]
+        for module in object["modules"] as? [[String: Any]] ?? [] {
+            if let id = module["id"] as? Int { modules[id] = module["name"] as? String }
+        }
+        return (object["lessons"] as? [[String: Any]] ?? []).compactMap { raw in
+            guard let id = raw["id"] as? Int else { return nil }
+            return Lesson(id: id, title: raw["title"] as? String ?? "Leçon",
+                          module: (raw["module_id"] as? Int).flatMap { modules[$0] }, status: raw["status"] as? String)
+        }
+    }
+
+    static func slides(lessonJSON: Data) -> [Slide] {
+        guard let object = try? JSONSerialization.jsonObject(with: lessonJSON) as? [String: Any],
+              let lesson = object["lesson"] as? [String: Any] else { return [] }
+        return (lesson["slides"] as? [[String: Any]] ?? []).compactMap { raw in
+            guard let id = raw["id"] as? Int else { return nil }
+            return Slide(id: id, type: raw["type"] as? String ?? "", title: raw["title"] as? String ?? "",
+                         content: raw["content"] as? String ?? "", isCompleted: (raw["status"] as? String) == "completed")
+        }
+    }
+
+    static func questions(json: Data) -> [Question] {
+        guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else { return [] }
+        return (object["questions"] as? [[String: Any]] ?? []).compactMap { raw in
+            guard let id = raw["id"] as? Int else { return nil }
+            let data = raw["data"] as? [String: Any] ?? raw
+            let type = data["type"] as? String ?? raw["type"] as? String ?? ""
+            let kind: Question.Kind
+            switch type {
+            case "multiple-choice": kind = .choice(multiple: (data["multiple_selection"] as? Bool) == true)
+            case "true-false": kind = .choice(multiple: false)
+            case "short-answer": kind = .text
+            case "numerical": kind = .number
+            default: kind = .other(type)
+            }
+            let answers = (data["answers"] as? [Any] ?? []).map { ($0 as? String) ?? (($0 as? [String: Any])?["content"] as? String ?? "") }
+            return Question(id: id, kind: kind, content: data["content"] as? String ?? "",
+                            answers: type == "true-false" && answers.isEmpty ? ["Vrai", "Faux"] : answers)
+        }
+    }
+
+    /// La réponse à envoyer : les indices choisis pour un choix, le texte sinon.
+    static func response(choices: Set<Int>, text: String, for kind: Question.Kind) -> Any {
+        switch kind {
+        case .choice: return choices.sorted()
+        case .number: return Double(text.replacingOccurrences(of: ",", with: ".")) ?? text
+        default: return text
+        }
     }
 
     private static func replace(_ text: String, _ pattern: String, _ transform: ([String]) -> String) -> String {
@@ -782,5 +958,53 @@ struct MoodleCoursePage: Codable, Equatable {
         if end < start { end = calendar.date(byAdding: .year, value: 1, to: end) ?? end }
         end = calendar.date(byAdding: .day, value: 1, to: end).map { $0.addingTimeInterval(-1) } ?? end
         return start...end
+    }
+}
+
+// MARK: - Courseware : un problème
+
+/// Un problème Open edX (`problem` xblock), lu dans la session : son énoncé,
+/// ses groupes de réponses (cases, boutons, listes, champs), le score. Les
+/// réponses partent à `<url>/problem_check` (formulaire, jeton CSRF) — observé
+/// sur CS-107 : `data-url`, `data-content`, `input_<id>_2_1[]`.
+struct EdXProblem: Codable, Equatable {
+    struct Option: Codable, Equatable { var value: String; var label: String; var checked: Bool? }
+    struct Group: Codable, Equatable {
+        var name: String
+        var type: String
+        var options: [Option] = []
+        var value: String?
+    }
+    var url: String
+    var title: String
+    var prompt: String
+    var groups: [Group]
+    var score: Double
+    var total: Double
+    var attempts: Int
+
+    static func decode(_ json: String) -> EdXProblem? { try? JSONDecoder().decode(EdXProblem.self, from: Data(json.utf8)) }
+
+    /// Le corps du formulaire envoyé : chaque groupe, une ou plusieurs valeurs.
+    static func formBody(_ answers: [String: [String]]) -> String {
+        func encode(_ text: String) -> String {
+            text.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? text
+        }
+        return answers.keys.sorted().flatMap { name in answers[name, default: []].map { encode(name) + "=" + encode($0) } }
+            .joined(separator: "&")
+    }
+
+    /// La réponse de `problem_check` : « correct », « incorrect », « partially-correct ».
+    struct Result: Equatable {
+        var verdict: String
+        var score: Double?
+        var total: Double?
+        var isCorrect: Bool { verdict == "correct" }
+    }
+
+    static func result(json: Data) -> Result? {
+        guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else { return nil }
+        let verdict = (object["success"] as? String) ?? ((object["success"] as? Bool) == true ? "correct" : "incorrect")
+        return Result(verdict: verdict, score: object["current_score"] as? Double, total: object["total_possible"] as? Double)
     }
 }

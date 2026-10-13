@@ -46,10 +46,19 @@ struct StudyWorkspace: View {
         switch desk.pane {
         case .desk:
             StudyDeskHome(course: course, tint: tint, desk: desk, open: open)
-        case .exercise:
-            ExercisePane(course: course, desk: desk, openWeb: openWeb)
-        case .course:
-            CoursePane(course: course, desk: desk, openWeb: openWeb)
+        case .exercise, .course:
+            if desk.sideBySide {
+                HSplitView {
+                    CoursePane(course: course, desk: desk, openWeb: openWeb)
+                        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+                    ExercisePane(course: course, desk: desk, openWeb: openWeb, compact: true)
+                        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else if desk.pane == .exercise {
+                ExercisePane(course: course, desk: desk, openWeb: openWeb)
+            } else {
+                CoursePane(course: course, desk: desk, openWeb: openWeb)
+            }
         case .claude:
             ClaudePane(course: course, courses: courses, desk: desk)
         case .calc:
@@ -62,6 +71,11 @@ struct StudyWorkspace: View {
                     .padding(14)
             }
         }
+    }
+
+    private func toggleSideBySide() {
+        desk.sideBySide.toggle()
+        if desk.sideBySide, desk.pane != .course, desk.pane != .exercise { desk.pane = .exercise }
     }
 
     private func openWeb(_ url: URL, _ title: String) {
@@ -79,13 +93,15 @@ struct StudyWorkspace: View {
         }
     }
 
-    /// ⌘1 à ⌘6 : les outils.
+    /// ⌘1 à ⌘6 : les outils ; ⌘\\ : le cours et la série côte à côte.
     private var paneShortcuts: some View {
         ZStack {
             ForEach(StudyDesk.Pane.allCases) { pane in
                 Button("") { desk.pane = pane }
                     .keyboardShortcut(pane.shortcut, modifiers: [.command])
             }
+            Button("") { toggleSideBySide() }
+                .keyboardShortcut("\\", modifiers: [.command])
         }
         .opacity(0)
         .accessibilityHidden(true)
@@ -199,6 +215,11 @@ private struct StudyRail: View {
                 }
                 .help("\(pane.title) (⌘\(String(pane.shortcut.character)))")
             }
+            RailButton(title: "Côte à côte", icon: "rectangle.split.2x1", selected: desk.sideBySide) {
+                desk.sideBySide.toggle()
+                if desk.sideBySide, desk.pane != .course, desk.pane != .exercise { desk.pane = .exercise }
+            }
+            .help("Cours et série côte à côte (⌘\\)")
             Spacer()
             Rectangle().fill(StudyPalette.rule).frame(width: 34, height: 1)
             ForEach(apps, id: \.self) { bundleID in
@@ -287,19 +308,106 @@ private struct StudyDeskHome: View {
                 }
                 .frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Ton bureau").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
-                    shortcut(.exercise, "L'énoncé et tes questions")
-                    shortcut(.course, "Moodle, Botafogo, vidéos")
-                    shortcut(.claude, "Ton tuteur pour la série")
-                    shortcut(.calc, "Calculs et graphes")
-                    shortcut(.web, "GeoGebra et cie")
-                    Text("⌘1 à ⌘6 pour changer d'outil.")
-                        .font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+                    Text("Ta session").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
+                    step(1, "Revoir le cours", detail: theoryDetail, icon: "books.vertical", done: theoryLeft == 0) { desk.pane = .course }
+                    step(2, "Faire la série", detail: seriesDetail, icon: "doc.text", done: series?.isComplete == true) {
+                        if let next = nextExercise, let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: next.id) }
+                        desk.pane = .exercise
+                    }
+                    step(3, "Bloqué ?", detail: "Un indice, ou fais vérifier ta copie", icon: "sparkle", done: false) { desk.pane = .claude }
+                    step(4, "Débriefer", detail: "Post-mortem quand la série est corrigée", icon: "checklist", done: false) { desk.pane = .claude }
+                    HStack(spacing: 8) {
+                        mini(.calc)
+                        mini(.web)
+                        Button { desk.sideBySide = true; desk.pane = .exercise } label: {
+                            Label("Côte à côte", systemImage: "rectangle.split.2x1")
+                        }
+                        .buttonStyle(.paper)
+                    }
+                    .padding(.top, 4)
+                    accounts
                 }
-                .frame(width: 400)
+                .frame(width: 420)
             }
             .padding(40)
         }
+    }
+
+    // MARK: Le fil de la session
+
+    private var series: ExerciseSeries? {
+        if let current = course?.allExercises.first(where: { $0.id == timer.targetID })?.series { return current }
+        let all = course?.sortedSeries.filter { !$0.exercises.isEmpty } ?? []
+        return all.first { $0.plannedWeek >= (course?.currentWeek ?? 0) && !$0.isComplete } ?? all.last
+    }
+
+    private var nextExercise: Exercise? { series.flatMap { ExerciseFlow.resumePoint(in: $0.sortedExercises) } }
+
+    private var theoryLeft: Int {
+        guard let course else { return 0 }
+        return course.sortedTheoryItems.filter { $0.plannedWeek == course.currentWeek && !$0.isWatched }.count
+    }
+
+    private var theoryDetail: String {
+        theoryLeft == 0 ? "À jour pour cette semaine" : "\(theoryLeft) à voir cette semaine"
+    }
+
+    private var seriesDetail: String {
+        guard let series else { return "Pas de série" }
+        let name = series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title
+        return "\(name) · \(series.doneCount)/\(series.requiredExercises.count)" + (nextExercise.map { " · ensuite \($0.displayNumber)" } ?? "")
+    }
+
+    private func step(_ number: Int, _ title: String, detail: String, icon: String, done: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(done ? Carnet.correct.opacity(0.25) : StudyPalette.raisedMore)
+                    if done { Image(systemName: "checkmark").font(.callout.weight(.bold)).foregroundStyle(Carnet.correct) }
+                    else { Text("\(number)").font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink) }
+                }
+                .frame(width: 34, height: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(StudyPalette.ink)
+                    Text(detail).font(.caption).foregroundStyle(StudyPalette.inkSecondary).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: icon).foregroundStyle(StudyPalette.inkTertiary)
+            }
+            .padding(12)
+            .background(StudyPalette.raised.opacity(0.9), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(StudyPalette.rule))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func mini(_ pane: StudyDesk.Pane) -> some View {
+        Button { desk.pane = pane } label: { Label(pane.title, systemImage: pane.icon) }
+            .buttonStyle(.paper)
+    }
+
+    /// Les comptes EPFL : connectés sans rien demander, ou un bouton.
+    private var accounts: some View {
+        let connect = EPFLConnect.shared
+        return HStack(spacing: 10) {
+            ForEach(EPFLConnect.Site.allCases) { site in
+                let state = connect.state(site)
+                HStack(spacing: 4) {
+                    Circle().fill(state == .connected ? Carnet.correct : (state == .failed ? Carnet.wrong : StudyPalette.inkTertiary))
+                        .frame(width: 6, height: 6)
+                    Text(site.title).font(.caption2).foregroundStyle(StudyPalette.inkSecondary)
+                }
+            }
+            Spacer()
+            if connect.isRunning {
+                ProgressView().controlSize(.mini)
+            } else if EPFLConnect.Site.allCases.contains(where: { connect.state($0) == .failed }) {
+                Button("Se connecter") { desk.signIn = connect.state(.moodle) == .failed ? .moodle : .mediaspace }
+                    .buttonStyle(.plain).font(.caption).foregroundStyle(StudyPalette.ink)
+            }
+        }
+        .padding(.top, 6)
     }
 
     private func shortcut(_ pane: StudyDesk.Pane, _ detail: String) -> some View {

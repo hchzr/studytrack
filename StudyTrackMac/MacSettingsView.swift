@@ -176,6 +176,21 @@ private struct StudySettingsPane: View {
             }
 
             Section {
+                LabeledContent("Dossier") {
+                    HStack {
+                        Text(NotesStore.shared.root.map { $0.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~") } ?? "introuvable")
+                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                        Button("Choisir…", action: chooseNotesFolder)
+                    }
+                }
+            } header: {
+                Text("Mes notes")
+            } footer: {
+                Text("La sauvegarde de GoodNotes (Google Drive, iCloud…).")
+            }
+            .task { await NotesStore.shared.refresh() }
+
+            Section {
                 ForEach(settings.studyApps, id: \.self) { bundleID in
                     HStack(spacing: 10) {
                         if let icon = StudyModeController.icon(for: bundleID) {
@@ -251,6 +266,16 @@ private struct StudySettingsPane: View {
             try? ClaudeProject.emptyFileTemplate.write(to: url, atomically: true, encoding: .utf8)
         }
         NSWorkspace.shared.open(url)
+    }
+
+    private func chooseNotesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Choisir"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        NotesStore.shared.chosenFolder = url.path
+        Task { await NotesStore.shared.refresh(force: true) }
     }
 
     private func chooseFolder() {

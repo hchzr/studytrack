@@ -214,7 +214,9 @@ enum MathMarkup {
             case "mathbb":
                 let body = argument(style: style).map(\.text).joined()
                 return [Run(text: String(body.map { MathMarkup.blackboard[$0] ?? String($0) }.joined()), style: style)]
-            case "mathrm", "mathbf", "mathit", "text", "textrm", "operatorname", "mathcal", "boldsymbol":
+            // `\mathsf{i}` (l'unité imaginaire des séries d'analyse) sortait « mathsfi ».
+            case "mathrm", "mathbf", "mathit", "text", "textrm", "operatorname", "mathcal", "boldsymbol",
+                 "mathsf", "mathtt", "mathscr", "mathfrak", "textbf", "textit", "textsf", "texttt", "emph", "mbox", "hbox", "pmb":
                 return argument(style: style)
             case "overline", "bar":
                 return argument(style: style).map { Run(text: $0.text + "\u{0305}", style: $0.style) }

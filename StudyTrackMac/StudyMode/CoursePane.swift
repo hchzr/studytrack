@@ -13,11 +13,12 @@ struct CoursePane: View {
     var openWeb: (URL, String) -> Void
 
     enum Source: String, CaseIterable, Identifiable {
-        case studytrack, moodle, courseware, botafogo, ed
+        case studytrack, notes, moodle, courseware, botafogo, ed
         var id: String { rawValue }
         var label: String {
             switch self {
             case .studytrack: return "Le cours"
+            case .notes: return "Mes notes"
             case .moodle: return "Moodle"
             case .courseware: return "Courseware"
             case .botafogo: return "Botafogo"
@@ -27,7 +28,12 @@ struct CoursePane: View {
     }
 
     @State private var source: Source = .studytrack
+    @Query private var allCourses: [Course]
     @State private var coursewareFailed = false
+    @State private var composingEd = false
+    @State private var edLessonsShown = false
+    @State private var edCategory: String?
+    @State private var edReload = 0
     /// Ce qu'on lit à droite.
     @State private var reading: Reading?
     @State private var book = BotafogoBook()
@@ -42,6 +48,7 @@ struct CoursePane: View {
         case edx(EdXOutline.Unit)
         case edThread(id: Int, title: String)
         case moodleSection(Int)
+        case edLesson(EdDiscussion.Lesson)
     }
 
     /// Le cours Ed de ce cours (par son code), une fois les cours Ed lus.
@@ -67,7 +74,7 @@ struct CoursePane: View {
 
     private var sources: [Source] {
         Source.allCases.filter {
-            $0 == .studytrack || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
+            $0 == .studytrack || ($0 == .notes && !notes.isEmpty) || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
                 || ($0 == .botafogo && botafogoURL != nil)
                 || ($0 == .ed && (edCourse != nil || desk.edNeedsLogin))
         }
@@ -91,6 +98,7 @@ struct CoursePane: View {
                     case .courseware: coursewareList
                     case .botafogo: botafogoList
                     case .ed: edList
+                    case .notes: notesList
                     }
                 }
                 .frame(width: 320)
@@ -114,6 +122,7 @@ struct CoursePane: View {
             // Les cours Ed, une fois : la source « Ed » n'apparaît que pour un
             // cours qui y est (ou pour se connecter).
             .task { await desk.loadEdCourses() }
+            .task { await NotesStore.shared.refresh() }
         } else {
             ContentUnavailableView("Pas de cours", systemImage: "books.vertical",
                                    description: Text("Choisis-en un pour la session."))
@@ -287,39 +296,126 @@ struct CoursePane: View {
         }
     }
 
-    // MARK: Ed
+    // MARK: Mes notes
 
-    @ViewBuilder
-    private var edList: some View {
-        if let ed = edCourse {
-            if let threads = desk.edThreads[ed.id] {
-                List {
-                    ForEach(threads) { thread in
-                        Button { reading = .edThread(id: thread.id, title: thread.title) } label: {
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: thread.isPinned == true ? "pin.fill"
-                                      : (thread.type == "announcement" ? "megaphone" : (thread.isAnswered == true ? "checkmark.bubble" : "bubble.left")))
+    /// Tes cahiers de ce cours (GoodNotes → Google Drive…), par semaine.
+    private var notes: [NotesLibrary.Document] {
+        guard let course else { return [] }
+        return NotesStore.shared.documents(for: course, among: allCourses)
+    }
+
+    private var notesList: some View {
+        let documents = notes
+        let weeks = Array(Set(documents.map { $0.week ?? 0 })).sorted { ($0 == 0 ? -1 : $0) > ($1 == 0 ? -1 : $1) }
+        return List {
+            ForEach(weeks, id: \.self) { week in
+                Section {
+                    ForEach(documents.filter { ($0.week ?? 0) == week }.sorted { $0.modified > $1.modified }) { document in
+                        Button {
+                            if let url = NotesStore.shared.url(document) { reading = .pdf(title: document.title, address: url.absoluteString) }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: document.isSolution ? "checkmark.seal" : (document.seriesNumber != nil ? "list.number" : "pencil.and.scribble"))
                                     .foregroundStyle(Carnet.tint(course?.colorHex ?? "")).frame(width: 18)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(thread.title).foregroundStyle(Carnet.ink).lineLimit(2)
-                                    Text([thread.category, thread.replyCount.map { "\($0) rép." }].compactMap { $0 }.joined(separator: " · "))
-                                        .font(.caption).foregroundStyle(Carnet.inkTertiary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(document.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                    Text(document.modified.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_CH"))))
+                                        .font(.caption2).foregroundStyle(Carnet.inkTertiary)
                                 }
                             }
                         }
                         .buttonStyle(.plain)
                     }
+                } header: {
+                    Text(week > 0 ? "Semaine \(week)" : "Autres").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-            } else {
-                ProgressView()
-                    .frame(maxHeight: .infinity)
-                    .task(id: desk.signInRevision) {
-                        do { desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id) }
-                        catch HiddenSiteSession.SiteError.notSignedIn { desk.edNeedsLogin = true }
-                        catch {}
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: Ed
+
+    @ViewBuilder
+    private var edList: some View {
+        if let ed = edCourse {
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    if !(desk.edLessons[ed.id] ?? []).isEmpty {
+                        Picker("Ed", selection: $edLessonsShown) {
+                            Text("Fils").tag(false)
+                            Text("Leçons").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
+                    Menu {
+                        Button("Toutes") { edCategory = nil }
+                        ForEach(Array(Set((desk.edThreads[ed.id] ?? []).compactMap(\.category))).sorted(), id: \.self) { name in
+                            Button(name) { edCategory = name }
+                        }
+                    } label: {
+                        Label(edCategory ?? "Toutes", systemImage: "line.3.horizontal.decrease")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    Spacer()
+                    Button { composingEd = true } label: { Label("Question", systemImage: "square.and.pencil") }
+                        .buttonStyle(.paper)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                if edLessonsShown, let lessons = desk.edLessons[ed.id] {
+                    List(lessons) { lesson in
+                        Button { reading = .edLesson(lesson) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(lesson.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                if let module = lesson.module { Text(module).font(.caption).foregroundStyle(Carnet.inkTertiary) }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                } else if let threads = desk.edThreads[ed.id] {
+                    List {
+                        ForEach(threads.filter { edCategory == nil || $0.category == edCategory }) { thread in
+                            Button { reading = .edThread(id: thread.id, title: thread.title) } label: {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: thread.isPinned == true ? "pin.fill"
+                                          : (thread.type == "announcement" ? "megaphone" : (thread.isAnswered == true ? "checkmark.bubble" : "bubble.left")))
+                                        .foregroundStyle(Carnet.tint(course?.colorHex ?? "")).frame(width: 18)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(thread.title).foregroundStyle(Carnet.ink).lineLimit(2)
+                                        Text([thread.category, thread.replyCount.map { "\($0) rép." }].compactMap { $0 }.joined(separator: " · "))
+                                            .font(.caption).foregroundStyle(Carnet.inkTertiary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground({ if case .edThread(let id, _)? = reading, id == thread.id { return Carnet.tint(course?.colorHex ?? "").opacity(0.12) }; return Color.clear }())
+                        }
+                    }
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                } else {
+                    ProgressView().frame(maxHeight: .infinity)
+                }
+            }
+            .task(id: "\(ed.id)|\(desk.signInRevision)|\(edReload)") {
+                await EPFLConnect.shared.ensure(.ed)
+                do { desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id) }
+                catch HiddenSiteSession.SiteError.notSignedIn { desk.edNeedsLogin = true }
+                catch {}
+                if desk.edLessons[ed.id] == nil { desk.edLessons[ed.id] = (try? await desk.ed.lessons(course: ed.id)) ?? [] }
+            }
+            .sheet(isPresented: $composingEd) {
+                EdComposeSheet(courseID: ed.id, desk: desk) { id in
+                    edReload += 1
+                    if let id { reading = .edThread(id: id, title: "Ta question") }
+                }
             }
         } else {
             VStack(spacing: 12) {
@@ -336,32 +432,10 @@ struct CoursePane: View {
     private var coursewareList: some View {
         if let key = coursewareKey {
             if let outline = desk.edxOutlines[key] {
-                List {
-                    ForEach(outline.chapters) { chapter in
-                        Section {
-                            ForEach(chapter.sequences) { sequence in
-                                DisclosureGroup {
-                                    ForEach(sequence.units) { unit in
-                                        Button { reading = .edx(unit) } label: {
-                                            HStack(spacing: 8) {
-                                                Image(systemName: unit.blocks.contains { $0.kind == .video } ? "play.rectangle" : "doc.text")
-                                                    .foregroundStyle(Carnet.tint(course?.colorHex ?? "")).frame(width: 18)
-                                                Text(unit.title).foregroundStyle(Carnet.ink).lineLimit(2)
-                                            }
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                } label: {
-                                    Text(sequence.title).foregroundStyle(Carnet.ink).lineLimit(2)
-                                }
-                            }
-                        } header: {
-                            Text(chapter.title).font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
+                CoursewareList(outline: outline, tint: Carnet.tint(course?.colorHex ?? ""),
+                               selected: { if case .edx(let unit)? = reading { return unit.id }; return nil }(),
+                               open: { reading = .edx($0) })
+                    .onAppear { if reading == nil, let resume = outline.resumeUnit { reading = .edx(resume) } }
             } else if coursewareFailed {
                 VStack(spacing: 12) {
                     Text("Connecte-toi à Courseware.").foregroundStyle(Carnet.inkSecondary)
@@ -373,6 +447,7 @@ struct CoursePane: View {
                 ProgressView()
                     .frame(maxHeight: .infinity)
                     .task(id: desk.signInRevision) {
+                        await EPFLConnect.shared.ensure(.courseware)
                         do { desk.edxOutlines[key] = try await desk.courseware.outline(of: key) } catch { coursewareFailed = true }
                     }
             }
@@ -508,6 +583,12 @@ struct CoursePane: View {
                                   openActivity: { openMoodle($0) }, openLink: { openLink($0, title: $1) }, openWeb: openWeb)
                     .id("section\(number)")
             }
+        case .edLesson(let lesson)?:
+            VStack(spacing: 0) {
+                plainHeader(lesson.title)
+                EdLessonReader(lesson: lesson, desk: desk, open: { openLink($0, title: $1) }, openWeb: openWeb)
+            }
+            .id("lesson\(lesson.id)")
         case .edThread(let id, let title)?:
             VStack(spacing: 0) {
                 plainHeader(title)
@@ -515,11 +596,11 @@ struct CoursePane: View {
             }
             .id("ed\(id)")
         case .edx(let unit)?:
-            VStack(spacing: 0) {
-                plainHeader(unit.title)
-                EdXUnitReader(unit: unit, desk: desk, open: { openLink($0, title: $1) }, openWeb: openWeb)
+            if let key = coursewareKey, let outline = desk.edxOutlines[key] {
+                CoursewareUnitPage(outline: outline, unit: unit, tint: Carnet.tint(course.colorHex), desk: desk,
+                                   go: { reading = .edx($0) }, open: { openLink($0, title: $1) }, openWeb: openWeb)
+                    .id(unit.id)
             }
-            .id(unit.id)
         case .theory(let id)?:
             if let item = course.theoryItems.first(where: { $0.id == id }) {
                 TheoryDetail(item: item, tint: Carnet.tint(course.colorHex), openLink: { openLink($0, title: $1, kind: $2) })

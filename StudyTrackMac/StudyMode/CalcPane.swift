@@ -20,7 +20,15 @@ struct CalcPane: View {
             graph
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            #if DEBUG
+            // `-calcRun "x^2 - 2;z^5 = 1"` : des lignes déjà tapées, pour les captures.
+            if let index = CommandLine.arguments.firstIndex(of: "-calcRun"), index + 1 < CommandLine.arguments.count, desk.calcHistory.isEmpty {
+                for sample in CommandLine.arguments[index + 1].split(separator: ";") { line = String(sample); run() }
+            }
+            #endif
+        }
     }
 
     // MARK: Calcul
@@ -30,7 +38,7 @@ struct CalcPane: View {
             HStack {
                 Text("Calcul").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
                 Spacer()
-                Picker("Angles", selection: Binding(get: { desk.calc.degrees }, set: { desk.calc.degrees = $0 })) {
+                Picker("Angles", selection: Binding(get: { desk.workbench.engine.degrees }, set: { desk.workbench.engine.degrees = $0 })) {
                     Text("rad").tag(false)
                     Text("deg").tag(true)
                 }
@@ -54,10 +62,7 @@ struct CalcPane: View {
                                 Text(entry.input)
                                     .font(.system(.body, design: .monospaced))
                                     .foregroundStyle(Carnet.inkSecondary)
-                                Text(entry.output)
-                                    .font(entry.isError ? .callout : Carnet.clock(22))
-                                    .foregroundStyle(entry.isError ? Carnet.wrong : Carnet.ink)
-                                    .textSelection(.enabled)
+                                CalcResult(result: entry.result)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 16)
@@ -76,7 +81,7 @@ struct CalcPane: View {
             keypad
             HStack(spacing: 8) {
                 Text("›").font(.title2).foregroundStyle(Carnet.inkTertiary)
-                TextField("2x^2 - 3x + 1, f(x) = sin(x)/x", text: $line)
+                TextField("x^2 - 2, z^3 = i, det([[1,2],[3,4]])", text: $line)
                     .textFieldStyle(.plain)
                     .font(.system(.title3, design: .monospaced))
                     .focused($focused)
@@ -92,7 +97,7 @@ struct CalcPane: View {
     private var examples: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Comme sur papier").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
-            ForEach(["sqrt(2)^3 - 2pi", "a = 3", "f(x) = x^3 - a x", "f'(1)", "int(f, 0, 2)", "root(f, 1, 3)", "binom(10, 3)"], id: \.self) { sample in
+            ForEach(["x^3 - 2x", "x^2 = 2", "z^5 = 1", "(1+2i)/(3-i)", "A = [[1,2],[3,4]]", "inv(A)", "f'(1)", "int(f, 0, 2)"], id: \.self) { sample in
                 Button {
                     line = sample
                     run()
@@ -102,7 +107,7 @@ struct CalcPane: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Carnet.inkSecondary)
             }
-            Text("f(x) = … se trace à droite.")
+            Text("Une expression en x se trace ; une équation se résout.")
                 .font(.caption).foregroundStyle(Carnet.inkTertiary)
         }
         .padding(16)
@@ -133,21 +138,17 @@ struct CalcPane: View {
         let input = line.trimmingCharacters(in: .whitespaces)
         guard !input.isEmpty else { return }
         do {
-            if let value = try desk.calc.run(input) {
-                desk.calcHistory.append((input, "= " + MathEngine.format(value), false))
-            } else {
-                desk.calcHistory.append((input, "tracée à droite", false))
-            }
+            desk.calcHistory.append((input, .success(try MathWorkbench.run(input, in: &desk.workbench))))
             line = ""
         } catch {
-            desk.calcHistory.append((input, error.localizedDescription, true))
+            desk.calcHistory.append((input, .failure(CalcError(message: error.localizedDescription))))
         }
     }
 
     // MARK: Graphe
 
     private var functionNames: [String] {
-        desk.calc.functions.filter { $0.value.parameters.count == 1 }.keys.sorted()
+        desk.workbench.engine.functions.filter { $0.value.parameters.count == 1 }.keys.sorted()
     }
 
     private static let colors: [Color] = [Carnet.ink, Carnet.wrong, Carnet.correct, Carnet.review, Color(hex: "#5B6CC9")]
@@ -174,7 +175,7 @@ struct CalcPane: View {
                     RuleMark(y: .value("0", 0)).foregroundStyle(Carnet.inkTertiary.opacity(0.6))
                     RuleMark(x: .value("0", 0)).foregroundStyle(Carnet.inkTertiary.opacity(0.6))
                     ForEach(Array(names.enumerated()), id: \.element) { index, name in
-                        let points = MathEngine.sample(name, from: range.lowerBound, to: range.upperBound, in: desk.calc)
+                        let points = MathEngine.sample(name, from: range.lowerBound, to: range.upperBound, in: desk.workbench.engine)
                         ForEach(segments(points), id: \.first!.x) { segment in
                             ForEach(segment) { point in
                                 LineMark(x: .value("x", point.x), y: .value("y", point.y),
@@ -183,7 +184,7 @@ struct CalcPane: View {
                                     .lineStyle(StrokeStyle(lineWidth: 2))
                             }
                         }
-                        ForEach(MathEngine.roots(name, from: range.lowerBound, to: range.upperBound, in: desk.calc), id: \.self) { root in
+                        ForEach(MathEngine.roots(name, from: range.lowerBound, to: range.upperBound, in: desk.workbench.engine), id: \.self) { root in
                             PointMark(x: .value("x", root), y: .value("y", 0))
                                 .foregroundStyle(Self.colors[index % Self.colors.count])
                                 .annotation(position: .top) {
@@ -212,10 +213,10 @@ struct CalcPane: View {
             ForEach(Array(names.enumerated()), id: \.element) { index, name in
                 HStack(spacing: 6) {
                     Capsule().fill(Self.colors[index % Self.colors.count]).frame(width: 14, height: 3)
-                    Text("\(name)(\(desk.calc.functions[name]?.parameters.first ?? "x"))").font(.callout.monospacedDigit())
+                    Text("\(name)(\(desk.workbench.engine.functions[name]?.parameters.first ?? "x"))").font(.callout.monospacedDigit())
                         .foregroundStyle(Carnet.ink)
                     Button {
-                        desk.calc.functions[name] = nil
+                        desk.workbench.engine.functions[name] = nil
                     } label: { Image(systemName: "xmark").font(.caption2) }
                     .buttonStyle(.plain)
                     .foregroundStyle(Carnet.inkTertiary)
@@ -242,7 +243,7 @@ struct CalcPane: View {
 
     /// L'axe des y : ce que les fonctions atteignent, sans les asymptotes.
     private func yDomain(_ names: [String]) -> ClosedRange<Double> {
-        let values = names.flatMap { MathEngine.sample($0, from: range.lowerBound, to: range.upperBound, in: desk.calc) }
+        let values = names.flatMap { MathEngine.sample($0, from: range.lowerBound, to: range.upperBound, in: desk.workbench.engine) }
             .map(\.y).sorted()
         guard values.count > 4 else { return -5...5 }
         let low = values[Int(Double(values.count) * 0.02)], high = values[Int(Double(values.count) * 0.98)]
@@ -261,3 +262,53 @@ struct CalcPane: View {
         range = (range.lowerBound + delta)...(range.upperBound + delta)
     }
 }
+
+/// Un résultat, mis en forme selon ce qu'il est : nombre, solutions, matrice,
+/// complexe (forme algébrique et polaire), fonction tracée.
+private struct CalcResult: View {
+    let result: Result<MathWorkbench.Output, CalcError>
+
+    var body: some View {
+        switch result {
+        case .failure(let error):
+            Text(error.message).font(.callout).foregroundStyle(Carnet.wrong)
+        case .success(let output):
+            switch output {
+            case .value(let value):
+                Text("= " + value).font(Carnet.clock(22)).foregroundStyle(Carnet.ink).textSelection(.enabled)
+            case .plotted(let definition):
+                Label(definition + " — tracée", systemImage: "chart.xyaxis.line").font(.callout).foregroundStyle(Carnet.ink)
+            case .defined(let text):
+                Text(text).font(.callout).foregroundStyle(Carnet.inkSecondary)
+            case .complex(let value, let polar):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("= " + value).font(Carnet.clock(22)).foregroundStyle(Carnet.ink).textSelection(.enabled)
+                    Text(polar).font(.callout.monospaced()).foregroundStyle(Carnet.inkSecondary)
+                }
+            case .solutions(let variable, let roots):
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(roots.enumerated()), id: \.offset) { _, root in
+                        Text("\(variable) = \(root)").font(.system(.title3, design: .monospaced)).foregroundStyle(Carnet.ink).textSelection(.enabled)
+                    }
+                }
+            case .matrix(let rows):
+                Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 4) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                                Text(cell).font(.system(.title3, design: .monospaced)).foregroundStyle(Carnet.ink)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .overlay(alignment: .leading) { Rectangle().fill(Carnet.ink).frame(width: 1.5) }
+                .overlay(alignment: .trailing) { Rectangle().fill(Carnet.ink).frame(width: 1.5) }
+                .textSelection(.enabled)
+            }
+        }
+    }
+}
+
+struct CalcError: Error, Equatable { let message: String }

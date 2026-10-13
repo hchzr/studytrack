@@ -782,12 +782,54 @@ extension CoursewareClient {
         if (!meText) return JSON.stringify({ error: 'login' });
         const me = JSON.parse(meText);
         const tree = await get('/api/courses/v2/blocks/?course_id=' + encodeURIComponent(key) + '&username=' + encodeURIComponent(me.username)
-          + '&depth=all&requested_fields=children,display_name,type,student_view_url,student_view_data&student_view_data=video');
+          + '&depth=all&requested_fields=children,display_name,type,student_view_url,student_view_data,completion&student_view_data=video');
         return tree || JSON.stringify({ error: 'plan' });
         """#, arguments: ["key": key])
         if raw.contains(#""error":"login""#) { throw HiddenSiteSession.SiteError.notSignedIn }
         guard let outline = EdXOutline.parse(json: Data(raw.utf8)) else { throw WebContentScraper.ScrapeError.empty }
         return outline
+    }
+
+    /// Un problème (`student_view_url` d'un bloc `problem`), prêt à répondre.
+    func problem(_ address: String) async throws -> EdXProblem? {
+        let raw = try await run(#"""
+        const r = await fetch(address, { credentials: 'include' });
+        const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+        const w = doc.querySelector('.problems-wrapper');
+        if (!w) return JSON.stringify({ error: 'noproblem' });
+        const inner = new DOMParser().parseFromString(w.getAttribute('data-content') || '', 'text/html');
+        const problem = inner.querySelector('.problem') || inner.body;
+        const groups = {};
+        problem.querySelectorAll('input, select, textarea').forEach(i => {
+          if (i.type === 'hidden' || !i.name) return;
+          const g = groups[i.name] || (groups[i.name] = { name: i.name, type: i.tagName === 'SELECT' ? 'select' : (i.type || 'text'), options: [] });
+          if (i.tagName === 'SELECT') { [...i.options].forEach(o => { if (o.value) g.options.push({ value: o.value, label: o.textContent.trim() }); }); }
+          else if (i.type === 'checkbox' || i.type === 'radio') {
+            const label = i.closest('label') || inner.querySelector('label[for="' + i.id + '"]');
+            g.options.push({ value: i.value, label: label ? label.innerHTML : i.value, checked: i.checked });
+          } else { g.value = i.value || ''; }
+        });
+        const copy = problem.cloneNode(true);
+        copy.querySelectorAll('input, select, textarea, label, .action, .notification, .problem-action-buttons-wrapper, .submission-feedback, .sr, script, .indicator-container, .status, .solution-span, .problem-hint').forEach(e => e.remove());
+        const base = new URL(r.url);
+        copy.querySelectorAll('[src]').forEach(e => { try { e.setAttribute('src', new URL(e.getAttribute('src'), base).href); } catch (x) {} });
+        const title = (inner.querySelector('.problem-header, h3') || {}).textContent || '';
+        return JSON.stringify({ url: new URL(w.getAttribute('data-url'), base).href, title: title.trim(), prompt: copy.innerHTML, groups: Object.values(groups),
+          score: Number(w.getAttribute('data-problem-score') || 0), total: Number(w.getAttribute('data-problem-total-possible') || 0), attempts: Number(w.getAttribute('data-attempts-used') || 0) });
+        """#, arguments: ["address": address])
+        return EdXProblem.decode(raw)
+    }
+
+    /// Envoie les réponses d'un problème (comme le bouton « Envoyer »).
+    func check(_ problem: EdXProblem, answers: [String: [String]]) async throws -> EdXProblem.Result? {
+        let raw = try await run(#"""
+        const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        const r = await fetch(url + '/problem_check', { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+          body });
+        return await r.text();
+        """#, arguments: ["url": problem.url, "body": EdXProblem.formBody(answers)])
+        return EdXProblem.result(json: Data(raw.utf8))
     }
 
     /// Le HTML d'un bloc seul (`student_view_url`), dans la session.
@@ -839,11 +881,13 @@ final class EdClient {
     /// Après une connexion : la page doit être rechargée pour voir le jeton.
     func reset() { isReady = false }
 
-    private func api(_ path: String) async throws -> Data {
+    private func api(_ path: String, method: String = "GET", body: Any? = nil) async throws -> Data {
         if !isReady {
             try await session.load(Self.home)
             isReady = true
         }
+        let bodyJSON = body.flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.fragmentsAllowed]) }
+            .map { String(decoding: $0, as: UTF8.self) } ?? ""
         let raw = try await session.run(#"""
         let token = null, region = 'eu';
         for (let i = 0; i < 20 && !token; i++) {
@@ -856,10 +900,13 @@ final class EdClient {
           if (!token) await new Promise(r => setTimeout(r, 300));
         }
         if (!token) return '__login__';
-        const r = await fetch('https://' + region + '.edstem.org/api/' + path, { headers: { 'X-Token': token } });
-        if (r.status === 401 || r.status === 403) return '__login__';
+        const init = { method, headers: { 'X-Token': token } };
+        if (body) { init.headers['Content-Type'] = 'application/json'; init.body = body; }
+        const r = await fetch('https://' + region + '.edstem.org/api/' + path, init);
+        if (r.status === 401) return '__login__';
+        if (!r.ok) return JSON.stringify({ __error: r.status, text: (await r.text()).slice(0, 300) });
         return await r.text();
-        """#, arguments: ["path": path])
+        """#, arguments: ["path": path, "method": method, "body": bodyJSON])
         if raw == "__login__" { throw HiddenSiteSession.SiteError.notSignedIn }
         return Data(raw.utf8)
     }
@@ -874,6 +921,69 @@ final class EdClient {
 
     func thread(_ id: Int) async throws -> EdDiscussion.Post? {
         EdDiscussion.thread(json: try await api("threads/\(id)?view=1"))
+    }
+
+    func categories(course: Int) async throws -> [String] {
+        EdDiscussion.categories(courseJSON: try await api("courses/\(course)"))
+    }
+
+    enum WriteError: LocalizedError {
+        case refused(String)
+        var errorDescription: String? { if case .refused(let text) = self { return text }; return nil }
+    }
+
+    private func write(_ path: String, method: String = "POST", body: Any?) async throws -> [String: Any] {
+        let data = try await api(path, method: method, body: body)
+        let object = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        if let status = object["__error"] as? Int { throw WriteError.refused("Ed a refusé (\(status)).") }
+        return object
+    }
+
+    /// Une nouvelle question ou un message (observé : `{thread: {type, title,
+    /// category, content, is_private, is_anonymous, …}}`).
+    @discardableResult
+    func postThread(course: Int, title: String, category: String, markdown: String, isQuestion: Bool,
+                    isPrivate: Bool, isAnonymous: Bool) async throws -> Int? {
+        let thread: [String: Any] = ["type": isQuestion ? "question" : "post", "title": title, "category": category,
+                                     "subcategory": "", "subsubcategory": "",
+                                     "content": EdDiscussion.document(fromMarkdown: markdown),
+                                     "is_pinned": false, "is_private": isPrivate, "is_anonymous": isAnonymous,
+                                     "is_megathread": false, "anonymous_comments": false]
+        let reply = try await write("courses/\(course)/threads", body: ["thread": thread])
+        return (reply["thread"] as? [String: Any])?["id"] as? Int
+    }
+
+    /// Répondre à un fil (`answer` ou `comment`) ou à un commentaire.
+    func reply(toThread thread: Int? = nil, toComment comment: Int? = nil, markdown: String, isAnswer: Bool,
+               isPrivate: Bool = false, isAnonymous: Bool = false) async throws {
+        let target = thread.map { "threads/\($0)" } ?? comment.map { "comments/\($0)" } ?? ""
+        let body: [String: Any] = ["comment": ["type": isAnswer ? "answer" : "comment",
+                                               "content": EdDiscussion.document(fromMarkdown: markdown),
+                                               "is_private": isPrivate, "is_anonymous": isAnonymous]]
+        _ = try await write(target + "/comments", body: body)
+    }
+
+    func lessons(course: Int) async throws -> [EdDiscussion.Lesson] {
+        EdDiscussion.lessons(json: try await api("courses/\(course)/lessons"))
+    }
+
+    func slides(lesson: Int) async throws -> [EdDiscussion.Slide] {
+        _ = try? await write("lessons/\(lesson)/attempts", body: nil)
+        return EdDiscussion.slides(lessonJSON: try await api("lessons/\(lesson)?view=1"))
+    }
+
+    func questions(slide: Int) async throws -> [EdDiscussion.Question] {
+        EdDiscussion.questions(json: try await api("lessons/slides/\(slide)/questions"))
+    }
+
+    /// Envoie une réponse ; Ed rend « juste ? », la solution et l'explication.
+    func answer(question: Int, response: Any) async throws -> (correct: Bool?, explanation: String?) {
+        let reply = try await write("lessons/slides/questions/\(question)/responses", body: response)
+        return (reply["correct"] as? Bool, reply["explanation"] as? String)
+    }
+
+    func complete(slide: Int) async {
+        _ = try? await write("lessons/slides/\(slide)/complete", method: "PUT", body: nil)
     }
 }
 
