@@ -120,9 +120,11 @@ enum SiteHTML {
 
         /// Le paragraphe en cours devient un bloc (avec ses liens, après lui).
         mutating func flush() {
+            // Les balises vides (`<h3></h3>`, `<strong></strong>`, fréquentes sur
+            // Courseware) ne laissent ni « #### » ni « **** » à l'écran.
             let lines = paragraph.components(separatedBy: "\n")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty && $0 != "**" && $0 != "*" }
+                .map { $0.replacingOccurrences(of: "****", with: "").trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && $0.range(of: #"^[#*_\s]+$"#, options: .regularExpression) == nil }
             if !lines.isEmpty {
                 let text = lines.joined(separator: "\n")
                 if case .markdown(let previous)? = blocks.last, isListLine(previous), isListLine(text) {
@@ -668,6 +670,70 @@ enum EdDiscussion {
         return root
     }
 
+    // MARK: Sondages (observé : `<poll id="3230"/>` dans le message,
+    // `GET polls/<id>` → `{poll}`, `POST polls/<id>/responses {option_indices}`)
+
+    /// Un sondage d'Ed (« Cochez les équations linéaires », les votes de la classe).
+    struct Poll: Equatable {
+        var id: Int
+        /// La question, au format d'Ed.
+        var question: String
+        var options: [String]
+        /// Les votes par option (absents tant qu'Ed ne les montre pas).
+        var counts: [Int]
+        var multipleChoice: Bool
+        var isClosed: Bool
+        /// Le nombre de personnes qui ont répondu.
+        var voters: Int
+        /// Ce que l'étudiant·e a coché (`nil` : pas encore répondu).
+        var chosen: [Int]?
+        /// `after_response`, `always`, `never`, `after_close`.
+        var revealVotes: String
+
+        /// Ed ne montre les votes qu'après sa propre réponse (ou selon le réglage).
+        var showsResults: Bool {
+            guard counts.count == options.count, voters > 0 else { return false }
+            switch revealVotes {
+            case "never": return false
+            case "always": return true
+            case "after_close": return isClosed
+            default: return chosen != nil || isClosed
+            }
+        }
+
+        /// La part des votants qui ont coché une option (0…1).
+        func share(_ index: Int) -> Double {
+            guard counts.indices.contains(index), voters > 0 else { return 0 }
+            return min(1, Double(counts[index]) / Double(voters))
+        }
+    }
+
+    /// Les sondages d'un message, dans l'ordre.
+    static func pollIDs(in document: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: #"<poll\b[^>]*\bid="(\d+)""#) else { return [] }
+        let range = NSRange(document.startIndex..., in: document)
+        return regex.matches(in: document, range: range).compactMap { match in
+            Range(match.range(at: 1), in: document).flatMap { Int(document[$0]) }
+        }
+    }
+
+    static func poll(json: Data) -> Poll? {
+        guard let object = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
+              let poll = object["poll"] as? [String: Any], let id = poll["id"] as? Int else { return nil }
+        let data = poll["data"] as? [String: Any] ?? [:]
+        let options = data["options"] as? [[String: Any]] ?? []
+        let counts = options.compactMap { $0["response_count"] as? Int }
+        let response = (poll["response"] as? [String: Any])?["data"] as? [String: Any]
+        return Poll(id: id, question: poll["content"] as? String ?? "",
+                    options: options.map { $0["content"] as? String ?? "" },
+                    counts: counts.count == options.count ? counts : [],
+                    multipleChoice: (data["multiple_choice"] as? Bool) == true,
+                    isClosed: (poll["is_closed"] as? Bool) == true,
+                    voters: poll["response_count"] as? Int ?? 0,
+                    chosen: response?["option_indices"] as? [Int],
+                    revealVotes: poll["reveal_votes"] as? String ?? "after_response")
+    }
+
     /// Le cours Ed d'un cours de l'app : le code (« CS-101 ») dans le code Ed
     /// (« CS-101 Fall 2026 », « cs101 »), le plus récent s'il y en a plusieurs.
     static func match(code: String, in courses: [Course]) -> Course? {
@@ -691,6 +757,7 @@ enum EdDiscussion {
         text = replace(text, #"<snippet[^>]*>"#) { _ in "<pre>" }
         text = replace(text, #"</snippet>"#) { _ in "</pre>" }
         text = replace(text, #"<web-snippet[^>]*>.*?</web-snippet>"#) { _ in "" }
+        text = replace(text, #"<poll\b[^>]*/>"#) { _ in "" }
         text = replace(text, #"<link(\s[^>]*)>"#) { "<a\($0[1])>" }
         text = text.replacingOccurrences(of: "</link>", with: "</a>")
         let tags = [("paragraph", "p"), ("bold", "b"), ("italic", "i"), ("underline", "span"), ("list-item", "li"),

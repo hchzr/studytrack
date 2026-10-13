@@ -5927,6 +5927,21 @@ do {
     let markdownPage = SiteHTML.blocks("<div class=\"md\">\n  ## Objectifs\n  - lire le **chapitre 4**\n  - voir [la vidéo](https://example.org/v)\n</div>")
     check(markdownPage == [.markdown("## Objectifs\n- lire le **chapitre 4**\n- voir [la vidéo](https://example.org/v)")], "HTML : texte Markdown gardé ligne par ligne")
     check(!SiteHTML.looksLikeMarkdown("\n   Soient \\(V\\) un espace\n   vectoriel. "), "HTML : texte indenté ordinaire, pas du Markdown")
+    // Courseware : titres et gras vides (`<h3></h3>`, `<strong></strong>`).
+    let emptyTags = SiteHTML.blocks("<h2>Contenu de la leçon</h2><h3></h3><p>Dans cette leçon.</p><h2></h2><ol><li>comparer ;<strong></strong></li></ol>")
+    check(emptyTags == [.markdown("### Contenu de la leçon"), .markdown("Dans cette leçon."), .markdown("1. comparer ;")], "HTML : pas de « #### » ni « **** » pour des balises vides")
+
+    // Ed : les sondages.
+    check(EdDiscussion.pollIDs(in: #"<document version="2.0"><paragraph>Soient $S$.</paragraph><poll id="3395"/></document>"#) == [3395], "Ed : sondage repéré dans le message")
+    check(!EdDiscussion.blocks(#"<document><paragraph>a</paragraph><poll id="1"/></document>"#).contains { if case .markdown(let t) = $0 { return t.contains("poll") }; return false },
+          "Ed : la balise du sondage n'est pas affichée")
+    let pollJSON = #"{"poll":{"id":3230,"content":"<document version=\"1.0\"><paragraph>Cochez</paragraph></document>","data":{"multiple_choice":true,"options":[{"content":"a","response_count":3},{"content":"b","response_count":115}]},"is_closed":false,"response":{"data":{"option_indices":[1]}},"response_count":116,"reveal_votes":"after_response"}}"#
+    let poll = EdDiscussion.poll(json: Data(pollJSON.utf8))
+    check(poll?.options.count == 2 && poll?.multipleChoice == true && poll?.chosen == [1] && poll?.voters == 116, "Ed : sondage lu (options, plusieurs réponses, mon vote)")
+    check(poll?.showsResults == true && abs((poll?.share(1) ?? 0) - 115.0 / 116.0) < 0.001, "Ed : votes montrés après ma réponse, part de la classe")
+    var unanswered = poll
+    unanswered?.chosen = nil
+    check(unanswered?.showsResults == false, "Ed : votes cachés avant de répondre")
 
     check(SiteRouter.route("https://moodle.epfl.ch/mod/page/view.php?id=42") == .moodle(module: "page", id: 42), "lien : page Moodle")
     check(SiteRouter.route("https://moodle.epfl.ch/mod/resource/view.php?id=42") == .pdf, "lien : fichier Moodle → PDF")

@@ -5,7 +5,8 @@ import Security
 /// Garde les sessions des sites de cours **d'un lancement à l'autre**.
 ///
 /// Switch edu-ID (MediaSpace) et plusieurs sites EPFL posent des cookies « de
-/// session » : sans date d'expiration, iOS les oublie quand l'app se ferme. Il
+/// session » : sans date d'expiration, WebKit les oublie quand l'app se ferme
+/// (sur l'iPhone comme sur le Mac). Il
 /// fallait donc se reconnecter à MediaSpace à chaque vidéo, ou presque. Ici,
 /// les cookies de ces sites sont copiés dans le trousseau (sur cet appareil
 /// seulement) quand l'app passe en arrière-plan ou après une connexion, et
@@ -97,25 +98,53 @@ enum CookieKeeper {
     }
 
     nonisolated static func clear() {
-        SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary)
+        #if os(macOS)
+        try? FileManager.default.removeItem(at: file)
+        #endif
+        SecItemDelete(base as CFDictionary)
     }
 
     // MARK: Trousseau
 
+    nonisolated private static var base: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
+    }
+
+    #if os(macOS)
+    /// Sur le Mac, un fichier lisible par toi seul, à côté de la base de l'app
+    /// (comme les cookies d'un navigateur) : le trousseau demandait un droit que
+    /// l'app de développement n'a pas, ou une autorisation à chaque version.
+    nonisolated private static var file: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("StudyTrack/session-cookies.json")
+    }
+    #endif
+
     nonisolated private static func store(_ data: Data) {
-        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
+        #if os(macOS)
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? data.write(to: file, options: [.atomic])) != nil {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        }
+        #else
         SecItemDelete(base as CFDictionary)
         var insert = base
         insert[kSecValueData as String] = data
         insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(insert as CFDictionary, nil)
+        #endif
     }
 
     nonisolated private static func load() -> Data? {
+        #if os(macOS)
+        return try? Data(contentsOf: file)
+        #else
         var item: CFTypeRef?
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                    kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var query = base
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
         return item as? Data
+        #endif
     }
 }

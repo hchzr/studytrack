@@ -917,12 +917,26 @@ final class EdClient {
         EdDiscussion.courses(userJSON: try await api("user"))
     }
 
+    #if DEBUG
+    /// Lecture brute (débogage, `GET` seulement).
+    func debugGET(_ path: String) async throws -> Data { try await api(path) }
+    #endif
+
     func threads(course: Int) async throws -> [EdDiscussion.Thread] {
         EdDiscussion.threads(json: try await api("courses/\(course)/threads?limit=50&sort=new"))
     }
 
     func thread(_ id: Int) async throws -> EdDiscussion.Post? {
         EdDiscussion.thread(json: try await api("threads/\(id)?view=1"))
+    }
+
+    func poll(_ id: Int) async throws -> EdDiscussion.Poll? {
+        EdDiscussion.poll(json: try await api("polls/\(id)"))
+    }
+
+    /// Voter (le bouton du sondage) ; Ed rend ensuite les votes de la classe.
+    func vote(poll id: Int, options: [Int]) async throws {
+        _ = try await write("polls/\(id)/responses", body: ["option_indices": options.sorted()])
     }
 
     func categories(course: Int) async throws -> [String] {

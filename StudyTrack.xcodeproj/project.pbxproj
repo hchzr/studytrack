@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
-		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
 		B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StudyTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* StudyTrackShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F30000000000000000000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Theme.swift */; };
@@ -30,6 +28,8 @@
 		F30000000000000000000011 /* CourseEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011 /* CourseEvidence.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
+		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */

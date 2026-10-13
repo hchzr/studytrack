@@ -129,6 +129,9 @@ struct EdThreadReader: View {
                 }
             }
             SiteBlocksView(blocks: EdDiscussion.blocks(post.content), desk: desk, open: open, openWeb: openWeb)
+            ForEach(EdDiscussion.pollIDs(in: post.content), id: \.self) { id in
+                EdPollCard(id: id, desk: desk, open: open, openWeb: openWeb)
+            }
             ForEach(Array(post.replies.enumerated()), id: \.offset) { _, reply in
                 message(reply, depth: depth + 1)
             }
@@ -276,6 +279,9 @@ struct EdLessonReader: View {
                         let slide = slides[current]
                         if !slide.content.isEmpty {
                             SiteBlocksView(blocks: EdDiscussion.blocks(slide.content), desk: desk, open: open, openWeb: openWeb)
+                            ForEach(EdDiscussion.pollIDs(in: slide.content), id: \.self) { id in
+                                EdPollCard(id: id, desk: desk, open: open, openWeb: openWeb)
+                            }
                         }
                         ForEach(questions[slide.id] ?? []) { question in
                             EdQuestionCard(question: question, desk: desk, open: open, openWeb: openWeb)
@@ -367,5 +373,116 @@ private struct EdQuestionCard: View {
         defer { sending = false }
         let response = EdDiscussion.response(choices: choices, text: text, for: question.kind)
         result = (try? await desk.ed.answer(question: question.id, response: response)) ?? (nil, "L'envoi a échoué.")
+    }
+}
+
+/// Un sondage d'Ed, comme sur le site : la question, les options à cocher,
+/// « Voter », puis la part de la classe sur chaque option et ce qu'on a coché.
+struct EdPollCard: View {
+    let id: Int
+    var desk: SiteHub
+    var open: (String, String) -> Void
+    var openWeb: (URL, String) -> Void
+
+    @State private var poll: EdDiscussion.Poll?
+    @State private var choices: Set<Int> = []
+    @State private var sending = false
+    @State private var failed = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let poll {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "chart.bar.fill").foregroundStyle(Carnet.inkSecondary)
+                    SiteBlocksView(blocks: EdDiscussion.blocks(poll.question), desk: desk, open: open, openWeb: openWeb)
+                }
+                if poll.multipleChoice, poll.chosen == nil, !poll.isClosed {
+                    Text("Plusieurs réponses possibles").font(.caption).foregroundStyle(Carnet.inkTertiary)
+                }
+                ForEach(Array(poll.options.enumerated()), id: \.offset) { index, option in
+                    optionRow(poll, index: index, option: option)
+                }
+                HStack(spacing: 12) {
+                    if poll.chosen == nil, !poll.isClosed {
+                        Button(sending ? "Envoi…" : "Voter") { Task { await vote(poll) } }
+                            .buttonStyle(.ink)
+                            .disabled(sending || choices.isEmpty)
+                    }
+                    if let error { Text(error).font(.caption).foregroundStyle(Carnet.wrong) }
+                    Spacer()
+                    Text(poll.isClosed ? "Fermé · \(votes(poll.voters))" : votes(poll.voters))
+                        .font(.caption).foregroundStyle(Carnet.inkTertiary)
+                }
+            } else if failed {
+                Text("Sondage illisible.").font(.caption).foregroundStyle(Carnet.inkSecondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .paperSheet(padding: 16)
+        .task(id: id) { await load() }
+    }
+
+    private func votes(_ count: Int) -> String { "\(count) vote\(count > 1 ? "s" : "")" }
+
+    @ViewBuilder
+    private func optionRow(_ poll: EdDiscussion.Poll, index: Int, option: String) -> some View {
+        let answered = poll.chosen != nil || poll.isClosed
+        let picked = poll.chosen?.contains(index) ?? choices.contains(index)
+        Button {
+            guard !answered else { return }
+            if poll.multipleChoice {
+                if choices.contains(index) { choices.remove(index) } else { choices.insert(index) }
+            } else {
+                choices = [index]
+            }
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: picked ? (poll.multipleChoice ? "checkmark.square.fill" : "largecircle.fill.circle")
+                                         : (poll.multipleChoice ? "square" : "circle"))
+                    .foregroundStyle(picked ? Carnet.ink : Carnet.inkTertiary)
+                SiteBlocksView(blocks: EdDiscussion.blocks(option), desk: desk, open: open, openWeb: openWeb)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(alignment: .leading) {
+                        if poll.showsResults {
+                            GeometryReader { proxy in
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Carnet.ink.opacity(picked ? 0.16 : 0.08))
+                                    .frame(width: proxy.size.width * poll.share(index))
+                            }
+                        }
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(picked ? Carnet.ink.opacity(0.5) : Carnet.rule, lineWidth: picked ? 1.5 : 1)
+                    }
+                if poll.showsResults {
+                    Text("\(Int((poll.share(index) * 100).rounded())) %")
+                        .font(.caption.monospacedDigit()).foregroundStyle(Carnet.inkSecondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func load() async {
+        poll = try? await desk.ed.poll(id)
+        failed = poll == nil
+    }
+
+    private func vote(_ poll: EdDiscussion.Poll) async {
+        sending = true
+        defer { sending = false }
+        do {
+            try await desk.ed.vote(poll: poll.id, options: Array(choices))
+            error = nil
+            await load()
+        } catch {
+            self.error = "Le vote n'est pas passé."
+        }
     }
 }

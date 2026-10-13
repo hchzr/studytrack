@@ -193,13 +193,44 @@ struct StudyTrackMacApp: App {
                 NSApp.activate(ignoringOtherApps: true)
             }
         }
+        #if DEBUG
+        // `-dumpEd <code> <dossier>` : les fils Ed bruts d'un cours (lecture seule).
+        if let index = CommandLine.arguments.firstIndex(of: "-dumpEd"), index + 2 < CommandLine.arguments.count {
+            let code = CommandLine.arguments[index + 1].lowercased()
+            let folder = URL(fileURLWithPath: CommandLine.arguments[index + 2])
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                await SchoolConnect.shared.ensure(.ed, prompting: false)
+                try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let ed = SiteHub.shared.ed
+                let courses = (try? await ed.courses()) ?? []
+                if let course = courses.first(where: { $0.code.lowercased().contains(code) || $0.name.lowercased().contains(code) }) {
+                    let list = (try? await ed.debugGET("courses/\(course.id)/threads?limit=100&sort=new")) ?? Data()
+                    try? list.write(to: folder.appendingPathComponent("threads.json"))
+                    for thread in EdDiscussion.threads(json: list).prefix(100) {
+                        let raw = (try? await ed.debugGET("threads/\(thread.id)")) ?? Data()
+                        let text = String(decoding: raw, as: UTF8.self)
+                        if text.contains("poll") {
+                            try? raw.write(to: folder.appendingPathComponent("thread-\(thread.id).json"))
+                            if let match = text.range(of: #"poll id=\\?"(\d+)"#, options: .regularExpression) {
+                                let id = text[match].filter(\.isNumber)
+                                let poll = (try? await ed.debugGET("polls/\(id)")) ?? Data()
+                                try? poll.write(to: folder.appendingPathComponent("poll-\(id).json"))
+                            }
+                        }
+                    }
+                }
+                FileHandle.standardError.write(Data("DUMP fini \(courses.map(\.code))\n".utf8))
+            }
+        }
+        #endif
         // `-mathPreview [adresse d'un problème Courseware]` : les formules mises
         // en page (texte d'essai, et un vrai problème, sans rien envoyer).
         if let index = CommandLine.arguments.firstIndex(of: "-mathPreview") {
             let address = index + 1 < CommandLine.arguments.count ? CommandLine.arguments[index + 1] : nil
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))
-                if address != nil { await SchoolConnect.shared.ensure(.courseware, prompting: false) }
+                if let address { await SchoolConnect.shared.ensure(Int(address) == nil ? .courseware : .ed, prompting: false) }
                 let sample = #"""
 Soient V=\(\mathbb{P}_4(\mathbb{R})\), et \(T:V\to W\) définie par \(T(p(t))=p'(t)\). Soient aussi \(\mathscr{B}_V=\{1,t,t^2,t^3,t^4\}\) et les matrices \[ A_1=\begin{pmatrix} 0 & 1 & 0 & 0 & 0 \\ 0 & 0 & 2 & 0 & 0 \\ 0 & 0 & 0 & 3 & 0 \\ 0 & 0 & 0 & 0 & 4 \end{pmatrix},~ A_2=\begin{pmatrix} 0 & 4 & 0 & 0 & 0 \\ 0 & 0 & 3 & 0 & 0 \\ 0 & 0 & 0 & 2 & 0 \\ 0 & 0 & 0 & 0 & 1 \end{pmatrix}, \] Parmi les possibilités suivantes, cochez celle qui vous paraît correcte. La matrice \([T]_{\mathscr{B}_W\mathscr{B}_V}\) est donnée par \(A_1\), et \(\dim (W_1+W_2) = \dim W_1 + \dim W_2 -\dim(W_1\cap W_2)\), avec \(\dfrac{a}{b}\) et \(\operatorname{rg}(A)\leqslant n\).
 
@@ -210,8 +241,13 @@ Soient V=\(\mathbb{P}_4(\mathbb{R})\), et \(T:V\to W\) définie par \(T(p(t))=p'
                 let root = ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         RichTextView(text: sample, size: 15).paperSheet(padding: 16)
-                        if let address {
+                        if let address, let poll = Int(address) {
+                            EdPollCard(id: poll, desk: SiteHub.shared, open: { _, _ in }, openWeb: { _, _ in })
+                        } else if let address {
                             EdXProblemCard(address: address, desk: SiteHub.shared, open: { _, _ in }, openWeb: { _, _ in })
+                        }
+                        ForEach(Array(SiteHTML.blocks("<h2 class=\"problem-header\">Contenu de la leçon</h2><h3></h3><p>Dans cette leçon, les matrices.</p><h2></h2><div><h2>objectifs</h2><h3></h3></div><ol><li>de maîtriser les notions (taille) ;<strong></strong></li><li>de comparer deux matrices.</li></ol>").enumerated()), id: \.offset) { _, block in
+                            if case .markdown(let text) = block { RichTextView(text: text, size: 15) }
                         }
                     }
                     .padding(24)

@@ -95,10 +95,25 @@ final class SchoolConnect {
     /// Ouvre la feuille de connexion du bureau quand un site attend la
     /// personne — seulement quand elle est en train de lire un site (pas au
     /// lancement de l'app, où une feuille surgirait sans raison).
+    ///
+    /// Seulement pour Microsoft (une validation ouvre Moodle, Courseware et
+    /// Ed) : MediaSpace ne surgit plus à chaque ouverture du mode étude — sa
+    /// pastille et son bouton restent, et la vidéo propose de se connecter.
     private func prompt() {
-        guard needsYou, SiteHub.shared.signIn == nil, let site = signInSite else { return }
-        SiteHub.shared.signIn = site
+        guard needsYou, SiteHub.shared.signIn == nil, signInSite == .moodle else { return }
+        SiteHub.shared.signIn = .moodle
     }
+
+    /// Ne pas recharger en silence un site qui attend la personne : vrai pour
+    /// Microsoft (chaque chargement envoie une notification Authenticator),
+    /// pas pour edu-ID (MediaSpace), qui n'envoie rien — et dont la session,
+    /// gardée par `CookieKeeper`, revient souvent toute seule.
+    private func holdsBack(_ site: Site) -> Bool {
+        site != .mediaspace && waiting.contains(site.rawValue)
+    }
+
+    /// Les sessions gardées, remises une fois avant la première connexion.
+    @ObservationIgnored private var restoredCookies = false
 
     /// Ouvre chaque site dans la session Microsoft, l'un après l'autre.
     /// `force` : après la feuille de connexion, on réessaie aussi les sites qui
@@ -111,11 +126,15 @@ final class SchoolConnect {
         }
         isRunning = true
         defer { isRunning = false; revision += 1 }
+        if !restoredCookies {
+            restoredCookies = true
+            await CookieKeeper.restore()
+        }
         // Tous les sites en même temps (chacun sa page cachée, mêmes cookies) :
         // l'attente est celle du plus lent, pas la somme.
         await withTaskGroup(of: Void.self) { group in
             for site in sites {
-                if !force, waiting.contains(site.rawValue) {
+                if !force, holdsBack(site) {
                     states[site] = .needsYou
                     continue
                 }
@@ -130,7 +149,7 @@ final class SchoolConnect {
     func ensure(_ site: Site, prompting: Bool = true) async {
         // On n'attend que ce site : Courseware prêt n'attend pas Ed.
         while isRunning, [.unknown, .connecting].contains(state(site)) { try? await Task.sleep(for: .milliseconds(400)) }
-        if state(site) != .connected, !waiting.contains(site.rawValue) { await connect(site) }
+        if state(site) != .connected, !holdsBack(site) { await connect(site) }
         if prompting { prompt() }
     }
 
@@ -206,6 +225,8 @@ final class SchoolConnect {
         }
         states[site] = done ? .connected : (driver.needsPerson ? .needsYou : .failed)
         if done { waiting.remove(site.rawValue) } else if driver.needsPerson { waiting.insert(site.rawValue) }
+        // Une session ouverte se garde pour le prochain lancement.
+        if done { await CookieKeeper.save() }
         log.notice("connexion \(site.rawValue, privacy: .public) : \(done ? "ok" : (driver.needsPerson ? "à toi (\(driver.reason ?? "?"))" : "échec"), privacy: .public)")
     }
 
