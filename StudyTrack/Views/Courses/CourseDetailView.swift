@@ -274,7 +274,7 @@ struct CourseDetailView: View {
 
     private func summaryAxis(_ title: String, done: Int, total: Int, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            Text(ui: title).font(.caption).foregroundStyle(Carnet.inkSecondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(total == 0 ? "—" : "\(done)")
                     .font(Carnet.serif(.title2))

@@ -139,7 +139,20 @@ struct MoodleCourseList: View {
         if activity.isSeries { return activity.name.lowercased().contains("corrig") || activity.name.lowercased().contains("sol") ? "checkmark.seal" : "list.number" }
         if activity.isVideo { return "play.rectangle" }
         if activity.module == "lti", activity.name.lowercased().contains("ed") { return "bubble.left.and.text.bubble.right" }
-        return CoursePane.icon(for: activity.module)
+        return moduleIcon(activity.module)
+    }
+
+    static func moduleIcon(_ module: String) -> String {
+        switch module {
+        case "resource": return "doc.richtext"
+        case "folder": return "folder"
+        case "url": return "link"
+        case "page": return "doc.text"
+        case "assign": return "tray.and.arrow.up"
+        case "forum": return "bubble.left.and.bubble.right"
+        case "quiz": return "checklist"
+        default: return "square.grid.2x2"
+        }
     }
 
     static func detail(_ activity: MoodleCoursePage.Activity) -> String? {
@@ -155,7 +168,7 @@ struct MoodleCourseList: View {
 struct MoodleSectionPage: View {
     let section: MoodleCoursePage.Section
     let tint: Color
-    var desk: StudyDesk
+    var desk: SiteHub
     var openActivity: (MoodleCoursePage.Activity) -> Void
     var openLink: (String, String) -> Void
     var openWeb: (URL, String) -> Void
@@ -166,13 +179,13 @@ struct MoodleSectionPage: View {
                 if section.isCurrent { Kicker("cette semaine", color: tint) }
                 Text(section.title).font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
                 if !section.summary.isEmpty {
-                    SiteBlocksView(blocks: SiteHTML.blocks(section.summary, base: URL(string: "https://moodle.epfl.ch/")),
+                    SiteBlocksView(blocks: SiteHTML.blocks(section.summary, base: URL(string: Institution.current.moodleBase + "/")),
                                    desk: desk, open: openLink, openWeb: openWeb)
                 }
                 ForEach(section.activities) { activity in
                     if activity.module == "label" {
                         if !activity.html.isEmpty {
-                            SiteBlocksView(blocks: SiteHTML.blocks(activity.html, base: URL(string: "https://moodle.epfl.ch/")),
+                            SiteBlocksView(blocks: SiteHTML.blocks(activity.html, base: URL(string: Institution.current.moodleBase + "/")),
                                            desk: desk, open: openLink, openWeb: openWeb)
                                 .padding(14)
                                 .background(Carnet.sheetRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))

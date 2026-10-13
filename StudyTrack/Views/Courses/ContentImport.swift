@@ -182,7 +182,7 @@ struct ContentImportView: View {
 
             Button {
                 path.append(.browser(.moodle, MoodleCourseMatcher.linkedID(in: course?.contentSources ?? [])
-                    .map { URL(string: "https://moodle.epfl.ch/course/view.php?id=\($0)")! }))
+                    .map { URL(string: Institution.current.moodleBase + "/course/view.php?id=\($0)")! }))
             } label: {
                 Label("Ouvrir Moodle et choisir la page moi-même", systemImage: "safari")
                     .font(.subheadline)
@@ -416,16 +416,16 @@ enum LoginSite: String, Identifiable {
         case .moodle: return MoodleClient.login
         case .courseware: return CoursewareClient.login
         case .explique: return ExpliqueClient.home
-        case .mediaspace: return URL(string: "https://mediaspace.epfl.ch/user/login")!
+        case .mediaspace: return URL(string: "https://\(Institution.current.videoHostName)/user/login")!
         }
     }
 
     var host: String {
         switch self {
-        case .moodle: return "moodle.epfl.ch"
-        case .courseware: return "courseware.epfl.ch"
-        case .explique: return "explique.epfl.ch"
-        case .mediaspace: return "mediaspace.epfl.ch"
+        case .moodle: return Institution.current.moodleHostName
+        case .courseware: return Institution.current.coursewareHostName
+        case .explique: return ExpliqueImport.host
+        case .mediaspace: return Institution.current.videoHostName
         }
     }
 
@@ -1038,7 +1038,7 @@ struct BotafogoPicker: View {
         List {
             Section {
                 if isLoadingCatalog {
-                    HStack { ProgressView(); Text("Lecture de botafogo.epfl.ch…").foregroundStyle(.secondary) }
+                    HStack { ProgressView(); Text("Lecture de \(URL(string: Institution.current.extras["botafogo"] ?? "")?.host ?? "Botafogo")…").foregroundStyle(.secondary) }
                 }
                 ForEach(ranked, id: \.url) { entry in
                     Button {

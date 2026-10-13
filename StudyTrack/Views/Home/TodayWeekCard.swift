@@ -76,7 +76,7 @@ struct WeekTimeCard: View {
     private func axis(_ title: String, _ value: (done: Int, total: Int)) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(title).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
+                Text(ui: title).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
                 Spacer(minLength: 4)
                 Text(value.total == 0 ? "—" : "\(value.done)")
                     .font(Carnet.serif(.title3))
@@ -170,7 +170,7 @@ struct WeekCourseRow: View {
     private func axis(_ title: String, done: Int, total: Int, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Text(title)
+                Text(ui: title)
                     .font(.caption)
                     .foregroundStyle(Carnet.inkSecondary)
                 Spacer(minLength: 2)

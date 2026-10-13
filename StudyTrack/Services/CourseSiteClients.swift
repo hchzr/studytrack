@@ -145,8 +145,8 @@ final class HiddenSiteSession: NSObject, WKNavigationDelegate {
 ///   • `core_courseformat_get_state` rend le plan du cours en JSON.
 @MainActor
 final class MoodleClient {
-    static let home = URL(string: "https://moodle.epfl.ch/my/")!
-    static let login = URL(string: "https://moodle.epfl.ch/login/index.php")!
+    nonisolated static var home: URL { URL(string: Institution.current.moodleBase + "/my/")! }
+    nonisolated static var login: URL { URL(string: Institution.current.moodleBase + "/login/index.php")! }
 
     private let session = HiddenSiteSession()
     private var isReady = false
@@ -193,7 +193,7 @@ final class MoodleClient {
             // La connexion EPFL passe par plusieurs redirections : on attend
             // d'être revenu sur Moodle, hors de la page de connexion.
             for _ in 0..<12 {
-                if let url = session.currentURL, url.host == "moodle.epfl.ch", !url.path.hasPrefix("/login") { break }
+                if let url = session.currentURL, url.host == Institution.current.moodleHostName, !url.path.hasPrefix("/login") { break }
                 try await Task.sleep(for: .seconds(1))
             }
         } catch {
@@ -303,7 +303,7 @@ final class MoodleClient {
         let json = try await call("core_courseformat_get_state", args: ["courseid": courseID])
         let state = (try? JSONDecoder().decode(String.self, from: Data(json.utf8))) ?? json
         guard let snapshot = MoodleStateParser.snapshot(fromStateJSON: state, title: title,
-                                                        url: "https://moodle.epfl.ch/course/view.php?id=\(courseID)") else {
+                                                        url: Institution.current.moodleBase + "/course/view.php?id=\(courseID)") else {
             throw WebContentScraper.ScrapeError.empty
         }
         return snapshot
@@ -355,7 +355,7 @@ final class MoodleClient {
               return;
             }
             if (item.module === 'url') {
-              const external = main.querySelector('a[href^="http"]:not([href*="moodle.epfl.ch"])');
+              const external = main.querySelector('a[href^="http"]:not([href*="\#(Institution.current.moodleHostName)"])');
               out[item.id] = { target: external ? external.href : '' };
               return;
             }
@@ -409,7 +409,7 @@ final class MoodleClient {
         const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
         const out = [];
         const mooc = [];
-        doc.querySelectorAll('a[href*="courseware.epfl.ch"]').forEach(a => {
+        doc.querySelectorAll('a[href*="\#(Institution.current.coursewareHostName)"]').forEach(a => {
           const holder = a.closest('[data-sectionnumber], [data-number], li.section');
           const n = holder && (holder.getAttribute('data-sectionnumber') || holder.getAttribute('data-number') || (holder.id || '').replace('section-', ''));
           mooc.push({ url: a.href, title: (a.innerText || a.textContent || '').trim(), section: n !== null && n !== undefined && n !== '' && !isNaN(Number(n)) ? Number(n) : null });
@@ -462,7 +462,7 @@ final class MoodleClient {
         let raw = (try? await session.run(#"""
         const out = [];
         const collect = (doc, section) => {
-          doc.querySelectorAll('a[href*="courseware.epfl.ch"]').forEach(a => {
+          doc.querySelectorAll('a[href*="\#(Institution.current.coursewareHostName)"]').forEach(a => {
             let s = section;
             if (s === null || s === undefined) {
               const holder = a.closest('[data-sectionnumber], [data-number], li.section');
@@ -608,7 +608,8 @@ final class MoodleClient {
         return content
     }
 
-    nonisolated static let activityScript = #"""
+    nonisolated static var activityScript: String {
+        #"""
     try {
     const clean = t => (t || '').replace(/\s+/g, ' ').trim();
     const load = async (path) => {
@@ -662,7 +663,7 @@ final class MoodleClient {
         .map(tr => { const th = tr.querySelector('th'), td = tr.querySelector('td'); return th && td ? clean(th.textContent) + ' : ' + clean(td.textContent) : ''; })
         .filter(Boolean);
     } else if (module === 'url') {
-      const link = doc.querySelector('.urlworkaround a, [role="main"] a[href]:not([href*="moodle.epfl.ch"])');
+      const link = doc.querySelector('.urlworkaround a, [role="main"] a[href]:not([href*="\#(Institution.current.moodleHostName)"])');
       out.target = link ? link.href : '';
       out.html = strip(intro);
     } else if (module === 'forum') {
@@ -686,6 +687,7 @@ final class MoodleClient {
     return JSON.stringify(out);
     } catch (e) { return JSON.stringify({ module, needsLogin: true }); }
     """#
+    }
 
     /// Trouve le cours Moodle d'un cours de l'app : le lien déjà retenu, sinon
     /// la recherche par code, départagée par les inscriptions.
@@ -705,15 +707,15 @@ final class MoodleClient {
 /// Courseware (Open edX), par ses API de page.
 @MainActor
 final class CoursewareClient {
-    static let home = URL(string: "https://courseware.epfl.ch/dashboard")!
-    static let login = URL(string: "https://courseware.epfl.ch/login")!
+    nonisolated static var home: URL { URL(string: Institution.current.coursewareBase + "/dashboard")! }
+    nonisolated static var login: URL { URL(string: Institution.current.coursewareBase + "/login")! }
 
     private let session = HiddenSiteSession()
     private var isReady = false
 
     private func prepare() async throws {
         guard !isReady else { return }
-        try await session.load(URL(string: "https://courseware.epfl.ch/courses/")!)
+        try await session.load(URL(string: Institution.current.coursewareBase + "/courses/")!)
         isReady = true
     }
 
@@ -847,7 +849,7 @@ extension MediaSpaceClient {
     /// se connecter (ou la vidéo n'existe plus).
     func playbackURL(entryID: String) async -> URL? {
         if let url = Kaltura.manifestURL(entryID: entryID), await Self.isPlayable(url) { return url }
-        guard let page = URL(string: "https://mediaspace.epfl.ch/media/t/\(entryID)") else { return nil }
+        guard let page = URL(string: "https://\(Institution.current.videoHostName)/media/t/\(entryID)") else { return nil }
         guard let html = try? await pageHTML(page) else { return nil }
         let config = Kaltura.config(html: html)
         guard let ks = config.ks,
@@ -872,8 +874,8 @@ extension MediaSpaceClient {
 /// appels depuis la page. Le décodage est dans `EdDiscussion` (pur, testé).
 @MainActor
 final class EdClient {
-    static let home = URL(string: "https://edstem.org/eu/dashboard")!
-    static let login = URL(string: "https://edstem.org/eu/login")!
+    nonisolated static var home: URL { URL(string: "https://edstem.org/\(Institution.current.edRegion)/dashboard")! }
+    nonisolated static var login: URL { URL(string: "https://edstem.org/\(Institution.current.edRegion)/login")! }
 
     private let session = HiddenSiteSession()
     private var isReady = false
@@ -998,7 +1000,7 @@ final class EdClient {
 /// affiche, puis on lit ses titres « Week N » et ses liens.
 @MainActor
 final class ExpliqueClient {
-    static let home = URL(string: "https://explique.epfl.ch/")!
+    nonisolated static var home: URL { URL(string: Institution.current.expliqueBase + "/")! }
 
     private let session = HiddenSiteSession()
 
@@ -1024,7 +1026,7 @@ final class ExpliqueClient {
     }
 
     func lectures(slug: String) async throws -> [ExpliqueImport.Lecture] {
-        let raw = try await read(URL(string: "https://explique.epfl.ch/\(slug)/lectures")!, script: #"""
+        let raw = try await read(URL(string: Institution.current.expliqueBase + "/\(slug)/lectures")!, script: #"""
         return JSON.stringify(weeks.flatMap(({ h, week }) => {
           let sec = h;
           while (sec && !sec.querySelector('a[href*="/v/"]')) {
@@ -1038,7 +1040,7 @@ final class ExpliqueClient {
     }
 
     func exercises(slug: String) async throws -> [ExpliqueImport.Exercise] {
-        let raw = try await read(URL(string: "https://explique.epfl.ch/\(slug)/exercises")!, script: #"""
+        let raw = try await read(URL(string: Institution.current.expliqueBase + "/\(slug)/exercises")!, script: #"""
         return JSON.stringify(weeks.flatMap(({ h, week }) => {
           const header = h.closest('header');
           const sec = header ? header.parentElement : h.parentElement;
@@ -1141,7 +1143,7 @@ final class MediaSpaceClient {
 
     /// Une page qui regroupe des vidéos (et non une vidéo seule).
     nonisolated static func isCollection(_ link: String) -> Bool {
-        guard let url = URL(string: link), url.host?.hasSuffix("mediaspace.epfl.ch") == true else { return false }
+        guard let url = URL(string: link), url.host?.hasSuffix(Institution.current.videoHostName) == true else { return false }
         let path = url.path
         if path.contains("/channel/") || path.contains("/category/") || path.contains("/channels/") { return true }
         // `/playlist/dedicated/<cat>/<liste>` : la liste ; avec un dernier
@@ -1157,7 +1159,7 @@ final class MediaSpaceClient {
     /// vers le choix de l'établissement (WAYF).
     func isSignedIn() async -> Bool {
         do {
-            try await session.load(URL(string: "https://mediaspace.epfl.ch/my-media")!)
+            try await session.load(URL(string: "https://\(Institution.current.videoHostName)/my-media")!)
             let result = try await session.run(#"""
             for (let i = 0; i < 15; i++) {
               if (/wayf|eduid|login|saml/i.test(location.href)) return 'false';
@@ -1230,7 +1232,7 @@ final class MediaSpaceClient {
           const title = (item.innerText || '').trim().replace(/\s+/g, ' ').replace(/^\d+\s+(\d{1,2}:)?\d{1,2}:\d{2}\s+/, '');
           if (!id || seen.has(id) || title.length < 3) return;
           seen.add(id);
-          out.push({ title, url: base.includes('/playlist/') ? base + '/' + id : 'https://mediaspace.epfl.ch/media/t/' + id });
+          out.push({ title, url: base.includes('/playlist/') ? base + '/' + id : 'https://\#(Institution.current.videoHostName)/media/t/' + id });
         });
         document.querySelectorAll('a[href]').forEach(a => {
           const href = decodeURIComponent(a.href);

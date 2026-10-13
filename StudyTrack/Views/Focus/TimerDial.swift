@@ -279,7 +279,7 @@ struct TimerSideButton: View {
                     .frame(width: diameter, height: diameter)
                     .background(Carnet.sheetRaised, in: Circle())
                     .contentTransition(.symbolEffect(.replace))
-                Text(title)
+                Text(ui: title)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Carnet.inkSecondary)
             }

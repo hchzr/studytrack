@@ -26,7 +26,7 @@ enum MoodleWatcher {
     private static let knownKey = "moodleWatch.known"
     private static let lastCheckKey = "moodleWatch.lastCheck"
     private static let statusKey = "moodleWatch.status"
-    private static let base = URL(string: "https://moodle.epfl.ch")!
+    private static var base: URL { URL(string: Institution.current.moodleBase)! }
     private static var running = false
 
     enum Status: String, Error {
@@ -179,7 +179,7 @@ enum MoodleWatcher {
               let first = reply.first, first["error"] as? Bool != true,
               let json = first["data"] as? String else { return nil }
         return MoodleStateParser.snapshot(fromStateJSON: json, title: title,
-                                          url: "https://moodle.epfl.ch/course/view.php?id=\(id)")
+                                          url: Institution.current.moodleBase + "/course/view.php?id=\(id)")
     }
 
     // MARK: Notification

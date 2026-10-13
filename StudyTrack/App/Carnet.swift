@@ -8,66 +8,17 @@ import UIKit
 /// (Liquid Glass d'iOS 26) pour ce qui flotte : la barre d'onglets, le chrono,
 /// les commandes d'un exercice, la carte « En cours ». Le papier se lit, le
 /// verre se touche. Voir `DESIGN.md`.
-enum Carnet {
+extension Carnet {
+    // Le cœur (papier, encre, verdicts, couleurs de cours, serif, feuilles,
+    // boutons encre/papier) est partagé avec le Mac : `StudyKit/CarnetCore.swift`.
+    // Ici, ce qui est propre à l'iPhone.
 
-    // MARK: Papier et encre
-
-    /// Le fond des écrans : papier crème, papier sombre la nuit.
-    static let ground = Color.dynamic(light: "#F4F0E6", dark: "#15130F")
-    /// Une feuille posée sur le fond : listes groupées, cartes.
-    static let sheet = Color.dynamic(light: "#FFFDF8", dark: "#211E18")
-    /// Une feuille en retrait : puces, pastilles, champs.
-    static let sheetRaised = Color.dynamic(light: "#EFE9DC", dark: "#2B271F")
-    /// L'encre : texte, glyphes, boutons pleins.
-    static let ink = Color.dynamic(light: "#1D1B16", dark: "#EDE6D6")
-    static let inkSecondary = Color.dynamic(light: "#6B655A", dark: "#A89F8D")
-    static let inkTertiary = Color.dynamic(light: "#8F8876", dark: "#7D7566")
-    /// Les traits : séparateurs, contours.
-    static let rule = Color.dynamic(light: "#E6DFD0", dark: "#353027")
-    /// Le surligneur : la sous-question en cours dans un énoncé.
-    static let marker = Color.dynamic(light: "#FBF1C9", dark: "#4A4020")
     /// Un interrupteur **activé**. L'encre servait de teinte à tout, interrupteurs
     /// compris : la nuit, elle devient crème — et un interrupteur crème sous un
     /// bouton blanc ne se distingue plus d'un interrupteur éteint (« Ajouter à
     /// mon calendrier » semblait d'une seule couleur). Un vert d'herbier, sombre
     /// les deux modes, pour que le bouton blanc s'en détache toujours.
     static let switchOn = Color.dynamic(light: "#3F7A3F", dark: "#3E7A3A")
-
-    // MARK: Verdicts de correction
-
-    static let correct = Color.dynamic(light: "#3F7A3F", dark: "#8FC58A")
-    static let review = Color.dynamic(light: "#A86F0C", dark: "#E0B04E")
-    static let wrong = Color.dynamic(light: "#A33A2A", dark: "#E7836F")
-
-    static func color(for correctness: Correctness) -> Color {
-        switch correctness {
-        case .correct: return correct
-        case .partial: return review
-        case .wrong: return wrong
-        }
-    }
-
-    // MARK: Couleurs de cours
-
-    /// La couleur d'un cours, **adoucie** pour le papier : la palette d'origine
-    /// (indigo, cyan, émeraude…) criait sur le crème. Même teinte, saturation
-    /// et luminosité ramenées vers l'encre ; plus claire la nuit.
-    static func tint(_ hex: String) -> Color {
-        let base = UIColor(Color(hex: hex))
-        return Color(uiColor: UIColor { traits in
-            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            base.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-            if traits.userInterfaceStyle == .dark {
-                return UIColor(hue: h, saturation: min(s, 0.45), brightness: max(b, 0.82), alpha: 1)
-            }
-            return UIColor(hue: h, saturation: min(s * 0.62, 0.62), brightness: min(b * 0.74, 0.62), alpha: 1)
-        })
-    }
-
-    /// Le fond léger d'une tuile d'icône de cette couleur.
-    static func wash(_ hex: String) -> Color {
-        tint(hex).opacity(0.16)
-    }
 
     // MARK: Mesures
 
@@ -77,11 +28,6 @@ enum Carnet {
     static let rowInset: CGFloat = 14
 
     // MARK: Typographie
-
-    /// Titres de section et nombres mis en avant : serif (New York).
-    static func serif(_ style: Font.TextStyle, weight: Font.Weight = .medium) -> Font {
-        .system(style, design: .serif).weight(weight)
-    }
 
     /// Les chiffres qui s'alignent : chrono, numéros d'exercice.
     static func mono(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
@@ -182,7 +128,7 @@ struct CarnetFormHeader: View {
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        Text(title)
+        Text(ui: title)
             .font(Carnet.serif(.title3))
             .foregroundStyle(Carnet.ink)
             .textCase(nil)
@@ -325,7 +271,7 @@ struct CarnetSectionTitle<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title)
+            Text(ui: title)
                 .font(Carnet.serif(.title3))
                 .foregroundStyle(Carnet.ink)
                 .accessibilityAddTraits(.isHeader)
@@ -355,7 +301,7 @@ struct CarnetKicker: View {
     }
 
     var body: some View {
-        Text(text.uppercased())
+        Text(verbatim: Bundle.main.localizedString(forKey: text, value: text, table: nil).uppercased())
             .font(.caption.weight(.semibold))
             .tracking(1.1)
             .foregroundStyle(color)
@@ -420,7 +366,7 @@ struct CarnetRow<Trailing: View>: View {
                 CarnetIconTile(systemName: icon, tint: tint)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(ui: title)
                     .font(.body)
                     .foregroundStyle(Carnet.ink)
                     .lineLimit(2)

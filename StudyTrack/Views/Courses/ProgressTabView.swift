@@ -102,7 +102,7 @@ struct ProgressTabView: View {
 
     private func axis(_ title: String, _ done: Int, _ total: Int) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            Text(ui: title).font(.caption).foregroundStyle(Carnet.inkSecondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(total == 0 ? "—" : "\(done)")
                     .font(Carnet.serif(.title3))

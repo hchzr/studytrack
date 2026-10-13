@@ -563,7 +563,7 @@ struct CourseCardRow: View {
     private func compactAxis(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
         VStack(alignment: .leading, spacing: Layout.tight) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(ui: title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: Layout.tight)
                 Text(total == 0 ? "—" : "\(done)/\(total)")
                     .font(.caption.weight(.semibold))

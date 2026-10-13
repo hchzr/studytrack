@@ -208,7 +208,7 @@ struct LabeledProgress: View {
             HStack(spacing: 8) {
                 // Une ligne, toujours : un titre qui passait à la ligne à côté
                 // d'un compte long décalait la barre et tout ce qui suit.
-                Text(title)
+                Text(ui: title)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -364,7 +364,7 @@ struct Card<Content: View>: View {
                             .font(.subheadline)
                             .foregroundStyle(Theme.accentInk)
                     }
-                    Text(title).font(.headline)
+                    Text(ui: title).font(.headline)
                     Spacer()
                     if let trailing {
                         Text(trailing)
@@ -594,7 +594,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title)
+            Text(ui: title)
                 .font(.headline)
             Spacer()
             if let trailing {

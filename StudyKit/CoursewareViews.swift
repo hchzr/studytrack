@@ -113,7 +113,7 @@ struct CoursewareUnitPage: View {
     let outline: EdXOutline
     let unit: EdXOutline.Unit
     let tint: Color
-    var desk: StudyDesk
+    var desk: SiteHub
     var go: (EdXOutline.Unit) -> Void
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
@@ -184,7 +184,7 @@ struct CoursewareUnitPage: View {
 /// et le verdict de Courseware.
 struct EdXProblemCard: View {
     let address: String
-    var desk: StudyDesk
+    var desk: SiteHub
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 

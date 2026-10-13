@@ -27,13 +27,42 @@ enum NotesLibrary {
         var name: String
     }
 
+    /// La façon de nommer de l'étudiant·e : les mots d'une série (« Série »,
+    /// « PS », « TD », « Übung »…), d'une semaine, et les cahiers déjà rangés à
+    /// la main (cahier → code du cours), qui l'emportent sur les devinettes.
+    struct Rules: Codable, Equatable {
+        var seriesWords: [String] = ["serie", "ps", "problem set", "exercice", "exercices"]
+        var weekWords: [String] = ["semaine", "week", "sem"]
+        var notebooks: [String: String] = [:]
+
+        static let standard = Rules()
+
+        init(seriesWords: [String] = ["serie", "ps", "problem set", "exercice", "exercices"],
+             weekWords: [String] = ["semaine", "week", "sem"], notebooks: [String: String] = [:]) {
+            self.seriesWords = seriesWords
+            self.weekWords = weekWords
+            self.notebooks = notebooks
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            seriesWords = try c.decodeIfPresent([String].self, forKey: .seriesWords) ?? Rules.standard.seriesWords
+            weekWords = try c.decodeIfPresent([String].self, forKey: .weekWords) ?? Rules.standard.weekWords
+            notebooks = try c.decodeIfPresent([String: String].self, forKey: .notebooks) ?? [:]
+        }
+    }
+
     // MARK: Cahier → cours
 
     /// Le cours d'un cahier, s'il y en a un clairement : son code d'abord
     /// (« MATH-111 … »), sinon les mots du nom (« Mécanique » ↔ « Physique
     /// générale : mécanique »), sinon l'acronyme (« AICC » ↔ « Advanced
     /// Information, Computation, Communication »).
-    static func course(forNotebook notebook: String, among courses: [CourseKey]) -> CourseKey? {
+    static func course(forNotebook notebook: String, among courses: [CourseKey], rules: Rules = .standard) -> CourseKey? {
+        // Un cahier rangé à la main l'emporte.
+        if let code = rules.notebooks[notebook] {
+            return code.isEmpty ? nil : courses.first { $0.code == code }
+        }
         let folder = normalize(notebook)
         let compact = folder.replacingOccurrences(of: " ", with: "")
         if let byCode = courses.first(where: { compact.contains(normalize(base($0.code)).replacingOccurrences(of: " ", with: "")) }) {
@@ -62,29 +91,34 @@ enum NotesLibrary {
     // MARK: Un document
 
     /// `EPFL BA1/Algèbre Linéaire/Semaine 3/Série 3.pdf` → cahier, semaine, série.
-    static func document(path: String, modified: Date) -> Document? {
+    static func document(path: String, modified: Date, rules: Rules = .standard) -> Document? {
         let parts = path.split(separator: "/").map(String.init)
         guard let file = parts.last, file.lowercased().hasSuffix(".pdf") else { return nil }
         let title = String(file.dropLast(4))
         let folders = parts.dropLast()
-        let week = folders.reversed().lazy.compactMap(weekNumber).first
-        let notebook = folders.last { weekNumber($0) == nil && normalize($0) != "s4s" } ?? folders.last ?? ""
+        let week = folders.reversed().lazy.compactMap { weekNumber($0, rules: rules) }.first
+        let notebook = folders.last { weekNumber($0, rules: rules) == nil && normalize($0) != "s4s" } ?? folders.last ?? ""
         let lower = normalize(title)
         let solution = ["corrige", "solution", "sol "].contains { lower.contains($0) } || lower.hasSuffix(" sol")
-        return Document(path: path, notebook: notebook, title: title, week: week, seriesNumber: seriesNumber(title),
+        return Document(path: path, notebook: notebook, title: title, week: week, seriesNumber: seriesNumber(title, rules: rules),
                         isSolution: solution, modified: modified)
     }
 
-    static func weekNumber(_ folder: String) -> Int? {
+    static func weekNumber(_ folder: String, rules: Rules = .standard) -> Int? {
         let text = normalize(folder)
-        guard let match = text.range(of: #"^(semaine|week|sem)\s*(\d{1,2})"#, options: .regularExpression) else { return nil }
+        let words = rules.weekWords.map { NSRegularExpression.escapedPattern(for: normalize($0)) }.joined(separator: "|")
+        guard !words.isEmpty, let match = text.range(of: "^(\(words))\\s*(\\d{1,2})", options: .regularExpression) else { return nil }
         return Int(text[match].filter(\.isNumber))
     }
 
     /// « Série 3 », « Serie 04 », « PS5 », « Problem Set 6 », « Séance et série 4 ».
-    static func seriesNumber(_ title: String) -> Int? {
+    static func seriesNumber(_ title: String, rules: Rules = .standard) -> Int? {
         let text = normalize(title)
-        let patterns = [#"serie\s*0*(\d{1,2})"#, #"\bps\s*0*(\d{1,2})"#, #"problem set\s*0*(\d{1,2})"#, #"exercices?\s*0*(\d{1,2})\b"#]
+        let patterns = rules.seriesWords.map { word -> String in
+            let escaped = NSRegularExpression.escapedPattern(for: normalize(word))
+            // Un mot court (« ps », « td ») doit commencer un mot : pas « laps 3 ».
+            return (word.count <= 3 ? "\\b" : "") + escaped + "\\s*0*(\\d{1,2})"
+        }
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern),
                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),

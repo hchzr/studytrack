@@ -130,6 +130,7 @@
 		B10000000000000000000001 /* StudyTrackWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackWidgets; sourceTree = "<group>"; };
 		C10000000000000000000001 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
 		E10000000000000000000001 /* StudyTrackShare */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackShare; sourceTree = "<group>"; };
+		E20000000000000000000001 /* StudyKit */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyKit; sourceTree = "<group>"; };
 		F10000000000000000000001 /* StudyTrackMac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackMac; sourceTree = "<group>"; };
 		F1000000000000000000000C /* Models (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (F1000000000000000000000F /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); name = "Models (Mac)"; path = StudyTrack/Models; sourceTree = "<group>"; };
 		F1000000000000000000000D /* Domain (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "Domain (Mac)"; path = StudyTrack/Domain; sourceTree = "<group>"; };
@@ -195,6 +196,7 @@
 				H10000000000000000000001 /* StudyTrackLock */,
 				G10000000000000000000001 /* StudyTrackMacWidgets */,
 				G1000000000000000000000C /* MacShared */,
+				E20000000000000000000001 /* StudyKit */,
 				F1000000000000000000000E /* Mac — sources partagées */,
 				D10000000000000000000001 /* Supabase.xcconfig */,
 				A10000000000000000000004 /* Products */,
@@ -262,6 +264,7 @@
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000001 /* StudyTrack */,
 				C10000000000000000000001 /* Shared */,
+				E20000000000000000000001 /* StudyKit */,
 			);
 			name = StudyTrack;
 			productName = StudyTrack;
@@ -325,6 +328,7 @@
 				G1000000000000000000000E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				E20000000000000000000001 /* StudyKit */,
 				F10000000000000000000001 /* StudyTrackMac */,
 				F1000000000000000000000C /* Models (Mac) */,
 				F1000000000000000000000D /* Domain (Mac) */,
@@ -408,7 +412,7 @@
 			};
 			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXProject "StudyTrack" */;
 			compatibilityVersion = "Xcode 15.0";
-			developmentRegion = en;
+			developmentRegion = fr;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,

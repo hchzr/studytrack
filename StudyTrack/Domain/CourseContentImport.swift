@@ -42,9 +42,9 @@ enum ContentSource: String, Codable, CaseIterable, Identifiable {
     /// La page d'arrivée du navigateur intégré.
     var homeURL: URL {
         switch self {
-        case .moodle: return URL(string: "https://moodle.epfl.ch/my/courses.php")!
-        case .courseware: return URL(string: "https://courseware.epfl.ch/dashboard")!
-        case .botafogo: return URL(string: "https://botafogo.epfl.ch/")!
+        case .moodle: return Institution.current.moodleURL("/my/courses.php") ?? URL(string: "https://moodle.epfl.ch/my/courses.php")!
+        case .courseware: return Institution.current.coursewareURL("/dashboard") ?? URL(string: "https://courseware.epfl.ch/dashboard")!
+        case .botafogo: return URL(string: (Institution.current.extras["botafogo"] ?? "https://botafogo.epfl.ch") + "/")!
         }
     }
 
@@ -735,7 +735,7 @@ enum BotafogoParser {
             guard !folded.contains("streaming"),
                   folded.range(of: #"\b\d{1,2}\.?\s+[a-z]+\.?\s+\d{4}\b"#, options: .regularExpression) != nil,
                   seen.insert(value).inserted else { continue }
-            items.append(ScrapedItem(title: title, url: "https://mediaspace.epfl.ch/media/\(value)",
+            items.append(ScrapedItem(title: title, url: "https://\(Institution.current.video?.host ?? "mediaspace.epfl.ch")/media/\(value)",
                                      type: "recording", videoCount: 1))
         }
         return items

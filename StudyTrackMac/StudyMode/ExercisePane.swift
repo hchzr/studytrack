@@ -64,7 +64,7 @@ struct ExercisePane: View {
                     if let exercise {
                         Rectangle().fill(Carnet.rule).frame(width: 1)
                         ScrollView {
-                            ExerciseSheet(exercise: exercise, series: series, desk: desk, tint: Carnet.tint(course.colorHex),
+                            ExerciseStudySheet(exercise: exercise, series: series, ask: { desk.ask($0, attachment: $1) }, tint: Carnet.tint(course.colorHex),
                                           showStatement: false, copy: copy(series), next: { next in select(next, in: course) })
                                 .padding(18)
                         }
@@ -73,7 +73,7 @@ struct ExercisePane: View {
                     }
                 } else if let exercise {
                     ScrollView {
-                        ExerciseSheet(exercise: exercise, series: series, desk: desk, tint: Carnet.tint(course.colorHex),
+                        ExerciseStudySheet(exercise: exercise, series: series, ask: { desk.ask($0, attachment: $1) }, tint: Carnet.tint(course.colorHex),
                                       showStatement: true, copy: copy(series), next: { next in select(next, in: course) })
                             .padding(32)
                             .frame(maxWidth: 760, alignment: .leading)
@@ -277,127 +277,3 @@ private struct ExerciseListRow: View {
     }
 }
 
-/// L'exercice, en feuille : l'énoncé (quand il n'y a pas de PDF), les
-/// questions à cocher juste dessous, où on en est (fait, juste / moyen / faux,
-/// à refaire), le corrigé quand il est publié, et les gestes (indice, faire
-/// vérifier sa copie, exercice suivant).
-struct ExerciseSheet: View {
-    @Bindable var exercise: Exercise
-    let series: ExerciseSeries
-    var desk: StudyDesk
-    var tint: Color
-    var showStatement: Bool
-    /// Ta copie dans tes notes, si on la trouve : « Vérifier ma copie » l'envoie.
-    var copy: NotesLibrary.Document?
-    var next: (Exercise) -> Void
-
-    private var nextExercise: Exercise? { ExerciseFlow.next(after: exercise, in: series.sortedExercises) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 4) {
-                Kicker(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title, color: tint)
-                Text(exercise.displayNumber).font(Carnet.serif(showStatement ? 30 : 24)).foregroundStyle(Carnet.ink)
-                if !exercise.title.isEmpty, exercise.title != exercise.displayNumber {
-                    MacMathText(exercise.title, size: 14).foregroundStyle(Carnet.inkSecondary)
-                }
-            }
-            if showStatement, !exercise.statement.isEmpty {
-                MacMathText(exercise.statement, size: 16).foregroundStyle(Carnet.ink).textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !exercise.hint.isEmpty {
-                DisclosureGroup("Indication") {
-                    MacMathText(exercise.hint, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-                .foregroundStyle(Carnet.inkSecondary)
-            }
-            if exercise.hasSubQuestions {
-                SubQuestionChecklist(exercise: exercise, tint: tint)
-                    .padding(14)
-                    .background(Carnet.sheetRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                Kicker("Où j'en suis")
-                ExerciseQuickMark(exercise: exercise)
-                Toggle("À refaire", isOn: $exercise.redoRequired).toggleStyle(.checkbox)
-            }
-            if !exercise.solution.isEmpty, series.solutionsAt.map({ $0 <= Date() }) ?? true {
-                DisclosureGroup("Corrigé") {
-                    MacMathText(exercise.solution, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-                .foregroundStyle(Carnet.inkSecondary)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Button { desk.ask(ClaudeTutor.QuickAction.hint.prompt) } label: { Label("Un indice", systemImage: "lightbulb") }
-                        .buttonStyle(.ink)
-                    Button {
-                        if let copy, let data = NotesStore.shared.attachmentData(copy) {
-                            desk.pendingAttachment = .init(kind: .pdf, data: data, name: copy.title)
-                        }
-                        desk.ask(ClaudeTutor.QuickAction.check.prompt, attachSeries: false)
-                    } label: { Label("Vérifier ma copie", systemImage: "checkmark.circle") }
-                        .buttonStyle(.paper)
-                        .help(copy.map { "Envoie « \($0.title) » à Claude" } ?? "Joins ta copie")
-                }
-                if let nextExercise {
-                    Button { next(nextExercise) } label: {
-                        Label("\(nextExercise.displayNumber)", systemImage: "arrow.right")
-                    }
-                    .buttonStyle(.paper)
-                }
-            }
-        }
-    }
-}
-
-/// Un PDF natif (PDFKit), ouvert à l'exercice cherché.
-struct PDFPane: NSViewRepresentable {
-    let url: URL
-    var search: [String] = []
-
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayMode = .singlePageContinuous
-        view.displaysPageBreaks = true
-        view.backgroundColor = NSColor(Carnet.ground)
-        view.document = PDFDocument(url: url)
-        context.coordinator.url = url
-        jump(view, coordinator: context.coordinator)
-        return view
-    }
-
-    func updateNSView(_ view: PDFView, context: Context) {
-        if context.coordinator.url != url {
-            view.document = PDFDocument(url: url)
-            context.coordinator.url = url
-            context.coordinator.searched = []
-        }
-        jump(view, coordinator: context.coordinator)
-    }
-
-    private func jump(_ view: PDFView, coordinator: Coordinator) {
-        guard search != coordinator.searched, let document = view.document else { return }
-        coordinator.searched = search
-        for term in search {
-            if let found = document.findString(term, withOptions: [.caseInsensitive]).first {
-                view.go(to: found)
-                view.setCurrentSelection(found, animate: true)
-                return
-            }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator {
-        var url: URL?
-        var searched: [String] = []
-    }
-}

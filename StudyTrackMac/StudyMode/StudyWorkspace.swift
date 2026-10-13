@@ -37,7 +37,7 @@ struct StudyWorkspace: View {
         // En entrant dans le bureau : chaque site, sans rien afficher, avec la
         // session Microsoft déjà là (rien ne se passe si elle n'y est pas).
         .task {
-            if !EPFLConnect.shared.allConnected { await EPFLConnect.shared.connectAll() }
+            if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll() }
         }
     }
 
@@ -49,7 +49,7 @@ struct StudyWorkspace: View {
         case .exercise, .course:
             if desk.sideBySide {
                 HSplitView {
-                    CoursePane(course: course, desk: desk, openWeb: openWeb)
+                    CoursePane(course: course, desk: desk.sites, openWeb: openWeb, ask: { desk.ask($0, attachSeries: false) })
                         .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
                     ExercisePane(course: course, desk: desk, openWeb: openWeb, compact: true)
                         .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
@@ -57,12 +57,12 @@ struct StudyWorkspace: View {
             } else if desk.pane == .exercise {
                 ExercisePane(course: course, desk: desk, openWeb: openWeb)
             } else {
-                CoursePane(course: course, desk: desk, openWeb: openWeb)
+                CoursePane(course: course, desk: desk.sites, openWeb: openWeb, ask: { desk.ask($0, attachSeries: false) })
             }
         case .claude:
             ClaudePane(course: course, courses: courses, desk: desk)
         case .calc:
-            CalcPane(desk: desk, openWeb: openWeb)
+            CalcPane(desk: desk.calc, openWeb: openWeb)
         case .web:
             if browser.tabs.isEmpty {
                 StudyWebHome(course: course, open: open)
@@ -309,13 +309,22 @@ private struct StudyDeskHome: View {
                 .frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Ta session").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
-                    step(1, "Revoir le cours", detail: theoryDetail, icon: "books.vertical", done: theoryLeft == 0) { desk.pane = .course }
-                    step(2, "Faire la série", detail: seriesDetail, icon: "doc.text", done: series?.isComplete == true) {
-                        if let next = nextExercise, let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: next.id) }
-                        desk.pane = .exercise
+                    // Les étapes et leur ordre : Personnaliser › Ta session (les mêmes sur l'iPhone).
+                    ForEach(Array(SessionFlow.load().steps.enumerated()), id: \.element) { index, item in
+                        switch item {
+                        case .course:
+                            step(index + 1, item.title, detail: theoryDetail, icon: "books.vertical", done: theoryLeft == 0) { desk.pane = .course }
+                        case .series:
+                            step(index + 1, item.title, detail: seriesDetail, icon: "doc.text", done: series?.isComplete == true) {
+                                if let next = nextExercise, let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: next.id) }
+                                desk.pane = .exercise
+                            }
+                        case .help:
+                            step(index + 1, item.title, detail: "Un indice, ou fais vérifier ta copie", icon: "sparkle", done: false) { desk.pane = .claude }
+                        case .debrief:
+                            step(index + 1, item.title, detail: "Post-mortem quand la série est corrigée", icon: "checklist", done: false) { desk.pane = .claude }
+                        }
                     }
-                    step(3, "Bloqué ?", detail: "Un indice, ou fais vérifier ta copie", icon: "sparkle", done: false) { desk.pane = .claude }
-                    step(4, "Débriefer", detail: "Post-mortem quand la série est corrigée", icon: "checklist", done: false) { desk.pane = .claude }
                     HStack(spacing: 8) {
                         mini(.calc)
                         mini(.web)
@@ -389,9 +398,9 @@ private struct StudyDeskHome: View {
 
     /// Les comptes EPFL : connectés sans rien demander, ou un bouton.
     private var accounts: some View {
-        let connect = EPFLConnect.shared
+        let connect = SchoolConnect.shared
         return HStack(spacing: 10) {
-            ForEach(EPFLConnect.Site.allCases) { site in
+            ForEach(SchoolConnect.Site.allCases) { site in
                 let state = connect.state(site)
                 HStack(spacing: 4) {
                     Circle().fill(state == .connected ? Carnet.correct : (state == .failed ? Carnet.wrong : StudyPalette.inkTertiary))
@@ -402,7 +411,7 @@ private struct StudyDeskHome: View {
             Spacer()
             if connect.isRunning {
                 ProgressView().controlSize(.mini)
-            } else if EPFLConnect.Site.allCases.contains(where: { connect.state($0) == .failed }) {
+            } else if SchoolConnect.Site.allCases.contains(where: { connect.state($0) == .failed }) {
                 Button("Se connecter") { desk.signIn = connect.state(.moodle) == .failed ? .moodle : .mediaspace }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(StudyPalette.ink)
             }

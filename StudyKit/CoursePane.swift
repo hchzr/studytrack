@@ -9,8 +9,12 @@ import SwiftData
 /// les sites inconnus passent par l'onglet Web.
 struct CoursePane: View {
     let course: Course?
-    var desk: StudyDesk
+    var desk: SiteHub
     var openWeb: (URL, String) -> Void
+    /// Demander à Claude (le bureau du Mac ; l'app Claude sur l'iPhone).
+    var ask: (String) -> Void = { _ in }
+    /// L'iPhone : la liste, puis la lecture par-dessus (pas deux colonnes).
+    var compact = false
 
     enum Source: String, CaseIterable, Identifiable {
         case studytrack, notes, moodle, courseware, botafogo, ed
@@ -81,26 +85,22 @@ struct CoursePane: View {
     }
 
     var body: some View {
-        if let course {
+        if let course, compact {
+            // L'iPhone : la même liste, la lecture poussée par-dessus.
+            NavigationStack {
+                sourceColumn(course)
+                    .navigationTitle(course.displayCode)
+                    .navigationBarTitleDisplayModeInline()
+                    .navigationDestination(isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
+                        reader(course)
+                            .background(Carnet.ground)
+                    }
+            }
+            .task { await desk.loadEdCourses() }
+            .task { await NotesStore.shared.refresh() }
+        } else if let course {
             HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    if sources.count > 1 {
-                        Picker("Source", selection: $source) {
-                            ForEach(sources) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .padding(12)
-                    }
-                    switch source {
-                    case .studytrack: studyTrackList(course)
-                    case .moodle: moodleList(course)
-                    case .courseware: coursewareList
-                    case .botafogo: botafogoList
-                    case .ed: edList
-                    case .notes: notesList
-                    }
-                }
+                sourceColumn(course)
                 .frame(width: 320)
                 #if DEBUG
                 .onAppear {
@@ -126,6 +126,41 @@ struct CoursePane: View {
         } else {
             ContentUnavailableView("Pas de cours", systemImage: "books.vertical",
                                    description: Text("Choisis-en un pour la session."))
+        }
+    }
+
+    /// Les sources du cours (le cours, mes notes, Moodle…) et la liste choisie.
+    @ViewBuilder
+    private func sourceColumn(_ course: Course) -> some View {
+        VStack(spacing: 0) {
+            if sources.count > 1 {
+                if compact {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Picker("Source", selection: $source) {
+                            ForEach(sources) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .padding(.horizontal, 12)
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    Picker("Source", selection: $source) {
+                        ForEach(sources) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(12)
+                }
+            }
+            switch source {
+            case .studytrack: studyTrackList(course)
+            case .moodle: moodleList(course)
+            case .courseware: coursewareList
+            case .botafogo: botafogoList
+            case .ed: edList
+            case .notes: notesList
+            }
         }
     }
 
@@ -228,7 +263,7 @@ struct CoursePane: View {
                                  openSection: { reading = .moodleSection($0.number) },
                                  openActivity: { openMoodle($0) })
                     .onAppear {
-                        if reading == nil, let current = page.currentSection() { reading = .moodleSection(current.number) }
+                        if !compact, reading == nil, let current = page.currentSection() { reading = .moodleSection(current.number) }
                     }
             } else if let error = desk.moodleError[id] {
                 VStack(spacing: 12) {
@@ -251,14 +286,14 @@ struct CoursePane: View {
     private func loadMoodle(_ id: Int, course: Course) {
         desk.moodleError[id] = nil
         Task { @MainActor in
-            await EPFLConnect.shared.ensure(.moodle)
+            await SchoolConnect.shared.ensure(.moodle)
             try? await desk.moodle.prepare(force: true)
             for attempt in 0..<2 {
                 do {
                     desk.moodlePages[id] = try await desk.moodle.coursePage(courseID: id)
                     return
                 } catch HiddenSiteSession.SiteError.notSignedIn where attempt == 0 {
-                    await EPFLConnect.shared.connect(.moodle)
+                    await SchoolConnect.shared.connect(.moodle)
                     try? await desk.moodle.prepare(force: true)
                     continue
                 } catch {
@@ -405,7 +440,7 @@ struct CoursePane: View {
                 }
             }
             .task(id: "\(ed.id)|\(desk.signInRevision)|\(edReload)") {
-                await EPFLConnect.shared.ensure(.ed)
+                await SchoolConnect.shared.ensure(.ed)
                 do { desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id) }
                 catch HiddenSiteSession.SiteError.notSignedIn { desk.edNeedsLogin = true }
                 catch {}
@@ -435,7 +470,7 @@ struct CoursePane: View {
                 CoursewareList(outline: outline, tint: Carnet.tint(course?.colorHex ?? ""),
                                selected: { if case .edx(let unit)? = reading { return unit.id }; return nil }(),
                                open: { reading = .edx($0) })
-                    .onAppear { if reading == nil, let resume = outline.resumeUnit { reading = .edx(resume) } }
+                    .onAppear { if !compact, reading == nil, let resume = outline.resumeUnit { reading = .edx(resume) } }
             } else if coursewareFailed {
                 VStack(spacing: 12) {
                     Text("Connecte-toi à Courseware.").foregroundStyle(Carnet.inkSecondary)
@@ -447,7 +482,7 @@ struct CoursePane: View {
                 ProgressView()
                     .frame(maxHeight: .infinity)
                     .task(id: desk.signInRevision) {
-                        await EPFLConnect.shared.ensure(.courseware)
+                        await SchoolConnect.shared.ensure(.courseware)
                         do { desk.edxOutlines[key] = try await desk.courseware.outline(of: key) } catch { coursewareFailed = true }
                     }
             }
@@ -551,7 +586,7 @@ struct CoursePane: View {
             }
             .id(address)
         case .botafogo(let title, let url)?:
-            BotafogoReader(book: book, title: title, url: url, desk: desk, openWeb: openWeb)
+            BotafogoReader(book: book, title: title, url: url, desk: desk, ask: ask, openWeb: openWeb)
                 .id(url)
         case .moodle(let module, let id, let title)?:
             VStack(spacing: 0) {
@@ -618,7 +653,7 @@ struct CoursePane: View {
         HStack {
             Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
             Spacer()
-            Button { desk.ask("J'ai une question sur ce document (« \(title) »).", attachSeries: false) } label: {
+            Button { ask("J'ai une question sur ce document (« \(title) »).") } label: {
                 Label("Claude", systemImage: "sparkle")
             }
             .buttonStyle(.paper)
@@ -630,7 +665,7 @@ struct CoursePane: View {
         HStack {
             Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
             Spacer()
-            Button { desk.ask("J'ai une question sur « \(title) ».", attachSeries: false) } label: {
+            Button { ask("J'ai une question sur « \(title) ».") } label: {
                 Label("Claude", systemImage: "sparkle")
             }
             .buttonStyle(.paper)
@@ -683,7 +718,7 @@ private struct TheoryDetail: View {
                 Kicker([item.kind.label, item.plannedWeek > 0 ? "semaine \(item.plannedWeek)" : nil].compactMap { $0 }.joined(separator: " · "), color: tint)
                 Text(item.title.isEmpty ? item.kind.label : item.numberAndTitle).font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
                 Toggle("Vu", isOn: Binding(get: { item.isWatched }, set: { item.watchedAt = $0 ? (item.watchedAt ?? Date()) : nil }))
-                    .toggleStyle(.checkbox)
+                    .studyCheckbox()
                 if let summary = item.summaryText, !summary.isEmpty {
                     RichTextView(text: summary, size: 15)
                 }
@@ -779,7 +814,8 @@ private struct BotafogoReader: View {
     var book: BotafogoBook
     let title: String
     let url: String
-    var desk: StudyDesk
+    var desk: SiteHub
+    var ask: (String) -> Void = { _ in }
     var openWeb: (URL, String) -> Void
 
     @State private var blocks: [ReaderBlock]?
@@ -789,7 +825,7 @@ private struct BotafogoReader: View {
             HStack {
                 Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink).lineLimit(1)
                 Spacer()
-                Button { desk.ask("J'ai une question sur « \(title) » (Botafogo).", attachSeries: false) } label: {
+                Button { ask("J'ai une question sur « \(title) » (Botafogo).") } label: {
                     Label("Claude", systemImage: "sparkle")
                 }
                 .buttonStyle(.paper)
@@ -942,7 +978,7 @@ indirect enum ReaderBlock: Equatable {
 private struct ReaderBlocks: View {
     let blocks: [ReaderBlock]
     var book: BotafogoBook
-    var desk: StudyDesk
+    var desk: SiteHub
     var openWeb: (URL, String) -> Void
 
     var body: some View {
@@ -968,7 +1004,7 @@ private struct ReaderBlocks: View {
                 .frame(maxWidth: .infinity)
             }
         case .video(let id, let title):
-            NativeVideo(title: title, address: "https://mediaspace.epfl.ch/media/t/\(id)", desk: desk, openWeb: openWeb)
+            NativeVideo(title: title, address: "https://\(Institution.current.videoHostName)/media/t/\(id)", desk: desk, openWeb: openWeb)
         case .figure(let script):
             // Botafogo publie l'image fixe de chaque figure à côté de son script
             // (`…/jsx_suite.js` → `…/jsx_suite.png`, vérifié) ; sinon, un repère.

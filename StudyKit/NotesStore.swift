@@ -15,14 +15,32 @@ final class NotesStore {
     private(set) var documents: [NotesLibrary.Document] = []
     private(set) var scannedAt: Date?
 
+    /// Ta façon de nommer et les cahiers rangés à la main.
+    var rules: NotesLibrary.Rules = {
+        guard let data = UserDefaults.standard.data(forKey: "notes.rules"),
+              let rules = try? JSONDecoder().decode(NotesLibrary.Rules.self, from: data) else { return .standard }
+        return rules
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(rules) { UserDefaults.standard.set(data, forKey: "notes.rules") }
+            scannedAt = nil
+        }
+    }
+
+    /// Les cahiers trouvés (pour les ranger à la main).
+    var notebooks: [String] { Array(Set(documents.map(\.notebook))).filter { !$0.isEmpty }.sorted() }
+
     /// Le dossier choisi dans les Réglages (vide : trouvé automatiquement).
     var chosenFolder: String {
         get { UserDefaults.standard.string(forKey: "mac.notesFolder") ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: "mac.notesFolder"); scannedAt = nil }
     }
 
-    /// Les endroits où GoodNotes (et les autres) sauvegardent d'habitude.
+    /// Les endroits où GoodNotes (et les autres) sauvegardent d'habitude (Mac).
     static func candidates() -> [URL] {
+        #if os(iOS)
+        return []
+        #else
         let home = FileManager.default.homeDirectoryForCurrentUser
         var result: [URL] = []
         let cloud = home.appendingPathComponent("Library/CloudStorage")
@@ -37,19 +55,50 @@ final class NotesStore {
             result.append(home.appendingPathComponent("Dropbox/Apps/\(name)"))
         }
         return result.filter { FileManager.default.fileExists(atPath: $0.path) }
+        #endif
+    }
+
+    // MARK: Dossier choisi (iPhone : un dossier de Fichiers, gardé en signet)
+
+    private static let bookmarkKey = "notes.folderBookmark"
+
+    /// Retient un dossier choisi (Fichiers sur l'iPhone, Finder sur le Mac).
+    func choose(_ url: URL) {
+        #if os(iOS)
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        if let data = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
+            UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
+        }
+        #endif
+        chosenFolder = url.path
+    }
+
+    private func bookmarkedFolder() -> URL? {
+        #if os(iOS)
+        guard let data = UserDefaults.standard.data(forKey: Self.bookmarkKey) else { return nil }
+        var stale = false
+        let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
+        _ = url?.startAccessingSecurityScopedResource()
+        return url
+        #else
+        return nil
+        #endif
     }
 
     /// Relit le dossier (une fois toutes les deux minutes au plus).
     func refresh(force: Bool = false) async {
         if !force, let scannedAt, Date().timeIntervalSince(scannedAt) < 120 { return }
-        let folder = chosenFolder.isEmpty ? Self.candidates().first : URL(fileURLWithPath: (chosenFolder as NSString).expandingTildeInPath)
+        let folder = bookmarkedFolder()
+            ?? (chosenFolder.isEmpty ? Self.candidates().first : URL(fileURLWithPath: (chosenFolder as NSString).expandingTildeInPath))
         root = folder
         scannedAt = Date()
         guard let folder else { documents = []; return }
-        documents = await Task.detached(priority: .utility) { Self.scan(folder) }.value
+        let rules = rules
+        documents = await Task.detached(priority: .utility) { Self.scan(folder, rules: rules) }.value
     }
 
-    nonisolated static func scan(_ folder: URL) -> [NotesLibrary.Document] {
+    nonisolated static func scan(_ folder: URL, rules: NotesLibrary.Rules = .standard) -> [NotesLibrary.Document] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
         guard let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys,
                                                               options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
@@ -58,7 +107,7 @@ final class NotesStore {
         for case let url as URL in enumerator where url.pathExtension.lowercased() == "pdf" {
             let values = try? url.resourceValues(forKeys: Set(keys))
             let relative = String(url.standardizedFileURL.path.dropFirst(base.count + 1))
-            if let document = NotesLibrary.document(path: relative, modified: values?.contentModificationDate ?? .distantPast) {
+            if let document = NotesLibrary.document(path: relative, modified: values?.contentModificationDate ?? .distantPast, rules: rules) {
                 result.append(document)
             }
             if result.count > 5000 { break }
@@ -68,6 +117,13 @@ final class NotesStore {
 
     func url(_ document: NotesLibrary.Document) -> URL? { root?.appendingPathComponent(document.path) }
 
+    /// Le cours deviné (ou choisi) pour un cahier.
+    func course(forNotebook notebook: String, among courses: [Course]) -> Course? {
+        let keys = courses.map { NotesLibrary.CourseKey(code: $0.code, name: $0.name) }
+        guard let key = NotesLibrary.course(forNotebook: notebook, among: keys, rules: rules) else { return nil }
+        return courses.first { $0.code == key.code }
+    }
+
     /// Les cahiers d'un cours.
     func documents(for course: Course, among courses: [Course]) -> [NotesLibrary.Document] {
         let keys = courses.map { NotesLibrary.CourseKey(code: $0.code, name: $0.name) }
@@ -75,7 +131,7 @@ final class NotesStore {
         var cache: [String: Bool] = [:]
         return documents.filter { document in
             if let known = cache[document.notebook] { return known }
-            let match = NotesLibrary.course(forNotebook: document.notebook, among: keys) == mine
+            let match = NotesLibrary.course(forNotebook: document.notebook, among: keys, rules: rules) == mine
             cache[document.notebook] = match
             return match
         }

@@ -10,7 +10,7 @@ struct MoodleCourseRef: Codable, Equatable, Identifiable, Hashable {
     var fullname: String
     var shortname: String
 
-    var url: URL { URL(string: "https://moodle.epfl.ch/course/view.php?id=\(id)")! }
+    var url: URL { Institution.current.moodleURL("/course/view.php?id=\(id)") ?? URL(string: "https://moodle.epfl.ch/course/view.php?id=\(id)")! }
 
     /// « MATH-101(e) » → « MATH-101 ».
     var baseCode: String { MoodleCourseMatcher.baseCode(shortname) }
@@ -182,7 +182,7 @@ enum MoodleStateParser {
                 }
                 let kind = module.module ?? ""
                 return [MoodleActivity(id: module.id, name: BotafogoParser.decode(module.name), module: kind,
-                                       url: module.url ?? "https://moodle.epfl.ch/mod/\(kind)/view.php?id=\(module.id)",
+                                       url: module.url ?? (Institution.current.moodle?.base ?? "https://moodle.epfl.ch") + "/mod/\(kind)/view.php?id=\(module.id)",
                                        isVisible: module.uservisible != false)]
             }
         }

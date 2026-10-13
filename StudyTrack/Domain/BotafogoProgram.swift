@@ -493,7 +493,7 @@ enum BotafogoProgramBuilder {
                         items.append(ContentDraftItem(kind: .theory,
                                                       number: "C\(index ?? items.count + 1)",
                                                       title: "\(child.name ?? "Cours")\(subtitle.isEmpty ? "" : " · " + subtitle)",
-                                                      url: videoID.map { "https://mediaspace.epfl.ch/media/\($0)" }
+                                                      url: videoID.map { "https://\(Institution.current.video?.host ?? "mediaspace.epfl.ch")/media/\($0)" }
                                                           ?? BotafogoProgram.pageURL(root: root, url: child.url ?? ""),
                                                       videoCount: 1,
                                                       seriesNumber: nil,

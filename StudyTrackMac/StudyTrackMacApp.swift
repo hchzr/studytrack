@@ -15,6 +15,8 @@ struct StudyTrackMacApp: App {
     @State private var menuClock: MenuBarClock
 
     init() {
+        AppLanguage.settle(existingUser: UserDefaults.standard.object(forKey: "cloudRelay.device") != nil
+                                         || UserDefaults.standard.object(forKey: "mac.epflEmail") != nil)
         #if DEBUG
         // `-cloudCheck` : iCloud marche-t-il hors du bac à sable ? Une base
         // jetable, le premier événement CloudKit, puis on quitte.
@@ -96,9 +98,9 @@ struct StudyTrackMacApp: App {
         if CommandLine.arguments.contains("-epflConnect") {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))
-                if CommandLine.arguments.contains("-epflOnlyMedia") { await EPFLConnect.shared.connect(.mediaspace) } else { await EPFLConnect.shared.connectAll() }
-                let states = EPFLConnect.Site.allCases.map { "\($0.rawValue)=\(EPFLConnect.shared.state($0))" }.joined(separator: " ")
-                FileHandle.standardError.write(Data("EPFL \(states) email=\(EPFLConnect.shared.email != nil)\n".utf8))
+                if CommandLine.arguments.contains("-epflOnlyMedia") { await SchoolConnect.shared.connect(.mediaspace) } else { await SchoolConnect.shared.connectAll() }
+                let states = SchoolConnect.Site.allCases.map { "\($0.rawValue)=\(SchoolConnect.shared.state($0))" }.joined(separator: " ")
+                FileHandle.standardError.write(Data("EPFL \(states) email=\(SchoolConnect.shared.email != nil)\n".utf8))
             }
         }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
@@ -174,6 +176,7 @@ struct StudyTrackMacApp: App {
             MacSettingsView()
                 .environment(settings)
                 .environment(store)
+                .modelContainer(store.container)
         }
     }
 }
@@ -276,7 +279,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         // Les sites de l'EPFL, sans rien afficher : la session Microsoft garde
         // la connexion, mais celle de chaque site s'efface à la fermeture.
         if !CommandLine.arguments.contains("-epflConnect") {
-            Task { @MainActor in await EPFLConnect.shared.connectAll() }
+            Task { @MainActor in await SchoolConnect.shared.connectAll() }
         }
         MiniTimerPanel.shared.update()
         // Au réveil du Mac, la socket du chrono partagé est morte : on la relance.

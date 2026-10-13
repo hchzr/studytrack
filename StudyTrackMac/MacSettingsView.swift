@@ -12,6 +12,9 @@ struct MacSettingsView: View {
                 .tabItem { Label("Chrono", systemImage: "timer") }
             StudySettingsPane()
                 .tabItem { Label("Mode étude", systemImage: "moon.stars") }
+            PersonalizeForm()
+                .frame(height: 520)
+                .tabItem { Label("Personnaliser", systemImage: "slider.horizontal.3") }
             SyncSettings()
                 .tabItem { Label("iCloud", systemImage: "icloud") }
         }
@@ -174,21 +177,6 @@ private struct StudySettingsPane: View {
             } footer: {
                 Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json." : "Passe par ton abonnement, sans outils.")
             }
-
-            Section {
-                LabeledContent("Dossier") {
-                    HStack {
-                        Text(NotesStore.shared.root.map { $0.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~") } ?? "introuvable")
-                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
-                        Button("Choisir…", action: chooseNotesFolder)
-                    }
-                }
-            } header: {
-                Text("Mes notes")
-            } footer: {
-                Text("La sauvegarde de GoodNotes (Google Drive, iCloud…).")
-            }
-            .task { await NotesStore.shared.refresh() }
 
             Section {
                 ForEach(settings.studyApps, id: \.self) { bundleID in

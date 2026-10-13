@@ -151,7 +151,7 @@ struct SectionTitle: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+            Text(ui: title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
             Spacer()
             if let trailing {
                 Text(trailing).font(.callout).monospacedDigit().foregroundStyle(Carnet.inkSecondary)

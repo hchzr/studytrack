@@ -95,16 +95,20 @@ enum StudyMode {
     /// `epfl.ch` laisse passer moodle, courseware, botafogo, mediaspace, la
     /// connexion Tequila… Les pages de connexion (Microsoft, Google, Apple)
     /// sont là pour que se connecter à Moodle ou à Claude reste possible.
-    static let defaultSites: [String] = [
-        "epfl.ch",
-        "claude.ai", "anthropic.com", "claudeusercontent.com",
-        "login.microsoftonline.com", "login.live.com", "msauth.net", "msftauth.net",
-        "accounts.google.com", "appleid.apple.com",
-        "kaltura.com", "switch.ch",
-        "geogebra.org", "desmos.com", "wolframalpha.com",
-        // Ed Discussion (forum des cours) et la connexion de Courseware.
-        "edstem.org", "edusercontent.com", "openlearnity.org",
-    ]
+    static var defaultSites: [String] { defaultSites(for: Institution.current) }
+
+    /// Les sites de l'école (son profil : `epfl.ch`, Kaltura, Ed…), puis ceux de
+    /// tout le monde (Claude, connexions, calcul).
+    static func defaultSites(for institution: Institution) -> [String] {
+        var sites = institution.studyDomains
+        for site in ["claude.ai", "anthropic.com", "claudeusercontent.com",
+                     "login.microsoftonline.com", "login.live.com", "msauth.net", "msftauth.net",
+                     "accounts.google.com", "appleid.apple.com",
+                     "geogebra.org", "desmos.com", "wolframalpha.com"] where !sites.contains(site) {
+            sites.append(site)
+        }
+        return sites
+    }
 
     /// Les sites ajoutés à la liste par défaut après coup : ils rejoignent une
     /// liste déjà enregistrée (sans rétablir ceux qu'on a retirés).
@@ -213,17 +217,20 @@ enum StudyMode {
             result.append(Tool(id: "course:" + url.absoluteString, title: title,
                                subtitle: courseName ?? host, icon: icon, kind: .web(url)))
         }
-        let base: [Tool] = [
-            // Claude n'est plus un site : il est dans l'app (le bureau du Mac).
-            Tool(id: "moodle", title: "Moodle", subtitle: "Tes cours", icon: "graduationcap",
-                 kind: .web(URL(string: "https://moodle.epfl.ch/my/")!)),
-            Tool(id: "claude-app", title: "Claude", subtitle: "L'app", icon: "sparkles",
-                 kind: .app(bundleID: "com.anthropic.claudefordesktop", scheme: "claude://")),
-            Tool(id: "goodnotes", title: "GoodNotes", subtitle: "Écrire", icon: "pencil.and.scribble",
-                 kind: .app(bundleID: "com.goodnotesapp.x", scheme: "goodnotes://")),
-            Tool(id: "courseware", title: "Courseware", subtitle: "MOOC et vidéos", icon: "play.rectangle",
-                 kind: .web(URL(string: "https://courseware.epfl.ch/dashboard")!)),
-        ]
+        // Claude n'est plus un site : il est dans l'app (le bureau du Mac).
+        // Les sites de l'école (Moodle, Courseware) viennent de son profil ;
+        // l'ordre reste celui d'avant : Moodle, Claude, GoodNotes, Courseware.
+        var base: [Tool] = []
+        if let url = Institution.current.moodleURL("/my/") {
+            base.append(Tool(id: "moodle", title: "Moodle", subtitle: "Tes cours", icon: "graduationcap", kind: .web(url)))
+        }
+        base.append(Tool(id: "claude-app", title: "Claude", subtitle: "L'app", icon: "sparkles",
+                         kind: .app(bundleID: "com.anthropic.claudefordesktop", scheme: "claude://")))
+        base.append(Tool(id: "goodnotes", title: "GoodNotes", subtitle: "Écrire", icon: "pencil.and.scribble",
+                         kind: .app(bundleID: "com.goodnotesapp.x", scheme: "goodnotes://")))
+        if let url = Institution.current.coursewareURL("/dashboard") {
+            base.append(Tool(id: "courseware", title: "Courseware", subtitle: "MOOC et vidéos", icon: "play.rectangle", kind: .web(url)))
+        }
         return result + base
     }
 

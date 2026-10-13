@@ -184,7 +184,7 @@ struct AssistantSettingsView: View {
 
     private func instruction(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: Layout.micro) {
-            Text(title).font(.subheadline.weight(.semibold))
+            Text(ui: title).font(.subheadline.weight(.semibold))
             Text(detail).font(.footnote).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

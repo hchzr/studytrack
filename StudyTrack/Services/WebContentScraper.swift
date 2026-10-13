@@ -132,8 +132,9 @@ enum WebContentScraper {
 
     /// Reçoit la clé du cours en argument (`key`) : le navigateur intégré la lit
     /// dans l'adresse affichée, l'import direct dans la liste des inscriptions.
-    static let coursewareOutlineScript = #"""
-    const lms = 'https://courseware.epfl.ch';
+    static var coursewareOutlineScript: String {
+        #"""
+    const lms = '\#(Institution.current.coursewareBase)';
     const get = async (path) => {
       try {
         const r = await fetch(lms + path, { credentials: 'include', headers: { 'Accept': 'application/json' } });
@@ -193,6 +194,7 @@ enum WebContentScraper {
     const title = (root && root.display_name) || document.title;
     return JSON.stringify({ source: 'courseware', title: title, url: location.href, sections: sections });
     """#
+    }
 }
 
 // MARK: - Botafogo
@@ -568,7 +570,7 @@ enum AuthenticatedDownloader {
         let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
         let relevant = cookies.filter { cookie in
             let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            return domain.hasSuffix("epfl.ch") || url.host?.hasSuffix(domain) == true
+            return Institution.current.owns(host: domain) || url.host?.hasSuffix(domain) == true
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage?.setCookies(relevant, for: url, mainDocumentURL: url)

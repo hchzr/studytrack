@@ -184,7 +184,7 @@ struct GroupSubjectProgressView: View {
     private func counter(_ title: String, done: Int, total: Int, active: Bool) -> some View {
         if total > 0 {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
+                Text(ui: title)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text("\(done)/\(total)")

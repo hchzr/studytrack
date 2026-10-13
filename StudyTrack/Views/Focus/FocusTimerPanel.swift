@@ -683,7 +683,7 @@ struct FocusTimerPanel: View {
             focus.adjust(by: delta)
             Haptics.tap()
         } label: {
-            Text(title)
+            Text(ui: title)
                 .font(.subheadline.weight(.medium).monospacedDigit())
                 .frame(maxWidth: .infinity)
         }

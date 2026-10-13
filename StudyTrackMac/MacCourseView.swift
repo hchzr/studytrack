@@ -150,7 +150,7 @@ struct MacCourseView: View {
     private func stat(_ title: String, _ done: Int, _ total: Int) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text("\(done)/\(total)").font(Carnet.serif(.title3).monospacedDigit()).foregroundStyle(Carnet.ink)
-            Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            Text(ui: title).font(.caption).foregroundStyle(Carnet.inkSecondary)
         }
     }
 

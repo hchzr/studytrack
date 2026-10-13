@@ -76,7 +76,7 @@ struct AIImportSettingsView: View {
         VStack(alignment: .leading, spacing: Layout.tight) {
             HStack(spacing: Layout.control) {
                 Image(systemName: icon).foregroundStyle(tint)
-                Text(title)
+                Text(ui: title)
                 Spacer(minLength: Layout.inline)
                 if busy { ProgressView() } else {
                     Text(value).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.trailing)

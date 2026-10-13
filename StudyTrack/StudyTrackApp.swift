@@ -104,7 +104,22 @@ enum PreviewLaunch {
     }
 
     /// Ouvre l'onglet demandé, et installe le semestre d'exemple si `-seedSampleData`.
+    /// `-studyMode` : le mode étude ouvert sur le premier cours (sans blocage) ;
+    /// `-studyTab series|course|calc` : l'onglet de départ.
+    static let studyModeFlag = "-studyMode"
+    static let studyTabFlag = "-studyTab"
+
     static func apply(to container: AppContainer) {
+        if isSet(studyModeFlag) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1200))
+                let context = ModelContext(container.modelContainer)
+                let course = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first { !$0.sortedSeries.isEmpty }
+                let exercise = course?.sortedSeries.first?.sortedExercises.first
+                container.focus.enterStudy(minutes: 50, courseID: course?.id, taskType: .exercise, targetID: exercise?.id, locks: false)
+                container.router.showingStudyMode = true
+            }
+        }
         if let raw = int(tabFlag), let tab = AppRouter.Tab(rawValue: raw), tab != .focus {
             container.router.selectedTab = tab
         } else if let raw = int(tabFlag), raw == 2 || raw == 4 {
@@ -191,6 +206,7 @@ struct StudyTrackApp: App {
     @State private var container: AppContainer
 
     init() {
+        AppLanguage.settle(existingUser: UserDefaults.standard.bool(forKey: "settings.hasCompletedOnboarding"))
         // Les grands titres en serif, avant la première barre de navigation.
         Carnet.installAppearance()
         let container = AppContainer()

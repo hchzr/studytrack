@@ -1,7 +1,11 @@
 import AVKit
-import QuickLookUI
 import SwiftUI
 import WebKit
+#if os(macOS)
+import QuickLookUI
+#else
+import QuickLook
+#endif
 
 // MARK: - Se connecter
 
@@ -23,7 +27,7 @@ enum StudySite: String, Identifiable {
         switch self {
         case .moodle: return MoodleClient.login
         case .courseware: return CoursewareClient.login
-        case .mediaspace: return URL(string: "https://mediaspace.epfl.ch/user/login")!
+        case .mediaspace: return URL(string: "https://\(Institution.current.videoHostName)/user/login")!
         case .ed: return EdClient.login
         }
     }
@@ -33,10 +37,10 @@ enum StudySite: String, Identifiable {
         guard let host = url.host?.lowercased() else { return false }
         let path = url.path.lowercased()
         switch self {
-        case .moodle: return host == "moodle.epfl.ch" && !path.hasPrefix("/login") && !path.contains("/auth/")
-        case .courseware: return host == "courseware.epfl.ch" && !path.hasPrefix("/login") && !path.hasPrefix("/auth") && !path.hasPrefix("/register")
-        case .mediaspace: return host == "mediaspace.epfl.ch" && !path.contains("login") && !path.contains("saml")
-        case .ed: return host == "edstem.org" && path.hasPrefix("/eu/") && !path.contains("login")
+        case .moodle: return host == Institution.current.moodleHostName && !path.hasPrefix("/login") && !path.contains("/auth/")
+        case .courseware: return host == Institution.current.coursewareHostName && !path.hasPrefix("/login") && !path.hasPrefix("/auth") && !path.hasPrefix("/register")
+        case .mediaspace: return host == Institution.current.videoHostName && !path.contains("login") && !path.contains("saml")
+        case .ed: return host == "edstem.org" && path.hasPrefix("/\(Institution.current.edRegion)/") && !path.contains("login")
         }
     }
 }
@@ -44,7 +48,7 @@ enum StudySite: String, Identifiable {
 /// La seule page web du bureau : **une** connexion EPFL (Microsoft), dans
 /// une petite feuille qui se ferme toute seule. On passe par la page de
 /// Moodle et son bouton « EPFL – Entra ID » (cliqué pour toi) ; une fois de
-/// retour sur Moodle, `EPFLConnect` ouvre les autres sites sans rien afficher.
+/// retour sur Moodle, `SchoolConnect` ouvre les autres sites sans rien afficher.
 struct SignInSheet: View {
     let site: StudySite
     var done: () -> Void
@@ -73,30 +77,28 @@ struct SignInSheet: View {
 
 /// La page de connexion. Elle est surveillée à chaque chargement **et** chaque
 /// seconde : les pages de Microsoft changent sans recharger.
-private struct SignInWebView: NSViewRepresentable {
+@MainActor
+private struct SignInWebView {
     let site: StudySite
     var finished: () -> Void
 
     private var start: URL {
-        site == .mediaspace ? URL(string: "https://mediaspace.epfl.ch/user/login")! : URL(string: "https://moodle.epfl.ch/login/index.php")!
+        site == .mediaspace ? URL(string: "https://\(Institution.current.videoHostName)/user/login")!
+                            : URL(string: Institution.current.moodleBase + "/login/index.php")!
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(site: site, finished: finished) }
 
-    func makeNSView(context: Context) -> WKWebView {
+    fileprivate func makeView(_ coordinator: Coordinator) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-        view.navigationDelegate = context.coordinator
-        context.coordinator.watch(view)
+        view.navigationDelegate = coordinator
+        coordinator.watch(view)
         view.load(URLRequest(url: start))
         return view
     }
-
-    func updateNSView(_ view: WKWebView, context: Context) {}
-
-    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) { coordinator.stop() }
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -127,18 +129,18 @@ private struct SignInWebView: NSViewRepresentable {
         private func check() {
             guard !done, let view, let url = view.url else { return }
             // Les étapes qu'on fait pour toi : choisir l'EPFL, remplir ton adresse.
-            if url.host == "wayf.switch.ch" { view.evaluateJavaScript(EPFLConnect.chooseWAYFEPFL); return }
-            if url.host?.contains("eduid.ch") == true {
-                Task { await EPFLConnect.answerEduID(view, email: EPFLConnect.shared.email) }
+            if url.host == Institution.current.video?.wayfHost { view.evaluateJavaScript(SchoolConnect.chooseWAYFEPFL); return }
+            if let idp = Institution.current.video?.passwordIdPHost, url.host?.contains(idp) == true {
+                Task { await SchoolConnect.answerEduID(view, email: SchoolConnect.shared.email) }
                 return
             }
-            let home = site == .mediaspace ? "mediaspace.epfl.ch" : "moodle.epfl.ch"
+            let home = site == .mediaspace ? Institution.current.videoHostName : Institution.current.moodleHostName
             guard url.host == home else { return }
             if site != .mediaspace, url.path.hasPrefix("/login") {
-                view.evaluateJavaScript(EPFLConnect.clickEntra)
+                view.evaluateJavaScript(SchoolConnect.clickEntra)
                 return
             }
-            let signedIn = site == .mediaspace ? EPFLConnect.mediaspaceSignedIn : EPFLConnect.moodleSignedIn
+            let signedIn = site == .mediaspace ? SchoolConnect.mediaspaceSignedIn : SchoolConnect.moodleSignedIn
             view.evaluateJavaScript(signedIn) { [weak self] value, _ in
                 MainActor.assumeIsolated {
                     guard let self, !self.done, (value as? Bool) == true else { return }
@@ -159,7 +161,7 @@ private struct SignInWebView: NSViewRepresentable {
 struct NativeVideo: View {
     let title: String
     let address: String
-    var desk: StudyDesk
+    var desk: SiteHub
     var openWeb: (URL, String) -> Void
 
     @State private var player: AVPlayer?
@@ -228,6 +230,7 @@ struct NativeVideo: View {
 
 /// Un fichier qui n'est pas un PDF (diapositives, image, code) : l'aperçu du
 /// système, dans le bureau.
+#if os(macOS)
 struct QuickLookPane: NSViewRepresentable {
     let url: URL
 
@@ -241,11 +244,35 @@ struct QuickLookPane: NSViewRepresentable {
         if (view.previewItem as? NSURL) as URL? != url { view.previewItem = url as NSURL }
     }
 }
+#else
+struct QuickLookPane: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
+        if context.coordinator.url != url { context.coordinator.url = url; controller.reloadData() }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        var url: URL
+        init(url: URL) { self.url = url }
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
+    }
+}
+#endif
 
 struct FileReader: View {
     let title: String
     let address: String
-    var desk: StudyDesk
+    var desk: SiteHub
 
     @State private var file: URL?
     @State private var failed = false
@@ -279,13 +306,13 @@ struct FileReader: View {
 /// Une image d'un site du cours, avec les cookies EPFL (Moodle en demande).
 struct SiteImage: View {
     let address: String
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
 
     var body: some View {
         Group {
             if let image {
-                Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 420)
+                Image(platformImage: image).resizable().scaledToFit().frame(maxHeight: 420)
             } else if !failed {
                 ProgressView().frame(height: 60)
             }
@@ -293,7 +320,7 @@ struct SiteImage: View {
         .frame(maxWidth: .infinity)
         .task(id: address) {
             guard let url = URL(string: address) else { failed = true; return }
-            if let data = await AuthenticatedDownloader.data(url), let loaded = NSImage(data: data) { image = loaded } else { failed = true }
+            if let data = await AuthenticatedDownloader.data(url), let loaded = PlatformImage(data: data) { image = loaded } else { failed = true }
         }
     }
 }
@@ -303,7 +330,7 @@ struct SiteImage: View {
 /// Une page de site, mise en page nativement.
 struct SiteBlocksView: View {
     let blocks: [SiteBlock]
-    var desk: StudyDesk
+    var desk: SiteHub
     /// Un lien : le lecteur choisit où l'ouvrir (`SiteRouter`).
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
@@ -339,7 +366,7 @@ struct MoodleActivityReader: View {
     let module: String
     let id: Int
     let title: String
-    var desk: StudyDesk
+    var desk: SiteHub
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 
@@ -400,7 +427,7 @@ struct MoodleActivityReader: View {
             .paperSheet(padding: 14)
         }
         if !content.html.isEmpty {
-            SiteBlocksView(blocks: SiteHTML.blocks(content.html, base: URL(string: "https://moodle.epfl.ch/")), desk: desk,
+            SiteBlocksView(blocks: SiteHTML.blocks(content.html, base: URL(string: Institution.current.moodleBase + "/")), desk: desk,
                            open: open, openWeb: openWeb)
         }
         if let target = content.target, !target.isEmpty {
@@ -434,7 +461,7 @@ struct MoodleActivityReader: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(post.subject).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
                     Text([post.author, post.date].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Carnet.inkSecondary)
-                    SiteBlocksView(blocks: SiteHTML.blocks(post.html, base: URL(string: "https://moodle.epfl.ch/")), desk: desk,
+                    SiteBlocksView(blocks: SiteHTML.blocks(post.html, base: URL(string: Institution.current.moodleBase + "/")), desk: desk,
                                    open: open, openWeb: openWeb)
                 }
                 .paperSheet(padding: 16)
@@ -475,3 +502,23 @@ struct MoodleActivityReader: View {
     }
 }
 
+
+// MARK: - Plateformes
+
+#if os(macOS)
+typealias PlatformImage = NSImage
+extension Image { init(platformImage: NSImage) { self.init(nsImage: platformImage) } }
+extension SignInWebView: NSViewRepresentable {
+    func makeNSView(context: Context) -> WKWebView { makeView(context.coordinator) }
+    func updateNSView(_ view: WKWebView, context: Context) {}
+    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) { coordinator.stop() }
+}
+#else
+typealias PlatformImage = UIImage
+extension Image { init(platformImage: UIImage) { self.init(uiImage: platformImage) } }
+extension SignInWebView: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView { makeView(context.coordinator) }
+    func updateUIView(_ view: WKWebView, context: Context) {}
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) { coordinator.stop() }
+}
+#endif

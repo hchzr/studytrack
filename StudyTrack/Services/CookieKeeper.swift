@@ -14,7 +14,9 @@ import Security
 @MainActor
 enum CookieKeeper {
     /// Les sites dont on garde la session.
-    nonisolated private static let domains = ["epfl.ch", "eduid.ch", "switch.ch", "kaltura.com"]
+    nonisolated private static var domains: [String] {
+        Institution.current.rootDomains + ["eduid.ch", "switch.ch", "kaltura.com"] + [Institution.current.video?.passwordIdPHost].compactMap { $0 }
+    }
     nonisolated private static let service = "com.hczr.studytrack.cookies"
 
     nonisolated private static func relevant(_ cookie: HTTPCookie) -> Bool {

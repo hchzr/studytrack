@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import SwiftData
 #if canImport(FamilyControls)
 import FamilyControls
@@ -76,7 +77,31 @@ struct StudyModeScreen: View {
     @State private var browsing: BrowsedLink?
     @State private var holding = false
     @State private var holdProgress: Double = 0
+    @State private var tab: StudyTab = StudyTab(rawValue: PreviewLaunch.string(PreviewLaunch.studyTabFlag) ?? "") ?? .desk
+    @State private var calc = CalcModel()
     @Environment(\.openURL) private var openURL
+
+    /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
+    enum StudyTab: String, CaseIterable, Identifiable {
+        case desk, series, course, calc
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .desk: return "Bureau"
+            case .series: return "Série"
+            case .course: return "Cours"
+            case .calc: return "Calcul"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .desk: return "moon.stars"
+            case .series: return "doc.text"
+            case .course: return "books.vertical"
+            case .calc: return "function"
+            }
+        }
+    }
 
     private var focus: FocusController { app.focus }
     private var course: Course? { courses.first { $0.id == focus.state?.courseID } }
@@ -90,10 +115,28 @@ struct StudyModeScreen: View {
             if focus.studyIsOver {
                 done
             } else {
-                session
+                Group {
+                    switch tab {
+                    case .desk: session
+                    case .series: StudySeriesPhone(course: course, courses: courses)
+                    case .course:
+                        CoursePane(course: course, desk: SiteHub.shared,
+                                   openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") },
+                                   ask: askClaude, compact: true)
+                    case .calc:
+                        CalcPane(desk: calc, compact: true,
+                                 openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") })
+                    }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
             }
         }
         .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
+        .sheet(item: Binding(get: { SiteHub.shared.signIn }, set: { SiteHub.shared.signIn = $0 })) { site in
+            SignInSheet(site: site) { SiteHub.shared.signedIn(site) }
+        }
+        .task { if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll() } }
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
     }
 
@@ -164,6 +207,8 @@ struct StudyModeScreen: View {
                     .buttonStyle(.carnetSecondary)
                 }
 
+                sessionSteps
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Tes outils").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
                     ForEach(tools) { tool in
@@ -203,6 +248,90 @@ struct StudyModeScreen: View {
             }
             .padding(24)
         }
+    }
+
+    // MARK: Onglets et fil de la session (comme le bureau du Mac)
+
+    private var tabBar: some View {
+        HStack(spacing: 4) {
+            ForEach(StudyTab.allCases) { item in
+                Button { tab = item } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: item.icon).font(.system(size: 17, weight: tab == item ? .semibold : .regular))
+                        Text(item.title).font(.caption2.weight(tab == item ? .semibold : .regular))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(tab == item ? Carnet.ink : Carnet.inkSecondary)
+                    .background(tab == item ? Carnet.sheetRaised : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+
+    private var studySeries: ExerciseSeries? {
+        if let current = course?.allExercises.first(where: { $0.id == focus.state?.targetID })?.series { return current }
+        let all = course?.sortedSeries.filter { !$0.exercises.isEmpty } ?? []
+        return all.first { $0.plannedWeek >= (course?.currentWeek ?? 0) && !$0.isComplete } ?? all.last
+    }
+
+    /// « Ta session » : les quatre étapes, comme sur le Mac.
+    private var sessionSteps: some View {
+        let theoryLeft = course.map { c in c.sortedTheoryItems.filter { $0.plannedWeek == c.currentWeek && !$0.isWatched }.count } ?? 0
+        let series = studySeries
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Ta session").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+            // Les étapes et leur ordre : Personnaliser › Ta session (les mêmes sur le Mac).
+            ForEach(Array(SessionFlow.load().steps.enumerated()), id: \.element) { index, item in
+                switch item {
+                case .course:
+                    step(index + 1, item.title, theoryLeft == 0 ? "À jour pour cette semaine" : "\(theoryLeft) à voir cette semaine",
+                         done: theoryLeft == 0) { tab = .course }
+                case .series:
+                    step(index + 1, item.title, series.map { "\($0.title.isEmpty ? "Série \($0.seriesNumber)" : $0.title) · \($0.doneCount)/\($0.requiredExercises.count)" } ?? "Pas de série",
+                         done: series?.isComplete == true) { tab = .series }
+                case .help:
+                    step(index + 1, item.title, "Un indice de Claude", done: false) { askClaude(ClaudeTutor.QuickAction.hint.prompt) }
+                case .debrief:
+                    step(index + 1, item.title, "Post-mortem quand la série est corrigée", done: false) {
+                        askClaude(ClaudeTutor.postMortemPrompt(useSkill: false))
+                    }
+                }
+            }
+        }
+    }
+
+    private func step(_ number: Int, _ title: String, _ detail: String, done: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(done ? Carnet.correct.opacity(0.25) : Carnet.sheetRaised)
+                    if done { Image(systemName: "checkmark").font(.callout.weight(.bold)).foregroundStyle(Carnet.correct) }
+                    else { Text("\(number)").font(.callout.weight(.semibold)).foregroundStyle(Carnet.ink) }
+                }
+                .frame(width: 32, height: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).foregroundStyle(Carnet.ink)
+                    Text(detail).font(.caption).foregroundStyle(Carnet.inkSecondary).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Carnet.inkTertiary)
+            }
+            .padding(10)
+            .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Claude sur l'iPhone : la question et le contexte copiés, l'app Claude ouverte.
+    private func askClaude(_ question: String) {
+        let exercise = FocusController.target(of: focus.state?.targetID, in: course).exercise
+        UIPasteboard.general.string = StudyPhoneClaude.prompt(question, exercise: exercise, course: course)
+        if let url = URL(string: "claude://") { openURL(url) }
     }
 
     /// Tenir pour terminer : une seconde et demie pour y penser.

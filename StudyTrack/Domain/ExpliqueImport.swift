@@ -11,7 +11,7 @@ import Foundation
 /// chargé par la page après connexion : l'app le lit dans le navigateur
 /// invisible (`ExpliqueClient`), puis le range ici dans les semaines du cours.
 enum ExpliqueImport {
-    static let host = "explique.epfl.ch"
+    static var host: String { Institution.current.extras["explique"].flatMap { URL(string: $0)?.host } ?? "explique.epfl.ch" }
 
     struct Lecture: Equatable, Decodable {
         var week: Int

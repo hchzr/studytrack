@@ -288,7 +288,8 @@ enum SiteRouter {
         let path = url.path.lowercased()
         if path.hasSuffix(".pdf") { return .pdf }
         if path.hasSuffix(".mp4") || path.hasSuffix(".m3u8") || path.hasSuffix(".mov") || path.hasSuffix(".webm") { return .video }
-        if host.hasSuffix("moodle.epfl.ch") {
+        let school = Institution.current
+        if let moodle = school.moodleHost, host.hasSuffix(moodle) {
             if path.contains("/pluginfile.php/") { return path.hasSuffix(".pdf") || !path.contains(".") ? .pdf : .file }
             if let module = path.range(of: #"/mod/([a-z]+)/view\.php"#, options: .regularExpression).map({ String(path[$0]) })?
                 .split(separator: "/").dropFirst().first.map(String.init),
@@ -297,12 +298,13 @@ enum SiteRouter {
             }
             return .web
         }
-        if host.hasSuffix("botafogo.epfl.ch") { return .botafogo }
-        if host.hasSuffix("mediaspace.epfl.ch") || host.contains("kaltura") || host.hasSuffix("cast.switch.ch") {
+        if let botafogo = school.extras["botafogo"].flatMap({ URL(string: $0)?.host }), host.hasSuffix(botafogo) { return .botafogo }
+        let videoHosts = [school.video?.host, school.video.flatMap { URL(string: $0.kalturaAPI)?.host }].compactMap { $0 }
+        if videoHosts.contains(where: { host.hasSuffix($0) }) || host.contains("kaltura") || host.hasSuffix("cast.switch.ch") {
             if let id = kalturaEntry(in: address) { return .mediaspace(entryID: id) }
             return .web
         }
-        if host.hasSuffix("courseware.epfl.ch") || host.hasSuffix("learning.edx.org") {
+        if school.coursewareHost.map({ host.hasSuffix($0) }) == true || host.hasSuffix("learning.edx.org") {
             if let key = MoocReference.courseKey(in: address) { return .courseware(courseKey: key) }
             return .web
         }
@@ -342,8 +344,9 @@ enum SiteRouter {
 /// lue dans la session de l'étudiant·e. Vérifié : le manifeste d'une vidéo
 /// publique répond `#EXTM3U` sans clé.
 enum Kaltura {
-    static let defaultPartner = 113
-    static let host = "https://api.cast.switch.ch"
+    /// Le partenaire et l'API de l'école (EPFL : 113 chez SWITCH).
+    static var defaultPartner: Int { Institution.current.video?.kalturaPartner ?? 113 }
+    static var host: String { Institution.current.video?.kalturaAPI ?? "https://api.cast.switch.ch" }
 
     static func manifestURL(entryID: String, partnerID: Int = defaultPartner, ks: String? = nil) -> URL? {
         var path = "\(host)/p/\(partnerID)/sp/\(partnerID)00/playManifest/entryId/\(entryID)/format/applehttp/protocol/https"

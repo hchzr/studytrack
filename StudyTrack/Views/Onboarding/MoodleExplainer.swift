@@ -100,7 +100,7 @@ struct MoodleExplainer: View {
                 ForEach(0..<3, id: \.self) { _ in Circle().fill(Carnet.rule).frame(width: 7, height: 7) }
                 HStack(spacing: 4) {
                     Image(systemName: "lock.fill").font(.system(size: 7))
-                    Text("moodle.epfl.ch").font(.system(size: 10, weight: .medium))
+                    Text(Institution.current.moodleHostName).font(.system(size: 10, weight: .medium))
                 }
                 .foregroundStyle(Carnet.inkTertiary)
                 .padding(.horizontal, 9)

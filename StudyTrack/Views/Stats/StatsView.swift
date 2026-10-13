@@ -778,7 +778,7 @@ struct StatsView: View {
     private func progressAxis(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 2) {
-                Text(title).font(.caption2).foregroundStyle(Carnet.inkSecondary)
+                Text(ui: title).font(.caption2).foregroundStyle(Carnet.inkSecondary)
                 Spacer(minLength: 2)
                 Text(total == 0 ? "—" : "\(done)/\(total)")
                     .font(Carnet.mono(.caption2, weight: .medium))

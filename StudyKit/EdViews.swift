@@ -8,7 +8,7 @@ import SwiftUI
 struct EdThreadReader: View {
     let id: Int
     let title: String
-    var desk: StudyDesk
+    var desk: SiteHub
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 
@@ -55,7 +55,7 @@ struct EdThreadReader: View {
 
     private func load() async {
         needsLogin = false
-        await EPFLConnect.shared.ensure(.ed)
+        await SchoolConnect.shared.ensure(.ed)
         do { post = try await desk.ed.thread(id); failed = post == nil }
         catch HiddenSiteSession.SiteError.notSignedIn { needsLogin = true }
         catch { failed = true }
@@ -153,7 +153,7 @@ struct EdThreadReader: View {
 /// formules, aperçu, privé / anonyme.
 struct EdComposeSheet: View {
     let courseID: Int
-    var desk: StudyDesk
+    var desk: SiteHub
     var posted: (Int?) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -241,7 +241,7 @@ struct EdComposeSheet: View {
 /// ici ; Ed dit si c'est juste, avec son explication.
 struct EdLessonReader: View {
     let lesson: EdDiscussion.Lesson
-    var desk: StudyDesk
+    var desk: SiteHub
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 
@@ -306,7 +306,7 @@ struct EdLessonReader: View {
 
 private struct EdQuestionCard: View {
     let question: EdDiscussion.Question
-    var desk: StudyDesk
+    var desk: SiteHub
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 

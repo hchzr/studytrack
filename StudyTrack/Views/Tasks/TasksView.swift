@@ -116,13 +116,15 @@ struct TasksView: View {
     @ViewBuilder
     private func section(_ title: String, _ items: [LinkedTask], tint: Color) -> some View {
         if !items.isEmpty {
-            Section(title) {
+            Section {
                 ForEach(items) { task in
                     taskRow(task, tint: tint)
                 }
                 .onDelete { offsets in
                     delete(offsets, in: items)
                 }
+            } header: {
+                Text(ui: title)
             }
         }
     }

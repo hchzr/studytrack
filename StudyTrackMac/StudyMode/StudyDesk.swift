@@ -84,6 +84,12 @@ final class StudyDesk {
     /// Montrer ta copie (GoodNotes) à la place de l'énoncé.
     var showingCopy = false
 
+    /// Une question pour Claude, avec une pièce jointe (ta copie) ou le PDF de la série.
+    func ask(_ question: String, attachment: ClaudeTutor.Attachment?) {
+        pendingAttachment = attachment
+        ask(question, attachSeries: attachment == nil)
+    }
+
     func ask(_ question: String, attachSeries: Bool = true) {
         pendingQuestion = question
         pendingAttachSeries = attachSeries
@@ -92,147 +98,37 @@ final class StudyDesk {
 
     // MARK: Calcul
 
-    var workbench = MathWorkbench.Session()
-    var calcHistory: [(input: String, result: Result<MathWorkbench.Output, CalcError>)] = []
+    /// La calculatrice (partagée avec l'iPhone : `StudyKit/CalcPane.swift`).
+    let calc = CalcModel()
 
-    // MARK: Documents
+    // MARK: Sites (partagés avec l'iPhone : `StudyKit/SiteHub.swift`)
 
-    /// Les PDF ouverts (séries, documents du cours), par adresse.
-    enum Load: Equatable {
-        case loading
-        case ready(URL)
-        case needsLogin
-        case failed(String)
+    let sites = SiteHub.shared
+    typealias Load = SiteHub.Load
+    var documents: [String: Load] { sites.documents }
+    func document(_ address: String) -> Load? { sites.document(address) }
+    func loadPDF(_ address: String) { sites.loadPDF(address) }
+    func retry(_ address: String) { sites.retry(address) }
+    var openedDocument: (title: String, address: String)? {
+        get { sites.openedDocument }
+        set { sites.openedDocument = newValue }
     }
-
-    private(set) var documents: [String: Load] = [:]
-    /// Les documents déjà retentés après une reconnexion silencieuse.
-    @ObservationIgnored private var retried: Set<String> = []
-
-    func document(_ address: String) -> Load? { documents[address] }
-
-    /// Télécharge un PDF dans la session de Moodle (gardé en cache) : la
-    /// connexion faite une fois dans le navigateur du mode étude sert ici.
-    func loadPDF(_ address: String) {
-        // Un fichier déjà sur le Mac (un PDF glissé, l'essai de débogage).
-        if let url = URL(string: address), url.isFileURL, PDFDocument(url: url) != nil {
-            documents[address] = .ready(url)
-            return
-        }
-        guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else {
-            documents[address] = .failed("Pas de document.")
-            return
-        }
-        if case .ready? = documents[address] { return }
-        if case .loading? = documents[address] { return }
-        let cached = Self.cacheURL(for: address)
-        if FileManager.default.fileExists(atPath: cached.path), PDFDocument(url: cached) != nil {
-            documents[address] = .ready(cached)
-            return
-        }
-        documents[address] = .loading
-        Task { @MainActor in
-            do {
-                let file = try await AuthenticatedDownloader.download(url)
-                guard PDFDocument(url: file) != nil else {
-                    throw URLError(.userAuthenticationRequired)
-                }
-                try? FileManager.default.removeItem(at: cached)
-                try FileManager.default.copyItem(at: file, to: cached)
-                documents[address] = .ready(cached)
-            } catch {
-                // Une page HTML à la place du PDF, sur un site EPFL : la session a
-                // expiré. On se reconnecte sans rien afficher, puis on réessaie une fois.
-                if url.host?.hasSuffix("epfl.ch") == true, !retried.contains(address) {
-                    retried.insert(address)
-                    await EPFLConnect.shared.connect(.moodle)
-                    if EPFLConnect.shared.state(.moodle) == .connected {
-                        documents[address] = nil
-                        loadPDF(address)
-                        return
-                    }
-                }
-                documents[address] = url.host?.hasSuffix("epfl.ch") == true ? .needsLogin : .failed("Document introuvable.")
-            }
-        }
-    }
-
-    func retry(_ address: String) {
-        documents[address] = nil
-        try? FileManager.default.removeItem(at: Self.cacheURL(for: address))
-        loadPDF(address)
-    }
-
-    static func cacheURL(for address: String) -> URL {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/pdf", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let digest = SHA256.hash(data: Data(address.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
-        return directory.appendingPathComponent(digest + ".pdf")
-    }
-
-    /// Un PDF ouvert hors série (un document du cours, un fichier Moodle).
-    var openedDocument: (title: String, address: String)?
-
-    // MARK: Moodle et Botafogo
-
-    let moodle = MoodleClient()
-    var moodleOutlines: [Int: MoodleCourseSnapshot] = [:]
-    var moodlePages: [Int: MoodleCoursePage] = [:]
-    var moodleError: [Int: String] = [:]
-
-    // MARK: Courseware et MediaSpace
-
-    let courseware = CoursewareClient()
-    let ed = EdClient()
-    /// Les cours Ed de l'étudiant·e (`nil` : pas encore lus).
-    var edCourses: [EdDiscussion.Course]?
-    var edNeedsLogin = false
-    var edThreads: [Int: [EdDiscussion.Thread]] = [:]
-    var edLessons: [Int: [EdDiscussion.Lesson]] = [:]
-
-    /// Lit les cours Ed une fois (et après une connexion).
-    func loadEdCourses() async {
-        guard edCourses == nil else { return }
-        await EPFLConnect.shared.ensure(.ed)
-        do {
-            edCourses = try await ed.courses()
-            edNeedsLogin = false
-        } catch HiddenSiteSession.SiteError.notSignedIn {
-            edNeedsLogin = true
-        } catch {}
-    }
-    let mediaspace = MediaSpaceClient()
-    var edxOutlines: [String: EdXOutline] = [:]
-
-    // MARK: Connexion
-
-    /// Le site où se connecter (la feuille de connexion, seule page web du bureau).
-    var signIn: StudySite?
-    /// Augmente à chaque connexion réussie : les lecteurs réessaient.
-    private(set) var signInRevision = 0
-
-    func signedIn(_ site: StudySite) {
-        if site == .mediaspace {
-            Task { await EPFLConnect.shared.connect(.mediaspace); signInRevision += 1 }
-            return
-        }
-        // Connecté·e à Microsoft par Moodle : les autres sites suivent, sans rien
-        // afficher (`EPFLConnect`).
-        moodleError = [:]
-        for (address, load) in documents where load == .needsLogin { documents[address] = nil }
-        Task {
-            try? await moodle.prepare(force: true)
-            signInRevision += 1
-            await EPFLConnect.shared.connectAll()
-            ed.reset()
-            edCourses = nil
-            edNeedsLogin = false
-            edThreads = [:]
-            await loadEdCourses()
-            signInRevision += 1
-        }
-    }
+    var moodle: MoodleClient { sites.moodle }
+    var moodleOutlines: [Int: MoodleCourseSnapshot] { get { sites.moodleOutlines } set { sites.moodleOutlines = newValue } }
+    var moodlePages: [Int: MoodleCoursePage] { get { sites.moodlePages } set { sites.moodlePages = newValue } }
+    var moodleError: [Int: String] { get { sites.moodleError } set { sites.moodleError = newValue } }
+    var courseware: CoursewareClient { sites.courseware }
+    var ed: EdClient { sites.ed }
+    var edCourses: [EdDiscussion.Course]? { get { sites.edCourses } set { sites.edCourses = newValue } }
+    var edNeedsLogin: Bool { get { sites.edNeedsLogin } set { sites.edNeedsLogin = newValue } }
+    var edThreads: [Int: [EdDiscussion.Thread]] { get { sites.edThreads } set { sites.edThreads = newValue } }
+    var edLessons: [Int: [EdDiscussion.Lesson]] { get { sites.edLessons } set { sites.edLessons = newValue } }
+    func loadEdCourses() async { await sites.loadEdCourses() }
+    var mediaspace: MediaSpaceClient { sites.mediaspace }
+    var edxOutlines: [String: EdXOutline] { get { sites.edxOutlines } set { sites.edxOutlines = newValue } }
+    var signIn: StudySite? { get { sites.signIn } set { sites.signIn = newValue } }
+    var signInRevision: Int { sites.signInRevision }
+    func signedIn(_ site: StudySite) { sites.signedIn(site) }
 
     func closeAll() {
         for chat in chats.values { chat.close() }

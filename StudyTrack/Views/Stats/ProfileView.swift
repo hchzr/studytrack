@@ -199,6 +199,11 @@ struct ProfileView: View {
                             value: app.settings.offlineEnabled ? OfflinePlan.label(bytes: OfflineLibrary.shared.usedBytes) : "désactivé")
             }
             NavigationLink {
+                subpage("Personnaliser") { PersonalizeForm() }
+            } label: {
+                settingsRow("Personnaliser", icon: "slider.horizontal.3", value: Institution.current.name)
+            }
+            NavigationLink {
                 StudyModeSettingsView()
             } label: {
                 settingsRow("Mode étude", icon: "moon.stars",
@@ -274,7 +279,7 @@ struct ProfileView: View {
     /// Une ligne de réglage : icône d'encre, titre, et l'état à droite.
     private func settingsRow(_ title: String, icon: String, value: String? = nil) -> some View {
         HStack(spacing: 12) {
-            Label(title, systemImage: icon)
+            Label { Text(ui: title) } icon: { Image(systemName: icon) }
             Spacer(minLength: 8)
             if let value {
                 Text(value)

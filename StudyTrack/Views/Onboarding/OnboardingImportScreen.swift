@@ -394,7 +394,7 @@ private struct MoodlePage: View {
             }
             HStack(spacing: 5) {
                 Image(systemName: "lock.fill").font(.system(size: 8))
-                Text("moodle.epfl.ch").font(.caption2.weight(.medium))
+                Text(Institution.current.moodleHostName).font(.caption2.weight(.medium))
             }
             .foregroundStyle(Carnet.inkTertiary)
             .padding(.horizontal, 10)

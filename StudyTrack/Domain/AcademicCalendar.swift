@@ -126,7 +126,7 @@ struct AcademicMilestoneValue: Equatable, Identifiable {
 /// Fonction **pure** : elle reçoit du HTML, donc elle se teste sur le vrai contenu.
 enum AcademicCalendarParser {
 
-    static let sourceURL = "https://www.epfl.ch/education/studies/reglement-et-procedure/calendrier-academique/"
+    static var sourceURL: String { Institution.current.calendarURL ?? Institution.epfl.calendarURL! }
 
     /// Les noms de mois, sans accents et en minuscules.
     ///

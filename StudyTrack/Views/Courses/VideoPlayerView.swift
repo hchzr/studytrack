@@ -8,7 +8,7 @@ enum VideoLinks {
         let host = url.host?.lowercased() ?? ""
         let ext = url.pathExtension.lowercased()
         if ["mp4", "m4v", "mov", "m3u8", "webm"].contains(ext) { return true }
-        if host.hasSuffix("mediaspace.epfl.ch") { return url.path.contains("/media/") || url.path.contains("/playlist/") || url.path.contains("/embed/") }
+        if host.hasSuffix(Institution.current.videoHostName) { return url.path.contains("/media/") || url.path.contains("/playlist/") || url.path.contains("/embed/") }
         if host == ExpliqueImport.host { return url.path.contains("/v/") }
         return ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "vimeo.com", "tube.switch.ch"].contains(host)
             || host.hasSuffix("kaltura.com") || host.hasSuffix("cast.switch.ch")

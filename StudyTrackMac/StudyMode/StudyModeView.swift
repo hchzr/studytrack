@@ -1,22 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// Le papier de nuit du mode étude : `Carnet` en apparence sombre, toujours.
-///
-/// La fenêtre du mode étude est forcée en sombre (`StudyModeView` et sa
-/// fenêtre) : un écran plein qui éblouit fatigue, et le soir comme le jour le
-/// travail se lit mieux crème sur encre. Les couleurs dynamiques de `Carnet`
-/// prennent alors leurs valeurs de nuit ; ces noms disent l'intention.
-enum StudyPalette {
-    static let ground = Carnet.ground
-    static let raised = Carnet.sheet
-    static let raisedMore = Carnet.sheetRaised
-    static let rule = Carnet.rule
-    static let ink = Carnet.ink
-    static let inkSecondary = Carnet.inkSecondary
-    static let inkTertiary = Carnet.inkTertiary
-}
-
 /// L'écran plein du mode étude : le choix avant de commencer, la session,
 /// puis « c'est fait ».
 struct StudyModeView: View {

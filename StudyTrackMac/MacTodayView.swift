@@ -463,7 +463,7 @@ private struct WeekCourseCard: View {
     private func meter(_ title: String, _ done: Int, _ total: Int, _ tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(title).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                Text(ui: title).font(.caption).foregroundStyle(Carnet.inkSecondary)
                 Spacer()
                 Text("\(done)/\(total)").font(.caption.monospacedDigit()).foregroundStyle(Carnet.ink)
             }

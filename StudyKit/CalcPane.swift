@@ -4,7 +4,9 @@ import Charts
 /// La calculatrice et le grapheur du bureau (`MathEngine`, pur et testé) :
 /// ce qu'on allait chercher sur GeoGebra, sans quitter le mode étude.
 struct CalcPane: View {
-    var desk: StudyDesk
+    var desk: CalcModel
+    /// Une colonne (l'iPhone) plutôt que deux.
+    var compact = false
     var openWeb: (URL, String) -> Void
 
     @State private var line = ""
@@ -12,16 +14,31 @@ struct CalcPane: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
-            calculator
-                .frame(width: 420)
-                .frame(maxHeight: .infinity, alignment: .top)
-            Rectangle().fill(Carnet.rule).frame(width: 1)
-            graph
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Le Mac : la calculatrice à gauche, le graphe à droite. L'iPhone : l'un
+        // sur l'autre, le graphe en haut quand il y a une fonction.
+        Group {
+        if compact {
+            VStack(spacing: 0) {
+                if !functionNames.isEmpty {
+                    graph.frame(height: 300)
+                    Rectangle().fill(Carnet.rule).frame(height: 1)
+                }
+                calculator
+            }
+        } else {
+            HStack(spacing: 0) {
+                calculator
+                    .frame(width: 420)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                Rectangle().fill(Carnet.rule).frame(width: 1)
+                graph
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        }
         }
         .onAppear {
-            focused = true
+            // Sur l'iPhone, le clavier n'apparaît qu'au toucher du champ.
+            if !compact { focused = true }
             #if DEBUG
             // `-calcRun "x^2 - 2;z^5 = 1"` : des lignes déjà tapées, pour les captures.
             if let index = CommandLine.arguments.firstIndex(of: "-calcRun"), index + 1 < CommandLine.arguments.count, desk.calcHistory.isEmpty {
@@ -312,3 +329,11 @@ private struct CalcResult: View {
 }
 
 struct CalcError: Error, Equatable { let message: String }
+
+/// Ce que la calculatrice garde pendant la session : les définitions, l'historique.
+@MainActor
+@Observable
+final class CalcModel {
+    var workbench = MathWorkbench.Session()
+    var calcHistory: [(input: String, result: Result<MathWorkbench.Output, CalcError>)] = []
+}

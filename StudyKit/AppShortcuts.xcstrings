@@ -1,0 +1,56 @@
+{
+  "sourceLanguage": "fr",
+  "strings": {
+    "Ajoute une tâche d'étude dans ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a study task in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Démarre une session d'étude dans ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a study session in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Enregistre une session d'étude dans ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a study session in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Marque un exercice comme fait dans ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark an exercise as done in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Planifie une session d'étude dans ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan a study session in ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

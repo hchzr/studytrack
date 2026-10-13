@@ -6077,6 +6077,62 @@ do {
     check(NotesLibrary.copy(seriesNumber: 9, week: 5, in: docs)?.title == "Séance Et Série 5", "ta copie : la série de la semaine")
 }
 
+// MARK: Profil d'école (Institution)
+do {
+    check(Institution.current == .epfl, "l'EPFL par défaut : rien ne change")
+    check(Institution.detect(email: "prenom.nom@epfl.ch")?.id == "epfl" && Institution.detect(email: "a@gmail.com") == nil,
+          "l'école d'une adresse")
+    let other = Institution(id: "uni", name: "Université fictive", emailDomains: ["uni.example"],
+                            moodle: .init(base: "https://cours.uni.example", oauthProviderID: nil),
+                            openEdX: .init(base: "https://mooc.uni.example", loginBackend: nil, ssoHost: nil, ssoIdP: nil),
+                            video: .init(host: "video.uni.example", kalturaAPI: "https://api.kaltura.example", kalturaPartner: 42,
+                                         wayfHost: nil, identityProvider: nil, passwordIdPHost: nil),
+                            ed: .init(region: "us"), studyDomains: ["uni.example"])
+    let saved = Institution.current
+    Institution.current = other
+    check(SiteRouter.route("https://cours.uni.example/mod/page/view.php?id=7") == .moodle(module: "page", id: 7), "autre école : son Moodle")
+    check(SiteRouter.route("https://moodle.epfl.ch/mod/page/view.php?id=7") == .web, "autre école : le Moodle de l'EPFL n'est plus le sien")
+    check(SiteRouter.route("https://video.uni.example/media/t/0_abcdefgh") == .mediaspace(entryID: "0_abcdefgh"), "autre école : ses vidéos")
+    check(SiteRouter.route("https://mooc.uni.example/courses/course-v1:UNI+X+2026/course/") == .courseware(courseKey: "course-v1:UNI+X+2026"),
+          "autre école : son Open edX")
+    check(SiteRouter.route("https://botafogo.epfl.ch/x/") != .botafogo, "autre école : pas de Botafogo")
+    check(Kaltura.manifestURL(entryID: "0_x")?.absoluteString.hasPrefix("https://api.kaltura.example/p/42/sp/4200/") == true, "autre école : son Kaltura")
+    check(StudyMode.defaultSites.first == "uni.example" && !StudyMode.defaultSites.contains("epfl.ch"), "autre école : ses sites permis")
+    check(StudyMode.tools(courseName: nil, courseLinks: []).first { $0.id == "moodle" }.map { if case .web(let url) = $0.kind { return url.host == "cours.uni.example" }; return false } == true,
+          "autre école : l'outil Moodle")
+    check(Institution.generic.moodle == nil && StudyMode.defaultSites(for: .generic).contains("claude.ai"), "école inconnue : l'essentiel marche")
+    Institution.current = saved
+    check(SiteRouter.route("https://moodle.epfl.ch/mod/page/view.php?id=7") == .moodle(module: "page", id: 7), "retour à l'EPFL")
+    let encoded = try? JSONEncoder().encode(Institution.epfl)
+    check(encoded.flatMap { try? JSONDecoder().decode(Institution.self, from: $0) } == .epfl, "un profil s'écrit et se relit")
+}
+
+// MARK: Personnalisation : règles des notes, étapes de la session
+do {
+    let courses: [NotesLibrary.CourseKey] = [.init(code: "MATH-101", name: "Analyse I"), .init(code: "MATH-106", name: "Analyse II")]
+    var rules = NotesLibrary.Rules(notebooks: ["Analyse": "MATH-106", "Brouillons": ""])
+    check(NotesLibrary.course(forNotebook: "Analyse", among: courses, rules: rules)?.code == "MATH-106", "cahier rangé à la main : l'emporte")
+    check(NotesLibrary.course(forNotebook: "Brouillons", among: courses, rules: rules) == nil, "cahier écarté à la main")
+    rules.seriesWords = ["TD", "Übung"]
+    rules.weekWords = ["Woche"]
+    check(NotesLibrary.seriesNumber("TD 4 corrigé", rules: rules) == 4 && NotesLibrary.seriesNumber("Übung 07", rules: rules) == 7
+          && NotesLibrary.seriesNumber("Série 3", rules: rules) == nil, "mots d'une série choisis")
+    check(NotesLibrary.weekNumber("Woche 3", rules: rules) == 3 && NotesLibrary.weekNumber("Semaine 3", rules: rules) == nil, "mot de semaine choisi")
+    check(NotesLibrary.seriesNumber("laps 3") == nil && NotesLibrary.seriesNumber("PS5") == 5, "un mot court commence un mot")
+    check(NotesLibrary.Rules.standard == (try? JSONDecoder().decode(NotesLibrary.Rules.self, from: Data("{}".utf8))), "règles par défaut relues")
+
+    var flow = SessionFlow.standard
+    check(flow.steps == [.course, .series, .help, .debrief], "session : les quatre étapes par défaut")
+    flow.toggle(.course)
+    check(flow.steps == [.series, .help, .debrief], "session : une étape retirée")
+    flow.toggle(.course)
+    check(flow.steps == [.course, .series, .help, .debrief], "session : remise à sa place")
+    flow.move(.debrief, by: -3)
+    check(flow.steps.first == .debrief, "session : réordonnée")
+    var single = SessionFlow(steps: [.series]); single.toggle(.series)
+    check(single.steps == [.series], "session : jamais vide")
+}
+
 // MARK: Formules : commandes de police
 do {
     check(MathMarkup.plain("$z^2=-3+4\\mathsf{i}$") == "z2=-3+4i", "\\mathsf{i} → i")

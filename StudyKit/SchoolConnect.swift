@@ -21,8 +21,8 @@ import WebKit
 /// étapes intermédiaires (WAYF, OpenLearnity, Ed).
 @MainActor
 @Observable
-final class EPFLConnect {
-    static let shared = EPFLConnect()
+final class SchoolConnect {
+    static let shared = SchoolConnect()
 
     enum Site: String, CaseIterable, Identifiable {
         case moodle, courseware, mediaspace, ed
@@ -54,7 +54,20 @@ final class EPFLConnect {
 
     func state(_ site: Site) -> State { states[site] ?? .unknown }
 
-    var allConnected: Bool { Site.allCases.allSatisfy { state($0) == .connected } }
+    /// Les sites que l'école a (son profil) : on ne se connecte qu'à eux.
+    var sites: [Site] {
+        let school = Institution.current
+        return Site.allCases.filter { site in
+            switch site {
+            case .moodle: return school.moodle != nil
+            case .courseware: return school.openEdX != nil
+            case .mediaspace: return school.video != nil
+            case .ed: return school.ed != nil
+            }
+        }
+    }
+
+    var allConnected: Bool { sites.allSatisfy { state($0) == .connected } }
 
     /// Ouvre chaque site dans la session Microsoft, l'un après l'autre.
     func connectAll() async {
@@ -64,7 +77,7 @@ final class EPFLConnect {
         }
         isRunning = true
         defer { isRunning = false; revision += 1 }
-        for site in Site.allCases { await connect(site) }
+        for site in sites { await connect(site) }
     }
 
     /// Avant de lire un site : connecté·e, ou on s'y connecte sans rien afficher
@@ -75,17 +88,19 @@ final class EPFLConnect {
     }
 
     func connect(_ site: Site) async {
+        let school = Institution.current
+        guard sites.contains(site) else { return }
         states[site] = .connecting
         let driver = SSODriver()
         let done: Bool
         switch site {
         case .moodle:
-            done = await driver.run(start: URL(string: "https://moodle.epfl.ch/login/index.php")!) { url, view in
-                if url.host == "moodle.epfl.ch", url.path.hasPrefix("/login") {
-                    _ = try? await view.evaluateJavaScript(Self.clickEntra)
+            done = await driver.run(start: URL(string: school.moodleBase + "/login/index.php")!) { url, view in
+                if url.host == school.moodleHostName, url.path.hasPrefix("/login") {
+                    _ = try? await view.evaluateJavaScript(Self.clickOAuth(school))
                     return false
                 }
-                if url.host == "moodle.epfl.ch" {
+                if url.host == school.moodleHostName {
                     return (try? await view.evaluateJavaScript(Self.moodleSignedIn)) as? Bool == true
                 }
                 await Self.answerMicrosoft(view, email: self.email)
@@ -93,24 +108,25 @@ final class EPFLConnect {
             }
             if done, email == nil { email = await driver.moodleEmail() }
         case .courseware:
-            done = await driver.run(start: URL(string: "https://courseware.epfl.ch/auth/login/edx-oauth2/?auth_entry=login&next=%2Fdashboard")!) { url, view in
-                if url.host == "id.openlearnity.org", url.path.hasPrefix("/login") {
-                    _ = try? await view.evaluateJavaScript(Self.chooseOpenLearnityEPFL)
+            let backend = school.openEdX?.loginBackend.map { "/auth/login/\($0)/?auth_entry=login&next=%2Fdashboard" } ?? "/login"
+            done = await driver.run(start: URL(string: school.coursewareBase + backend)!) { url, view in
+                if let sso = school.openEdX?.ssoHost, url.host == sso, url.path.hasPrefix("/login"), let idp = school.openEdX?.ssoIdP {
+                    _ = try? await view.evaluateJavaScript(Self.chooseSSOIdP(idp))
                     return false
                 }
-                if url.host == "courseware.epfl.ch" {
+                if url.host == school.coursewareHostName {
                     return (try? await view.callAsyncJavaScript(Self.coursewareSignedIn, contentWorld: .page)) as? Bool == true
                 }
                 await Self.answerMicrosoft(view, email: self.email)
                 return false
             }
         case .mediaspace:
-            done = await driver.run(start: URL(string: "https://mediaspace.epfl.ch/user/login")!) { url, view in
-                if url.host == "wayf.switch.ch" {
-                    _ = try? await view.evaluateJavaScript(Self.chooseWAYFEPFL)
+            done = await driver.run(start: URL(string: "https://\(school.videoHostName)/user/login")!) { url, view in
+                if let wayf = school.video?.wayfHost, url.host == wayf, let idp = school.video?.identityProvider {
+                    _ = try? await view.evaluateJavaScript(Self.chooseWAYF(idp))
                     return false
                 }
-                if url.host == "mediaspace.epfl.ch" {
+                if url.host == school.videoHostName {
                     return (try? await view.evaluateJavaScript(Self.mediaspaceSignedIn)) as? Bool == true
                 }
                 await Self.answerEduID(view, email: self.email)
@@ -120,12 +136,13 @@ final class EPFLConnect {
         case .ed:
             guard let email else { states[site] = .failed; return }
             var asked = false
-            done = await driver.run(start: URL(string: "https://edstem.org/eu/login")!) { url, view in
+            done = await driver.run(start: URL(string: "https://edstem.org/\(school.edRegion)/login")!) { url, view in
                 if url.host == "edstem.org" {
                     if (try? await view.evaluateJavaScript("!!localStorage.getItem('authToken')")) as? Bool == true { return true }
-                    if url.path.hasPrefix("/eu/login"), !asked {
+                    if url.path.hasPrefix("/\(school.edRegion)/login"), !asked {
                         asked = true
-                        _ = try? await view.callAsyncJavaScript(Self.edLogin, arguments: ["email": email], contentWorld: .page)
+                        _ = try? await view.callAsyncJavaScript(Self.edLogin, arguments: ["email": email, "region": school.edRegion],
+                                                                contentWorld: .page)
                     }
                     return false
                 }
@@ -154,7 +171,7 @@ final class EPFLConnect {
     /// MediaSpace — observé) : la page de stockage local s'envoie seule ; la
     /// page « E-mail » reçoit l'adresse EPFL, puis edu-ID renvoie vers Microsoft.
     static func answerEduID(_ view: WKWebView, email: String?) async {
-        guard view.url?.host?.contains("eduid.ch") == true, let email else { return }
+        guard let idp = Institution.current.video?.passwordIdPHost, view.url?.host?.contains(idp) == true, let email else { return }
         _ = try? await view.callAsyncJavaScript(#"""
         const field = document.querySelector('form#loginForm input[type="email"], form#loginForm input[name="username"], form#loginForm input[name="j_username"], input#username');
         if (field && !field.value) {
@@ -164,30 +181,41 @@ final class EPFLConnect {
           if (button) { button.click(); } else { field.form.submit(); }
           return;
         }
-        const external = [...document.querySelectorAll('a, button')].find(b => /epfl|microsoft|continuer|continue|weiter/i.test(b.innerText || ''));
+        const pattern = new RegExp(school + '|microsoft|continuer|continue|weiter', 'i');
+        const external = [...document.querySelectorAll('a, button')].find(b => pattern.test(b.innerText || ''));
         if (external && !/help|aide/i.test(external.innerText)) external.click();
-        """#, arguments: ["email": email], contentWorld: .page)
+        """#, arguments: ["email": email, "school": Institution.current.id], contentWorld: .page)
     }
 
     // MARK: Scripts (observés sur les vraies pages)
 
-    static let clickEntra = """
-    (() => { const a = document.querySelector('a[href*="auth/oauth2/login.php?id=3"]'); if (a) { location.href = a.href; return true; } return false; })()
-    """
+    /// Le bouton de connexion OAuth de Moodle (EPFL : `id=3`, « Entra ID »).
+    static func clickOAuth(_ school: Institution) -> String {
+        let id = school.moodle?.oauthProviderID.map(String.init) ?? ""
+        return """
+        (() => { const a = document.querySelector('a[href*="auth/oauth2/login.php?id=\(id)"]'); if (a) { location.href = a.href; return true; } return false; })()
+        """
+    }
+    static var clickEntra: String { clickOAuth(Institution.current) }
     static let moodleSignedIn = "!!document.querySelector('#user-menu-toggle, .usermenu .userbutton')"
-    static let chooseOpenLearnityEPFL = """
-    (() => { const next = new URLSearchParams(location.search).get('next') || '/';
-      location.href = '/auth/login/tpa-saml/?auth_entry=login&idp=epfl-ol&next=' + encodeURIComponent(next); return true; })()
-    """
+    static func chooseSSOIdP(_ idp: String) -> String {
+        """
+        (() => { const next = new URLSearchParams(location.search).get('next') || '/';
+          location.href = '/auth/login/tpa-saml/?auth_entry=login&idp=\(idp)&next=' + encodeURIComponent(next); return true; })()
+        """
+    }
     static let coursewareSignedIn = "const r = await fetch('/api/user/v1/me', { credentials: 'include' }); return r.status === 200;"
-    static let chooseWAYFEPFL = """
-    (() => { const s = document.querySelector('select[name="user_idp"]'); if (!s) return false;
-      s.value = 'https://idp.epfl.ch/idp/shibboleth'; s.form.submit(); return true; })()
-    """
+    static func chooseWAYF(_ idp: String) -> String {
+        """
+        (() => { const s = document.querySelector('select[name="user_idp"]'); if (!s) return false;
+          s.value = '\(idp)'; s.form.submit(); return true; })()
+        """
+    }
+    static var chooseWAYFEPFL: String { chooseWAYF(Institution.current.video?.identityProvider ?? "") }
     static let mediaspaceSignedIn = "!!document.querySelector('a[href*=\"/user/logout\"]')"
     static let edLogin = """
-    const r = await fetch('https://eu.edstem.org/api/login_type', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ login: email, redirect: '/eu/dashboard' }) });
+    const r = await fetch('https://' + region + '.edstem.org/api/login_type', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login: email, redirect: '/' + region + '/dashboard' }) });
     const d = await r.json();
     if (d.url) { location.href = d.url; return true; }
     return false;

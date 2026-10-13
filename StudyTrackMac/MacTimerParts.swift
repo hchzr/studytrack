@@ -335,35 +335,6 @@ private struct RecapRow: View {
     }
 }
 
-/// Fait / juste / moyen / faux, en une rangée.
-struct ExerciseQuickMark: View {
-    @Bindable var exercise: Exercise
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Toggle("Fait", isOn: Binding(get: { exercise.isDone }, set: { exercise.setDone($0) }))
-                .toggleStyle(.checkbox)
-            Spacer(minLength: 8)
-            ForEach(Correctness.allCases) { result in
-                let selected = exercise.correctness == result
-                Button {
-                    if selected { exercise.clearCorrection() } else { exercise.correct(result) }
-                } label: {
-                    Text(result.shortLabel)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(selected ? Carnet.color(for: result) : Carnet.color(for: result).opacity(0.12)))
-                        .foregroundStyle(selected ? Carnet.ground : Carnet.color(for: result))
-                }
-                .buttonStyle(.plain)
-                .help(result.label)
-            }
-        }
-        .font(.callout)
-    }
-}
-
 // MARK: - Objectif du jour
 
 /// « 2 h 10 sur 3 h » et une barre.
