@@ -20,8 +20,14 @@ enum MacDebugLaunch {
                     let context = ModelContext(store.container)
                     let course = (try? context.fetch(FetchDescriptor<Course>()))?.first
                     let exercise = course?.sortedSeries.first?.sortedExercises.dropFirst().first
-                    timer.enterStudy(minutes: 25, courseID: course?.id, taskType: .exercise, targetID: exercise?.id,
-                                     label: "Test du mode étude")
+                    // `-studyMoment lecture|revision` : le bureau sous cette forme. Jamais
+                    // de verrou en essai.
+                    let moment = CommandLine.arguments.firstIndex(of: "-studyMoment").flatMap {
+                        $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil
+                    }
+                    let type: TaskType = moment == "lecture" ? .lecture : (moment == "revision" ? .theory : .exercise)
+                    timer.enterStudy(minutes: 25, courseID: course?.id, taskType: type,
+                                     targetID: type == .exercise ? exercise?.id : nil, label: "Test du mode étude", locks: false)
                     if let index = CommandLine.arguments.firstIndex(of: "-studyPane"), index + 1 < CommandLine.arguments.count,
                        let pane = StudyDesk.Pane(rawValue: CommandLine.arguments[index + 1]) {
                         StudyModeController.shared.desk.pane = pane

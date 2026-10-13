@@ -5976,6 +5976,69 @@ do {
     check(old?.studyLocks == nil, "un état d'avant se lit (champ absent)")
 }
 
+// MARK: Verrou du mode étude
+do {
+    var state = FocusTimerState()
+    StudyMode.enter(&state, minutes: 30)
+    check(!StudyMode.canLeave(state), "verrou : on ne sort pas avant l'heure")
+    check(StudyMode.canLeave(state, at: Date().addingTimeInterval(31 * 60)), "verrou : l'heure passée, on sort")
+    StudyMode.enter(&state, minutes: 30, locks: false)
+    check(StudyMode.canLeave(state), "sans verrou : on sort quand on veut")
+    check(StudyMode.emergencyNote("") == "Sortie d'urgence", "sortie d'urgence : notée")
+    check(StudyMode.emergencyNote("Analyse") == "Analyse · Sortie d'urgence", "sortie d'urgence : après la note")
+    check(StudyMode.emergencyNote("Analyse · Sortie d'urgence") == "Analyse · Sortie d'urgence", "sortie d'urgence : une fois")
+    check(StudyMode.defaultSites(for: .epfl).contains("speakup.info"), "sondages en amphi permis")
+}
+
+// MARK: Bureau : la forme du moment
+do {
+    check(DeskMoment.resolve(taskType: .lecture, inGroup: false, daysToExam: nil) == .lecture, "bureau : en cours")
+    check(DeskMoment.resolve(taskType: .lecture, inGroup: true, daysToExam: 3) == .together, "bureau : le groupe d'abord")
+    check(DeskMoment.resolve(taskType: .theory, inGroup: false, daysToExam: 5) == .revision, "bureau : examen proche → révision")
+    check(DeskMoment.resolve(taskType: .exercise, inGroup: false, daysToExam: 5) == .series, "bureau : une série reste une série")
+    check(DeskMoment.resolve(taskType: .theory, inGroup: false, daysToExam: 30) == .series, "bureau : examen loin → séries")
+    check(DeskMoment.resolve(taskType: .video, inGroup: false, daysToExam: 2) == .revision, "bureau : vidéo = théorie")
+
+    let course = UUID()
+    let day = Calendar.current.date(bySettingHour: 8, minute: 15, second: 0, of: Date())!
+    let lecture = FocusContext.Slot(courseID: course, courseCode: "MATH-101", kind: .lecture, start: day, end: day.addingTimeInterval(105 * 60))
+    let later = FocusContext.Slot(courseID: UUID(), courseCode: "CS-107", kind: .exerciseSession,
+                                  start: day.addingTimeInterval(3 * 3600), end: day.addingTimeInterval(5 * 3600))
+    check(LectureClock.current(at: day.addingTimeInterval(-5 * 60), in: [lecture, later])?.courseID == course, "horloge : dix minutes avant, le cours")
+    check(LectureClock.current(at: day.addingTimeInterval(-20 * 60), in: [lecture]) == nil, "horloge : trop tôt")
+    check(LectureClock.next(after: day.addingTimeInterval(60), in: [lecture, later])?.courseCode == "CS-107", "horloge : la suite")
+    check(LectureClock.phase(of: lecture, at: day.addingTimeInterval(50 * 60)) == .pause(untilMinutes: 10), "horloge : la pause à +45")
+    check(LectureClock.phase(of: lecture, at: day.addingTimeInterval(20 * 60)) == .running, "horloge : en cours")
+    check(LectureClock.phase(of: lecture, at: day.addingTimeInterval(-3 * 60)) == .before(minutes: 3), "horloge : avant")
+    check(LectureClock.phase(of: lecture, at: day.addingTimeInterval(2 * 3600)) == .over, "horloge : fini")
+    check(LectureClock.breakWindow(of: FocusContext.Slot(courseID: course, courseCode: "X", kind: .lecture, start: day,
+                                                         end: day.addingTimeInterval(45 * 60))) == nil, "horloge : 45 min sans pause")
+    check(LectureClock.studyMinutes(for: lecture, now: day) == 105, "horloge : le mode étude tient jusqu'à la fin")
+    check(abs(LectureClock.progress(of: lecture, at: day.addingTimeInterval(52.5 * 60)) - 0.5) < 0.001, "horloge : à mi-chemin")
+
+    let first = LectureMark(courseID: course, classStart: day, at: day.addingTimeInterval(754))
+    check(first.offsetLabel == "12:34", "repère : 12:34")
+    check(LectureMark(courseID: course, classStart: day, at: day.addingTimeInterval(3723)).offsetLabel == "1:02:03", "repère : plus d'une heure")
+    var marks = LectureMarks.adding(first, to: [], now: day)
+    marks = LectureMarks.adding(LectureMark(courseID: course, classStart: day, at: day.addingTimeInterval(760)), to: marks, now: day)
+    check(marks.count == 1, "repère : deux touchers rapprochés n'en font qu'un")
+    marks = LectureMarks.adding(LectureMark(courseID: course, classStart: day, at: day.addingTimeInterval(1500)), to: marks, now: day)
+    check(LectureMarks.of(courseID: course, classStart: day, in: marks).count == 2, "repère : ceux du cours")
+    check(LectureMarks.classes(of: course, in: marks).count == 1, "repère : un créneau")
+    let stale = LectureMark(courseID: course, classStart: day.addingTimeInterval(-40 * 86_400), at: day.addingTimeInterval(-40 * 86_400))
+    check(LectureMarks.adding(first, to: [stale], now: day).count == 1, "repère : un mois au plus")
+    check(LectureMarks.decode(LectureMarks.encode(marks)) == marks, "repère : aller-retour")
+    let video = URL(string: "https://mediaspace.epfl.ch/media/1_abc")!
+    check(LectureMarks.seekURL(video, offset: 754).absoluteString == "https://mediaspace.epfl.ch/media/1_abc?st=754", "repère : MediaSpace à la minute")
+    check(LectureMarks.seekURL(URL(string: "https://www.youtube.com/watch?v=x")!, offset: 60).absoluteString.hasSuffix("t=60"), "repère : YouTube")
+    check(LectureMarks.startOffset(in: "https://mediaspace.epfl.ch/media/1_abc?st=754") == 754, "repère : relu")
+    check(LectureMarks.startOffset(in: "https://x.ch/v.mp4#t=30") == 30, "repère : fragment relu")
+
+    let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+    let order = RevisionFocus.pastExamOrder([(a, 2022, true, .high), (b, 2023, false, nil), (c, 2021, true, .low), (d, 2024, false, nil)])
+    check(order == [d, b, c, a], "révision : jamais faites, puis rouges, les sues en dernier")
+}
+
 // MARK: Botafogo : noms et macros
 do {
     check(MathMarkup.plain("$x \\in \\bR$") == "x ∈ ℝ", "macro Botafogo \\bR → ℝ")

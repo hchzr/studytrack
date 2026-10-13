@@ -82,6 +82,25 @@ enum StudyMode {
         isActive(state, at: now) && state?.studyLocks != false
     }
 
+    // MARK: Verrou
+
+    /// La sortie d'urgence : secondes à tenir pour lever un verrou avant
+    /// l'heure. Assez long pour n'être jamais un réflexe.
+    static let emergencyHold: Double = 8
+
+    /// Peut-on terminer, abandonner ou sortir maintenant ? Libre sans verrou ;
+    /// sous verrou, seulement une fois l'heure passée.
+    static func canLeave(_ state: FocusTimerState?, at now: Date = Date()) -> Bool {
+        !locks(state, at: now)
+    }
+
+    /// La note d'une session levée par la sortie d'urgence (une fois).
+    static func emergencyNote(_ note: String) -> String {
+        let mark = String(localized: "Sortie d'urgence")
+        guard !note.contains(mark) else { return note }
+        return note.isEmpty ? mark : note + " · " + mark
+    }
+
     /// Lève le mode étude (la session continue).
     static func leave(_ state: inout FocusTimerState) {
         state.studyUntil = nil
@@ -104,7 +123,8 @@ enum StudyMode {
         for site in ["claude.ai", "anthropic.com", "claudeusercontent.com",
                      "login.microsoftonline.com", "login.live.com", "msauth.net", "msftauth.net",
                      "accounts.google.com", "appleid.apple.com",
-                     "geogebra.org", "desmos.com", "wolframalpha.com"] where !sites.contains(site) {
+                     "geogebra.org", "desmos.com", "wolframalpha.com",
+                     "speakup.info", "wooclap.com", "app.wooclap.com", "particify.de"] where !sites.contains(site) {
             sites.append(site)
         }
         return sites
@@ -113,7 +133,8 @@ enum StudyMode {
     /// Les sites ajoutés à la liste par défaut après coup : ils rejoignent une
     /// liste déjà enregistrée (sans rétablir ceux qu'on a retirés).
     static let addedLater: Set<String> = ["geogebra.org", "desmos.com", "wolframalpha.com",
-                                          "edstem.org", "edusercontent.com", "openlearnity.org"]
+                                          "edstem.org", "edusercontent.com", "openlearnity.org",
+                                          "speakup.info", "wooclap.com", "app.wooclap.com", "particify.de"]
 
     /// `https://www.Moodle.epfl.ch/my/` → `moodle.epfl.ch`. Ce que l'utilisateur·rice
     /// tape dans les réglages, ramené à un domaine ; `nil` si ce n'en est pas un.

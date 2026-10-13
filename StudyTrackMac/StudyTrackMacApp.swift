@@ -137,6 +137,7 @@ struct StudyTrackMacApp: App {
         Settings {
             MacSettingsView()
                 .environment(settings)
+                .environment(timer)
                 .environment(settings.shared)
                 .environment(store)
                 .modelContainer(store.container)
@@ -167,7 +168,7 @@ struct MacCommands: Commands {
             .keyboardShortcut("t", modifiers: [.command])
             Button("Terminer") { timer.finish() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
-                .disabled(timer.phase == .idle)
+                .disabled(timer.phase == .idle || timer.isLocked)
             Button("Écourter la pause") { timer.skipBreak() }
                 .disabled(timer.phase != .onBreak)
             Divider()
@@ -183,7 +184,7 @@ struct MacCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
             Button("Abandonner", role: .destructive) { timer.discard() }
-                .disabled(timer.phase == .idle)
+                .disabled(timer.phase == .idle || timer.isLocked)
         }
         CommandGroup(after: .newItem) {
             Button("Note rapide…") { NotificationCenter.default.post(name: .macQuickNote, object: nil) }
@@ -313,7 +314,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         case .onBreak: title = "Écourter la pause"
         }
         menu.addItem(DockItem(title: title) { timer.phase == .onBreak ? timer.skipBreak() : timer.toggle() })
-        if timer.phase != .idle {
+        if timer.phase != .idle, !timer.isLocked {
             menu.addItem(DockItem(title: "Terminer et enregistrer") { timer.finish() })
         }
         return menu
@@ -322,7 +323,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     /// Fermer la fenêtre ne quitte pas : le chrono reste dans la barre des menus.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    /// ⌘Q pendant le mode étude : on demande d'abord.
+    /// ⌘Q, « Quitter » du Dock, la fermeture de session, un redémarrage :
+    /// sous verrou, StudyTrack ne quitte pas (et le Mac ne s'éteint pas sans
+    /// forcer). Sans verrou, en mode étude, on demande d'abord.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         StudyModeController.shared.confirmQuit() ? .terminateNow : .terminateCancel

@@ -36,6 +36,8 @@ struct TodayItem: Identifiable {
     let subtitle: String
     let icon: String
     let color: Color
+    /// Un cours ou une séance de l'horaire : « Suivre le cours » pendant le créneau.
+    var classCourseID: UUID? = nil
 }
 
 /// Aujourd'hui : le tableau de bord de la semaine.
@@ -113,7 +115,8 @@ struct TodayView: View {
                                    subtitle: [event.course?.displayCode, event.location.isEmpty ? nil : event.location]
                                        .compactMap { $0 }.joined(separator: " · "),
                                    icon: event.kind.icon,
-                                   color: event.course.map { Carnet.tint($0.colorHex) } ?? event.kind.color))
+                                   color: event.course.map { Carnet.tint($0.colorHex) } ?? event.kind.color,
+                                   classCourseID: [.lecture, .exerciseSession].contains(event.kind) ? event.course?.id : nil))
         }
         for session in plannedSessions where calendar.isDateInToday(session.startsAt) {
             items.append(TodayItem(id: "planned-\(session.id)",
@@ -598,6 +601,11 @@ struct TodayView: View {
                 }
                 .accessibilityLabel("Ouvrir l'agenda")
             }
+            if let live = items.first(where: { item in
+                item.classCourseID != nil && item.start.addingTimeInterval(-LectureClock.lead) <= now && now < (item.end ?? item.start)
+            }), let courseID = live.classCourseID {
+                followCard(live, courseID: courseID, now: now)
+            }
             Button {
                 app.router.openAgenda(day: now)
             } label: {
@@ -621,6 +629,32 @@ struct TodayView: View {
             }
             .buttonStyle(PressableStyle(scale: 0.99))
         }
+    }
+
+    /// Le cours de maintenant : un toucher, et le bureau s'ouvre dessus —
+    /// la semaine sur Moodle, l'horloge du cours, les repères.
+    private func followCard(_ item: TodayItem, courseID: UUID, now: Date) -> some View {
+        let following = app.focus.isStudying && app.focus.state?.courseID == courseID && app.focus.state?.taskType == .lecture
+        return Button {
+            if following { app.router.showingStudyMode = true } else { app.router.openLectureDesk(courseID: courseID) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: DeskMoment.lecture.icon).font(.title3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(following ? "Revenir au cours" : "Suivre le cours").font(.headline)
+                    Text([item.subtitle, item.end.map { "jusqu'à \(DateUtils.time.string(from: $0))" }]
+                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.footnote).opacity(0.85).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right").font(.subheadline.weight(.semibold))
+            }
+            .padding(14)
+            .foregroundStyle(Carnet.ground)
+            .background(item.color, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityHint("Ouvre le bureau du cours, jusqu'à la fin du créneau")
     }
 
     private func scheduleRow(_ item: TodayItem, now: Date) -> some View {

@@ -246,7 +246,7 @@ struct ClaudePane: View {
                 Text("Joins ta copie GoodNotes, ou une photo prise à l'iPhone (clic droit).")
                     .foregroundStyle(Carnet.inkSecondary)
             }
-            FlowChips(spacing: 8) { actionButtons(disabled: false, includeGeneric: true) }
+            FlowLayout(spacing: 8) { actionButtons(disabled: false, includeGeneric: true) }
         }
         .padding(.top, 20)
     }

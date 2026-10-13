@@ -97,6 +97,8 @@ struct CoursePane: View {
                     }
             }
             .task { await desk.loadEdCourses() }
+            .onAppear { consumeRequest() }
+            .onChange(of: desk.request) { _, _ in consumeRequest() }
             .task { await NotesStore.shared.refresh() }
         } else if let course {
             HStack(spacing: 0) {
@@ -123,6 +125,8 @@ struct CoursePane: View {
             // Les cours Ed, une fois : la source « Ed » n'apparaît que pour un
             // cours qui y est (ou pour se connecter).
             .task { await desk.loadEdCourses() }
+            .onAppear { consumeRequest() }
+            .onChange(of: desk.request) { _, _ in consumeRequest() }
             .task { await NotesStore.shared.refresh() }
         } else {
             ContentUnavailableView("Pas de cours", systemImage: "books.vertical",
@@ -295,32 +299,16 @@ struct CoursePane: View {
         }
     }
 
-    /// La page du cours d'abord (texte des semaines, achèvement) ; le plan seul
-    /// en secours ; une reconnexion silencieuse si Moodle demande la connexion.
+    /// Une demande venue d'ailleurs (l'accueil « En cours ») : la source, la lecture.
+    private func consumeRequest() {
+        guard let request = desk.request, request.courseID == course?.id else { return }
+        desk.request = nil
+        source = request.source
+        if let wanted = request.reading { reading = wanted }
+    }
+
     private func loadMoodle(_ id: Int, course: Course) {
-        desk.moodleError[id] = nil
-        Task { @MainActor in
-            await SchoolConnect.shared.ensure(.moodle)
-            try? await desk.moodle.prepare(force: true)
-            for attempt in 0..<2 {
-                do {
-                    desk.moodlePages[id] = try await desk.moodle.coursePage(courseID: id)
-                    return
-                } catch HiddenSiteSession.SiteError.notSignedIn where attempt == 0 {
-                    await SchoolConnect.shared.refresh(.moodle)
-                    try? await desk.moodle.prepare(force: true)
-                    continue
-                } catch {
-                    if let outline = try? await desk.moodle.outline(courseID: id, title: course.name) {
-                        desk.moodlePages[id] = MoodleCoursePage(snapshot: outline)
-                        return
-                    }
-                    desk.moodleError[id] = "Connecte-toi à Moodle."
-                    return
-                }
-            }
-            desk.moodleError[id] = "Connecte-toi à Moodle."
-        }
+        Task { await desk.loadMoodlePage(id, title: course.name) }
     }
 
     /// Une activité de la page du cours, ouverte au bon endroit.

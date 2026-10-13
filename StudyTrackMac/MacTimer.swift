@@ -147,6 +147,8 @@ final class MacTimer: TimerEngineHost {
     var studyIsOver: Bool { engine.studyIsOver }
     /// Le mode étude bloque-t-il le reste (apps fermées, sites filtrés) ?
     var studyLocks: Bool { StudyMode.locks(state) }
+    /// Sous verrou : rien ne termine la session, sauf la sortie d'urgence.
+    var isLocked: Bool { engine.isLocked }
 
     /// Entre en mode étude pour `minutes` : démarre le chrono s'il dort, sinon
     /// verrouille la session en cours sur ce contexte.
@@ -158,7 +160,7 @@ final class MacTimer: TimerEngineHost {
     }
 
     func extendStudy(minutes: Int) { engine.extendStudy(minutes: minutes) }
-    func leaveStudy() { engine.leaveStudy() }
+    func leaveStudy(emergency: Bool = false) { engine.leaveStudy(emergency: emergency) }
 
     // MARK: Gestes
 
@@ -196,8 +198,9 @@ final class MacTimer: TimerEngineHost {
 
     /// Termine et enregistre — une session par cible, comme sur l'iPhone.
     @discardableResult
-    func finish() -> Int? {
-        let finished = engine.finish()
+    func finish(emergency: Bool = false) -> Int? {
+        guard emergency || !engine.isLocked else { return nil }
+        let finished = engine.finish(emergency: emergency)
         recap = finished
         guard let finished, !finished.parts.isEmpty else { return nil }
         return finished.totalSeconds
@@ -218,7 +221,7 @@ final class MacTimer: TimerEngineHost {
 
     func dismissRecap() { recap = nil }
 
-    func discard() { engine.discard() }
+    func discard(emergency: Bool = false) { engine.discard(emergency: emergency) }
 
     /// L'état publié par l'iPhone (ou un autre Mac).
     func applyRemote() { engine.applyRemote() }

@@ -99,6 +99,42 @@ final class SiteHub {
     var moodlePages: [Int: MoodleCoursePage] = [:]
     var moodleError: [Int: String] = [:]
 
+    /// La page du cours d'abord (texte des semaines, achèvement) ; le plan seul
+    /// en secours ; une reconnexion silencieuse si Moodle demande la connexion.
+    /// Le bureau (onglet Cours, accueil « En cours ») et l'iPhone la partagent.
+    func loadMoodlePage(_ id: Int, title: String) async {
+        moodleError[id] = nil
+        await SchoolConnect.shared.ensure(.moodle)
+        try? await moodle.prepare(force: true)
+        for attempt in 0..<2 {
+            do {
+                moodlePages[id] = try await moodle.coursePage(courseID: id)
+                return
+            } catch HiddenSiteSession.SiteError.notSignedIn where attempt == 0 {
+                await SchoolConnect.shared.refresh(.moodle)
+                try? await moodle.prepare(force: true)
+                continue
+            } catch {
+                if let outline = try? await moodle.outline(courseID: id, title: title) {
+                    moodlePages[id] = MoodleCoursePage(snapshot: outline)
+                    return
+                }
+                moodleError[id] = String(localized: "Connecte-toi à Moodle.")
+                return
+            }
+        }
+        moodleError[id] = String(localized: "Connecte-toi à Moodle.")
+    }
+
+    /// Ce qu'un autre écran demande d'ouvrir dans l'onglet Cours (l'accueil
+    /// « En cours » : les diapositives, l'enregistrement à un repère, Ed).
+    struct Request: Equatable {
+        var courseID: UUID
+        var source: CoursePane.Source
+        var reading: CoursePane.Reading?
+    }
+    var request: Request?
+
     // MARK: Courseware et MediaSpace
 
     let courseware = CoursewareClient()

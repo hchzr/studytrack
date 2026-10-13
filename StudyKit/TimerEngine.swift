@@ -108,6 +108,14 @@ final class TimerEngine {
         return StudyMode.isOver(state)
     }
 
+    /// Le verrou tient : terminer, abandonner ou sortir du mode étude ne passe
+    /// que par la sortie d'urgence (`emergency: true`). Ni un bouton du Dock, ni
+    /// un widget, ni Siri, ni ⌘Q ne le lèvent — la règle est ici, une fois.
+    var isLocked: Bool {
+        _ = revision
+        return StudyMode.locks(state)
+    }
+
     // MARK: Cycle de vie
 
     /// Relit l'état persisté et rattrape le temps passé app fermée.
@@ -306,8 +314,9 @@ final class TimerEngine {
     /// plusieurs cibles (3.2, puis 3.3) est enregistrée en **une session par
     /// cible**, bout à bout : le temps de chaque exercice se lit sur l'exercice.
     @discardableResult
-    func finish() -> Finished? {
-        guard let current = state else { return nil }
+    func finish(emergency: Bool = false) -> Finished? {
+        guard var current = state, emergency || !StudyMode.locks(current) else { return nil }
+        if emergency, StudyMode.locks(current) { current.note = StudyMode.emergencyNote(current.note) }
         defer { close() }
         // Dans une session de groupe rejointe en cours de route, le temps d'avant
         // l'arrivée est compté par l'horloge commune mais n'est pas le sien.
@@ -346,7 +355,8 @@ final class TimerEngine {
     }
 
     /// Abandonne la session sans l'enregistrer.
-    func discard() {
+    func discard(emergency: Bool = false) {
+        guard emergency || !StudyMode.locks(state) else { return }
         close()
     }
 
@@ -377,6 +387,15 @@ final class TimerEngine {
         state = clock.joining(link: link, courseID: courseID, taskTypeRaw: taskType.rawValue, targetID: targetID)
         lastEvent = nil
         commit(presence: true)
+    }
+
+    /// La session de groupe est finie mais le verrou tient : le chrono reste,
+    /// à soi, sans l'horloge commune.
+    func detachGroup() {
+        guard var current = state, current.groupSession != nil else { return }
+        current.groupSession = nil
+        state = current
+        commit(presence: false)
     }
 
     /// L'horloge du groupe a changé ailleurs (un membre a mis en pause, repris,
@@ -423,8 +442,8 @@ final class TimerEngine {
     }
 
     /// Sortir du mode étude sans terminer la session.
-    func leaveStudy() {
-        guard var current = state, current.studyUntil != nil else { return }
+    func leaveStudy(emergency: Bool = false) {
+        guard var current = state, current.studyUntil != nil, emergency || !StudyMode.locks(current) else { return }
         StudyMode.leave(&current)
         state = current
         commit(presence: false)

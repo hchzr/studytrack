@@ -124,6 +124,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
                 showWindow()
             }
             if timer.studyLocks { startBlocking() } else { stopBlocking() }
+            applyPresentation()
         } else {
             stopBlocking()
             if timer.studyIsOver {
@@ -176,16 +177,31 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     }
 
     /// Dock et barre des menus cachés tant que StudyTrack est au premier plan.
+    /// Sous verrou, en plus : ni ⌘Tab, ni « Forcer à quitter » (⌥⌘⎋), ni
+    /// fermeture de session ou redémarrage, ni ⌘H, ni menu Pomme. Ces options
+    /// ne valent que quand StudyTrack est au premier plan ; ailleurs (une app
+    /// permise), le voile prend le relais.
     private func applyPresentation() {
         guard window?.isVisible == true, !previewOnly else { return }
-        NSApp.presentationOptions = [.hideDock, .hideMenuBar]
+        var options: NSApplication.PresentationOptions = [.hideDock, .hideMenuBar]
+        if timer?.isLocked == true {
+            options.formUnion([.disableProcessSwitching, .disableForceQuit, .disableSessionTermination,
+                               .disableHideApplication, .disableAppleMenu])
+        }
+        if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
 
     func windowDidBecomeKey(_ notification: Notification) { applyPresentation() }
 
     func windowDidResignKey(_ notification: Notification) {
+        // Une autre fenêtre de StudyTrack (le cours, les réglages) : sous
+        // verrou, rien ne se relâche.
+        guard timer?.isLocked != true else { return }
         NSApp.presentationOptions = []
     }
+
+    /// Sous verrou, la fenêtre ne se ferme pas (⌘W) et ne se réduit pas (⌘M).
+    func windowShouldClose(_ sender: NSWindow) -> Bool { timer?.isLocked != true }
 
     // MARK: Blocage
 
@@ -343,9 +359,14 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     // MARK: Quitter
 
-    /// ⌘Q pendant le mode étude : on demande.
+    /// ⌘Q pendant le mode étude : sous verrou, non — l'écran revient ; sans
+    /// verrou, on demande.
     func confirmQuit() -> Bool {
         guard let timer, timer.isStudying else { return true }
+        if timer.isLocked {
+            present()
+            return false
+        }
         let alert = NSAlert()
         alert.messageText = "Quitter le mode étude ?"
         alert.informativeText = "Ta session continue."
@@ -359,4 +380,21 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 final class StudyWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    private var locked: Bool { MainActor.assumeIsolated { StudyModeController.shared.timer?.isLocked == true } }
+
+    override func performClose(_ sender: Any?) {
+        guard !locked else { NSSound.beep(); return }
+        super.performClose(sender)
+    }
+
+    override func performMiniaturize(_ sender: Any?) {
+        guard !locked else { NSSound.beep(); return }
+        super.performMiniaturize(sender)
+    }
+
+    override func miniaturize(_ sender: Any?) {
+        guard !locked else { return }
+        super.miniaturize(sender)
+    }
 }

@@ -35,6 +35,9 @@ enum SearchIndexBuilder {
             for exam in course.sortedExams {
                 documents.append(examDocument(exam, course: course))
             }
+            for past in course.pastExams.sorted(by: { $0.year > $1.year }) {
+                documents.append(pastExamDocument(past, course: course))
+            }
         }
 
         for session in sessions.prefix(sessionLimit) {
@@ -77,7 +80,7 @@ enum SearchIndexBuilder {
                        kind: .series,
                        title: series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title,
                        subtitle: "\(course.displayCode) · semaine \(series.plannedWeek) · \(series.exercises.count) exercices",
-                       detail: "serie \(series.seriesNumber) \(series.title)",
+                       detail: "serie \(series.seriesNumber) \(series.title) \(series.topic)",
                        courseCode: course.displayCode,
                        date: series.dueDate ?? series.publishedAt)
     }
@@ -89,6 +92,9 @@ enum SearchIndexBuilder {
         if exercise.isBonus { detail += " bonus facultatif" }
         if let note = exercise.correctionNote { detail += " \(note)" }
         if exercise.redoRequired { detail += " a refaire" }
+        // L'énoncé : « valeurs propres », « Cauchy » retrouvent l'exercice
+        // même quand on a oublié son numéro.
+        if !exercise.statement.isEmpty { detail += " " + String(MathMarkup.plain(exercise.statement).prefix(600)) }
 
         var parts = ["\(course.displayCode) · Série \(series.seriesNumber)"]
         if exercise.isDone {
@@ -126,6 +132,16 @@ enum SearchIndexBuilder {
                               detail: detail,
                               courseCode: course.displayCode,
                               date: item.watchedAt)
+    }
+
+    /// Une annale : « midterm 2023 », « examen analyse corrigé ».
+    private static func pastExamDocument(_ exam: PastExam, course: Course) -> SearchDocument {
+        SearchDocument(id: "pastexam.\(exam.id)",
+                       kind: .exam,
+                       title: exam.title,
+                       subtitle: "\(course.displayCode) · " + (exam.workedAt == nil ? "annale à faire" : "annale faite"),
+                       detail: "annale \(exam.kind.label) \(exam.year) \(exam.solutionURLString.isEmpty ? "" : "corrige") \(exam.notes)",
+                       courseCode: course.displayCode)
     }
 
     private static func examDocument(_ exam: Exam, course: Course) -> SearchDocument {

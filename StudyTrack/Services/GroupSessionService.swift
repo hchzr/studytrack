@@ -75,7 +75,16 @@ final class GroupSessionService {
             // La session est finie (ou en a remplacé une autre) : chacun
             // enregistre son temps.
             closingFromGroup = true
-            app.focus.finish()
+            if app.focus.isLocked {
+                // Le verrou tient : on quitte le groupe, la session continue.
+                app.focus.engine.detachGroup()
+                let left = linked
+                linked = nil
+                lastPushed = nil
+                if let left { Task { try? await app.social.leaveGroupSession(sessionID: left.sessionID) } }
+            } else {
+                app.focus.finish()
+            }
             closingFromGroup = false
             return
         }

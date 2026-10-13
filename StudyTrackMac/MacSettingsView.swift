@@ -114,6 +114,7 @@ private struct SyncSettings: View {
 /// Le mode étude : ce qui reste ouvert, la durée, la sortie.
 private struct StudySettingsPane: View {
     @Environment(MacSettings.self) private var settings
+    @Environment(MacTimer.self) private var timer
     @State private var newSite = ""
     @State private var siteError = false
     @State private var editingButtons = false
@@ -121,6 +122,13 @@ private struct StudySettingsPane: View {
     var body: some View {
         @Bindable var settings = settings
         Form {
+            if timer.isLocked {
+                // Sous verrou, la liste ne s'élargit pas : ajouter Safari aux
+                // apps permises serait une sortie.
+                Label("Verrouillé jusqu'à \(DateUtils.time.string(from: timer.state?.studyUntil ?? Date())). Les réglages du mode étude reviennent à la fin.",
+                      systemImage: "lock.fill")
+                    .foregroundStyle(.secondary)
+            }
             Section {
                 Stepper("Durée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
                 Toggle("Maintenir pour finir plus tôt", isOn: $settings.studyHoldToLeave)
@@ -244,6 +252,7 @@ private struct StudySettingsPane: View {
             }
         }
         .formStyle(.grouped)
+        .disabled(timer.isLocked)
         .sheet(isPresented: $editingButtons) {
             ClaudeButtonsEditor(url: ClaudeProjectSetup.fileURL(settings: settings))
         }

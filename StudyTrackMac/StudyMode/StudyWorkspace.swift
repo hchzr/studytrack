@@ -13,13 +13,19 @@ struct StudyWorkspace: View {
 
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
+    @Environment(\.modelContext) private var context
+    /// L'horaire du jour, relu chaque minute (le cours en cours, la suite).
+    @State private var classes: [ScheduledClass] = []
 
     private var course: Course? { courses.first { $0.id == timer.courseID } }
     private var tint: Color { MacTargets.tint(course) }
+    private var moment: DeskMoment {
+        DeskSchedule.moment(taskType: timer.taskType, inGroup: timer.state?.groupSession != nil, course: course)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            StudyTopBar(course: course, tint: tint)
+            StudyTopBar(course: course, tint: tint, moment: moment)
             Rectangle().fill(Carnet.rule).frame(height: 1)
             HStack(spacing: 0) {
                 StudyRail(desk: desk, browser: browser, course: course)
@@ -39,13 +45,41 @@ struct StudyWorkspace: View {
         .task {
             if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll(prompting: true) }
         }
+        .task {
+            while !Task.isCancelled {
+                classes = DeskSchedule.today(context: context)
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
+    }
+
+    /// Ouvre l'onglet Cours sur ce que l'accueil demande (diapositives, Ed…).
+    private func openCourse(_ request: SiteHub.Request) {
+        desk.sites.request = request
+        desk.sideBySide = false
+        desk.pane = .course
     }
 
     @ViewBuilder
     private var pane: some View {
         switch desk.pane {
         case .desk:
-            StudyDeskHome(course: course, tint: tint, desk: desk, open: open)
+            switch moment {
+            case .lecture where course != nil:
+                LectureDeskView(course: course!,
+                                klass: DeskSchedule.latest(of: course?.id, in: classes),
+                                next: DeskSchedule.next(in: classes),
+                                hub: desk.sites, openCourse: openCourse,
+                                openApp: { bundleID, _ in StudyModeController.shared.openApp(bundleID: bundleID) },
+                                openWeb: openWeb)
+            case .revision where course != nil:
+                RevisionDeskView(course: course!, openCourse: openCourse) { exercise in
+                    timer.retarget(courseID: course?.id, taskType: .exercise, targetID: exercise.id)
+                    desk.pane = .exercise
+                }
+            default:
+                StudyDeskHome(course: course, tint: tint, desk: desk, open: open)
+            }
         case .exercise, .course:
             if desk.sideBySide {
                 HSplitView {
@@ -129,6 +163,7 @@ struct StudyWorkspace: View {
 private struct StudyTopBar: View {
     let course: Course?
     var tint: Color
+    var moment: DeskMoment
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
 
@@ -163,6 +198,13 @@ private struct StudyTopBar: View {
             }
             .font(.callout)
             .foregroundStyle(StudyPalette.inkSecondary)
+            momentMenu
+            if let group = timer.state?.groupSession {
+                Label(group.groupName, systemImage: "person.2.fill")
+                    .font(.callout)
+                    .foregroundStyle(StudyPalette.inkSecondary)
+                    .help("Chrono commun avec le groupe")
+            }
             Spacer()
             Button {
                 if timer.phase == .onBreak { timer.skipBreak() } else { timer.toggle() }
@@ -173,17 +215,30 @@ private struct StudyTopBar: View {
             .help(timer.phase == .running ? "Pause" : "Reprendre")
             Button { timer.extendStudy(minutes: 25) } label: { Label("25 min", systemImage: "plus") }
                 .buttonStyle(.paper)
-            HoldButton(title: "Terminer", systemImage: "checkmark", hold: settings.studyHoldToLeave ? 1.5 : 0) {
-                timer.finish()
+            if timer.isLocked {
+                // Sous verrou : une seule sortie, qu'on ne prend pas par réflexe.
+                Label("Verrouillé", systemImage: "lock.fill")
+                    .font(.callout)
+                    .foregroundStyle(StudyPalette.inkSecondary)
+                HoldButton(title: "Sortie d'urgence", systemImage: "exclamationmark.triangle", hold: StudyMode.emergencyHold) {
+                    timer.finish(emergency: true)
+                }
+                .help("Maintiens \(Int(StudyMode.emergencyHold)) secondes : la session s'enregistre, notée « sortie d'urgence ».")
+            } else {
+                HoldButton(title: "Terminer", systemImage: "checkmark", hold: settings.studyHoldToLeave ? 1.5 : 0) {
+                    timer.finish()
+                }
             }
             Menu {
                 Button("Mes cours") {
                     NSApp.setActivationPolicy(.regular)
                     NotificationCenter.default.post(name: .macOpenMainWindow, object: nil)
                 }
-                Divider()
-                Button("Sortir, garder la session") { timer.leaveStudy() }
-                Button("Abandonner", role: .destructive) { timer.discard() }
+                if !timer.isLocked {
+                    Divider()
+                    Button("Sortir, garder la session") { timer.leaveStudy() }
+                    Button("Abandonner", role: .destructive) { timer.discard() }
+                }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -195,6 +250,27 @@ private struct StudyTopBar: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
         .background(StudyPalette.raised.opacity(0.6))
+    }
+
+    /// La forme du bureau, à changer à la main : suivre le cours, faire la
+    /// série, réviser. Le chrono continue ; le temps déjà compté reste.
+    private var momentMenu: some View {
+        Menu {
+            Button { timer.retarget(courseID: timer.courseID, taskType: .lecture) } label: {
+                Label(DeskMoment.lecture.title, systemImage: DeskMoment.lecture.icon)
+            }
+            Button { timer.retarget(courseID: timer.courseID, taskType: .exercise) } label: {
+                Label(DeskMoment.series.title, systemImage: DeskMoment.series.icon)
+            }
+            Button { timer.retarget(courseID: timer.courseID, taskType: .theory) } label: {
+                Label(course?.nextExam != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
+            }
+        } label: {
+            PillLabel(icon: moment.icon, title: moment.title)
+        }
+        .pillMenu()
+        .disabled(course == nil)
+        .help("La forme du bureau")
     }
 }
 

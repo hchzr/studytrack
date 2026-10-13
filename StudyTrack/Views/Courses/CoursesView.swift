@@ -9,7 +9,12 @@ struct CoursesView: View {
     @Query(sort: \Course.code) private var courses: [Course]
 
     @State private var showingForm = false
-    @State private var showingSearch = false
+    /// La recherche de tout ce que l'app contient (tirer la liste vers le bas).
+    @State private var query = ""
+    /// Construit à la première lettre tapée, refait à chaque nouvelle recherche.
+    @State private var searchIndex: [SearchDocument] = []
+    /// Une page ouverte depuis un résultat (historique, tâches, groupe…).
+    @State private var searchPage: SearchDestination?
     @State private var showingImport = false
     /// Cours sélectionné dans la barre latérale (iPad).
     @State private var selectedCourseID: UUID?
@@ -25,6 +30,8 @@ struct CoursesView: View {
     @State private var seriesImportCourse: Course?
     /// Segment à ouvrir sur le cours poussé par un autre onglet.
     @State private var pushedSection: CourseDetailView.Section = .exercises
+    /// L'exercice ou la théorie à ouvrir sur ce cours (recherche, Spotlight).
+    @State private var pushedTarget: UUID?
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
     private var archived: [Course] { courses.sorted { $0.code < $1.code }.filter { !$0.isTracked } }
@@ -41,7 +48,6 @@ struct CoursesView: View {
         Group {
             if isWide { split } else { column }
         }
-        .sheet(isPresented: $showingSearch) { SearchView() }
         .sheet(isPresented: $showingForm) {
             CourseFormView(course: nil, defaultSectionCode: app.settings.sectionCode)
         }
@@ -68,12 +74,62 @@ struct CoursesView: View {
         .sheet(item: $seriesImportCourse) { course in
             SeriesImportSheet(course: course)
         }
-        .task { applyPreviewCourse(); applyRoute() }
+        .onChange(of: query.isEmpty) { _, empty in
+            if empty { searchIndex = [] } else if searchIndex.isEmpty { searchIndex = SearchIndex.build(context: context) }
+        }
+        .task {
+            applyPreviewCourse()
+            applyRoute()
+            #if DEBUG
+            if let preset = PreviewLaunch.string(PreviewLaunch.searchFlag) { query = preset }
+            #endif
+        }
         .onChange(of: app.router.courseRoute) { _, _ in applyRoute() }
         // Les cours arrivent parfois après la première passe : `@Query` rend une
         // liste vide, puis la remplit. Sans ce second essai, le drapeau de
         // prévisualisation ne trouvait rien et la capture montrait la liste.
         .onChange(of: courses.count) { _, _ in applyPreviewCourse() }
+    }
+
+    // MARK: Recherche
+
+    /// Un résultat : l'élément lui-même (l'exercice, la théorie) dans son cours,
+    /// ou la page qui le porte.
+    private func openSearch(_ hit: SearchHit) {
+        guard let destination = SearchDestination.of(hit, courses: courses) else { return }
+        Haptics.tap()
+        switch destination {
+        case .course(let id, let section, let target):
+            guard let match = courses.first(where: { $0.id == id }) else { return }
+            pushedSection = section
+            pushedTarget = target
+            selectedCourseID = match.id
+            if isWide {
+                query = ""
+            } else {
+                pushedCourse = nil
+                Task { @MainActor in pushedCourse = match }
+            }
+        case .tasks:
+            query = ""
+            app.router.selectedTab = .today
+            app.router.showingTasks = true
+        default:
+            searchPage = destination
+        }
+    }
+
+    @ViewBuilder
+    private func searchPageView(_ destination: SearchDestination) -> some View {
+        switch destination {
+        case .history: SessionHistoryView()
+        case .life: EPFLLifeView()
+        case .group(let id):
+            if let group = try? context.fetch(FetchDescriptor<StudyGroup>(predicate: #Predicate { $0.id == id })).first {
+                GroupSettingsView(group: group)
+            }
+        case .course, .tasks: EmptyView()
+        }
     }
 
     /// Un cours demandé par un autre onglet : sélectionné (iPad) ou poussé (iPhone).
@@ -82,6 +138,7 @@ struct CoursesView: View {
               let match = courses.first(where: { $0.id == route.id }) else { return }
         app.router.courseRoute = nil
         pushedSection = route.section
+        pushedTarget = route.targetID
         selectedCourseID = match.id
         if !isWide {
             pushedCourse = nil
@@ -127,9 +184,15 @@ struct CoursesView: View {
             sidebar
         } detail: {
             NavigationStack {
-                if let course = selectedCourse {
-                    CourseDetailView(course: course, initialSection: pushedSection)
-                        .id("\(course.id)-\(pushedSection.rawValue)")
+                if !query.isEmpty {
+                    CarnetScroll {
+                        SearchResultsList(query: query, index: searchIndex, open: openSearch)
+                    }
+                    .navigationTitle("Recherche")
+                    .navigationDestination(item: $searchPage) { searchPageView($0) }
+                } else if let course = selectedCourse {
+                    CourseDetailView(course: course, initialSection: pushedSection, initialTargetID: pushedTarget)
+                        .id("\(course.id)-\(pushedSection.rawValue)-\(pushedTarget?.uuidString ?? "")")
                 } else {
                     semesterOverview
                 }
@@ -185,6 +248,7 @@ struct CoursesView: View {
         .listStyle(.sidebar)
         .carnetBackground()
         .navigationTitle("Cours")
+        .searchable(text: $query, prompt: "Exercice, énoncé, théorie, annale…")
         .toolbar { toolbarItems }
     }
 
@@ -217,6 +281,8 @@ struct CoursesView: View {
                         Button("À la main") { showingForm = true }
                             .buttonStyle(.carnetSecondaryWide)
                     }
+                } else if !query.isEmpty {
+                    SearchResultsList(query: query, index: searchIndex, open: openSearch)
                 } else {
                     newsBanner
                     courseGrid
@@ -225,10 +291,12 @@ struct CoursesView: View {
             }
             .navigationTitle("Cours")
             .carnetSubtitle(subtitle)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Exercice, énoncé, théorie, annale…")
             .toolbar { toolbarItems }
             .navigationDestination(item: $pushedCourse) { course in
-                CourseDetailView(course: course, initialSection: pushedSection)
+                CourseDetailView(course: course, initialSection: pushedSection, initialTargetID: pushedTarget)
             }
+            .navigationDestination(item: $searchPage) { searchPageView($0) }
         }
     }
 
@@ -326,20 +394,11 @@ struct CoursesView: View {
         }
     }
 
-    /// Loupe (avant iOS 26 ; ensuite, la recherche a son onglet), puis « + » :
-    /// un cours à la main, son contenu depuis Moodle / Courseware / Botafogo,
-    /// ou l'horaire IS-Academia.
+    /// « + » : un cours à la main, son contenu depuis Moodle / Courseware /
+    /// Botafogo, ou l'horaire IS-Academia. (La recherche est la barre de la liste.)
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if #unavailable(iOS 26.0) {
-                Button {
-                    showingSearch = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                }
-                .accessibilityLabel("Rechercher")
-            }
             Menu {
                 Button {
                     app.router.openContentImport()

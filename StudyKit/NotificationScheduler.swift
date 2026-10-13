@@ -223,6 +223,27 @@ extension NotificationScheduler {
         // quand les évaluations changent.
         #if os(iOS)
         ExamActivityController.reconcile(exams: exams)
+        if settings.classStartNotice { scheduleClassStarts(context: context) }
         #endif
+    }
+
+    /// « MATH-101 commence » deux minutes avant chaque cours des trois
+    /// prochains jours : un toucher ouvre le bureau du cours, en direct.
+    @MainActor
+    func scheduleClassStarts(context: ModelContext, now: Date = Date()) {
+        let horizon = now.addingTimeInterval(3 * 86_400)
+        let descriptor = FetchDescriptor<LinkedCalendarEvent>(
+            predicate: #Predicate { $0.startsAt > now && $0.startsAt < horizon },
+            sortBy: [SortDescriptor(\.startsAt)])
+        let events = (try? context.fetch(descriptor)) ?? []
+        for item in DeskSchedule.classes(from: events) where item.slot.kind == .lecture || item.slot.kind == .exerciseSession {
+            let content = UNMutableNotificationContent()
+            content.title = String(localized: "\(item.slot.courseCode) commence")
+            content.body = [item.kindLabel, item.location.isEmpty ? nil : item.location,
+                            String(localized: "Touche pour ouvrir le cours en direct.")].compactMap { $0 }.joined(separator: " · ")
+            content.categoryIdentifier = "class-start"
+            content.userInfo = ["lectureCourseID": item.slot.courseID.uuidString]
+            add(identifier: "class-\(item.id.uuidString)", content: content, date: item.slot.start.addingTimeInterval(-120))
+        }
     }
 }

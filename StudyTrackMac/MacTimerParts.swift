@@ -14,7 +14,7 @@ struct TimerControls: View {
 
     var body: some View {
         HStack(spacing: size * 0.32) {
-            if timer.phase != .idle {
+            if timer.phase != .idle, !timer.isLocked {
                 Button { timer.discard() } label: { Image(systemName: "xmark") }
                     .buttonStyle(RoundButtonStyle(size: size * 0.7))
                     .help("Abandonner")
@@ -24,7 +24,7 @@ struct TimerControls: View {
             }
             .buttonStyle(RoundButtonStyle(size: size, prominent: true, tint: timer.phase == .onBreak ? MacStyle.breakTint : tint))
             .help(primaryHelp)
-            if timer.phase != .idle {
+            if timer.phase != .idle, !timer.isLocked {
                 Button { timer.finish() } label: { Image(systemName: "checkmark") }
                     .buttonStyle(RoundButtonStyle(size: size * 0.7))
                     .help("Terminer (⇧⌘T)")
@@ -228,34 +228,6 @@ struct CourseChip: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-    }
-}
-
-/// Des pastilles qui passent à la ligne.
-struct FlowChips: SwiftUI.Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 400
-        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { x = 0; y += line + spacing; line = 0 }
-            x += size.width + spacing
-            line = max(line, size.height)
-        }
-        return CGSize(width: width, height: y + line)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += line + spacing; line = 0 }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            line = max(line, size.height)
-        }
     }
 }
 

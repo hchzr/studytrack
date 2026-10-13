@@ -230,6 +230,10 @@ struct NativeVideo: View {
     private func play(_ url: URL) {
         let player = AVPlayer(url: url)
         self.player = player
+        // Un repère de cours : l'enregistrement s'ouvre à sa minute.
+        if let start = LectureMarks.startOffset(in: address) {
+            player.seek(to: CMTime(seconds: start, preferredTimescale: 1))
+        }
         player.play()
     }
 }

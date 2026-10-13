@@ -33,8 +33,6 @@ final class AppRouter {
         case courses = 1
         case groups = 3
         case focus = 2
-        /// La recherche, rond détaché de la barre sur iOS 26.
-        case search = 6
 
         var title: String {
             switch self {
@@ -42,7 +40,6 @@ final class AppRouter {
             case .courses: return String(localized: "Cours")
             case .groups: return String(localized: "Groupes")
             case .focus: return String(localized: "Chrono")
-            case .search: return String(localized: "Recherche")
             }
         }
 
@@ -52,7 +49,6 @@ final class AppRouter {
             case .courses: return "books.vertical"
             case .groups: return "person.2"
             case .focus: return "timer"
-            case .search: return "magnifyingglass"
             }
         }
     }
@@ -70,6 +66,17 @@ final class AppRouter {
     var showingFocus = false
     /// L'écran plein du mode étude (lancé ici ou adopté du Mac).
     var showingStudyMode = false
+    /// « Suivre le cours » (notification de début de cours, accueil) : le
+    /// bureau s'ouvre en mode « En cours » sur ce cours, jusqu'à sa fin.
+    var lectureRequest: UUID?
+
+    func openLectureDesk(courseID: UUID) {
+        showingProfile = false
+        showingStats = false
+        showingFocus = false
+        showingAgenda = false
+        lectureRequest = courseID
+    }
     /// L'agenda complet, en feuille (depuis l'horaire du jour, une évaluation…).
     var showingAgenda = false
     /// « Moi » (bilan de la semaine, réglages) : une feuille ouverte depuis
@@ -83,6 +90,8 @@ final class AppRouter {
     struct CourseRoute: Equatable {
         var id: UUID
         var section: CourseDetailView.Section
+        /// L'exercice ou l'élément de théorie à ouvrir (recherche, Spotlight).
+        var targetID: UUID? = nil
     }
     var courseRoute: CourseRoute?
 
@@ -111,9 +120,9 @@ final class AppRouter {
         contentImport = ImportRoute(courseID: courseID)
     }
 
-    func openCourse(_ id: UUID, section: CourseDetailView.Section = .exercises) {
+    func openCourse(_ id: UUID, section: CourseDetailView.Section = .exercises, targetID: UUID? = nil) {
         selectedTab = .courses
-        courseRoute = CourseRoute(id: id, section: section)
+        courseRoute = CourseRoute(id: id, section: section, targetID: targetID)
     }
 
     /// Code d'invitation reçu par lien profond (`studytrack://join?code=EPFL-XXXX`).

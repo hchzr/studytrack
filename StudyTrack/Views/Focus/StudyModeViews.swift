@@ -29,7 +29,7 @@ struct StudyModeEntry: View {
             }
             .buttonStyle(.carnetSecondaryWide)
         } else {
-            Menu {
+        Menu {
                 Section("Mode étude") {
                     ForEach(StudyMode.durations, id: \.self) { minutes in
                         Button(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h\(minutes % 60 == 0 ? "" : " \(minutes % 60)")") {
@@ -105,6 +105,9 @@ struct StudyModeScreen: View {
     @State private var tab: StudyTab = StudyTab(rawValue: PreviewLaunch.string(PreviewLaunch.studyTabFlag) ?? "") ?? .desk
     @State private var calc = CalcModel()
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
+    /// L'horaire du jour, relu chaque minute.
+    @State private var classes: [ScheduledClass] = []
 
     /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
     enum StudyTab: String, CaseIterable, Identifiable {
@@ -131,18 +134,46 @@ struct StudyModeScreen: View {
     private var focus: FocusController { app.focus }
     private var course: Course? { courses.first { $0.id == focus.state?.courseID } }
     private var tint: Color { course.map { Carnet.tint($0.colorHex) } ?? Carnet.ink }
+    private var moment: DeskMoment {
+        DeskSchedule.moment(taskType: focus.state?.taskType ?? .exercise, inGroup: focus.state?.groupSession != nil, course: course)
+    }
 
     var body: some View {
         ZStack {
             Carnet.ground.ignoresSafeArea()
             RadialGradient(colors: [tint.opacity(0.18), .clear], center: .top, startRadius: 20, endRadius: 520)
                 .ignoresSafeArea()
-            if focus.studyIsOver {
+            if focus.studyIsOver, focus.state?.taskType == .lecture {
+                lectureDone
+            } else if focus.studyIsOver {
                 done
             } else {
                 Group {
                     switch tab {
-                    case .desk: session
+                    case .desk:
+                        switch moment {
+                        case .lecture where course != nil:
+                            VStack(spacing: 0) {
+                                compactHeader
+                                LectureDeskView(course: course!, klass: DeskSchedule.latest(of: course?.id, in: classes),
+                                                next: DeskSchedule.next(in: classes), hub: SiteHub.shared, compact: true,
+                                                openCourse: openCourse,
+                                                openApp: { _, scheme in if let url = URL(string: scheme) { openURL(url) } },
+                                                openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") })
+                                holdToFinish.padding(.horizontal, 20).padding(.vertical, 8)
+                            }
+                        case .revision where course != nil:
+                            VStack(spacing: 0) {
+                                compactHeader
+                                RevisionDeskView(course: course!, compact: true, openCourse: openCourse) { exercise in
+                                    focus.updateContext(courseID: .some(course?.id), taskType: .exercise, targetID: .some(exercise.id))
+                                    tab = .series
+                                }
+                                holdToFinish.padding(.horizontal, 20).padding(.vertical, 8)
+                            }
+                        default:
+                            session
+                        }
                     case .series: StudySeriesPhone(course: course, courses: courses)
                     case .course:
                         CoursePane(course: course, desk: SiteHub.shared,
@@ -162,7 +193,92 @@ struct StudyModeScreen: View {
             SignInSheet(site: site) { SiteHub.shared.signedIn(site) }
         }
         .task { if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll(prompting: true) } }
+        .task {
+            while !Task.isCancelled {
+                classes = DeskSchedule.today(context: context)
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
+        // Sous verrou, l'écran ne se referme pas d'un geste.
+        .interactiveDismissDisabled(focus.isLocked)
+    }
+
+    /// Ouvre l'onglet Cours sur ce que l'accueil demande.
+    private func openCourse(_ request: SiteHub.Request) {
+        SiteHub.shared.request = request
+        tab = .course
+    }
+
+    /// En haut du bureau « En cours » et « Révision » : ce qui reste, la forme
+    /// du bureau, la pause, la sortie.
+    private var compactHeader: some View {
+        HStack(spacing: 12) {
+            momentMenu
+            if focus.isLocked {
+                Image(systemName: "lock.fill").font(.caption).foregroundStyle(Carnet.inkSecondary)
+                    .accessibilityLabel("Verrouillé")
+            }
+            Spacer(minLength: 0)
+            TimelineView(.periodic(from: (focus.state?.studyUntil ?? .now).addingTimeInterval(0.05), by: 1)) { context in
+                Text(TimerText.clock(StudyMode.remaining(focus.state, at: context.date).rounded(.up)))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Carnet.ink)
+            }
+            Button {
+                if focus.isRunning { focus.pause() } else { focus.resume() }
+            } label: {
+                Image(systemName: focus.isRunning ? "pause.fill" : "play.fill")
+                    .frame(width: 36, height: 36)
+                    .background(Carnet.ink, in: Circle())
+                    .foregroundStyle(Carnet.ground)
+            }
+            .accessibilityLabel(focus.isRunning ? "Pause" : "Reprendre")
+            if !focus.isLocked {
+                Button { app.router.showingStudyMode = false } label: {
+                    Image(systemName: "chevron.down").font(.headline)
+                }
+                .foregroundStyle(Carnet.inkSecondary)
+                .accessibilityLabel("Réduire")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+
+    /// La forme du bureau, à changer à la main (le chrono continue).
+    private var momentMenu: some View {
+        Menu {
+            Button { focus.updateContext(taskType: .lecture) } label: { Label(DeskMoment.lecture.title, systemImage: DeskMoment.lecture.icon) }
+            Button { focus.updateContext(taskType: .exercise) } label: { Label(DeskMoment.series.title, systemImage: DeskMoment.series.icon) }
+            Button { focus.updateContext(taskType: .theory) } label: {
+                Label(course?.nextExam != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
+            }
+        } label: {
+            Label(moment.title, systemImage: moment.icon)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Carnet.sheetRaised, in: Capsule())
+                .foregroundStyle(Carnet.ink)
+        }
+    }
+
+    /// La fin d'un cours suivi : enchaîner sur la série, prolonger, terminer.
+    private var lectureDone: some View {
+        let start = focus.state?.sessionStartedAt ?? .distantFuture
+        let count = course.map { c in LectureMarkStore.shared.marks.filter { $0.courseID == c.id && $0.at >= start }.count } ?? 0
+        return LectureAfterClass(course: course, markCount: count, compact: true, startSeries: {
+            guard let course else { return }
+            let next = FocusTargets.exercises(of: course.series, for: .exercise).upNext.first
+            focus.updateContext(courseID: .some(course.id), taskType: .exercise, targetID: .some(next?.id))
+            focus.extendStudy(minutes: 50)
+            tab = .series
+        }, extend: {
+            focus.extendStudy(minutes: 25)
+        }, finish: {
+            focus.finish()
+            app.router.showingStudyMode = false
+        })
     }
 
     private var session: some View {
@@ -175,11 +291,19 @@ struct StudyModeScreen: View {
                         .tracking(1.1)
                         .foregroundStyle(Carnet.inkSecondary)
                     Spacer()
-                    Button { app.router.showingStudyMode = false } label: {
-                        Image(systemName: "chevron.down").font(.headline)
+                    if course != nil { momentMenu }
+                    if !focus.isLocked {
+                        Button { app.router.showingStudyMode = false } label: {
+                            Image(systemName: "chevron.down").font(.headline)
+                        }
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .accessibilityLabel("Réduire")
                     }
-                    .foregroundStyle(Carnet.inkSecondary)
-                    .accessibilityLabel("Réduire")
+                }
+                if let group = focus.state?.groupSession {
+                    Label("Ensemble · \(group.groupName)", systemImage: "person.2.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(Carnet.inkSecondary)
                 }
                 TimelineView(.periodic(from: (focus.state?.studyUntil ?? .now).addingTimeInterval(0.05), by: 1)) { context in
                     let remaining = StudyMode.remaining(focus.state, at: context.date)
@@ -359,9 +483,12 @@ struct StudyModeScreen: View {
         if let url = URL(string: "claude://") { openURL(url) }
     }
 
-    /// Tenir pour terminer : une seconde et demie pour y penser.
+    /// Tenir pour terminer : une seconde et demie pour y penser. Sous verrou,
+    /// la sortie d'urgence : huit secondes, et la session le note.
     private var holdToFinish: some View {
-        Text(holding ? "Maintiens…" : "Maintiens pour finir")
+        let locked = focus.isLocked
+        let duration = locked ? StudyMode.emergencyHold : 1.5
+        return Text(holding ? "Maintiens…" : (locked ? "Sortie d'urgence · maintiens \(Int(StudyMode.emergencyHold)) s" : "Maintiens pour finir"))
             .font(.body.weight(.semibold))
             .foregroundStyle(Carnet.ink)
             .frame(maxWidth: .infinity, minHeight: 52)
@@ -374,13 +501,13 @@ struct StudyModeScreen: View {
                 }
             }
             .clipShape(Capsule())
-            .onLongPressGesture(minimumDuration: 1.5) {
+            .onLongPressGesture(minimumDuration: duration) {
                 holdProgress = 0
-                focus.finish()
+                focus.finish(emergency: locked)
                 app.router.showingStudyMode = false
             } onPressingChanged: { pressing in
                 holding = pressing
-                withAnimation(pressing ? .linear(duration: 1.5) : .easeOut(duration: 0.2)) { holdProgress = pressing ? 1 : 0 }
+                withAnimation(pressing ? .linear(duration: duration) : .easeOut(duration: 0.2)) { holdProgress = pressing ? 1 : 0 }
             }
             .accessibilityLabel("Terminer la session")
             .accessibilityAddTraits(.isButton)
@@ -434,6 +561,7 @@ struct StudyModeScreen: View {
 /// Configurer le blocage de l'iPhone : l'autorisation du Temps d'écran, les
 /// apps permises, les sites permis (les mêmes que sur le Mac).
 struct StudyModeSettingsView: View {
+    @Environment(AppContainer.self) private var app
     @State private var lock = StudyLock.shared
     @State private var showingPicker = false
     @State private var newSite = ""
@@ -500,6 +628,15 @@ struct StudyModeSettingsView: View {
             }
         }
         .carnetForm()
+        // Sous verrou, la liste ne s'élargit pas.
+        .disabled(app.focus.isLocked)
+        .safeAreaInset(edge: .top) {
+            if app.focus.isLocked {
+                Label("Verrouillé : les réglages reviennent à la fin de la session.", systemImage: "lock.fill")
+                    .font(.footnote).foregroundStyle(Carnet.inkSecondary)
+                    .padding(10)
+            }
+        }
         .navigationTitle("Mode étude")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { sites = lock.sites }

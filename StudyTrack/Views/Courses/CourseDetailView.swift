@@ -14,6 +14,8 @@ struct CourseDetailView: View {
     let course: Course
     /// Section ouverte à l'arrivée. La recherche y mène directement.
     var initialSection: Section = .exercises
+    /// L'exercice ou la théorie à ouvrir en arrivant (recherche, Spotlight).
+    var initialTargetID: UUID? = nil
 
     @Environment(AppContainer.self) private var app
     @Environment(\.modelContext) private var context
@@ -148,6 +150,15 @@ struct CourseDetailView: View {
                 case .exams: showingExams = true
                 case .theory: shownWeek = nil; tab = .theory
                 default: break
+                }
+                if let target = initialTargetID {
+                    if let exercise = course.allExercises.first(where: { $0.id == target }) {
+                        tab = .exercises
+                        openedExercise = exercise
+                    } else if let item = course.theoryItems.first(where: { $0.id == target }) {
+                        tab = .theory
+                        openedVideo = item
+                    }
                 }
             }
             #if DEBUG

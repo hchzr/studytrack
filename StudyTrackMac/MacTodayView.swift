@@ -203,6 +203,9 @@ struct MacTodayView: View {
     private func schedule(_ events: [LinkedCalendarEvent]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "Horaire du jour")
+            if let live = DeskSchedule.current(in: DeskSchedule.classes(from: events)) {
+                FollowClassButton(klass: live)
+            }
             VStack(spacing: 0) {
                 ForEach(events) { event in
                     EventLine(event: event)
@@ -404,5 +407,47 @@ struct SessionRow: View {
                 .frame(minWidth: 56, alignment: .trailing)
         }
         .padding(.vertical, 7)
+    }
+}
+
+/// Le cours de maintenant : « Suivre le cours » ouvre le mode étude dessus,
+/// bureau « En cours », jusqu'à la fin du créneau (Aujourd'hui, la barre des
+/// menus).
+struct FollowClassButton: View {
+    let klass: ScheduledClass
+    var compact = false
+    @Environment(MacTimer.self) private var timer
+
+    private var following: Bool {
+        timer.isStudying && timer.courseID == klass.slot.courseID && timer.taskType == .lecture
+    }
+
+    var body: some View {
+        Button {
+            if following {
+                StudyModeController.shared.present()
+            } else {
+                StudyModeController.shared.presentSetup(courseID: klass.slot.courseID, taskType: .lecture)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: DeskMoment.lecture.icon).font(compact ? .callout : .title3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(following ? "Revenir au cours" : "Suivre le cours · \(klass.slot.courseCode)")
+                        .font(compact ? .callout.weight(.semibold) : .headline)
+                    Text([klass.kindLabel, klass.location.isEmpty ? nil : klass.location,
+                          "jusqu'à \(DateUtils.time.string(from: klass.slot.end))"].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).opacity(0.85).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right").font(.caption.weight(.bold))
+            }
+            .padding(compact ? 10 : 14)
+            .foregroundStyle(Carnet.ground)
+            .background(Carnet.tint(klass.colorHex), in: RoundedRectangle(cornerRadius: compact ? 10 : 14, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Le mode étude sur ce cours : la semaine sur Moodle, l'horloge du cours, les repères")
     }
 }

@@ -193,19 +193,29 @@ struct FocusTimerPanel: View {
                             isPresented: Binding(get: { pendingStart != nil },
                                                  set: { if !$0 { pendingStart = nil } }),
                             titleVisibility: .visible) {
-            Button("Enregistrer et démarrer") {
-                if let request = pendingStart {
-                    finish()
-                    begin(request)
+            if focus.isLocked {
+                // Sous verrou, la session ne se coupe pas : elle passe dessus.
+                Button("Passer dessus") {
+                    if let request = pendingStart {
+                        focus.updateContext(courseID: .some(request.courseID), taskType: request.taskType, targetID: .some(request.targetID))
+                    }
+                    pendingStart = nil
                 }
-                pendingStart = nil
-            }
-            Button("Abandonner et démarrer", role: .destructive) {
-                if let request = pendingStart {
-                    focus.discard()
-                    begin(request)
+            } else {
+                Button("Enregistrer et démarrer") {
+                    if let request = pendingStart {
+                        finish()
+                        begin(request)
+                    }
+                    pendingStart = nil
                 }
-                pendingStart = nil
+                Button("Abandonner et démarrer", role: .destructive) {
+                    if let request = pendingStart {
+                        focus.discard()
+                        begin(request)
+                    }
+                    pendingStart = nil
+                }
             }
             Button("Continuer la session actuelle", role: .cancel) { pendingStart = nil }
         } message: {
@@ -622,7 +632,7 @@ struct FocusTimerPanel: View {
                 }
             } else {
                 TimerSideButton(title: "Abandonner", icon: "xmark", role: .destructive,
-                                isEnabled: focus.hasSession) {
+                                isEnabled: focus.hasSession && !focus.isLocked) {
                     confirmingDiscard = true
                 }
                 // Au repos, rien à abandonner : le bouton s'efface (sa place reste,
@@ -633,8 +643,10 @@ struct FocusTimerPanel: View {
             primaryButton(phase: phase)
 
             // À droite : conclure.
+            // Sous verrou, la session se termine dans l'écran du mode étude
+            // (sortie d'urgence), pas d'ici.
             TimerSideButton(title: "Terminer", icon: "checkmark",
-                            isEnabled: focus.hasSession && focus.elapsed() >= 1) {
+                            isEnabled: focus.hasSession && focus.elapsed() >= 1 && !focus.isLocked) {
                 finish()
             }
             .opacity(focus.hasSession ? 1 : 0)

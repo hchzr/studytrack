@@ -22,7 +22,10 @@ struct StudyModeView: View {
                 StudySetupView(screen: screen, courses: tracked)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             case .session:
-                if timer.studyIsOver {
+                if timer.studyIsOver, timer.taskType == .lecture {
+                    LectureDoneView(course: tracked.first { $0.id == timer.courseID })
+                        .transition(.opacity)
+                } else if timer.studyIsOver {
                     StudyDoneView()
                         .transition(.opacity)
                 } else if timer.phase == .idle {
@@ -75,6 +78,10 @@ private struct StudySetupView: View {
     @Environment(MacSettings.self) private var settings
     @State private var minutes = 50
     @State private var pomodoro = false
+    @State private var classes: [ScheduledClass] = []
+    @Environment(\.modelContext) private var context
+
+    private var currentClass: ScheduledClass? { DeskSchedule.current(in: classes) }
 
     private var course: Course? { courses.first { $0.id == screen.courseID } }
     private var tint: Color { MacTargets.tint(course) }
@@ -92,9 +99,36 @@ private struct StudySetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            if let klass = currentClass, screen.taskType != .lecture || screen.courseID != klass.slot.courseID {
+                // Un cours à l'horaire, maintenant : le suivre, jusqu'à sa fin.
+                Button {
+                    screen.courseID = klass.slot.courseID
+                    screen.taskType = .lecture
+                    screen.targetID = nil
+                    minutes = LectureClock.studyMinutes(for: klass.slot, now: Date())
+                    pomodoro = false
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: DeskMoment.lecture.icon).font(.title3)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Suivre le cours · \(klass.slot.courseCode)").font(.headline)
+                            Text("\(klass.kindLabel)\(klass.location.isEmpty ? "" : " · \(klass.location)") · jusqu'à \(DateUtils.time.string(from: klass.slot.end))")
+                                .font(.caption).opacity(0.8)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                    }
+                    .padding(14)
+                    .foregroundStyle(StudyPalette.ground)
+                    .background(Carnet.tint(klass.colorHex), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
             field("Sur quoi") {
                 VStack(alignment: .leading, spacing: 12) {
-                    FlowChips(spacing: 7) {
+                    FlowLayout(spacing: 7) {
                         CourseChip(title: "Libre", color: StudyPalette.inkSecondary, selected: screen.courseID == nil) {
                             screen.courseID = nil
                             screen.targetID = nil
@@ -109,7 +143,7 @@ private struct StudySetupView: View {
                     }
                     HStack(spacing: 10) {
                         Picker("Travail", selection: $screen.taskType) {
-                            ForEach(TaskType.choices) { Label($0.label, systemImage: $0.icon).tag($0) }
+                            ForEach(TaskType.choices + [.lecture]) { Label($0.label, systemImage: $0.icon).tag($0) }
                         }
                         .labelsHidden()
                         .fixedSize()
@@ -208,6 +242,21 @@ private struct StudySetupView: View {
         .onAppear {
             minutes = settings.studyMinutes
             pomodoro = timer.phase == .idle ? settings.studyPomodoro : (timer.state?.pomodoro ?? false)
+            classes = DeskSchedule.today(context: context)
+            fitLecture()
+        }
+        .onChange(of: screen.courseID) { _, _ in fitLecture() }
+        .onChange(of: screen.taskType) { _, _ in fitLecture() }
+    }
+
+    /// Suivre un cours (le panneau, l'accueil, le choix ici) : jusqu'à sa fin,
+    /// sans Pomodoro — un cours ne s'interrompt pas toutes les 25 minutes.
+    private func fitLecture() {
+        if classes.isEmpty { classes = DeskSchedule.today(context: context) }
+        guard screen.taskType == .lecture else { return }
+        pomodoro = false
+        if let klass = currentClass, klass.slot.courseID == screen.courseID {
+            minutes = LectureClock.studyMinutes(for: klass.slot, now: Date())
         }
     }
 
@@ -438,6 +487,28 @@ struct StudyToolIcon: View {
 }
 
 // MARK: - C'est fait
+
+/// La fin d'un cours suivi : enchaîner sur la série, prolonger, terminer.
+private struct LectureDoneView: View {
+    let course: Course?
+    @Environment(MacTimer.self) private var timer
+
+    var body: some View {
+        let start = course.flatMap { c in timer.state?.sessionStartedAt }
+        let count = course.map { c in LectureMarkStore.shared.marks.filter { $0.courseID == c.id && $0.at >= (start ?? .distantFuture) }.count } ?? 0
+        LectureAfterClass(course: course, markCount: count, startSeries: {
+            guard let course else { return }
+            let next = FocusTargets.exercises(of: course.series, for: .exercise).upNext.first
+            timer.retarget(courseID: course.id, taskType: .exercise, targetID: next?.id)
+            timer.extendStudy(minutes: 50)
+            StudyModeController.shared.desk.pane = .exercise
+        }, extend: {
+            timer.extendStudy(minutes: 25)
+        }, finish: {
+            timer.finish()
+        })
+    }
+}
 
 private struct StudyDoneView: View {
     @Environment(MacTimer.self) private var timer

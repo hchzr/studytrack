@@ -191,7 +191,7 @@ struct FocusMiniPlayer: View {
 
                     primaryButton(phase: phase)
 
-                    if !isInline {
+                    if !isInline, !focus.isLocked {
                     Button {
                         focus.finish()
                         Haptics.success()
@@ -278,12 +278,12 @@ struct FocusAccessory: ViewModifier {
 
     func body(content: Content) -> some View {
         if #available(iOS 26.1, *) {
-            content.tabViewBottomAccessory(isEnabled: app.focus.hasSession) {
+            content.tabViewBottomAccessory(isEnabled: app.focus.hasSession && app.router.selectedTab != .focus) {
                 FocusMiniPlayer(inAccessory: true)
             }
         } else {
             content.tabViewBottomAccessory {
-                if app.focus.hasSession { FocusMiniPlayer(inAccessory: true) }
+                if app.focus.hasSession, app.router.selectedTab != .focus { FocusMiniPlayer(inAccessory: true) }
             }
         }
     }

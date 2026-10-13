@@ -151,7 +151,7 @@ enum ExerciseRegions {
 /// théorie. Une proposition seulement — rien ne démarre tout seul.
 enum FocusContext {
 
-    struct Slot {
+    struct Slot: Equatable {
         var courseID: UUID
         var courseCode: String
         var kind: CalendarEventKind

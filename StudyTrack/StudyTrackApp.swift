@@ -102,6 +102,8 @@ enum PreviewLaunch {
     /// `-studyTab series|course|calc` : l'onglet de départ.
     static let studyModeFlag = "-studyMode"
     static let studyTabFlag = "-studyTab"
+    /// `-studyMoment lecture|revision` : le bureau sous cette forme.
+    static let studyMomentFlag = "-studyMoment"
 
     static func apply(to container: AppContainer) {
         if isSet(studyModeFlag) {
@@ -110,7 +112,10 @@ enum PreviewLaunch {
                 let context = ModelContext(container.modelContainer)
                 let course = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first { !$0.sortedSeries.isEmpty }
                 let exercise = course?.sortedSeries.first?.sortedExercises.first
-                container.focus.enterStudy(minutes: 50, courseID: course?.id, taskType: .exercise, targetID: exercise?.id, locks: false)
+                let moment = string(studyMomentFlag)
+                let type: TaskType = moment == "lecture" ? .lecture : (moment == "revision" ? .theory : .exercise)
+                container.focus.enterStudy(minutes: 50, courseID: course?.id, taskType: type,
+                                           targetID: type == .exercise ? exercise?.id : nil, locks: false)
                 container.router.showingStudyMode = true
             }
         }

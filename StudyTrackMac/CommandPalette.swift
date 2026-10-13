@@ -170,7 +170,7 @@ struct CommandPalette: View {
         case .onBreak:
             items.append(Item(id: "a.skip", title: "Écourter la pause", icon: "forward.fill", section: "Chrono") { timer.skipBreak() })
         }
-        if timer.phase != .idle {
+        if timer.phase != .idle, !timer.isLocked {
             items.append(Item(id: "a.finish", title: "Terminer et enregistrer", icon: "checkmark", section: "Chrono", shortcut: "⇧⌘T") { timer.finish() })
         }
         items.append(Item(id: "a.float", title: settings.floatingTimer ? "Masquer le chrono flottant" : "Afficher le chrono flottant",

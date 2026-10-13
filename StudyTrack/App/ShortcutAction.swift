@@ -47,6 +47,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        // « Le cours commence » : le bureau du cours, en direct.
+        if let raw = info["lectureCourseID"] as? String, let id = UUID(uuidString: raw) {
+            await MainActor.run { AppRuntime.container?.router.openLectureDesk(courseID: id) }
+            return
+        }
         guard let raw = info["courseID"] as? String, let id = UUID(uuidString: raw) else { return }
         let section: CourseDetailView.Section = (info["section"] as? String) == "theory" ? .theory : .exercises
         await MainActor.run {

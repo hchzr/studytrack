@@ -33,6 +33,7 @@ final class SettingsStore {
         static let timetableURLString = "settings.timetableURLString"
         static let shareProgressWithGroups = "settings.shareProgressWithGroups"
         static let trackAttendance = "settings.trackAttendance"
+        static let classStartNotice = "settings.classStartNotice"
         static let hasSeededSampleData = "settings.hasSeededSampleData"
         static let focusShortcuts = "settings.focusShortcuts"
         static let ankiLastSync = "settings.ankiLastSync"
@@ -107,6 +108,8 @@ final class SettingsStore {
     // MARK: Suivi
     /// Suivre la présence en amphi (heures de cours réelles).
     var trackAttendance: Bool { didSet { defaults.set(trackAttendance, forKey: Key.trackAttendance) } }
+    /// « Le cours commence » : une notification qui ouvre le bureau du cours.
+    var classStartNotice: Bool { didSet { defaults.set(classStartNotice, forKey: Key.classStartNotice) } }
 
     // MARK: Vie privée
     var anonymousInLeaderboards: Bool { didSet { defaults.set(anonymousInLeaderboards, forKey: Key.anonymousInLeaderboards) } }
@@ -259,6 +262,7 @@ final class SettingsStore {
         self.hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
         self.deviceHasOnboarded = defaults.bool(forKey: Key.deviceHasOnboarded) || defaults.bool(forKey: Key.hasCompletedOnboarding)
         self.trackAttendance = defaults.object(forKey: Key.trackAttendance) as? Bool ?? true
+        self.classStartNotice = defaults.object(forKey: Key.classStartNotice) as? Bool ?? true
         self.anonymousInLeaderboards = defaults.bool(forKey: Key.anonymousInLeaderboards)
         self.shareProgressWithGroups = defaults.object(forKey: Key.shareProgressWithGroups) as? Bool ?? true
         self.dailyReminderEnabled = defaults.object(forKey: Key.dailyReminderEnabled) as? Bool ?? true

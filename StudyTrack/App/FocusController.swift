@@ -76,6 +76,8 @@ final class FocusController: TimerEngineHost {
     func pomodoroStatus(at now: Date = Date()) -> PomodoroStatus { engine.pomodoroStatus(at: now) }
     var isStudying: Bool { engine.isStudying }
     var studyIsOver: Bool { engine.studyIsOver }
+    /// Sous verrou : rien ne termine la session, sauf la sortie d'urgence.
+    var isLocked: Bool { engine.isLocked }
 
     // MARK: Cycle de vie
 
@@ -131,12 +133,12 @@ final class FocusController: TimerEngineHost {
     /// Enregistre la session ; rend la durée enregistrée, `nil` si rien ne
     /// l'a été (moins d'une minute).
     @discardableResult
-    func finish() -> Int? {
-        guard let finished = engine.finish(), !finished.parts.isEmpty else { return nil }
+    func finish(emergency: Bool = false) -> Int? {
+        guard let finished = engine.finish(emergency: emergency), !finished.parts.isEmpty else { return nil }
         return finished.totalSeconds
     }
 
-    func discard() { engine.discard() }
+    func discard(emergency: Bool = false) { engine.discard(emergency: emergency) }
 
     /// Coche la sous-question en cours de la cible (bouton de l'îlot).
     func tickNextQuestion() {
@@ -171,7 +173,7 @@ final class FocusController: TimerEngineHost {
     }
 
     func extendStudy(minutes: Int) { engine.extendStudy(minutes: minutes) }
-    func leaveStudy() { engine.leaveStudy() }
+    func leaveStudy(emergency: Bool = false) { engine.leaveStudy(emergency: emergency) }
 
     // MARK: Effets
 

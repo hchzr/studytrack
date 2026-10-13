@@ -423,6 +423,8 @@ struct ProfileView: View {
             }
             Toggle("Récap hebdomadaire", isOn: $settings.weeklyRecapEnabled)
                 .onChange(of: settings.weeklyRecapEnabled) { _, on in if on { askForNotifications() } }
+            Toggle("Début des cours", isOn: $settings.classStartNotice)
+                .onChange(of: settings.classStartNotice) { _, on in if on { askForNotifications() } }
 
             Button {
                 Task {
@@ -445,6 +447,7 @@ struct ProfileView: View {
         .onChange(of: settings.dailyReminderEnabled) { _, _ in Task { await reschedule(settings) } }
         .onChange(of: settings.dailyReminderHour) { _, _ in Task { await reschedule(settings) } }
         .onChange(of: settings.weeklyRecapEnabled) { _, _ in Task { await reschedule(settings) } }
+        .onChange(of: settings.classStartNotice) { _, _ in Task { await reschedule(settings) } }
     }
 
     private func reschedule(_ settings: SettingsStore) async {

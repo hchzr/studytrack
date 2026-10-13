@@ -403,7 +403,9 @@ struct MenuBarTimerView: View {
     @ViewBuilder
     private var nowLine: some View {
         let now = Date()
-        if let current = schedule.first(where: { $0.startsAt <= now && now < $0.endsAt }) {
+        if let live = DeskSchedule.current(in: DeskSchedule.classes(from: schedule), at: now) {
+            FollowClassButton(klass: live, compact: true)
+        } else if let current = schedule.first(where: { $0.startsAt <= now && now < $0.endsAt }) {
             scheduleLine(current, prefix: "Maintenant", until: true)
         } else if let next = schedule.first(where: { $0.startsAt > now }) {
             scheduleLine(next, prefix: "À \(DateUtils.time.string(from: next.startsAt))", until: false)

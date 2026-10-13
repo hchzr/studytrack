@@ -98,10 +98,21 @@ struct RootTabView: View {
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
                   let destination = SpotlightIndexer.destination(of: identifier) else { return }
-            app.router.openCourse(destination.courseID, section: identifier.hasPrefix("theory:") ? .theory : .exercises)
+            app.router.openCourse(destination.courseID, section: identifier.hasPrefix("theory:") ? .theory : .exercises,
+                                  targetID: destination.targetID)
         }
         .onChange(of: app.router.focusRequest) { _, request in
             if let request { startInPlace(request) }
+        }
+        // « Ouvrir le chrono » de partout (mini-lecteur, widgets, raccourcis) :
+        // sur iOS 26, c'est l'onglet.
+        .onChange(of: app.router.showingFocus) { _, showing in
+            guard showing, Self.chronoIsTab else { return }
+            app.router.showingFocus = false
+            app.router.selectedTab = .focus
+        }
+        .onChange(of: app.router.lectureRequest) { _, courseID in
+            if let courseID { followLecture(courseID) }
         }
         // Les widgets suivent **chaque** enregistrement — une question cochée, une
         // série importée —, pas seulement le passage en arrière-plan.
@@ -200,7 +211,7 @@ struct RootTabView: View {
     /// remet le drapeau à faux — sinon le bouton ne rouvrirait plus rien.
     private var rootSheet: Binding<RootSheet?> {
         Binding(get: {
-            if app.router.showingFocus { return .focus }
+            if app.router.showingFocus, !Self.chronoIsTab { return .focus }
             if app.router.showingAgenda { return .agenda }
             if app.router.showingStats { return .stats }
             if app.router.showingProfile { return .me }
@@ -215,11 +226,11 @@ struct RootTabView: View {
         })
     }
 
-    /// Le rond « Chrono » n'est pas une page : le choisir ouvre Focus et laisse
-    /// l'onglet où l'on était.
+    /// iOS 26 : le chrono est un onglet. Avant : notre barre, où « Chrono »
+    /// ouvre Focus en feuille.
     private var tabSelection: Binding<AppRouter.Tab> {
         Binding(get: { app.router.selectedTab }, set: { tab in
-            if tab == .focus {
+            if tab == .focus, !Self.chronoIsTab {
                 app.router.openFocus()
                 Haptics.tap()
             } else {
@@ -228,12 +239,17 @@ struct RootTabView: View {
         })
     }
 
-    /// La barre **système** (Liquid Glass d'iOS 26) : trois onglets, le
-    /// chrono (un onglet qui ouvre Focus par-dessus l'onglet courant), et la
-    /// recherche dans le rond détaché — le rôle que le système lui réserve
-    /// (le chrono l'occupait : VoiceOver l'annonçait comme une recherche, et la
-    /// vraie recherche restait cachée dans « Cours »). Elle se replie au
-    /// défilement ; pendant une session, le mini-lecteur est son accessoire.
+    static var chronoIsTab: Bool {
+        if #available(iOS 26.0, *) { return true }
+        return false
+    }
+
+    /// La barre **système** (Liquid Glass d'iOS 26) : quatre vrais onglets, le
+    /// chrono compris — une page, comme les autres, plus un faux onglet qui
+    /// ouvrait une feuille par-dessus. Pendant une session, le chrono **flotte**
+    /// au-dessus de la barre (son accessoire) sur les autres onglets ; le
+    /// toucher mène à l'onglet. La recherche est dans « Cours » (la barre de la
+    /// liste). La barre se replie au défilement.
     ///
     /// Avant iOS 26 : notre barre (`CarnetTabBar`) sur matière translucide.
     @ViewBuilder
@@ -246,10 +262,7 @@ struct RootTabView: View {
                     }
                 }
                 Tab(AppRouter.Tab.focus.title, systemImage: AppRouter.Tab.focus.icon, value: AppRouter.Tab.focus) {
-                    Color.clear
-                }
-                Tab(value: AppRouter.Tab.search, role: .search) {
-                    SearchView(isTab: true)
+                    FocusView()
                 }
             }
             .tabBarMinimizeBehavior(.onScrollDown)
@@ -289,6 +302,24 @@ struct RootTabView: View {
         app.router.focusRequest = nil
         focus.start(courseID: resolved.courseID, taskType: resolved.taskType,
                     targetID: resolved.targetID, label: resolved.label)
+        Haptics.success()
+    }
+
+    /// Suivre un cours : le mode étude jusqu'à la fin du créneau, bureau « En
+    /// cours ». Une session déjà ouverte passe dessus (son temps reste).
+    private func followLecture(_ courseID: UUID) {
+        app.router.lectureRequest = nil
+        let classes = DeskSchedule.today(context: context)
+        let klass = DeskSchedule.current(in: classes).flatMap { $0.slot.courseID == courseID ? $0 : nil }
+            ?? classes.first { $0.slot.courseID == courseID && $0.slot.end > Date() }
+        let minutes = klass.map { LectureClock.studyMinutes(for: $0.slot, now: Date()) } ?? 105
+        let blocking = UserDefaults.standard.object(forKey: "studyMode.blocking") as? Bool ?? true
+        if app.focus.isLocked {
+            app.focus.updateContext(courseID: .some(courseID), taskType: .lecture, targetID: .some(nil))
+        } else {
+            app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: .lecture, locks: blocking)
+        }
+        app.router.showingStudyMode = true
         Haptics.success()
     }
 
@@ -334,6 +365,9 @@ struct RootTabView: View {
             app.router.selectedTab = .courses
         case "groups":
             app.router.selectedTab = .groups
+        case "lecture":
+            // `studytrack://lecture?id=…` — suivre le cours (widget, raccourci).
+            if let id = value("id").flatMap(UUID.init(uuidString:)) { app.router.openLectureDesk(courseID: id) }
         case "join":
             // `studytrack://join?code=EPFL-XXXX` — le lien partagé par un camarade.
             let code = value("code") ?? ""
@@ -353,7 +387,7 @@ struct RootTabView: View {
         case .today: TodayView()
         case .courses: CoursesView()
         case .groups: GroupsView()
-        case .focus, .search: EmptyView()
+        case .focus: EmptyView()
         }
     }
 }

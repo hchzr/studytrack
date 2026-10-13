@@ -108,6 +108,11 @@ final class StudyLock {
         store.shield.webDomainCategories = .all(except: selection.webDomainTokens)
         let domains = Set(sites.compactMap(StudyMode.normalizedDomain).map { WebDomain(domain: $0) })
         store.webContent.blockedByFilter = .all(except: domains)
+        // Pas de sortie par la bande : StudyTrack (ni aucune app) ne se
+        // supprime pendant le verrou, et l'heure ne se règle pas à la main —
+        // avancer l'horloge ne lève rien.
+        store.application.denyAppRemoval = true
+        store.dateAndTime.requireAutomaticDateAndTime = true
         if !isShielding { log.notice("bouclier posé jusqu'à \(until, privacy: .public)") }
         isShielding = true
         scheduleRelease(at: until)
