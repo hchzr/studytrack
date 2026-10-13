@@ -82,6 +82,8 @@ private struct PomodoroSettingsPane: View {
         }
         .formStyle(.grouped)
         .frame(height: 440)
+        // La session ouverte prend les nouvelles durées, et l'iPhone avec elle.
+        .onChange(of: settings.pomodoro) { _, _ in MacAppDelegate.timer?.cycleDidChange() }
     }
 }
 

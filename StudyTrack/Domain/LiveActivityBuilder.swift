@@ -50,6 +50,7 @@ enum LiveActivityBuilder {
                       course: Course? = nil,
                       now: Date = Date()) -> ActivityTimerState {
         let elapsed = timer.elapsed(at: now)
+        let settings = timer.cycle(or: settings)
         var block: ActivityPomodoro?
         if timer.pomodoro {
             if let pause = timer.currentBreak {

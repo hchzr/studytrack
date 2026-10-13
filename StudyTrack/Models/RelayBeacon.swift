@@ -1,7 +1,11 @@
 import Foundation
 import SwiftData
 
-/// Le chrono d'un appareil, tel qu'il le publie **par la base** iCloud.
+/// **Inutilisé** : gardé dans le schéma (`SchemaV1`) pour ne pas imposer de
+/// migration. Le chrono passe par le relais et le magasin clé-valeur
+/// (`CloudRelay`). Le retirer viendra avec la prochaine version du schéma.
+///
+/// C'était le chrono d'un appareil, tel qu'il le publiait **par la base** iCloud.
 ///
 /// Le magasin clé-valeur (`CloudRelay`) part quand iOS le décide — jusqu'à une
 /// minute. La base, elle, est envoyée dans la seconde et poussée aux autres

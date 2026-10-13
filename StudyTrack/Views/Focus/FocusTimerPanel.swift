@@ -42,7 +42,8 @@ struct FocusTimerPanel: View {
     @AppStorage("focus.showsStatement") private var showsStatement = true
 
     private var focus: FocusController { app.focus }
-    private var pomodoroSettings: PomodoroSettings { app.settings.pomodoro }
+    /// Les durées du cycle de la session ouverte, sinon celles réglées ici.
+    private var pomodoroSettings: PomodoroSettings { focus.cycle }
     private var trackedCourses: [Course] { courses.filter(\.isTracked) }
 
     // MARK: Contexte de la session

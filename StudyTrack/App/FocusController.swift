@@ -1,189 +1,99 @@
 import Foundation
-import CoreData
 import SwiftData
 import Observation
 
-/// Le chrono de l'app, **un seul**, partagé par tous ceux qui le montrent.
+/// Le chrono de l'iPhone : le moteur commun (`TimerEngine`, le même que sur le
+/// Mac) et ce que l'iPhone en fait — Live Activity, présence dans les groupes,
+/// notifications Pomodoro, widgets, bouclier du Temps d'écran, haptique.
 ///
-/// Avant, trois endroits tenaient chacun leur copie : l'écran Focus (ses propres
-/// `startDate` et `accumulated`), le dock (relu depuis le disque à chaque
-/// notification) et le gestionnaire des commandes de l'écran verrouillé. Chacun
-/// publiait la Live Activity, la présence et les widgets à sa façon, et il
-/// suffisait qu'un chemin en oublie un pour que l'îlot, le dock et l'écran se
-/// contredisent.
-///
-/// Ici, l'état persisté (`FocusTimerState`) est la seule vérité. Chaque geste
-/// passe par une méthode de ce type, qui modifie l'état puis **publie tout** au
-/// même endroit : disque, Live Activity, présence, notifications, widgets.
-///
-/// Le cycle Pomodoro avance tout seul : `tick()` rattrape les fins de bloc et
-/// de pause, à la seconde près, même après une longue absence (voir
-/// `FocusTimerState.advance`).
+/// Un seul chrono, partagé par Focus, le dock, l'écran verrouillé et le mode
+/// étude : chaque geste passe par le moteur, qui l'écrit et le publie aux
+/// autres appareils, puis appelle `timerDidChange` — le seul endroit où
+/// l'iPhone répercute un changement.
 @MainActor
 @Observable
-final class FocusController {
+final class FocusController: TimerEngineHost {
 
-    /// L'état du chrono ; `nil` quand aucune session n'est ouverte.
-    private(set) var state: FocusTimerState?
-
-    /// Le dernier événement du cycle, pour que l'écran puisse le saluer.
-    private(set) var lastEvent: PomodoroEvent?
-
-    @ObservationIgnored weak var app: AppContainer?
-    @ObservationIgnored private var ticker: Task<Void, Never>?
-    /// Réveil à la fin du mode étude (app ouverte) : le bouclier se lève à l'heure.
-    @ObservationIgnored private var studyEnd: Task<Void, Never>?
-    /// Change à la fin du mode étude : l'écran plein se relit.
-    private(set) var studyRevision = 0
-    /// Vrai pendant qu'on applique un état venu d'un autre appareil : on ne le
-    /// republie pas (sinon les appareils se le renverraient sans fin).
-    @ObservationIgnored private var applyingRemote = false
-    @ObservationIgnored private var relayObserver: NSObjectProtocol?
-    @ObservationIgnored private var baseObserver: NSObjectProtocol?
-
-    /// Le contexte où vit la balise du chrono (voie rapide entre appareils).
-    private var relayContext: ModelContext? { app.map { ModelContext($0.modelContainer) } }
+    @ObservationIgnored let engine = TimerEngine()
+    @ObservationIgnored weak var app: AppContainer? {
+        didSet { engine.container = app?.modelContainer }
+    }
 
     init() {
-        state = FocusTimerStore.load()
+        engine.host = self
+    }
+
+    // MARK: TimerEngineHost
+
+    var localCycle: PomodoroSettings { app?.settings.pomodoro ?? PomodoroSettings() }
+    var pomodoroByDefault: Bool { app?.settings.pomodoroDefault ?? false }
+
+    func timerDidChange(_ change: TimerEngine.Change) {
+        StudyLock.shared.sync(state)
+        guard let app else { return }
+        switch change {
+        case .closed(let session):
+            StudyActivityController.end(session: session)
+            app.notifications.cancelPomodoro()
+            let context = ModelContext(app.modelContainer)
+            app.presence.stop(context: context, social: app.social)
+            WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
+            return
+        case .boundary(let events, _):
+            switch events.last {
+            case .blockEnded: Haptics.success()
+            case .breakEnded: Haptics.tap()
+            case nil: break
+            }
+        case .saved:
+            // Une note tapée : rien de visible ailleurs.
+            return
+        case .gesture, .remote, .refresh:
+            break
+        }
+        guard let state else { return }
+        StudyActivityController.publish(state, container: app)
+        schedulePomodoroNotifications(state)
+        if change == .gesture(presence: true) { announcePresence(state) }
+        WidgetSnapshotWriter.scheduleRefresh(context: ModelContext(app.modelContainer), settings: app.settings)
     }
 
     // MARK: Lecture
 
-    /// Une session est ouverte : du temps compté, ou une pause en cours.
-    var hasSession: Bool {
-        guard let state else { return false }
-        return state.isRunning || state.isRestorable()
-    }
-
-    var isRunning: Bool { state?.isRunning ?? false }
-
-    var isPomodoro: Bool { state?.pomodoro ?? (app?.settings.pomodoroDefault ?? false) }
-
-    private var settings: PomodoroSettings { app?.settings.pomodoro ?? PomodoroSettings() }
-
-    func elapsed(at now: Date = Date()) -> TimeInterval { state?.elapsed(at: now) ?? 0 }
-
-    func phase(at now: Date = Date()) -> FocusPhase {
-        state?.phase(settings: settings, at: now) ?? .idle
-    }
-
-    /// Où en est le bloc de travail à l'instant `now`.
-    func pomodoroStatus(at now: Date = Date()) -> PomodoroStatus {
-        PomodoroEngine.status(elapsed: elapsed(at: now), focusMinutes: settings.focusMinutes)
-    }
+    /// L'état du chrono ; `nil` quand aucune session n'est ouverte.
+    var state: FocusTimerState? { engine.state }
+    /// Le dernier événement du cycle, pour que l'écran puisse le saluer.
+    var lastEvent: PomodoroEvent? { engine.lastEvent }
+    var hasSession: Bool { engine.hasSession }
+    var isRunning: Bool { engine.isRunning }
+    var isPomodoro: Bool { state?.pomodoro ?? pomodoroByDefault }
+    /// Les durées du cycle en vigueur (celles de la session ouverte).
+    var cycle: PomodoroSettings { engine.cycle }
+    func elapsed(at now: Date = Date()) -> TimeInterval { engine.elapsed(at: now) }
+    func phase(at now: Date = Date()) -> FocusPhase { engine.phase(at: now) }
+    func pomodoroStatus(at now: Date = Date()) -> PomodoroStatus { engine.pomodoroStatus(at: now) }
+    var isStudying: Bool { engine.isStudying }
+    var studyIsOver: Bool { engine.studyIsOver }
 
     // MARK: Cycle de vie
 
     /// Relit l'état persisté et rattrape le temps passé app fermée.
-    ///
-    /// Une session trop ancienne (chrono oublié la veille) n'est pas reprise :
-    /// elle est enregistrée telle quelle, bornée, et le journal la montre avec
-    /// une note pour qu'on la corrige.
     func reload() {
-        guard var saved = FocusTimerStore.load() else {
-            state = nil
-            syncStudyLock()
-            updateTicker()
-            return
-        }
-        guard saved.isRestorable() else {
-            FocusTimerStore.save(nil)
-            state = nil
-            let seconds = min(Int(saved.elapsed()), Int(FocusTimerState.maxRestorableAge))
-            if seconds >= 60, let app {
-                let context = ModelContext(app.modelContainer)
-                let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-                let session = StudySession(course: courses.first { $0.id == saved.courseID },
-                                           taskType: saved.taskType,
-                                           startedAt: saved.sessionStartedAt,
-                                           durationSeconds: seconds,
-                                           isManual: false,
-                                           note: saved.note.isEmpty
-                                               ? "Chrono resté ouvert — durée à vérifier"
-                                               : saved.note + " · chrono resté ouvert")
-                context.insert(session)
-                try? context.save()
-            }
-            StudyActivityController.end(session: saved.sessionStartedAt)
-            syncStudyLock()
-            updateTicker()
-            return
-        }
-        let events = saved.advance(settings: settings)
-        state = saved
-        if !events.isEmpty {
-            lastEvent = events.last
-            commit(presence: false, publish: false)
-        }
-        syncStudyLock()
-        updateTicker()
+        engine.reload()
+        StudyLock.shared.sync(state)
     }
 
-    /// Fait avancer le cycle Pomodoro. Appelé chaque seconde tant qu'il y a
-    /// quelque chose à surveiller.
-    func tick(now: Date = Date()) {
-        guard var current = state else { return }
-        let events = current.advance(settings: settings, to: now)
-        guard !events.isEmpty else { return }
-        state = current
-        lastEvent = events.last
-        switch events.last {
-        case .blockEnded: Haptics.success()
-        case .breakEnded: Haptics.tap()
-        case nil: break
-        }
-        commit(publish: false)
-    }
+    func startRelay() { engine.startRelay() }
+    func applyRemote() { engine.applyRemote() }
 
     // MARK: Gestes
 
-    /// Démarre une session — ou reprend celle qui est en pause.
-    ///
-    /// - Parameters:
-    ///   - pomodoro: `nil` garde le réglage de la session ouverte, sinon celui
-    ///     choisi par défaut dans les réglages.
-    func start(courseID: UUID?,
-               taskType: TaskType,
-               targetID: UUID? = nil,
-               label: String = "",
-               pomodoro: Bool? = nil) {
-        if var current = state, hasSession {
-            // Le temps déjà compté reste à la cible précédente.
-            current.switchContext(courseID: courseID, taskTypeRaw: taskType.rawValue, targetID: targetID)
-            current.contextLabel = label
-            if let pomodoro { current.pomodoro = pomodoro }
-            current.start()
-            state = current
-        } else {
-            var fresh = FocusTimerState(sessionStartedAt: Date(),
-                                        courseID: courseID,
-                                        taskTypeRaw: taskType.rawValue,
-                                        targetID: targetID,
-                                        contextLabel: label,
-                                        pomodoro: pomodoro ?? (app?.settings.pomodoroDefault ?? false))
-            fresh.start()
-            state = fresh
-        }
-        lastEvent = nil
-        commit()
+    func start(courseID: UUID?, taskType: TaskType, targetID: UUID? = nil, label: String = "", pomodoro: Bool? = nil) {
+        engine.start(courseID: courseID, taskType: taskType, targetID: targetID, label: label, pomodoro: pomodoro)
     }
 
-    /// Relance le chrono : reprise après une pause, ou bloc suivant.
-    func resume() {
-        guard var current = state else { return }
-        current.start()
-        state = current
-        lastEvent = nil
-        commit()
-    }
-
-    func pause() {
-        guard var current = state, current.isRunning else { return }
-        current.pause()
-        state = current
-        commit()
-    }
+    func resume() { engine.resume() }
+    func pause() { engine.pause() }
 
     /// Le geste du gros bouton : démarrer, mettre en pause ou reprendre.
     func toggle(courseID: UUID?, taskType: TaskType) {
@@ -196,145 +106,48 @@ final class FocusController {
         }
     }
 
-    /// Termine la pause Pomodoro et relance le travail.
-    func skipBreak() {
-        guard var current = state, current.currentBreak != nil else { return }
-        current.skipBreak()
-        state = current
-        lastEvent = nil
-        commit()
-    }
+    func skipBreak() { engine.skipBreak() }
+    func extendBreak(minutes: Int = 5) { engine.extendBreak(minutes: minutes) }
 
-    /// Allonge la pause en cours.
-    func extendBreak(minutes: Int = 5) {
-        guard var current = state, current.currentBreak != nil else { return }
-        current.extendBreak(by: TimeInterval(minutes * 60))
-        state = current
-        commit(presence: false)
-    }
-
-    /// Active ou coupe le Pomodoro, y compris en pleine session.
-    ///
-    /// Le couper pendant une pause la termine : sans cycle, il n'y a plus de
-    /// pause à décompter, seulement un chrono arrêté.
+    /// Active ou coupe le Pomodoro (la session ouverte et le réglage par défaut).
     func setPomodoro(_ enabled: Bool) {
-        guard var current = state else {
-            app?.settings.pomodoroDefault = enabled
-            return
-        }
-        current.pomodoro = enabled
-        if !enabled { current.clearBreak() }
-        current.advance(settings: settings)
-        state = current
         app?.settings.pomodoroDefault = enabled
-        commit(presence: false)
+        engine.setPomodoro(enabled)
     }
 
-    /// Les durées du cycle ont changé : la fin du bloc, la pause en cours et
-    /// leurs notifications sont recalculées.
-    func settingsDidChange() {
-        guard var current = state else { return }
-        let events = current.advance(settings: settings)
-        state = current
-        if !events.isEmpty { lastEvent = events.last }
-        commit(presence: false, publish: false)
+    /// Les durées du cycle ont changé : la session ouverte les prend.
+    func settingsDidChange() { engine.cycleDidChange() }
+
+    func updateContext(courseID: UUID?? = nil, taskType: TaskType? = nil, targetID: UUID?? = nil,
+                       note: String? = nil, label: String? = nil) {
+        engine.updateContext(courseID: courseID, taskType: taskType, targetID: targetID, note: note, label: label)
     }
 
-    /// Change le cours, le type, la cible ou la note de la session ouverte.
-    func updateContext(courseID: UUID?? = nil,
-                       taskType: TaskType? = nil,
-                       targetID: UUID?? = nil,
-                       note: String? = nil,
-                       label: String? = nil) {
-        guard var current = state else { return }
-        // Cours, type et cible passent par un **segment** : changer d'exercice
-        // en pleine session ne réattribue pas le temps déjà passé sur l'autre.
-        current.switchContext(courseID: courseID ?? current.courseID,
-                              taskTypeRaw: taskType?.rawValue ?? current.taskTypeRaw,
-                              targetID: targetID ?? current.targetID)
-        if let note { current.note = note }
-        if let label { current.contextLabel = label }
-        guard current != state else { return }
-        let presenceChanged = current.courseID != state?.courseID
-            || current.taskTypeRaw != state?.taskTypeRaw
-            || current.targetID != state?.targetID
-        state = current
-        // La note s'écrit à chaque frappe : elle n'a pas à republier l'îlot.
-        commit(presence: presenceChanged, activity: presenceChanged)
-    }
+    func adjust(by delta: TimeInterval) { engine.setElapsed(elapsed() + delta) }
+    func setElapsed(_ total: TimeInterval) { engine.setElapsed(total) }
 
-    /// Applique une **variation** au temps compté (les boutons ±5 min, l'anneau).
-    func adjust(by delta: TimeInterval) {
-        setElapsed(elapsed() + delta)
-    }
-
-    /// Fixe le temps compté **absolu**.
-    func setElapsed(_ total: TimeInterval) {
-        let bounded = max(0, total)
-        if state == nil {
-            guard bounded >= 1 else { return }
-            state = FocusTimerState(sessionStartedAt: Date(), pomodoro: app?.settings.pomodoroDefault ?? false)
-        }
-        guard var current = state, abs(bounded - current.elapsed()) >= 0.5 else { return }
-        current.accumulated = bounded
-        // La période en cours repart de maintenant : le chrono continue de
-        // tourner à partir du nouveau total.
-        current.runningSince = current.isRunning ? Date() : nil
-        state = current
-        commit(presence: false)
-    }
-
-    /// Enregistre la session dans le journal et libère le chrono.
-    ///
-    /// - Returns: la durée enregistrée, en secondes ; `nil` s'il n'y avait rien.
-    /// Une session passée sur plusieurs cibles (3.2, puis 3.3) est enregistrée
-    /// en **une session par cible**, bout à bout : le temps de chaque exercice
-    /// se lit ensuite sur l'exercice lui-même.
+    /// Enregistre la session ; rend la durée enregistrée, `nil` si rien ne
+    /// l'a été (moins d'une minute).
     @discardableResult
     func finish() -> Int? {
-        guard let current = state, let app else { return nil }
-        let seconds = Int(current.elapsed())
-        defer { close() }
-        guard seconds >= 1 else { return nil }
-        let context = ModelContext(app.modelContainer)
-        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        var start = current.sessionStartedAt
-        for (index, part) in current.allocatedSeconds().enumerated() {
-            let course = courses.first { $0.id == part.segment.courseID }
-            let target = Self.target(of: part.segment.targetID, in: course)
-            let session = StudySession(course: course,
-                                       taskType: part.segment.taskType,
-                                       startedAt: start,
-                                       durationSeconds: part.seconds,
-                                       isManual: false,
-                                       note: index == 0 ? current.note : "",
-                                       exercise: target.exercise,
-                                       theoryItem: target.theoryItem)
-            context.insert(session)
-            start = start.addingTimeInterval(TimeInterval(part.seconds))
-        }
-        try? context.save()
-        return seconds
+        guard let finished = engine.finish(), !finished.parts.isEmpty else { return nil }
+        return finished.totalSeconds
     }
 
-    /// Abandonne la session sans l'enregistrer.
-    func discard() {
-        close()
-    }
+    func discard() { engine.discard() }
 
     /// Coche la sous-question en cours de la cible (bouton de l'îlot).
     func tickNextQuestion() {
         guard let current = state, let app else { return }
         let context = ModelContext(app.modelContainer)
-        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        guard let course = courses.first(where: { $0.id == current.courseID }),
+        guard let course = TimerEngine.course(current.courseID, in: context),
               let exercise = Self.target(of: current, in: course).exercise,
               let next = exercise.leafSubQuestions.first(where: { !$0.isDone }) else { return }
         next.isDone = true
         next.doneAt = Date()
         exercise.refreshCompletion()
         try? context.save()
-        commit(presence: false, publish: false)
+        engine.refresh()
     }
 
     /// Exécute une commande venue de l'écran verrouillé, de l'îlot ou du dock.
@@ -351,159 +164,19 @@ final class FocusController {
 
     // MARK: Mode étude
 
-    /// Le mode étude est en vigueur (relu à son échéance, `studyRevision`).
-    var isStudying: Bool {
-        _ = studyRevision
-        return StudyMode.isActive(state)
-    }
-
-    var studyIsOver: Bool {
-        _ = studyRevision
-        return StudyMode.isOver(state)
-    }
-
-    /// Entre en mode étude : démarre la session si besoin. Publié comme un
-    /// geste : le Mac ouvre son écran plein, et se ferme au reste lui aussi.
     func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil, locks: Bool = true) {
-        if !hasSession {
-            start(courseID: courseID, taskType: taskType, targetID: targetID)
-        }
-        guard var current = state else { return }
-        StudyMode.enter(&current, minutes: minutes, locks: locks)
-        if !current.isRunning, current.currentBreak == nil { current.start() }
-        state = current
-        commit(presence: false)
+        engine.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: locks)
     }
 
-    func extendStudy(minutes: Int) {
-        guard var current = state else { return }
-        if current.studySince == nil || StudyMode.isOver(current) { current.studySince = Date() }
-        current.studyUntil = StudyMode.extended(current.studyUntil, by: minutes)
-        if !current.isRunning, current.currentBreak == nil { current.start() }
-        state = current
-        commit(presence: false)
-    }
+    func extendStudy(minutes: Int) { engine.extendStudy(minutes: minutes) }
+    func leaveStudy() { engine.leaveStudy() }
 
-    func leaveStudy() {
-        guard var current = state, current.studyUntil != nil else { return }
-        StudyMode.leave(&current)
-        state = current
-        commit(presence: false)
-    }
-
-    /// Bouclier du Temps d'écran et réveil de fin, d'après l'état.
-    private func syncStudyLock() {
-        StudyLock.shared.sync(state)
-        studyEnd?.cancel()
-        studyEnd = nil
-        studyRevision &+= 1
-        guard let until = state?.studyUntil, until > Date() else { return }
-        studyEnd = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(until.timeIntervalSinceNow + 0.2))
-            guard !Task.isCancelled, let self else { return }
-            StudyLock.shared.sync(self.state)
-            self.studyRevision &+= 1
-        }
-    }
-
-    // MARK: Entre appareils
-
-    /// Reprend l'état publié par un autre appareil (le Mac a démarré, mis en
-    /// pause ou terminé la session). Rien n'est enregistré ici : c'est
-    /// l'appareil qui termine qui enregistre.
-    /// Écoute les autres appareils **au niveau de l'app**, pas d'une fenêtre :
-    /// lancée en arrière-plan (écran éteint, push iCloud), l'app suit quand
-    /// même le chrono du Mac.
-    func startRelay() {
-        guard relayObserver == nil else { return }
-        relayObserver = NotificationCenter.default.addObserver(forName: CloudRelay.changed, object: nil,
-                                                               queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyRemote() }
-        }
-        // La voie rapide : la balise d'un autre appareil arrive par la base.
-        baseObserver = NotificationCenter.default.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil,
-                                                              queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyRemote() }
-        }
-        NSUbiquitousKeyValueStore.default.synchronize()
-        applyRemote()
-    }
-
-    func applyRemote() {
-        guard let remote = CloudRelay.remoteTimer(context: relayContext) else { return }
-        CloudRelay.noteShared(local: state, remote: remote)
-        let decision = CloudRelay.decide(local: state, remote: remote,
-                                         lastApplied: CloudRelay.lastAppliedTimer, device: CloudRelay.deviceID,
-                                         shared: CloudRelay.sharedSession)
-        guard decision != .ignore else { return }
-        applyingRemote = true
-        defer { applyingRemote = false }
-        CloudRelay.lastAppliedTimer = remote.updatedAt
-        switch decision {
-        case .adopt(let remoteState):
-            CloudRelay.noteAdopted(remoteState)
-            state = remoteState
-            lastEvent = nil
-            commit(presence: false)
-        case .close:
-            close()
-        case .ignore:
-            break
-        }
-    }
-
-    // MARK: Publication
-
-    /// Ferme la session : plus d'état, plus d'îlot, plus de présence.
-    private func close() {
-        let ended = state?.sessionStartedAt
-        if !applyingRemote, let ended { CloudRelay.publishTimer(nil, ended: ended, context: relayContext) }
-        state = nil
-        lastEvent = nil
-        FocusTimerStore.save(nil)
-        StudyActivityController.end(session: ended)
-        syncStudyLock()
-        app?.notifications.cancelPomodoro()
-        if let app {
-            app.presence.stop(context: ModelContext(app.modelContainer), social: app.social)
-            WidgetSnapshotWriter.refresh(context: ModelContext(app.modelContainer), settings: app.settings)
-        }
-        updateTicker()
-    }
-
-    /// Publie l'état partout où il se voit.
-    ///
-    /// - Parameters:
-    ///   - presence: annoncer aux groupes (démarrage, pause, changement de cours).
-    ///   - activity: republier la Live Activity.
-    private func commit(presence: Bool = true, activity: Bool = true, publish: Bool = true) {
-        FocusTimerStore.save(state)
-        // Le Mac (et l'iPad) suivent le même chrono. Seule une session se
-        // publie : « pas de chrono » ne part que de `close()`, avec la session
-        // terminée — sinon un réglage touché au repos (cours, Pomodoro)
-        // effaçait la session tout juste démarrée ailleurs.
-        //
-        // Et seuls les **gestes** se publient (`publish`). La fin d'un bloc ou
-        // d'une pause se déduit des dates, pareil sur chaque appareil : la
-        // republier, c'était dater de « maintenant » un état périmé (l'iPhone
-        // qui se réveille rattrape les blocs de SA dernière version) et
-        // écraser le « play » donné entre-temps sur le Mac.
-        if publish, !applyingRemote, let state { CloudRelay.publishTimer(state, context: relayContext) }
-        syncStudyLock()
-        guard let app, let state else { updateTicker(); return }
-        if activity {
-            StudyActivityController.publish(state, container: app)
-        }
-        schedulePomodoroNotifications(state)
-        if presence { announcePresence(state) }
-        WidgetSnapshotWriter.scheduleRefresh(context: ModelContext(app.modelContainer), settings: app.settings)
-        updateTicker()
-    }
+    // MARK: Effets
 
     /// Planifie la fin du bloc et la fin de la pause qui suit.
     private func schedulePomodoroNotifications(_ state: FocusTimerState) {
         guard let app else { return }
-        let settings = self.settings
+        let settings = cycle
         guard state.pomodoro else {
             app.notifications.cancelPomodoro()
             return
@@ -540,8 +213,7 @@ final class FocusController {
             app.presence.stop(context: context, social: app.social)
             return
         }
-        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
-        let course = courses.first { $0.id == state.courseID }
+        let course = TimerEngine.course(state.courseID, in: context)
         let target = Self.target(of: state, in: course)
         let entry = PresenceEntry(
             userID: app.social.userID ?? "me",
@@ -555,38 +227,12 @@ final class FocusController {
         app.presence.announce(entry, context: context, social: app.social)
     }
 
-    /// Le battement ne tourne que lorsqu'un changement peut survenir : un bloc
-    /// qui court vers sa fin, ou une pause qui décompte.
-    private func updateTicker() {
-        let needsTick = state.map { $0.pomodoro && ($0.isRunning || $0.currentBreak != nil) } ?? false
-        if needsTick {
-            guard ticker == nil else { return }
-            ticker = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(1))
-                    if Task.isCancelled { break }
-                    self?.tick()
-                }
-            }
-        } else {
-            ticker?.cancel()
-            ticker = nil
-        }
-    }
-
     /// La cible de la session : un exercice ou un élément de théorie.
     static func target(of state: FocusTimerState, in course: Course?) -> (exercise: Exercise?, theoryItem: TheoryItem?) {
-        target(of: state.targetID, in: course)
+        TimerEngine.target(of: state.targetID, in: course)
     }
 
     static func target(of targetID: UUID?, in course: Course?) -> (exercise: Exercise?, theoryItem: TheoryItem?) {
-        guard let course, let targetID else { return (nil, nil) }
-        if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
-            return (exercise, nil)
-        }
-        if let item = course.theoryItems.first(where: { $0.id == targetID }) {
-            return (nil, item)
-        }
-        return (nil, nil)
+        TimerEngine.target(of: targetID, in: course)
     }
 }

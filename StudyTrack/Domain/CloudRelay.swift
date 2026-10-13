@@ -125,11 +125,15 @@ enum CloudRelay {
         set { UserDefaults.standard.set(newValue, forKey: appliedKey) }
     }
 
-    /// Publie par les deux voies : le magasin clé-valeur, et la balise de cet
-    /// appareil dans la base (`context`), bien plus rapide.
+    /// Publie par les deux voies : le relais (`onPublish`, instantané) et le
+    /// magasin clé-valeur d'iCloud (rattrapage des appareils fermés).
+    ///
+    /// Une troisième voie, une balise par appareil dans la base iCloud
+    /// (`RelayBeacon`), écrivait une fiche synchronisée à chaque geste : du
+    /// trafic CloudKit et de la batterie pour ce que le relais fait déjà en
+    /// 70 ms. Elle est retirée ; le modèle reste dans le schéma, inutilisé.
     @discardableResult @MainActor
-    static func publishTimer(_ state: FocusTimerState?, ended: Date? = nil, now: Date = Date(),
-                             context: ModelContext? = nil) -> TimerSnapshot {
+    static func publishTimer(_ state: FocusTimerState?, ended: Date? = nil, now: Date = Date()) -> TimerSnapshot {
         // La dernière session fermée ici voyage avec chaque publication : si
         // une nouvelle session la suit de près, l'autre appareil saura quand
         // même que l'ancienne est finie.
@@ -147,16 +151,6 @@ enum CloudRelay {
         lastAppliedTimer = now
         store.synchronize()
         onPublish?(snapshot)
-        if let context {
-            let device = deviceID
-            let mine = (try? context.fetch(FetchDescriptor<RelayBeacon>(predicate: #Predicate { $0.device == device }))) ?? []
-            let beacon = mine.first ?? RelayBeacon(device: device)
-            if mine.isEmpty { context.insert(beacon) }
-            for extra in mine.dropFirst() { context.delete(extra) }
-            beacon.updatedAt = now
-            beacon.payload = data
-            try? context.save()
-        }
         return snapshot
     }
 
@@ -179,14 +173,10 @@ enum CloudRelay {
     /// L'état le plus récent publié par un **autre** appareil, quelle que soit
     /// la voie par laquelle il est arrivé.
     @MainActor
-    static func remoteTimer(context: ModelContext? = nil) -> TimerSnapshot? {
+    static func remoteTimer() -> TimerSnapshot? {
         var candidates: [TimerSnapshot] = linked.map { [$0] } ?? []
         if let data = store.data(forKey: timerKey), let snapshot = try? decoder.decode(TimerSnapshot.self, from: data) {
             candidates.append(snapshot)
-        }
-        if let context {
-            let beacons = (try? context.fetch(FetchDescriptor<RelayBeacon>())) ?? []
-            candidates += beacons.compactMap { $0.payload.flatMap { try? decoder.decode(TimerSnapshot.self, from: $0) } }
         }
         return newest(candidates, excluding: deviceID)
     }

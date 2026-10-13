@@ -36,7 +36,6 @@ struct StudyTrackMacApp: App {
         let menuClock = MenuBarClock()
         menuClock.timer = timer
         menuClock.settings = settings
-        timer.container = store.container
         // Le mode étude suit le chrono : lancé sur l'iPhone, il s'ouvre ici.
         StudyModeController.shared.timer = timer
         StudyModeController.shared.settings = settings
@@ -49,7 +48,7 @@ struct StudyTrackMacApp: App {
             menuClock.update()
             StudyModeController.shared.update()
         }
-        timer.applyRemote()
+        timer.attach(store.container)
         MiniTimerPanel.shared.timer = timer
         MiniTimerPanel.shared.settings = settings
         MiniTimerPanel.shared.container = store.container
@@ -335,8 +334,7 @@ enum MacLivePayload {
             return LiveActivityBuilder.push(event: "end", state: ActivityTimerState(countingSince: nil, frozenTotal: 0),
                                             attributes: nil)
         }
-        let context = ModelContext(container)
-        let course = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first { $0.id == state.courseID }
+        let course = TimerEngine.course(state.courseID, in: ModelContext(container))
         let exercise = LiveActivityBuilder.exercise(for: state, course: course)
         let content = LiveActivityBuilder.state(timer: state, settings: settings, exercise: exercise, course: course)
         return LiveActivityBuilder.push(event: "update", state: content,

@@ -73,7 +73,7 @@ enum PomodoroEngine {
 // MARK: - Le cycle : travail, pause, travail
 
 /// Ce que dure chaque temps du cycle, lu dans les réglages.
-struct PomodoroSettings: Equatable {
+struct PomodoroSettings: Codable, Equatable {
     var focusMinutes: Int = 25
     var shortBreakMinutes: Int = 5
     var longBreakMinutes: Int = 15

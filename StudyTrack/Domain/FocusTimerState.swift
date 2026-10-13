@@ -50,6 +50,14 @@ struct FocusTimerState: Codable, Equatable {
     /// écran de travail, rien n'est fermé. `nil` vaut oui — les états publiés
     /// avant ce champ, et un appareil plus ancien qui l'ignore, bloquent.
     var studyLocks: Bool?
+    /// Les durées du cycle Pomodoro **de cette session**, fixées par l'appareil
+    /// qui l'a démarrée et publiées avec elle.
+    ///
+    /// Chaque appareil lisait ses propres réglages : un Mac en 50/10 et un
+    /// iPhone en 25/5 ne coupaient pas le bloc au même instant, et l'îlot (bâti
+    /// par le Mac) contredisait l'app. `nil` : un état publié avant ce champ —
+    /// les réglages de l'appareil s'appliquent, comme avant.
+    var cycle: PomodoroSettings?
 
     init(accumulated: TimeInterval = 0,
          runningSince: Date? = nil,
@@ -72,6 +80,9 @@ struct FocusTimerState: Codable, Equatable {
     }
 
     var isRunning: Bool { runningSince != nil }
+
+    /// Les durées du cycle de la session, sinon celles de l'appareil.
+    func cycle(or local: PomodoroSettings) -> PomodoroSettings { cycle ?? local }
 
     var taskType: TaskType { TaskType(rawValue: taskTypeRaw) ?? .other }
 

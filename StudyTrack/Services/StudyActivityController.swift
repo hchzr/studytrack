@@ -213,8 +213,7 @@ enum StudyActivityController {
 
     /// Le cours de la session, s'il y en a un.
     static func course(for state: FocusTimerState, context: ModelContext) -> Course? {
-        guard let id = state.courseID else { return nil }
-        return ((try? context.fetch(FetchDescriptor<Course>())) ?? []).first { $0.id == id }
+        TimerEngine.course(state.courseID, in: context)
     }
 
     /// L'exercice visé, s'il en existe un : seul porteur de sous-questions.

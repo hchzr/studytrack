@@ -306,7 +306,7 @@ struct RecapCard: View {
 }
 
 private struct RecapRow: View {
-    let part: MacTimer.Recap.Part
+    let part: TimerEngine.RecordedPart
     let course: Course?
 
     var body: some View {

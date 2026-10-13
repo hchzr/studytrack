@@ -5243,6 +5243,29 @@ do {
     check(merged == ["1": ["a", "b", "c"], "2": ["x"]], "activités vues : union de tous les appareils")
 }
 
+// MARK: Chrono partagé : le cycle Pomodoro voyage avec la session
+do {
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    let mac = PomodoroSettings(focusMinutes: 50, shortBreakMinutes: 10)
+    let phone = PomodoroSettings(focusMinutes: 25, shortBreakMinutes: 5)
+    var session = FocusTimerState(sessionStartedAt: start, pomodoro: true)
+    session.cycle = mac
+    session.start(at: start)
+    // L'iPhone (25/5) lit la session démarrée sur le Mac (50/10) : même fin de bloc.
+    check(session.blockEndDate(settings: session.cycle(or: phone)) == start.addingTimeInterval(50 * 60),
+          "le bloc finit à 50 min sur les deux appareils, pas à 25 sur l'iPhone")
+    var onPhone = session
+    let events = onPhone.advance(settings: onPhone.cycle(or: phone), to: start.addingTimeInterval(30 * 60))
+    check(events.isEmpty && onPhone.isRunning, "à 30 min, l'iPhone ne coupe pas le bloc du Mac")
+    let encoded = try! JSONEncoder().encode(session)
+    check((try? JSONDecoder().decode(FocusTimerState.self, from: encoded))?.cycle == mac, "le cycle est publié avec l'état")
+    var old = session
+    old.cycle = nil
+    let legacy = try! JSONEncoder().encode(old)
+    check((try? JSONDecoder().decode(FocusTimerState.self, from: legacy))?.cycle(or: phone) == phone,
+          "un état d'avant (sans cycle) prend les réglages de l'appareil")
+}
+
 // MARK: Mode étude
 do {
     let t0 = Date(timeIntervalSince1970: 2_000_000_000)
