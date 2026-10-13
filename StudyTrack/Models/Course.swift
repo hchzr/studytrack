@@ -39,9 +39,20 @@ final class Course {
     /// Cours suivi ce semestre (les autres sont archivés).
     var isTracked: Bool = false
 
+    /// **Inutilisé** : doublon de `isTracked`, que tout l'app lit. Gardé dans
+    /// le schéma (`SchemaV1`) pour ne pas imposer de migration ; à retirer avec
+    /// la prochaine version du schéma.
     var isActive: Bool = false
     var lecturer: String = ""
+    /// Le lien Moodle saisi à la main (formulaire du cours). Le lien d'un cours
+    /// importé est dans `contentSources` ; `moodleLink` choisit.
     var moodleURLString: String = ""
+
+    /// Le lien Moodle du cours : celui saisi à la main, sinon celui de l'import.
+    var moodleLink: URL? {
+        if !moodleURLString.isEmpty, let url = URL(string: moodleURLString) { return url }
+        return contentSources.compactMap(URL.init(string:)).first { ContentSource.detect(host: $0.host) == .moodle }
+    }
     var notes: String = ""
 
     /// Pages d'où le contenu du cours a été importé (Moodle, Courseware,
@@ -158,7 +169,6 @@ final class Course {
          hasLectures: Bool = true,
          sectionCode: String = "",
          isTracked: Bool = true,
-         isActive: Bool = true,
          lecturer: String = "",
          moodleURLString: String = "",
          notes: String = "") {
@@ -176,7 +186,6 @@ final class Course {
         self.hasLectures = hasLectures
         self.sectionCode = sectionCode
         self.isTracked = isTracked
-        self.isActive = isActive
         self.lecturer = lecturer
         self.moodleURLString = moodleURLString
         self.notes = notes

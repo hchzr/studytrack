@@ -691,7 +691,7 @@ struct CourseDetailView: View {
                 } label: {
                     Label("Modifier le cours", systemImage: "slider.horizontal.3")
                 }
-                if let url = URL(string: course.moodleURLString), !course.moodleURLString.isEmpty {
+                if let url = course.moodleLink {
                     Link(destination: url) {
                         Label("Ouvrir la page du cours", systemImage: "safari")
                     }

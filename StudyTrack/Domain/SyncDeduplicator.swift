@@ -124,7 +124,6 @@ enum SyncDeduplicator {
 
     static func merge(_ b: Course, into a: Course, context: ModelContext) {
         a.isTracked = a.isTracked || b.isTracked
-        a.isActive = a.isActive || b.isActive
         fill(&a.moodleURLString, b.moodleURLString)
         fill(&a.lecturer, b.lecturer)
         fill(&a.notes, b.notes)

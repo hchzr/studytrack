@@ -96,14 +96,12 @@ struct StatsView: View {
     /// manqués, plus les sessions saisies comme amphi.
     private var lectures: [LectureSlot] {
         let r = range
-        // Moins ce qu'un chrono du même cours recouvre déjà (`StudyTime`).
+        // Les cours suivis, comptés par `StudyTime` (la même règle partout :
+        // moins ce qu'un chrono du même cours recouvre déjà).
+        let byCode = Dictionary(courses.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
         let inRange = events.filter { $0.startsAt >= r.start && $0.startsAt < r.end }
-        var slots = inRange.filter(\.countsAsAttendedLecture).compactMap { event -> LectureSlot? in
-            let own = event.course?.sessions.map {
-                StudyTime.Interval(start: $0.startedAt, end: $0.startedAt.addingTimeInterval(TimeInterval($0.durationSeconds)))
-            } ?? []
-            let seconds = StudyTime.lectureSeconds(start: event.startsAt, end: event.endsAt, minus: own)
-            return seconds > 0 ? LectureSlot(date: event.startsAt, seconds: seconds, course: event.course) : nil
+        var slots = StudyTime.lectureBlocks(events: inRange, sessions: Array(sessions)).map {
+            LectureSlot(date: $0.start, seconds: $0.seconds, course: $0.courseCode.flatMap { byCode[$0] })
         }
         slots += sessions
             .filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical == .lecture }
