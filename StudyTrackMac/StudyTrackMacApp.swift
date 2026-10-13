@@ -42,8 +42,11 @@ struct StudyTrackMacApp: App {
         StudyModeController.shared.container = store.container
         // Les widgets du bureau, le chrono flottant, la barre des menus et le
         // mode étude suivent le chrono.
+        let refreshWidgets = {
+            WidgetSnapshotWriter.scheduleRefresh(context: ModelContext(store.container), settings: store.preferences)
+        }
         timer.onChange = {
-            MacWidgetWriter.schedule(container: store.container, timer: timer)
+            refreshWidgets()
             MiniTimerPanel.shared.update()
             menuClock.update()
             StudyModeController.shared.update()
@@ -52,8 +55,8 @@ struct StudyTrackMacApp: App {
         MiniTimerPanel.shared.timer = timer
         MiniTimerPanel.shared.settings = settings
         MiniTimerPanel.shared.container = store.container
-        store.onDataChange = { MacWidgetWriter.schedule(container: store.container, timer: timer) }
-        MacWidgetWriter.schedule(container: store.container, timer: timer)
+        store.onDataChange = refreshWidgets
+        refreshWidgets()
         _settings = State(initialValue: settings)
         _store = State(initialValue: store)
         _timer = State(initialValue: timer)

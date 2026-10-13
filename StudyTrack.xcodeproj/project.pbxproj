@@ -27,6 +27,7 @@
 		F30000000000000000000010 /* ConnectionCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000010 /* ConnectionCenter.swift */; };
 		F30000000000000000000011 /* CourseEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011 /* CourseEvidence.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
 		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
@@ -137,7 +138,6 @@
 		F1000000000000000000000C /* Models (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (F1000000000000000000000F /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); name = "Models (Mac)"; path = StudyTrack/Models; sourceTree = "<group>"; };
 		F1000000000000000000000D /* Domain (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "Domain (Mac)"; path = StudyTrack/Domain; sourceTree = "<group>"; };
 		G10000000000000000000001 /* StudyTrackMacWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackMacWidgets; sourceTree = "<group>"; };
-		G1000000000000000000000C /* MacShared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MacShared; sourceTree = "<group>"; };
 		H10000000000000000000001 /* StudyTrackLock */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackLock; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -199,7 +199,6 @@
 				F10000000000000000000001 /* StudyTrackMac */,
 				H10000000000000000000001 /* StudyTrackLock */,
 				G10000000000000000000001 /* StudyTrackMacWidgets */,
-				G1000000000000000000000C /* MacShared */,
 				E20000000000000000000001 /* StudyKit */,
 				F1000000000000000000000E /* Mac — sources partagées */,
 				D10000000000000000000001 /* Supabase.xcconfig */,
@@ -339,7 +338,6 @@
 				F10000000000000000000001 /* StudyTrackMac */,
 				F1000000000000000000000C /* Models (Mac) */,
 				F1000000000000000000000D /* Domain (Mac) */,
-				G1000000000000000000000C /* MacShared */,
 			);
 			name = StudyTrackMac;
 			packageProductDependencies = (
@@ -363,7 +361,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				G10000000000000000000001 /* StudyTrackMacWidgets */,
-				G1000000000000000000000C /* MacShared */,
 			);
 			name = StudyTrackMacWidgets;
 			productName = StudyTrackMacWidgets;
@@ -542,6 +539,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				G3000000000000000000000D /* WidgetBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

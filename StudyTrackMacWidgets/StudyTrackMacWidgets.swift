@@ -1,7 +1,9 @@
 import SwiftUI
 import WidgetKit
 
-/// Les widgets du bureau : le chrono, la journée, la semaine.
+/// Les widgets du bureau, les mêmes que ceux de l'iPhone : le chrono, la
+/// journée (horaire et échéances), la semaine cours par cours. Ils lisent
+/// l'instantané écrit par l'app (`WidgetSnapshot`, partagé avec l'iPhone).
 @main
 struct StudyTrackMacWidgets: WidgetBundle {
     var body: some Widget {
@@ -13,7 +15,7 @@ struct StudyTrackMacWidgets: WidgetBundle {
 
 struct SnapshotEntry: TimelineEntry {
     let date: Date
-    let snapshot: MacWidgetSnapshot
+    let snapshot: WidgetSnapshot
 }
 
 struct SnapshotProvider: TimelineProvider {
@@ -22,15 +24,27 @@ struct SnapshotProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
-        let snapshot = MacWidgetSnapshot.load()
-        completion(SnapshotEntry(date: Date(), snapshot: context.isPreview && snapshot.courses.isEmpty ? .preview : snapshot))
+        let snapshot = WidgetBridge.read()
+        completion(SnapshotEntry(date: Date(), snapshot: context.isPreview && snapshot?.courses == nil ? .preview
+                                 : snapshot ?? WidgetSnapshot(updatedAt: .distantPast)))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
         // L'app recharge les widgets à chaque changement ; ce rappel ne sert
         // qu'à passer minuit (« aujourd'hui » repart à zéro).
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        completion(Timeline(entries: [SnapshotEntry(date: Date(), snapshot: MacWidgetSnapshot.load())], policy: .after(next)))
+        let snapshot = WidgetBridge.read() ?? WidgetSnapshot(updatedAt: .distantPast)
+        completion(Timeline(entries: [SnapshotEntry(date: Date(), snapshot: snapshot)], policy: .after(next)))
+    }
+}
+
+extension WidgetSnapshot {
+    /// Le temps d'aujourd'hui (sessions et cours suivis), d'après la semaine.
+    func todaySeconds(at date: Date = Date()) -> Int {
+        guard let week else { return 0 }
+        let index = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: week.weekStart),
+                                                    to: Calendar.current.startOfDay(for: date)).day ?? -1
+        return week.days.indices.contains(index) ? week.days[index] : 0
     }
 }
 
@@ -49,26 +63,26 @@ struct TimerWidget: Widget {
 }
 
 struct TimerWidgetView: View {
-    let snapshot: MacWidgetSnapshot
+    let snapshot: WidgetSnapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let timer = snapshot.timer {
                 HStack(spacing: 6) {
                     Circle().fill(Color(widgetHex: timer.colorHex)).frame(width: 8, height: 8)
-                    Text(timer.courseCode.isEmpty ? "Session" : timer.courseCode).font(.caption.weight(.semibold))
+                    Text(timer.label).font(.caption.weight(.semibold)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if let end = timer.breakEndsAt, end > Date() {
                     Text(end, style: .timer)
                         .font(.system(size: 30, weight: .light, design: .serif)).monospacedDigit()
-                    Text("Pause").font(.caption).foregroundStyle(.secondary)
-                } else if let start = timer.counterStart {
-                    Text(start, style: .timer)
+                    Text(timer.breakLabel ?? "Pause").font(.caption).foregroundStyle(.secondary)
+                } else if timer.isRunning {
+                    Text(timer.effectiveStart, style: .timer)
                         .font(.system(size: 30, weight: .light, design: .serif)).monospacedDigit()
-                    Text(timer.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text("En cours").font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text(Duration.seconds(timer.accumulated).formatted(.time(pattern: .minuteSecond)))
+                    Text(Duration.seconds(timer.elapsedWhenPaused).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 30, weight: .light, design: .serif)).monospacedDigit()
                         .foregroundStyle(.secondary)
                     Text("En pause").font(.caption).foregroundStyle(.secondary)
@@ -76,9 +90,10 @@ struct TimerWidgetView: View {
             } else {
                 Label("Aujourd'hui", systemImage: "timer").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                Text(widgetHours(snapshot.todaySeconds))
+                Text(WidgetFormat.hours(snapshot.todaySeconds()))
                     .font(.system(size: 30, weight: .light, design: .serif))
-                Text("\(widgetHours(snapshot.weekSeconds)) cette semaine").font(.caption).foregroundStyle(.secondary)
+                Text("\(WidgetFormat.hours(snapshot.week?.actualSeconds ?? 0)) cette semaine")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -90,51 +105,65 @@ struct TimerWidgetView: View {
 struct TodayWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "mac.today", provider: SnapshotProvider()) { entry in
-            TodayWidgetView(snapshot: entry.snapshot)
+            TodayWidgetView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("À faire")
-        .description("Ce qu'il reste à faire, et le temps du jour.")
+        .configurationDisplayName("Aujourd'hui")
+        .description("L'horaire du jour et les prochaines échéances.")
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
 
 struct TodayWidgetView: View {
-    let snapshot: MacWidgetSnapshot
+    let entry: SnapshotEntry
     @Environment(\.widgetFamily) private var family
+
+    private var events: [WidgetEvent] {
+        (entry.snapshot.schedule ?? [])
+            .filter { Calendar.current.isDate($0.start, inSameDayAs: entry.date) && ($0.end ?? $0.start) >= entry.date }
+    }
+
+    private var deadlines: [WidgetDeadline] {
+        (entry.snapshot.deadlines ?? []).filter { $0.date >= entry.date }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("À faire").font(.headline)
+                Text("Aujourd'hui").font(.headline)
                 Spacer()
-                if let timer = snapshot.timer, let start = timer.counterStart {
-                    Label { Text(start, style: .timer).monospacedDigit() } icon: { Image(systemName: "timer") }
-                        .font(.caption)
-                        .foregroundStyle(Color(widgetHex: timer.colorHex))
-                } else {
-                    Text(widgetHours(snapshot.todaySeconds)).font(.caption).foregroundStyle(.secondary)
+                Text(WidgetFormat.hours(entry.snapshot.todaySeconds(at: entry.date)))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            let shown = events.prefix(family == .systemLarge ? 6 : 2)
+            if shown.isEmpty {
+                Text("Rien à l'horaire").font(.callout).foregroundStyle(.secondary)
+            }
+            ForEach(Array(shown)) { event in
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color(widgetHex: event.colorHex)).frame(width: 3, height: 24)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(event.title).font(.callout).lineLimit(1)
+                        Text(event.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Text(event.start, style: .time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
-            let todos = snapshot.todos.prefix(family == .systemLarge ? 8 : 3)
-            if todos.isEmpty {
-                Spacer()
-                Text("Rien en attente.").foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                ForEach(Array(todos)) { todo in
+            if !deadlines.isEmpty {
+                Divider()
+                ForEach(Array(deadlines.prefix(family == .systemLarge ? 3 : 1))) { deadline in
                     HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2).fill(Color(widgetHex: todo.colorHex)).frame(width: 3, height: 24)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(todo.title).font(.callout).lineLimit(1)
-                            Text(todo.detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                        }
+                        Text(deadline.courseCode).font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(widgetHex: deadline.colorHex))
+                        Text(deadline.title).font(.caption).lineLimit(1)
                         Spacer(minLength: 0)
-                        Image(systemName: todo.icon).font(.caption).foregroundStyle(.secondary)
+                        Text(WidgetFormat.countdown(to: deadline.date, from: entry.date))
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }
                 }
-                Spacer(minLength: 0)
             }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -154,24 +183,24 @@ struct WeekWidget: Widget {
 }
 
 struct WeekWidgetView: View {
-    let snapshot: MacWidgetSnapshot
+    let snapshot: WidgetSnapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(snapshot.week > 0 ? "Semaine \(snapshot.week)" : "Cette semaine").font(.headline)
+                Text(snapshot.week?.number.map { "Semaine \($0)" } ?? "Cette semaine").font(.headline)
                 Spacer()
-                Text(widgetHours(snapshot.weekSeconds)).font(.caption).foregroundStyle(.secondary)
+                Text(WidgetFormat.hours(snapshot.week?.actualSeconds ?? 0)).font(.caption).foregroundStyle(.secondary)
             }
-            ForEach(snapshot.courses.prefix(6)) { course in
+            ForEach((snapshot.courses ?? []).prefix(6)) { course in
                 HStack(spacing: 8) {
                     Text(course.code).font(.caption.weight(.semibold)).frame(width: 70, alignment: .leading)
                     ProgressView(value: Double(course.done), total: Double(max(course.total, 1)))
                         .tint(Color(widgetHex: course.colorHex))
                     Text("\(course.done)/\(course.total)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         .frame(width: 34, alignment: .trailing)
-                    if course.late > 0 {
-                        Text("\(course.late)").font(.caption2.weight(.bold)).foregroundStyle(.red)
+                    if let late = course.late, late > 0 {
+                        Text("\(late)").font(.caption2.weight(.bold)).foregroundStyle(.red)
                     }
                 }
             }
@@ -180,19 +209,37 @@ struct WeekWidgetView: View {
     }
 }
 
-extension MacWidgetSnapshot {
-    static let preview = MacWidgetSnapshot(
-        updatedAt: Date(), todaySeconds: 7800, weekSeconds: 44_000, week: 4,
-        timer: Timer(courseCode: "MATH-101", colorHex: "#3E7CB1", label: "Exercice 4.2",
-                     runningSince: Date().addingTimeInterval(-900), accumulated: 600, breakEndsAt: nil),
-        todos: [
-            Todo(id: "1", title: "Exercice 3.4", detail: "CS-107 · À refaire", colorHex: "#C0504D", icon: "arrow.counterclockwise"),
-            Todo(id: "2", title: "Série 4", detail: "MATH-101 · Exercice", colorHex: "#3E7CB1", icon: "list.number"),
-            Todo(id: "3", title: "Théorie 4.1", detail: "PHYS-101 · Théorie", colorHex: "#4F9D69", icon: "play.rectangle"),
-        ],
-        courses: [
-            CourseWeek(id: "a", code: "MATH-101", colorHex: "#3E7CB1", done: 3, total: 5, late: 0),
-            CourseWeek(id: "b", code: "CS-107", colorHex: "#C0504D", done: 1, total: 4, late: 2),
-            CourseWeek(id: "c", code: "PHYS-101", colorHex: "#4F9D69", done: 4, total: 4, late: 0),
-        ])
+extension WidgetSnapshot {
+    static var preview: WidgetSnapshot {
+        let now = Date()
+        let monday = Calendar(identifier: .iso8601).dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        return WidgetSnapshot(
+            updatedAt: now,
+            courses: [
+                WidgetCourse(id: "a", code: "MATH-101", colorHex: "#3E7CB1", done: 3, total: 5, summary: "", late: 0),
+                WidgetCourse(id: "b", code: "CS-107", colorHex: "#C0504D", done: 1, total: 4, summary: "", late: 2),
+                WidgetCourse(id: "c", code: "PHYS-101", colorHex: "#4F9D69", done: 4, total: 4, summary: "", late: 0)
+            ],
+            timer: WidgetTimer(label: "MATH-101 · 4.2", colorHex: "#3E7CB1",
+                               effectiveStart: now.addingTimeInterval(-1500), isRunning: true, elapsedWhenPaused: 1500),
+            week: WidgetWeek(weekStart: monday, number: 4, totalWeeks: 14, actualSeconds: 44_000,
+                             expectedSeconds: 60_000, days: [7800, 9000, 5400, 10800, 11000, 0, 0]),
+            schedule: [WidgetEvent(id: "e", start: now.addingTimeInterval(3600), end: now.addingTimeInterval(7200),
+                                   title: "Analyse I", subtitle: "MATH-101 · CE1", colorHex: "#3E7CB1")],
+            deadlines: [WidgetDeadline(id: "d", title: "Série 4 à rendre", courseCode: "CS-107",
+                                       date: now.addingTimeInterval(2 * 86400), colorHex: "#C0504D")])
+    }
+}
+
+extension Color {
+    /// « #5B4FE0 » → couleur (les widgets n'ont pas le thème de l'app).
+    init(widgetHex hex: String) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        var value: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&value)
+        self.init(.sRGB,
+                  red: Double((value >> 16) & 0xFF) / 255,
+                  green: Double((value >> 8) & 0xFF) / 255,
+                  blue: Double(value & 0xFF) / 255)
+    }
 }

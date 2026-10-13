@@ -2,10 +2,11 @@ import Foundation
 import SwiftData
 import WidgetKit
 
-/// Publie l'état de l'app dans le conteneur partagé et recharge les widgets.
+/// Publie l'état de l'app dans le conteneur partagé et recharge les widgets —
+/// **le même instantané** sur l'iPhone et le Mac (`WidgetSnapshot`).
 ///
-/// Appelé quand l'app passe au premier plan ou à l'arrière-plan, et après
-/// l'enregistrement d'une session.
+/// Appelé après chaque enregistrement (groupé), quand l'app change d'état et
+/// quand le chrono change.
 @MainActor
 enum WidgetSnapshotWriter {
 
@@ -33,8 +34,10 @@ enum WidgetSnapshotWriter {
         }
         WidgetBridge.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
+        #if os(iOS)
         // Le contrôle « Pause du chrono » lit le même instantané.
         if #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
+        #endif
     }
 
     /// Rafraîchissement **groupé** : plusieurs enregistrements rapprochés (cocher

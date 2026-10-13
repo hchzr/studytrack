@@ -760,7 +760,8 @@ struct FocusTimerPanel: View {
     private var todaySummary: some View {
         let start = DateUtils.startOfDay(Date())
         let today = sessions.filter { $0.startedAt >= start }
-        let seconds = today.reduce(0) { $0 + $1.durationSeconds }
+        // Compté comme partout : sessions et cours suivis (`StudyTime`).
+        let seconds = StudyTime.today(in: context)
         if seconds > 0 {
             HStack(spacing: Layout.snug) {
                 Image(systemName: "sum")

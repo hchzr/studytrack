@@ -12,9 +12,9 @@ import SwiftData
 struct MeView: View {
     var onClose: (() -> Void)? = nil
     @Environment(AppContainer.self) private var app
+    @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
-    @Query(sort: \LinkedCalendarEvent.startsAt) private var events: [LinkedCalendarEvent]
     /// `-settings` (captures) : ouvre les réglages à l'arrivée.
     @State private var debugSettings = false
 
@@ -85,30 +85,32 @@ struct MeView: View {
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
-    private var weekSessions: [StudySession] {
-        let start = DateUtils.startOfWeek(Date())
-        return sessions.filter { $0.startedAt >= start }
-    }
-
+    /// Trois chiffres, **tous de la semaine** : le temps, ce qui était prévu et
+    /// est fait, ce qui a été corrigé juste. (Le deuxième était celui du
+    /// semestre et le troisième de toujours, sous le titre « Cette semaine ».)
     private var weekStats: some View {
-        // Le même compte qu'« Aujourd'hui » : le chrono **et** les cours suivis.
         let start = DateUtils.startOfWeek(Date())
-        let seconds = StudyTime.blocks(events: events.filter { $0.startsAt >= start && $0.startsAt < Date() },
-                                       sessions: weekSessions).reduce(0) { $0 + $1.seconds }
-        let progress = tracked.map { ProgressEngine.progress(for: $0) }
-        let done = progress.reduce(0) { $0 + $1.watchedCount + $1.doneCount }
-        let total = progress.reduce(0) { $0 + $1.videoCount + $1.exerciseCount }
-        let corrected = tracked.flatMap(\.allExercises).filter { $0.correctness != nil }
+        let end = DateUtils.addDays(7, to: start)
+        let _ = sessions.count
+        let seconds = StudyTime.seconds(in: context, from: start, to: end)
+        let weekSessions = sessions.prefix { $0.startedAt >= start }.filter { $0.startedAt < end }
+        let weeks = tracked.map { ProgressEngine.weekProgress(for: $0, week: $0.currentWeek) }
+        let done = weeks.reduce(0) { $0 + $1.watchedCount + $1.doneCount }
+        let total = weeks.reduce(0) { $0 + $1.videoCount + $1.exerciseCount }
+        let corrected = tracked.flatMap(\.allExercises).filter {
+            guard let at = $0.correctedAt, $0.correctness != nil else { return false }
+            return at >= start && at < end
+        }
         let right = corrected.filter { $0.correctness == .correct }.count
         return VStack(alignment: .leading, spacing: 10) {
             CarnetSectionTitle("Cette semaine")
             HStack(spacing: 8) {
                 CarnetStat(label: "Travail", value: DateUtils.hoursLabel(seconds: seconds),
                            detail: "\(weekSessions.count) session\(weekSessions.count > 1 ? "s" : "")")
-                CarnetStat(label: "Fait", value: "\(Int((CourseProgress.ratio(done, total) * 100).rounded())) %",
-                           detail: "du semestre")
+                CarnetStat(label: "Fait", value: total == 0 ? "—" : "\(done)/\(total)",
+                           detail: "prévu cette semaine")
                 CarnetStat(label: "Juste", value: corrected.isEmpty ? "—" : "\(Int((Double(right) / Double(corrected.count) * 100).rounded())) %",
-                           detail: corrected.isEmpty ? "rien de corrigé" : "\(corrected.count) corrigés")
+                           detail: corrected.isEmpty ? "rien de corrigé" : "\(corrected.count) corrigé\(corrected.count > 1 ? "s" : "")")
             }
         }
     }

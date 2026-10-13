@@ -89,11 +89,16 @@ enum WidgetBridge {
     /// injecté dans l'Info.plist des deux cibles et dans leurs entitlements.
     /// Le lire ici évite qu'une valeur codée en dur ne diverge de la configuration.
     static let appGroupID: String = {
+        #if os(macOS)
+        // Groupe préfixé par l'équipe : pas de profil à part sur macOS.
+        return "5GGDH5F3NG.com.hczr.studytrack"
+        #else
         if let value = Bundle.main.object(forInfoDictionaryKey: "StudyTrackAppGroup") as? String,
            !value.isEmpty {
             return value
         }
         return "group.com.studytracker.app"
+        #endif
     }()
 
     static let fileName = "widget-snapshot.json"

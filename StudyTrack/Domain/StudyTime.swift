@@ -93,6 +93,23 @@ enum StudyTime {
         return blocks(events: events, sessions: sessions)
     }
 
+    /// Le temps compté entre deux dates.
+    static func seconds(in context: ModelContext, from start: Date, to end: Date) -> Int {
+        total(blocks(in: context, from: start, to: end))
+    }
+
+    /// Le temps compté aujourd'hui.
+    static func today(in context: ModelContext, now: Date = Date()) -> Int {
+        let start = DateUtils.startOfDay(now)
+        return seconds(in: context, from: start, to: DateUtils.addDays(1, to: start))
+    }
+
+    /// Le temps compté cette semaine (lundi → dimanche).
+    static func thisWeek(in context: ModelContext, now: Date = Date()) -> Int {
+        let start = DateUtils.startOfWeek(now)
+        return seconds(in: context, from: start, to: DateUtils.addDays(7, to: start))
+    }
+
     /// La somme des secondes de ces blocs.
     static func total(_ blocks: [Block]) -> Int {
         blocks.reduce(0) { $0 + $1.seconds }

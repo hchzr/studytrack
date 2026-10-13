@@ -79,10 +79,10 @@ struct MacTodayView: View {
         return "Cette semaine"
     }
 
+    /// Le temps de la semaine, compté comme partout (`StudyTime`).
     private var weekSeconds: Int {
-        let start = DateUtils.startOfWeek(Date())
-        return sessions.filter { $0.startedAt >= start && $0.taskType.canonical != .lecture }
-            .reduce(0) { $0 + $1.durationSeconds }
+        _ = sessions.count
+        return StudyTime.thisWeek(in: context)
     }
 
     private var header: some View {
@@ -94,14 +94,14 @@ struct MacTodayView: View {
                 Text(Self.dayTitle).font(Carnet.serif(34)).foregroundStyle(Carnet.ink)
             }
             Spacer()
-            TodayStudyText(savedSeconds: TodayTotal.saved(sessions)) { today in
+            TodayStudyText(savedSeconds: TodayTotal.saved(in: context)) { today in
                 AnyView(
                     HStack(spacing: 14) {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(DateUtils.hoursLabel(seconds: today))
                                 .font(Carnet.clock(28))
                                 .foregroundStyle(Carnet.ink)
-                            Text("sur \(DateUtils.hoursLabel(seconds: goal)) · \(DateUtils.hoursLabel(seconds: week + (today - TodayTotal.saved(sessions)))) cette semaine")
+                            Text("sur \(DateUtils.hoursLabel(seconds: goal)) · \(DateUtils.hoursLabel(seconds: week + (today - TodayTotal.saved(in: context)))) cette semaine")
                                 .font(.caption)
                                 .foregroundStyle(Carnet.inkSecondary)
                         }

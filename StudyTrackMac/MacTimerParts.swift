@@ -367,12 +367,12 @@ struct GoalBar: View {
 }
 
 /// Le temps d'étude d'aujourd'hui, déjà enregistré (la session en cours
-/// s'ajoute à la minute, `TodayStudyText`).
+/// s'ajoute à la minute, `TodayStudyText`) — compté comme partout
+/// (`StudyTime` : sessions et cours suivis).
 @MainActor
 enum TodayTotal {
-    static func saved(_ sessions: [StudySession]) -> Int {
-        sessions.filter { Calendar.current.isDateInToday($0.startedAt) && $0.taskType.canonical != .lecture }
-            .reduce(0) { $0 + $1.durationSeconds }
+    static func saved(in context: ModelContext) -> Int {
+        StudyTime.today(in: context)
     }
 
     /// Le début du jour, pour borner les requêtes : la fenêtre ne relit plus
@@ -382,11 +382,14 @@ enum TodayTotal {
 
 /// L'objectif du jour, session en cours comprise, à la minute.
 struct LiveGoalBar: View {
+    /// Les sessions du jour : la barre se redessine quand elles changent.
     let sessions: [StudySession]
     let goal: Int
+    @Environment(\.modelContext) private var context
 
     var body: some View {
-        TodayStudyText(savedSeconds: TodayTotal.saved(sessions)) { seconds in
+        let _ = sessions.count
+        TodayStudyText(savedSeconds: TodayTotal.saved(in: context)) { seconds in
             AnyView(GoalBar(seconds: seconds, goal: goal))
         }
     }

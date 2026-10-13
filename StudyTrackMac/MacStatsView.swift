@@ -11,6 +11,7 @@ struct MacStatsView: View {
     }
 
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
+    @Query(sort: \Course.code) private var courses: [Course]
     @State private var period: Period = .week
     @State private var weekOffset = 0
     @State private var editing: StudySession?
@@ -28,10 +29,23 @@ struct MacStatsView: View {
         }
     }
 
-    /// L'étude seulement : une session « amphi » saisie à la main n'en est pas.
-    private var studySessions: [StudySession] {
+    /// Les sessions de la période (la liste du bas).
+    private var periodSessions: [StudySession] {
         let r = range
-        return sessions.filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical != .lecture }
+        return sessions.filter { $0.startedAt >= r.start && $0.startedAt < r.end }
+    }
+
+    /// Ce qui compte dans la période, comme partout (`StudyTime`) : les
+    /// sessions **et** les cours suivis — les mêmes chiffres que l'iPhone.
+    private var blocks: [StudyTime.Block] {
+        _ = sessions.count
+        let r = range
+        return StudyTime.blocks(in: context, from: r.start, to: r.end)
+    }
+
+    private static func category(_ block: StudyTime.Block) -> String {
+        // Un cours suivi porte le type `lecture`, comme une session « amphi ».
+        (TaskType(rawValue: block.taskType) ?? .other).canonical.label
     }
 
     private struct Bar: Identifiable {
@@ -48,21 +62,23 @@ struct MacStatsView: View {
         var id: String { code }
     }
 
-    private var bars: [Bar] {
+    private func bars(_ blocks: [StudyTime.Block]) -> [Bar] {
         var totals: [Date: [String: Int]] = [:]
-        for session in studySessions {
-            totals[DateUtils.startOfDay(session.startedAt), default: [:]][session.taskType.canonical.label, default: 0] += session.durationSeconds
+        for block in blocks {
+            totals[DateUtils.startOfDay(block.start), default: [:]][Self.category(block), default: 0] += block.seconds
         }
         return totals.flatMap { day, byType in byType.map { Bar(day: day, category: $0.key, hours: Double($0.value) / 3600) } }
     }
 
-    private var slices: [CourseSlice] {
+    private func slices(_ blocks: [StudyTime.Block]) -> [CourseSlice] {
+        let byCode = Dictionary(courses.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
         var seconds: [String: Int] = [:]
         var colors: [String: Color] = [:]
-        for session in studySessions {
-            let code = session.course?.displayCode ?? "Sans cours"
-            seconds[code, default: 0] += session.durationSeconds
-            colors[code] = session.course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
+        for block in blocks {
+            let course = block.courseCode.flatMap { byCode[$0] }
+            let code = course?.displayCode ?? "Sans cours"
+            seconds[code, default: 0] += block.seconds
+            colors[code] = course.map { Carnet.tint($0.colorHex) } ?? Carnet.inkTertiary
         }
         return seconds.map { CourseSlice(code: $0.key, color: colors[$0.key] ?? .gray, seconds: $0.value) }
             .sorted { $0.seconds > $1.seconds }
@@ -71,9 +87,10 @@ struct MacStatsView: View {
     @Environment(MacSettings.self) private var settings
 
     var body: some View {
-        let total = studySessions.reduce(0) { $0 + $1.durationSeconds }
-        let dayTotals = Dictionary(grouping: studySessions, by: { DateUtils.startOfDay($0.startedAt) })
-            .mapValues { $0.reduce(0) { $0 + $1.durationSeconds } }
+        let blocks = self.blocks
+        let total = StudyTime.total(blocks)
+        let dayTotals = Dictionary(grouping: blocks, by: { DateUtils.startOfDay($0.start) })
+            .mapValues { $0.reduce(0) { $0 + $1.seconds } }
         let days = dayTotals.count
         let goalDays = dayTotals.values.filter { $0 >= settings.dailyGoalSeconds }.count
         ScrollView {
@@ -144,7 +161,7 @@ struct MacStatsView: View {
         .sheet(item: $creating) { SessionEditor(session: $0, isNew: true) }
     }
 
-    private static let categories = TaskType.reportCategories.filter { $0 != .lecture }
+    private static let categories = TaskType.reportCategories
 
     private var rangeTitle: String {
         if period == .month { return "30 derniers jours" }
@@ -155,6 +172,7 @@ struct MacStatsView: View {
     }
 
     private var dayChart: some View {
+        let bars = bars(blocks)
         let goal = Double(settings.dailyGoalSeconds) / 3600
         return card("Jour par jour") {
             Chart {
@@ -188,7 +206,8 @@ struct MacStatsView: View {
     }
 
     private var subjectCard: some View {
-        card("Par matière") {
+        let slices = slices(blocks)
+        return card("Par matière") {
             if slices.isEmpty {
                 Text("Rien sur cette période.").foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 220)
             } else {
@@ -219,7 +238,7 @@ struct MacStatsView: View {
 
     private var sessionsCard: some View {
         card("Sessions") {
-            let groups = SessionStats.groupedByDay(Array(studySessions.prefix(80)))
+            let groups = SessionStats.groupedByDay(Array(periodSessions.prefix(80)))
             if groups.isEmpty {
                 Text("Rien sur cette période.").foregroundStyle(.secondary)
             }

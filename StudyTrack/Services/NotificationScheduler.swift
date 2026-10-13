@@ -210,11 +210,7 @@ extension NotificationScheduler {
     func rescheduleFromStore(context: ModelContext, settings: SettingsStore) async {
         let planned = (try? context.fetch(FetchDescriptor<PlannedSession>())) ?? []
         let exams = (try? context.fetch(FetchDescriptor<Exam>())) ?? []
-        let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
-        let weekStart = DateUtils.dateRange(days: 7).start
-        let weekSeconds = sessions
-            .filter { $0.startedAt >= weekStart }
-            .reduce(0) { $0 + $1.durationSeconds }
+        let weekSeconds = StudyTime.thisWeek(in: context)
         await rescheduleAll(sessions: planned,
                             exams: exams,
                             settings: settings,
