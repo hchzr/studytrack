@@ -184,6 +184,10 @@ struct MacCommands: Commands {
             Button("Abandonner", role: .destructive) { timer.discard() }
                 .disabled(timer.phase == .idle)
         }
+        CommandGroup(after: .newItem) {
+            Button("Note rapide…") { NotificationCenter.default.post(name: .macQuickNote, object: nil) }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+        }
         CommandMenu("Aller") {
             Button("Aujourd'hui") { go("today") }.keyboardShortcut("1", modifiers: [.command])
             Button("Chrono") { go("focus") }.keyboardShortcut("2", modifiers: [.command])
@@ -228,6 +232,8 @@ struct MacCommands: Commands {
 extension Notification.Name {
     static let macFocusSearch = Notification.Name("mac.focusSearch")
     static let macGoTo = Notification.Name("mac.goTo")
+    /// La note rapide (⇧⌘N, barre des menus) : la fenêtre l'ouvre.
+    static let macQuickNote = Notification.Name("mac.quickNote")
 }
 
 /// Le raccourci global et les widgets : ce qui vit hors des fenêtres.

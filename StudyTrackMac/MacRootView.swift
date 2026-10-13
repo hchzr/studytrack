@@ -18,6 +18,7 @@ struct MacRootView: View {
     @State private var page: Page? = .today
     @State private var showingPalette = false
     @State private var addingCourse = false
+    @State private var quickNote = false
     /// L'exercice ou l'élément de théorie à montrer à l'ouverture d'un cours
     /// (un résultat de recherche, une ligne « À faire »).
     @State private var focusTarget: UUID?
@@ -153,6 +154,10 @@ struct MacRootView: View {
             }
         }
         .animation(.spring(duration: 0.22, bounce: 0.1), value: showingPalette)
+        .sheet(isPresented: $quickNote) {
+            QuickNoteSheet(preferredCourseID: currentCourseID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macQuickNote)) { _ in quickNote = true }
         .sheet(isPresented: $addingCourse) {
             CourseFormView(course: nil, defaultSectionCode: settings.shared.sectionCode)
         }
@@ -177,6 +182,12 @@ struct MacRootView: View {
             if !settings.keepInDock { NSApp.setActivationPolicy(.accessory) }
         }
         .onChange(of: page) { _, value in storedPage = Self.encode(value) }
+    }
+
+    /// Le cours affiché, sinon celui du chrono : la note rapide le propose.
+    private var currentCourseID: UUID? {
+        if case .course(let id)? = page { return id }
+        return timer.courseID
     }
 
     private func open(_ courseID: UUID, _ target: UUID?) {

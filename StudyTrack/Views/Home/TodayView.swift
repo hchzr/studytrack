@@ -147,11 +147,13 @@ struct TodayView: View {
     /// Les présentations de « Aujourd'hui », en une seule valeur.
     private enum TodaySheet: Identifiable, Hashable {
         case tasks
+        case quickNote
         case seriesImport(Course?, PendingImport?)
 
         var id: String {
             switch self {
             case .tasks: return "tasks"
+            case .quickNote: return "quickNote"
             case .seriesImport(let course, let shared):
                 return "seriesImport-\(course?.id.uuidString ?? "aucun")-\(shared?.receivedAt.timeIntervalSince1970 ?? 0)"
             }
@@ -180,6 +182,11 @@ struct TodayView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button {
+                            sheet = .quickNote
+                        } label: {
+                            Label("Note rapide", systemImage: "note.text.badge.plus")
+                        }
                         Button {
                             app.router.openContentImport()
                         } label: {
@@ -542,6 +549,8 @@ struct TodayView: View {
         switch destination {
         case .tasks:
             TasksView()
+        case .quickNote:
+            QuickNoteSheet(preferredCourseID: app.focus.state?.courseID)
         case .seriesImport(let course, let shared):
             SeriesImportSheet(course: course,
                               initialFileURL: shared.flatMap(importFileURL),

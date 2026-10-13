@@ -152,6 +152,39 @@ struct LogStudySessionIntent: AppIntent {
     }
 }
 
+/// Range une note datée dans les notes d'un cours (« le midterm couvre jusqu'au
+/// chapitre 5 »), sans ouvrir l'app.
+struct AddCourseNoteIntent: AppIntent {
+    static var title: LocalizedStringResource = "Ajouter une note à un cours"
+    static var description: IntentDescription = IntentDescription(
+        "Ajoute une ligne datée aux notes d'un cours StudyTrack.")
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "Cours")
+    var course: CourseEntity
+
+    @Parameter(title: "Note")
+    var text: String
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else { return .result(dialog: "La note est vide.") }
+        let saved = await MainActor.run { () -> Bool in
+            guard let container = AppRuntime.container else { return false }
+            let context = container.modelContainer.mainContext
+            let id = course.id
+            guard let target = try? context.fetch(FetchDescriptor<Course>(predicate: #Predicate { $0.id == id })).first
+            else { return false }
+            QuickNote.append(note, to: target)
+            try? context.save()
+            return true
+        }
+        return .result(dialog: saved ? "Rangé dans les notes de \(course.code)." : "Cours introuvable.")
+    }
+}
+
 /// Ajoute une tâche liée à un cours.
 struct AddStudyTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Ajouter une tâche d'étude"
@@ -361,6 +394,14 @@ struct StudyTrackShortcuts: AppShortcutsProvider {
                     ],
                     shortTitle: "Enregistrer une session",
                     systemImageName: "clock.badge.checkmark")
+
+        AppShortcut(intent: AddCourseNoteIntent(),
+                    phrases: [
+                        "Ajoute une note de cours dans \(.applicationName)",
+                        "Note pour \(\.$course) dans \(.applicationName)"
+                    ],
+                    shortTitle: "Note de cours",
+                    systemImageName: "note.text.badge.plus")
 
         AppShortcut(intent: AddStudyTaskIntent(),
                     phrases: [

@@ -288,6 +288,16 @@ struct MenuBarTimerView: View {
             .labelStyle(.titleAndIcon)
             Spacer()
             Button {
+                MacWindows.openMain(openWindow)
+                // La fenêtre doit exister pour recevoir la demande.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: .macQuickNote, object: nil)
+                }
+            } label: {
+                Image(systemName: "note.text.badge.plus")
+            }
+            .help("Note rapide (⇧⌘N)")
+            Button {
                 settings.floatingTimer.toggle()
                 MiniTimerPanel.shared.update()
             } label: {
