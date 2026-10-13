@@ -22,6 +22,7 @@ struct CourseDetailView: View {
     @State private var showingProgress = false
     @State private var showingExams = false
     @State private var showingDocuments = false
+    @State private var showingNotes = false
     @State private var hasAppliedInitialSection = false
     @State private var showingEditor = false
     @State private var showingDelete = false
@@ -120,6 +121,16 @@ struct CourseDetailView: View {
         }
         .navigationDestination(isPresented: $showingExams) {
             CourseExamsView(course: course)
+        }
+        .navigationDestination(isPresented: $showingNotes) {
+            ScrollView {
+                CourseNotesView(course: course)
+                    .padding(Layout.screenPadding)
+                    .adaptiveColumn()
+            }
+            .background(Carnet.ground.ignoresSafeArea())
+            .navigationTitle("Notes · \(course.displayCode)")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .navigationDestination(isPresented: $showingDocuments) {
             CourseDocumentsView(course: course)
@@ -524,11 +535,24 @@ struct CourseDetailView: View {
         }
     }
 
-    /// Ce qui accompagne le cours sans se suivre : examens, documents, progression.
+    /// La première ligne des notes, ou ce qu'on y met.
+    private var notesPreview: String {
+        let first = course.notes.split(separator: "\n").first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return first.map { MathMarkup.plain(String($0)).trimmingCharacters(in: CharacterSet(charactersIn: "#*- ")) }
+            ?? "Ce que le prof a dit, le barème, une erreur du corrigé"
+    }
+
+    /// Ce qui accompagne le cours sans se suivre : notes, examens, documents, progression.
     private var besideLinks: some View {
         VStack(alignment: .leading, spacing: 10) {
             CarnetSectionTitle("À côté")
             CarnetSheet {
+                Button { showingNotes = true } label: {
+                    CarnetRow(icon: "note.text", tint: Carnet.inkSecondary, title: "Notes",
+                              subtitle: notesPreview) { chevron }
+                }
+                .buttonStyle(.plain)
+                CarnetRule()
                 Button { showingExams = true } label: {
                     CarnetRow(icon: "graduationcap", tint: Carnet.inkSecondary, title: "Examens et annales",
                               subtitle: examsDetail(course.nextExam)) { chevron }

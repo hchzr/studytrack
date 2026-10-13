@@ -9,7 +9,7 @@ struct MacCourseView: View {
     @Binding var focusTarget: UUID?
 
     enum Tab: String, CaseIterable, Identifiable {
-        case series = "Séries", theory = "Théorie"
+        case series = "Séries", theory = "Théorie", notes = "Notes"
         var id: String { rawValue }
     }
 
@@ -36,6 +36,7 @@ struct MacCourseView: View {
                 switch tab {
                 case .series: seriesSections
                 case .theory: theorySections
+                case .notes: CourseNotesView(course: course, textSize: 14)
                 }
             }
             .listStyle(.inset)
