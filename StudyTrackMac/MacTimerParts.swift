@@ -384,11 +384,12 @@ enum TodayTotal {
 struct LiveGoalBar: View {
     /// Les sessions du jour : la barre se redessine quand elles changent.
     let sessions: [StudySession]
-    let goal: Int
     @Environment(\.modelContext) private var context
+    @Environment(MacSettings.self) private var settings
 
     var body: some View {
         let _ = sessions.count
+        let goal = settings.dailyGoalSeconds(in: context)
         TodayStudyText(savedSeconds: TodayTotal.saved(in: context)) { seconds in
             AnyView(GoalBar(seconds: seconds, goal: goal))
         }

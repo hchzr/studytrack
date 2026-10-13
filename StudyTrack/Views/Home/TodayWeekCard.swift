@@ -18,6 +18,8 @@ struct WeekTimeCard: View {
     /// Éléments des semaines passées pas faits (corrections comprises), tous
     /// cours confondus.
     let late: Int
+    /// L'objectif de la semaine (réglé, sinon la charge EPFL), en secondes.
+    var goal: Int = 0
     var onOpen: () -> Void
 
     private var todayIndex: Int {
@@ -38,10 +40,17 @@ struct WeekTimeCard: View {
                 }
                 HStack(alignment: .bottom, spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(DateUtils.hoursLabel(seconds: total))
-                            .font(Carnet.serif(.largeTitle, weight: .regular))
-                            .foregroundStyle(Carnet.ink)
-                            .contentTransition(.numericText())
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(DateUtils.hoursLabel(seconds: total))
+                                .font(Carnet.serif(.largeTitle, weight: .regular))
+                                .foregroundStyle(Carnet.ink)
+                                .contentTransition(.numericText())
+                            if goal > 0 {
+                                Text("/ \(DateUtils.hoursLabel(seconds: goal))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(total >= goal ? Carnet.correct : Carnet.inkSecondary)
+                            }
+                        }
                         Text(todayLine)
                             .font(.footnote)
                             .foregroundStyle(Carnet.inkSecondary)

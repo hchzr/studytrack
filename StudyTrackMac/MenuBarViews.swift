@@ -165,7 +165,7 @@ struct MenuBarTimerView: View {
                 }
             }
             .padding(16)
-            LiveGoalBar(sessions: today, goal: settings.dailyGoalSeconds)
+            LiveGoalBar(sessions: today)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             PaperRule()

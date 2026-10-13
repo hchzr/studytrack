@@ -19,7 +19,7 @@ final class MacStore {
     let storeError: String?
     /// Les réglages communs à l'iPhone (relecture des cours, IA de lecture,
     /// nouveautés annoncées) : le même type, pour la même chaîne d'import.
-    let preferences = SettingsStore()
+    let preferences: SettingsStore
 
     /// Ce que fait iCloud : la barre latérale le dit.
     enum SyncState: Equatable {
@@ -36,7 +36,8 @@ final class MacStore {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "sync")
 
-    init() {
+    init(preferences: SettingsStore) {
+        self.preferences = preferences
         let schema = StudyTrackSchema.current
         #if DEBUG
         // `-memoryStore` : une base vide en mémoire, sans iCloud (essais,

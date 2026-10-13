@@ -60,8 +60,10 @@ private struct PomodoroSettingsPane: View {
         @Bindable var settings = settings
         Form {
             Section {
-                Stepper("Objectif du jour : \(DateUtils.hoursLabel(seconds: settings.dailyGoalSeconds))",
-                        value: $settings.dailyGoalMinutes, in: 30...600, step: 30)
+                Stepper(settings.weeklyGoalMinutes == 0
+                            ? "Objectif de la semaine : charge EPFL"
+                            : "Objectif de la semaine : \(DateUtils.hoursLabel(seconds: settings.weeklyGoalMinutes * 60))",
+                        value: $settings.weeklyGoalMinutes, in: 0...6000, step: 60)
                 Toggle("Chrono flottant", isOn: Binding(
                     get: { settings.floatingTimer },
                     set: { settings.floatingTimer = $0; MiniTimerPanel.shared.update() }))

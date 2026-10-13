@@ -1,26 +1,55 @@
 import Foundation
 import Observation
+import SwiftData
 import ServiceManagement
 
-/// Les réglages du Mac (⌘,). Ceux de l'iPhone restent sur l'iPhone : un Mac
-/// de bureau n'a pas forcément le même rythme.
+/// Les réglages du Mac (⌘,).
+///
+/// Ce qui touche à l'étude — cycle Pomodoro, objectif de la semaine, nom,
+/// section — vit dans `shared` (`SettingsStore`), partagé avec l'iPhone par
+/// iCloud : régler 50/10 sur le Mac le règle sur l'iPhone. Le reste (barre des
+/// menus, Dock, raccourci, mode étude du Mac) est propre au Mac.
 @MainActor
 @Observable
 final class MacSettings {
     private let defaults = UserDefaults.standard
+    /// Les réglages d'étude communs à l'iPhone et au Mac.
+    let shared = SettingsStore()
 
-    var focusMinutes: Int { didSet { defaults.set(focusMinutes, forKey: "mac.focusMinutes") } }
-    var shortBreakMinutes: Int { didSet { defaults.set(shortBreakMinutes, forKey: "mac.shortBreakMinutes") } }
-    var longBreakMinutes: Int { didSet { defaults.set(longBreakMinutes, forKey: "mac.longBreakMinutes") } }
-    var longBreakEvery: Int { didSet { defaults.set(longBreakEvery, forKey: "mac.longBreakEvery") } }
-    var autoStartFocus: Bool { didSet { defaults.set(autoStartFocus, forKey: "mac.autoStartFocus") } }
-    var pomodoroDefault: Bool { didSet { defaults.set(pomodoroDefault, forKey: "mac.pomodoroDefault") } }
+    var focusMinutes: Int {
+        get { shared.pomodoroFocusMinutes }
+        set { shared.pomodoroFocusMinutes = newValue }
+    }
+    var shortBreakMinutes: Int {
+        get { shared.pomodoroBreakMinutes }
+        set { shared.pomodoroBreakMinutes = newValue }
+    }
+    var longBreakMinutes: Int {
+        get { shared.pomodoroLongBreakMinutes }
+        set { shared.pomodoroLongBreakMinutes = newValue }
+    }
+    var longBreakEvery: Int {
+        get { shared.pomodoroLongBreakEvery }
+        set { shared.pomodoroLongBreakEvery = newValue }
+    }
+    var autoStartFocus: Bool {
+        get { shared.pomodoroAutoStartFocus }
+        set { shared.pomodoroAutoStartFocus = newValue }
+    }
+    var pomodoroDefault: Bool {
+        get { shared.pomodoroDefault }
+        set { shared.pomodoroDefault = newValue }
+    }
     /// Le temps à côté de l'icône, dans la barre des menus.
     var showTimeInMenuBar: Bool { didSet { defaults.set(showTimeInMenuBar, forKey: "mac.showTimeInMenuBar") } }
     /// ⌃⌥Espace démarre ou met en pause, depuis n'importe quelle app.
     var globalShortcut: Bool { didSet { defaults.set(globalShortcut, forKey: "mac.globalShortcut") } }
-    /// L'objectif d'étude du jour, en minutes (l'anneau du chrono, Aujourd'hui).
-    var dailyGoalMinutes: Int { didSet { defaults.set(dailyGoalMinutes, forKey: "mac.dailyGoalMinutes") } }
+    /// L'objectif de la semaine, en minutes, commun à l'iPhone (0 : celui de
+    /// la charge EPFL). Le jour en vise le septième.
+    var weeklyGoalMinutes: Int {
+        get { shared.weeklyGoalMinutes }
+        set { shared.weeklyGoalMinutes = newValue }
+    }
     /// La petite fenêtre du chrono, au-dessus des autres, pendant une session.
     var floatingTimer: Bool { didSet { defaults.set(floatingTimer, forKey: "mac.floatingTimer") } }
     /// Un son discret à la fin d'un bloc et d'une pause.
@@ -69,15 +98,8 @@ final class MacSettings {
     var claudeStudyTrackMCP: String { didSet { defaults.set(claudeStudyTrackMCP, forKey: "mac.claudeStudyTrackMCP") } }
 
     init() {
-        focusMinutes = defaults.object(forKey: "mac.focusMinutes") as? Int ?? 25
-        shortBreakMinutes = defaults.object(forKey: "mac.shortBreakMinutes") as? Int ?? 5
-        longBreakMinutes = defaults.object(forKey: "mac.longBreakMinutes") as? Int ?? 15
-        longBreakEvery = defaults.object(forKey: "mac.longBreakEvery") as? Int ?? 4
-        autoStartFocus = defaults.bool(forKey: "mac.autoStartFocus")
-        pomodoroDefault = defaults.bool(forKey: "mac.pomodoroDefault")
         showTimeInMenuBar = defaults.object(forKey: "mac.showTimeInMenuBar") as? Bool ?? true
         globalShortcut = defaults.object(forKey: "mac.globalShortcut") as? Bool ?? true
-        dailyGoalMinutes = defaults.object(forKey: "mac.dailyGoalMinutes") as? Int ?? 180
         floatingTimer = defaults.object(forKey: "mac.floatingTimer") as? Bool ?? true
         sounds = defaults.object(forKey: "mac.sounds") as? Bool ?? true
         keepInDock = defaults.bool(forKey: "mac.keepInDock")
@@ -95,9 +117,37 @@ final class MacSettings {
         claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("EPFL").path
         claudeStudyTrackMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
+        migrateLegacyPreferences()
     }
 
-    var dailyGoalSeconds: Int { max(15, dailyGoalMinutes) * 60 }
+    /// Les réglages Pomodoro et l'objectif du jour du Mac (clés `mac.*`) passent,
+    /// une fois, dans les réglages partagés — sauf si l'iPhone les a déjà réglés.
+    private func migrateLegacyPreferences() {
+        guard !defaults.bool(forKey: "mac.prefsShared") else { return }
+        defaults.set(true, forKey: "mac.prefsShared")
+        let iCloud = NSUbiquitousKeyValueStore.default
+        func carry(_ legacy: String, _ key: String, _ apply: (Any) -> Void) {
+            guard let value = defaults.object(forKey: legacy), iCloud.object(forKey: "pref." + key) == nil else { return }
+            apply(value)
+        }
+        carry("mac.focusMinutes", "settings.pomodoroFocusMinutes") { self.focusMinutes = $0 as? Int ?? 25 }
+        carry("mac.shortBreakMinutes", "settings.pomodoroBreakMinutes") { self.shortBreakMinutes = $0 as? Int ?? 5 }
+        carry("mac.longBreakMinutes", "settings.pomodoroLongBreakMinutes") { self.longBreakMinutes = $0 as? Int ?? 15 }
+        carry("mac.longBreakEvery", "settings.pomodoroLongBreakEvery") { self.longBreakEvery = $0 as? Int ?? 4 }
+        carry("mac.autoStartFocus", "settings.pomodoroAutoStartFocus") { self.autoStartFocus = $0 as? Bool ?? false }
+        carry("mac.pomodoroDefault", "settings.pomodoroDefault") { self.pomodoroDefault = $0 as? Bool ?? false }
+        carry("mac.dailyGoalMinutes", "settings.weeklyGoalMinutes") { self.weeklyGoalMinutes = ($0 as? Int ?? 0) * 7 }
+    }
+
+    /// L'objectif de la semaine (réglé, sinon la charge EPFL des cours suivis).
+    func weeklyGoalSeconds(in context: ModelContext) -> Int {
+        StudyGoal.weeklySeconds(in: context, goalMinutes: weeklyGoalMinutes, hoursPerCredit: shared.hoursPerCredit)
+    }
+
+    /// Le septième de l'objectif de la semaine : l'anneau du jour.
+    func dailyGoalSeconds(in context: ModelContext) -> Int {
+        StudyGoal.dailySeconds(weekly: weeklyGoalSeconds(in: context))
+    }
 
     var pomodoro: PomodoroSettings {
         PomodoroSettings(focusMinutes: focusMinutes, shortBreakMinutes: shortBreakMinutes,

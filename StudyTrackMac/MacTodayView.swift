@@ -115,7 +115,7 @@ struct MacTodayView: View {
     }
 
     private var header: some View {
-        let goal = settings.dailyGoalSeconds
+        let goal = settings.dailyGoalSeconds(in: context)
         let week = weekSeconds
         return HStack(alignment: .center, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
@@ -260,7 +260,7 @@ struct MacTodayView: View {
             let day = DateUtils.addDays(offset, to: first)
             return (day, blocks.filter { DateUtils.startOfDay($0.start) == day }.reduce(0) { $0 + $1.seconds })
         }
-        let goalHours = Double(settings.dailyGoalSeconds) / 3600
+        let goalHours = Double(settings.dailyGoalSeconds(in: context)) / 3600
         return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "7 derniers jours")
             Chart {

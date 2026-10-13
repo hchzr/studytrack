@@ -388,6 +388,13 @@ struct ProfileView: View {
             ), in: 20...40, step: 1) {
                 Label("\(Int(settings.hoursPerCredit)) h par crédit ECTS", systemImage: "scalemass")
             }
+            // Un seul objectif, partagé avec le Mac (le jour en vise le septième).
+            Stepper(value: $settings.weeklyGoalMinutes, in: 0...6000, step: 60) {
+                Label(settings.weeklyGoalMinutes == 0
+                      ? "Objectif de la semaine : charge EPFL"
+                      : "Objectif de la semaine : \(DateUtils.hoursLabel(seconds: settings.weeklyGoalMinutes * 60))",
+                      systemImage: "target")
+            }
         }
     }
 

@@ -37,7 +37,7 @@ struct MacFocusView: View {
                         targetCard
                         segmentsCard
                     }
-                    LiveGoalBar(sessions: today, goal: settings.dailyGoalSeconds)
+                    LiveGoalBar(sessions: today)
                         .padding(.horizontal, 4)
                 }
                 .frame(maxWidth: 540)

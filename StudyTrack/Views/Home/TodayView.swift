@@ -279,7 +279,9 @@ struct TodayView: View {
             CarnetColumns {
                 WeekTimeCard(days: state.days, weekStart: state.weekStart,
                              theory: state.theory, series: state.series,
-                             corrections: state.corrections, late: state.late) {
+                             corrections: state.corrections, late: state.late,
+                             goal: StudyGoal.weeklySeconds(goalMinutes: app.settings.weeklyGoalMinutes,
+                                                           courses: state.tracked, hoursPerCredit: app.settings.hoursPerCredit)) {
                     app.router.showingStats = true
                 }
                 todaySchedule(state)

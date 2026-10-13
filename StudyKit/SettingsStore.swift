@@ -6,6 +6,7 @@ import Observation
 final class SettingsStore {
     private enum Key {
         static let hoursPerCredit = "settings.hoursPerCredit"
+        static let weeklyGoalMinutes = "settings.weeklyGoalMinutes"
         static let pomodoroFocusMinutes = "settings.pomodoroFocusMinutes"
         static let pomodoroBreakMinutes = "settings.pomodoroBreakMinutes"
         static let pomodoroLongBreakMinutes = "settings.pomodoroLongBreakMinutes"
@@ -60,12 +61,16 @@ final class SettingsStore {
 
     // MARK: Charge EPFL
     /// Heures de travail attendues par crédit ECTS (EPFL : ~25–30 h).
-    var hoursPerCredit: Double { didSet { defaults.set(hoursPerCredit, forKey: Key.hoursPerCredit) } }
+    var hoursPerCredit: Double { didSet { defaults.set(hoursPerCredit, forKey: Key.hoursPerCredit); share(Key.hoursPerCredit, hoursPerCredit) } }
+    /// L'objectif d'étude de la semaine, en minutes — **un seul**, sur tous les
+    /// appareils (le jour en vise le septième). 0 : celui de la charge EPFL des
+    /// cours suivis (`WorkloadEngine`).
+    var weeklyGoalMinutes: Int { didSet { defaults.set(weeklyGoalMinutes, forKey: Key.weeklyGoalMinutes); share(Key.weeklyGoalMinutes, weeklyGoalMinutes) } }
 
     // MARK: Identité académique
-    var displayName: String { didSet { defaults.set(displayName, forKey: Key.displayName) } }
+    var displayName: String { didSet { defaults.set(displayName, forKey: Key.displayName); share(Key.displayName, displayName) } }
     /// Section EPFL choisie (code, ex : « IN »).
-    var sectionCode: String { didSet { defaults.set(sectionCode, forKey: Key.sectionCode) } }
+    var sectionCode: String { didSet { defaults.set(sectionCode, forKey: Key.sectionCode); share(Key.sectionCode, sectionCode) } }
     var hasCompletedOnboarding: Bool {
         didSet {
             defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding)
@@ -80,15 +85,15 @@ final class SettingsStore {
     var section: EPFLSection? { EPFLCatalog.section(code: sectionCode) }
 
     // MARK: Pomodoro
-    var pomodoroFocusMinutes: Int { didSet { defaults.set(pomodoroFocusMinutes, forKey: Key.pomodoroFocusMinutes) } }
+    var pomodoroFocusMinutes: Int { didSet { defaults.set(pomodoroFocusMinutes, forKey: Key.pomodoroFocusMinutes); share(Key.pomodoroFocusMinutes, pomodoroFocusMinutes) } }
     /// La pause courte. La clé historique est conservée : les réglages déjà
     /// faits ne sont pas perdus.
-    var pomodoroBreakMinutes: Int { didSet { defaults.set(pomodoroBreakMinutes, forKey: Key.pomodoroBreakMinutes) } }
-    var pomodoroLongBreakMinutes: Int { didSet { defaults.set(pomodoroLongBreakMinutes, forKey: Key.pomodoroLongBreakMinutes) } }
-    var pomodoroLongBreakEvery: Int { didSet { defaults.set(pomodoroLongBreakEvery, forKey: Key.pomodoroLongBreakEvery) } }
-    var pomodoroAutoStartFocus: Bool { didSet { defaults.set(pomodoroAutoStartFocus, forKey: Key.pomodoroAutoStartFocus) } }
+    var pomodoroBreakMinutes: Int { didSet { defaults.set(pomodoroBreakMinutes, forKey: Key.pomodoroBreakMinutes); share(Key.pomodoroBreakMinutes, pomodoroBreakMinutes) } }
+    var pomodoroLongBreakMinutes: Int { didSet { defaults.set(pomodoroLongBreakMinutes, forKey: Key.pomodoroLongBreakMinutes); share(Key.pomodoroLongBreakMinutes, pomodoroLongBreakMinutes) } }
+    var pomodoroLongBreakEvery: Int { didSet { defaults.set(pomodoroLongBreakEvery, forKey: Key.pomodoroLongBreakEvery); share(Key.pomodoroLongBreakEvery, pomodoroLongBreakEvery) } }
+    var pomodoroAutoStartFocus: Bool { didSet { defaults.set(pomodoroAutoStartFocus, forKey: Key.pomodoroAutoStartFocus); share(Key.pomodoroAutoStartFocus, pomodoroAutoStartFocus) } }
     /// Une nouvelle session démarre-t-elle en Pomodoro ?
-    var pomodoroDefault: Bool { didSet { defaults.set(pomodoroDefault, forKey: Key.pomodoroDefault) } }
+    var pomodoroDefault: Bool { didSet { defaults.set(pomodoroDefault, forKey: Key.pomodoroDefault); share(Key.pomodoroDefault, pomodoroDefault) } }
 
     /// Le cycle tel que la logique pure l'attend.
     var pomodoro: PomodoroSettings {
@@ -159,13 +164,35 @@ final class SettingsStore {
     @ObservationIgnored private var applyingShared = false
     @ObservationIgnored private var sharedObserver: NSObjectProtocol?
 
+    /// Les réglages d'étude **partagés** par iCloud (clé-valeur) : nom,
+    /// section, cycle Pomodoro, objectif de la semaine, charge par crédit.
+    /// Réglés sur l'iPhone, ils valent sur le Mac (et inversement).
+    private func share(_ key: String, _ value: Any) {
+        guard !applyingShared else { return }
+        NSUbiquitousKeyValueStore.default.set(value, forKey: "pref." + key)
+        NSUbiquitousKeyValueStore.default.synchronize()
+    }
+
     /// Reprend ce qu'un autre appareil a écrit.
     private func applyShared() {
-        guard let news = NSUbiquitousKeyValueStore.default.string(forKey: Self.sharedNewsKey),
-              news != contentRefreshNews else { return }
+        let store = NSUbiquitousKeyValueStore.default
         applyingShared = true
-        contentRefreshNews = news
-        applyingShared = false
+        defer { applyingShared = false }
+        if let news = store.string(forKey: Self.sharedNewsKey), news != contentRefreshNews { contentRefreshNews = news }
+        func value<T: Equatable>(_ key: String, _ current: T) -> T? {
+            guard let shared = store.object(forKey: "pref." + key) as? T, shared != current else { return nil }
+            return shared
+        }
+        if let v = value(Key.hoursPerCredit, hoursPerCredit) { hoursPerCredit = v }
+        if let v = value(Key.weeklyGoalMinutes, weeklyGoalMinutes) { weeklyGoalMinutes = v }
+        if let v = value(Key.displayName, displayName) { displayName = v }
+        if let v = value(Key.sectionCode, sectionCode) { sectionCode = v }
+        if let v = value(Key.pomodoroFocusMinutes, pomodoroFocusMinutes) { pomodoroFocusMinutes = v }
+        if let v = value(Key.pomodoroBreakMinutes, pomodoroBreakMinutes) { pomodoroBreakMinutes = v }
+        if let v = value(Key.pomodoroLongBreakMinutes, pomodoroLongBreakMinutes) { pomodoroLongBreakMinutes = v }
+        if let v = value(Key.pomodoroLongBreakEvery, pomodoroLongBreakEvery) { pomodoroLongBreakEvery = v }
+        if let v = value(Key.pomodoroAutoStartFocus, pomodoroAutoStartFocus) { pomodoroAutoStartFocus = v }
+        if let v = value(Key.pomodoroDefault, pomodoroDefault) { pomodoroDefault = v }
     }
 
     // MARK: Nouveautés Moodle
@@ -220,6 +247,7 @@ final class SettingsStore {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.hoursPerCredit = defaults.object(forKey: Key.hoursPerCredit) as? Double ?? 30
+        self.weeklyGoalMinutes = defaults.integer(forKey: Key.weeklyGoalMinutes)
         self.pomodoroFocusMinutes = defaults.object(forKey: Key.pomodoroFocusMinutes) as? Int ?? 25
         self.pomodoroBreakMinutes = defaults.object(forKey: Key.pomodoroBreakMinutes) as? Int ?? 5
         self.pomodoroLongBreakMinutes = defaults.object(forKey: Key.pomodoroLongBreakMinutes) as? Int ?? 15
@@ -266,6 +294,19 @@ final class SettingsStore {
         self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         for key in Key.legacyAI { defaults.removeObject(forKey: key) }
+        // Ce qu'iCloud ne connaît pas encore part d'ici ; ce qu'il connaît
+        // l'emporte (le réglage fait sur l'autre appareil).
+        let store = NSUbiquitousKeyValueStore.default
+        let local: [String: Any] = [Key.hoursPerCredit: hoursPerCredit, Key.weeklyGoalMinutes: weeklyGoalMinutes,
+                                    Key.displayName: displayName, Key.sectionCode: sectionCode,
+                                    Key.pomodoroFocusMinutes: pomodoroFocusMinutes, Key.pomodoroBreakMinutes: pomodoroBreakMinutes,
+                                    Key.pomodoroLongBreakMinutes: pomodoroLongBreakMinutes,
+                                    Key.pomodoroLongBreakEvery: pomodoroLongBreakEvery,
+                                    Key.pomodoroAutoStartFocus: pomodoroAutoStartFocus, Key.pomodoroDefault: pomodoroDefault]
+        for (key, value) in local where store.object(forKey: "pref." + key) == nil
+            && defaults.object(forKey: key) != nil {
+            store.set(value, forKey: "pref." + key)
+        }
         applyShared()
         sharedObserver = NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification, object: nil, queue: .main) { [weak self] _ in

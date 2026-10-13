@@ -25,7 +25,7 @@ struct StudyTrackMacApp: App {
         // Avant tout : les réglages et la base du bac à sable, repris une fois.
         MacSandboxMigration.run()
         let settings = MacSettings()
-        let store = MacStore()
+        let store = MacStore(preferences: settings.shared)
         #if DEBUG
         // `-isolatedTimer` : un chrono qui ne publie rien (essais, captures) —
         // l'iPhone n'en voit rien.

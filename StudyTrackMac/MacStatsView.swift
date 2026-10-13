@@ -92,7 +92,7 @@ struct MacStatsView: View {
         let dayTotals = Dictionary(grouping: blocks, by: { DateUtils.startOfDay($0.start) })
             .mapValues { $0.reduce(0) { $0 + $1.seconds } }
         let days = dayTotals.count
-        let goalDays = dayTotals.values.filter { $0 >= settings.dailyGoalSeconds }.count
+        let goalDays = dayTotals.values.filter { $0 >= settings.dailyGoalSeconds(in: context) }.count
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .firstTextBaseline) {
@@ -173,7 +173,7 @@ struct MacStatsView: View {
 
     private var dayChart: some View {
         let bars = bars(blocks)
-        let goal = Double(settings.dailyGoalSeconds) / 3600
+        let goal = Double(settings.dailyGoalSeconds(in: context)) / 3600
         return card("Jour par jour") {
             Chart {
                 ForEach(bars) { bar in
