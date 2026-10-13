@@ -414,7 +414,10 @@ private struct StudyDeskHome: View {
             if connect.isRunning {
                 ProgressView().controlSize(.mini)
             } else if let site = connect.signInSite {
-                Button(connect.needsYou ? "Confirmer que c'est toi" : "Se connecter") { desk.signIn = site }
+                Button(site == .mediaspace ? "Mot de passe edu-ID" : "Confirmer que c'est toi") { desk.signIn = site }
+                    .buttonStyle(.plain).font(.caption).foregroundStyle(StudyPalette.ink)
+            } else if SchoolConnect.Site.allCases.contains(where: { connect.state($0) == .failed }) {
+                Button("Réessayer") { Task { await connect.connectAll(prompting: true) } }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(StudyPalette.ink)
             }
         }

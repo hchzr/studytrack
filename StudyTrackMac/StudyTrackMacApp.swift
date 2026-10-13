@@ -115,6 +115,18 @@ struct StudyTrackMacApp: App {
                 NSApp.activate(ignoringOtherApps: true)
             }
         }
+        // `-signInSheet moodle|mediaspace` : la feuille de connexion seule.
+        if let index = CommandLine.arguments.firstIndex(of: "-signInSheet"), index + 1 < CommandLine.arguments.count,
+           let site = CommandLine.arguments[index + 1] == "mediaspace" ? StudySite.mediaspace : StudySite.moodle as StudySite? {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                let window = NSWindow(contentViewController: NSHostingController(rootView: SignInSheet(site: site) {
+                    FileHandle.standardError.write(Data("SIGNIN fini\n".utf8))
+                }))
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
         if let index = CommandLine.arguments.firstIndex(of: "-debugPage"), index + 1 < CommandLine.arguments.count {
             let page = CommandLine.arguments[index + 1]

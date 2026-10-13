@@ -87,8 +87,8 @@ final class SchoolConnect {
     /// Où montrer la feuille de connexion : Microsoft passe par Moodle ;
     /// MediaSpace a son propre mot de passe (edu-ID).
     var signInSite: StudySite? {
-        if [.moodle, .courseware, .ed].contains(where: { state($0) == .needsYou || state($0) == .failed }) { return .moodle }
-        if state(.mediaspace) == .needsYou || state(.mediaspace) == .failed { return .mediaspace }
+        if [.moodle, .courseware, .ed].contains(where: { state($0) == .needsYou }) { return .moodle }
+        if state(.mediaspace) == .needsYou { return .mediaspace }
         return nil
     }
 
@@ -111,19 +111,16 @@ final class SchoolConnect {
         }
         isRunning = true
         defer { isRunning = false; revision += 1 }
-        for site in sites {
-            // Microsoft attend la personne (vu sur Moodle) : Ed passe par lui
-            // aussi, inutile d'attendre. Courseware est essayé quand même : sa
-            // session OpenLearnity tient souvent plus longtemps (observé).
-            if !force, waiting.contains(site.rawValue) {
-                states[site] = .needsYou
-                continue
+        // Tous les sites en même temps (chacun sa page cachée, mêmes cookies) :
+        // l'attente est celle du plus lent, pas la somme.
+        await withTaskGroup(of: Void.self) { group in
+            for site in sites {
+                if !force, waiting.contains(site.rawValue) {
+                    states[site] = .needsYou
+                    continue
+                }
+                group.addTask { await self.connect(site) }
             }
-            if site == .ed, state(.moodle) == .needsYou {
-                states[.ed] = .needsYou
-                continue
-            }
-            await connect(site)
         }
         if prompting { prompt() }
     }
@@ -230,6 +227,10 @@ final class SchoolConnect {
     static func answerEduID(_ view: WKWebView, email: String?) async {
         guard let idp = Institution.current.video?.passwordIdPHost, view.url?.host?.contains(idp) == true, let email else { return }
         _ = try? await view.callAsyncJavaScript(#"""
+        // La page du mot de passe est à la personne : on n'y touche pas (un clic
+        // sur « Continuer » l'envoyait vide — « La connexion a échoué »).
+        const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+        if (document.querySelector('form#passwordForm') || [...document.querySelectorAll('input[type="password"]')].some(visible)) return;
         const field = document.querySelector('form#loginForm input[type="email"], form#loginForm input[name="username"], form#loginForm input[name="j_username"], input#username');
         if (field && !field.value) {
           field.value = email;
@@ -238,7 +239,7 @@ final class SchoolConnect {
           if (button) { button.click(); } else { field.form.submit(); }
           return;
         }
-        const pattern = new RegExp(school + '|microsoft|continuer|continue|weiter', 'i');
+        const pattern = new RegExp(school + '|microsoft', 'i');
         const external = [...document.querySelectorAll('a, button')].find(b => pattern.test(b.innerText || ''));
         if (external && !/help|aide/i.test(external.innerText)) external.click();
         """#, arguments: ["email": email, "school": Institution.current.id], contentWorld: .page)
@@ -317,6 +318,10 @@ final class SSODriver: NSObject, WKNavigationDelegate {
     /// La chaîne s'est arrêtée sur une page pour la personne (et laquelle).
     private(set) var needsPerson = false
     private(set) var reason: String?
+    /// Depuis quand une page pour la personne est affichée : Microsoft montre
+    /// parfois une étape un instant puis passe seul (observé sur Courseware) —
+    /// on n'abandonne que si elle reste.
+    private var personSince: Date?
 
     override init() {
         let configuration = WKWebViewConfiguration()
@@ -371,12 +376,17 @@ final class SSODriver: NSObject, WKNavigationDelegate {
         busy = true
         if let host = url.host, SchoolConnect.isIdentityProvider(host),
            let reason = await personStep(), !reason.isEmpty {
+            let since = personSince ?? Date()
+            personSince = since
             busy = false
-            needsPerson = true
-            self.reason = reason
-            finish(false)
+            if Date().timeIntervalSince(since) >= 4 {
+                needsPerson = true
+                self.reason = reason
+                finish(false)
+            }
             return
         }
+        personSince = nil
         let done = await step(url, view)
         busy = false
         if done { finish(true) }

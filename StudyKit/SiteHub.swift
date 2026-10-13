@@ -142,7 +142,7 @@ final class SiteHub {
         Task {
             try? await moodle.prepare(force: true)
             signInRevision += 1
-            await SchoolConnect.shared.connectAll(force: true)
+            await SchoolConnect.shared.connectAll(prompting: true, force: true)
             ed.reset()
             edCourses = nil
             edNeedsLogin = false
