@@ -102,6 +102,7 @@ struct CoursePane: View {
             HStack(spacing: 0) {
                 sourceColumn(course)
                 .frame(width: 320)
+                .clipped()
                 #if DEBUG
                 .onAppear {
                     if CommandLine.arguments.contains("-botafogo") { source = .botafogo }
@@ -145,11 +146,24 @@ struct CoursePane: View {
                     }
                     .padding(.vertical, 8)
                 } else {
-                    Picker("Source", selection: $source) {
-                        ForEach(sources) { Text($0.label).tag($0) }
+                    // Les onglets quand ils tiennent ; sinon un menu (la colonne
+                    // est étroite à côté de la série) — un contrôle segmenté du
+                    // Mac ne rétrécit pas et débordait sur la barre latérale.
+                    ViewThatFits(in: .horizontal) {
+                        Picker("Source", selection: $source) {
+                            ForEach(sources) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        Picker("Source", selection: $source) {
+                            ForEach(sources) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
                     .padding(12)
                 }
             }

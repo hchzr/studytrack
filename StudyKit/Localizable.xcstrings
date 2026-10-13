@@ -11648,6 +11648,9 @@
         }
       }
     },
+    "Plusieurs réponses possibles" : {
+
+    },
     "Poids : %lld %% de la note" : {
       "localizations" : {
         "en" : {
@@ -14000,6 +14003,9 @@
           }
         }
       }
+    },
+    "Sondage illisible." : {
+
     },
     "Sons" : {
       "localizations" : {
@@ -16482,6 +16488,9 @@
           }
         }
       }
+    },
+    "Voter" : {
+
     },
     "Vu" : {
       "localizations" : {
