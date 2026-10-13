@@ -112,6 +112,19 @@ enum ClaudeProject {
             /// Les résultats peuvent proposer des verdicts à noter (post-mortem).
             var verdicts: Bool?
 
+            init(id: String, label: String, icon: String = "sparkle", prompt: String, scope: Scope = .system,
+                 model: String? = nil, capture: Bool? = nil, attach: Bool? = nil, verdicts: Bool? = nil) {
+                self.id = id
+                self.label = label
+                self.icon = icon
+                self.prompt = prompt
+                self.scope = scope
+                self.model = model
+                self.capture = capture
+                self.attach = attach
+                self.verdicts = verdicts
+            }
+
             init(from decoder: Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 id = try c.decode(String.self, forKey: .id)
@@ -176,6 +189,38 @@ enum ClaudeProject {
             default: return name
             }
         }
+    }
+
+    /// Les boutons et les modèles réécrits dans `studytrack.json` (l'éditeur des
+    /// Réglages) : le reste du fichier — compétences, serveurs, permis, et toute
+    /// clé inconnue — est gardé tel quel. `nil` si le fichier n'est pas un objet JSON.
+    static func updating(_ json: Data?, commands: [File.Command], models: File.Models) -> Data? {
+        var object: [String: Any] = [:]
+        if let json, !json.isEmpty {
+            guard let existing = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { return nil }
+            object = existing
+        }
+        let encoder = JSONEncoder()
+        guard let commandData = try? encoder.encode(commands),
+              let commandList = try? JSONSerialization.jsonObject(with: commandData) else { return nil }
+        object["commands"] = commandList
+        var modelObject: [String: Any] = [:]
+        modelObject["tutor"] = models.tutor.map { $0 as Any } ?? NSNull()
+        modelObject["system"] = models.system.map { $0 as Any } ?? NSNull()
+        object["models"] = modelObject
+        return try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    }
+
+    /// Un identifiant de bouton tiré de son libellé (« Où j'en suis » → `ou-j-en-suis`),
+    /// unique parmi `taken`.
+    static func commandID(for label: String, taken: [String]) -> String {
+        let folded = label.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr"))
+        let base = folded.lowercased().split { !$0.isLetter && !$0.isNumber }.joined(separator: "-")
+        let root = base.isEmpty ? "bouton" : base
+        var candidate = root
+        var index = 2
+        while taken.contains(candidate) { candidate = "\(root)-\(index)"; index += 1 }
+        return candidate
     }
 
     /// Le fichier qu'on crée depuis les Réglages : la forme, sans rien dedans.

@@ -103,6 +103,18 @@ struct StudyTrackMacApp: App {
                 FileHandle.standardError.write(Data("EPFL \(states) email=\(SchoolConnect.shared.email != nil)\n".utf8))
             }
         }
+        // `-claudeButtons <fichier>` : l'éditeur des boutons de Claude sur ce
+        // fichier (une copie, pour l'essayer sans toucher au vrai).
+        if let index = CommandLine.arguments.firstIndex(of: "-claudeButtons"), index + 1 < CommandLine.arguments.count {
+            let url = URL(fileURLWithPath: CommandLine.arguments[index + 1])
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                let window = NSWindow(contentViewController: NSHostingController(rootView: ClaudeButtonsEditor(url: url)))
+                window.title = "Boutons de Claude"
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
         // `-debugPage focus|stats|today` : ouvrir une page sans cliquer.
         if let index = CommandLine.arguments.firstIndex(of: "-debugPage"), index + 1 < CommandLine.arguments.count {
             let page = CommandLine.arguments[index + 1]

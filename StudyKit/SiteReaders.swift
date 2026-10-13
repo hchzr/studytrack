@@ -59,7 +59,9 @@ struct SignInSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(site == .mediaspace ? "Vidéos du cours" : "Connexion EPFL").font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink)
-                    Text(site == .mediaspace ? "Ton mot de passe SWITCH edu-ID, une fois." : "Une fois pour Moodle, Courseware et Ed.")
+                    Text(site == .mediaspace ? "Ton mot de passe SWITCH edu-ID, une fois."
+                         : SchoolConnect.shared.needsYou ? "Microsoft demande de confirmer que c'est toi."
+                         : "Une fois pour Moodle, Courseware et Ed.")
                         .font(.caption).foregroundStyle(Carnet.inkSecondary)
                 }
                 Spacer()
@@ -71,7 +73,9 @@ struct SignInSheet: View {
                 dismiss()
             }
         }
+        #if os(macOS)
         .frame(width: 520, height: 680)
+        #endif
     }
 }
 

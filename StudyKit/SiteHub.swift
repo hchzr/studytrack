@@ -63,7 +63,7 @@ final class SiteHub {
                 // expiré. On se reconnecte sans rien afficher, puis on réessaie une fois.
                 if Institution.current.owns(host: url.host), !retried.contains(address) {
                     retried.insert(address)
-                    await SchoolConnect.shared.connect(.moodle)
+                    await SchoolConnect.shared.refresh(.moodle)
                     if SchoolConnect.shared.state(.moodle) == .connected {
                         documents[address] = nil
                         loadPDF(address)
@@ -142,7 +142,7 @@ final class SiteHub {
         Task {
             try? await moodle.prepare(force: true)
             signInRevision += 1
-            await SchoolConnect.shared.connectAll()
+            await SchoolConnect.shared.connectAll(force: true)
             ed.reset()
             edCourses = nil
             edNeedsLogin = false

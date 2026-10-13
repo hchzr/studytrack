@@ -136,7 +136,7 @@ struct StudyModeScreen: View {
         .sheet(item: Binding(get: { SiteHub.shared.signIn }, set: { SiteHub.shared.signIn = $0 })) { site in
             SignInSheet(site: site) { SiteHub.shared.signedIn(site) }
         }
-        .task { if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll() } }
+        .task { if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll(prompting: true) } }
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
     }
 

@@ -477,8 +477,70 @@ struct SiteLoginSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var browser = BrowserModel()
     @State private var checking = false
+    /// Moodle et Courseware : d'abord la connexion de l'école sans rien
+    /// afficher (`SchoolConnect`, comme le mode étude et le Mac) ; la page
+    /// n'apparaît que si Microsoft attend la personne.
+    @State private var trying = true
+
+    private var school: SchoolConnect.Site? {
+        switch site {
+        case .moodle: return .moodle
+        case .courseware: return .courseware
+        default: return nil
+        }
+    }
 
     var body: some View {
+        if let school {
+            schoolSignIn(school)
+        } else {
+            sitePage
+        }
+    }
+
+    @ViewBuilder
+    private func schoolSignIn(_ school: SchoolConnect.Site) -> some View {
+        Group {
+            if trying {
+                NavigationStack {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Connexion à \(Institution.current.name)…").foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .carnetBackground()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+                    }
+                }
+            } else {
+                SignInSheet(site: .moodle) {
+                    // Microsoft fait, Moodle connecté : les autres sites suivent.
+                    SiteHub.shared.signedIn(.moodle)
+                    Task {
+                        await SchoolConnect.shared.ensure(school, prompting: false)
+                        signedIn()
+                    }
+                }
+            }
+        }
+        .task {
+            await SchoolConnect.shared.ensure(school, prompting: false)
+            if SchoolConnect.shared.state(school) == .connected { signedIn() } else { trying = false }
+        }
+    }
+
+    private func signedIn() {
+        Haptics.success()
+        Task { await CookieKeeper.save() }
+        if site == .moodle {
+            ConnectionCenter.shared.report(.moodle, .connected)
+            SeriesAutoReader.shared.retryAll()
+        }
+        onSignedIn()
+    }
+
+    private var sitePage: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 WebView(model: browser, initialURL: site.start)

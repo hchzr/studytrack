@@ -37,7 +37,10 @@ final class SchoolConnect {
         }
     }
 
-    enum State: Equatable { case unknown, connecting, connected, failed }
+    /// `needsYou` : le site demande quelque chose que seule la personne peut
+    /// faire (mot de passe, validation Authenticator, clé d'accès) — la page
+    /// cachée s'arrête tout de suite au lieu d'attendre pour rien.
+    enum State: Equatable { case unknown, connecting, connected, failed, needsYou }
 
     private(set) var states: [Site: State] = [:]
     private(set) var isRunning = false
@@ -52,7 +55,16 @@ final class SchoolConnect {
 
     @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "epfl")
 
-    func state(_ site: Site) -> State { states[site] ?? .unknown }
+    func state(_ site: Site) -> State { states[site] ?? (waiting.contains(site.rawValue) ? .needsYou : .unknown) }
+
+    /// Les sites qui attendent la personne, retenus d'un lancement à l'autre :
+    /// la page de validation de Microsoft envoie une notification Authenticator
+    /// à chaque chargement — on ne la recharge pas en silence à chaque
+    /// lancement. Effacé dès que la connexion réussit (la feuille).
+    private var waiting: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "school.waitingForYou") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "school.waitingForYou") }
+    }
 
     /// Les sites que l'école a (son profil) : on ne se connecte qu'à eux.
     var sites: [Site] {
@@ -69,22 +81,66 @@ final class SchoolConnect {
 
     var allConnected: Bool { sites.allSatisfy { state($0) == .connected } }
 
+    /// Un site attend la personne (mot de passe, Authenticator…).
+    var needsYou: Bool { sites.contains { state($0) == .needsYou } }
+
+    /// Où montrer la feuille de connexion : Microsoft passe par Moodle ;
+    /// MediaSpace a son propre mot de passe (edu-ID).
+    var signInSite: StudySite? {
+        if [.moodle, .courseware, .ed].contains(where: { state($0) == .needsYou || state($0) == .failed }) { return .moodle }
+        if state(.mediaspace) == .needsYou || state(.mediaspace) == .failed { return .mediaspace }
+        return nil
+    }
+
+    /// Ouvre la feuille de connexion du bureau quand un site attend la
+    /// personne — seulement quand elle est en train de lire un site (pas au
+    /// lancement de l'app, où une feuille surgirait sans raison).
+    private func prompt() {
+        guard needsYou, SiteHub.shared.signIn == nil, let site = signInSite else { return }
+        SiteHub.shared.signIn = site
+    }
+
     /// Ouvre chaque site dans la session Microsoft, l'un après l'autre.
-    func connectAll() async {
+    /// `force` : après la feuille de connexion, on réessaie aussi les sites qui
+    /// attendaient la personne.
+    func connectAll(prompting: Bool = false, force: Bool = false) async {
         guard !isRunning else {
             while isRunning { try? await Task.sleep(for: .milliseconds(400)) }
+            if prompting { prompt() }
             return
         }
         isRunning = true
         defer { isRunning = false; revision += 1 }
-        for site in sites { await connect(site) }
+        for site in sites {
+            // Microsoft attend la personne (vu sur Moodle) : Ed passe par lui
+            // aussi, inutile d'attendre. Courseware est essayé quand même : sa
+            // session OpenLearnity tient souvent plus longtemps (observé).
+            if !force, waiting.contains(site.rawValue) {
+                states[site] = .needsYou
+                continue
+            }
+            if site == .ed, state(.moodle) == .needsYou {
+                states[.ed] = .needsYou
+                continue
+            }
+            await connect(site)
+        }
+        if prompting { prompt() }
     }
 
     /// Avant de lire un site : connecté·e, ou on s'y connecte sans rien afficher
     /// (en attendant la connexion déjà en cours, s'il y en a une).
-    func ensure(_ site: Site) async {
+    func ensure(_ site: Site, prompting: Bool = true) async {
         while isRunning, state(site) != .connected { try? await Task.sleep(for: .milliseconds(400)) }
-        if state(site) != .connected { await connect(site) }
+        if state(site) != .connected, !waiting.contains(site.rawValue) { await connect(site) }
+        if prompting { prompt() }
+    }
+
+    /// La session d'un site a expiré en cours de lecture : on s'y reconnecte
+    /// (sans rien afficher), sauf s'il attend déjà la personne.
+    func refresh(_ site: Site) async {
+        if state(site) == .connected { states[site] = nil }
+        await ensure(site)
     }
 
     func connect(_ site: Site) async {
@@ -150,8 +206,9 @@ final class SchoolConnect {
                 return false
             }
         }
-        states[site] = done ? .connected : .failed
-        log.notice("connexion \(site.rawValue, privacy: .public) : \(done ? "ok" : "échec", privacy: .public)")
+        states[site] = done ? .connected : (driver.needsPerson ? .needsYou : .failed)
+        if done { waiting.remove(site.rawValue) } else if driver.needsPerson { waiting.insert(site.rawValue) }
+        log.notice("connexion \(site.rawValue, privacy: .public) : \(done ? "ok" : (driver.needsPerson ? "à toi (\(driver.reason ?? "?"))" : "échec"), privacy: .public)")
     }
 
     /// Les pages de Microsoft qui demandent un clic, quand la session existe
@@ -188,6 +245,29 @@ final class SchoolConnect {
     }
 
     // MARK: Scripts (observés sur les vraies pages)
+
+    /// Une page que seule la personne peut passer, ou `nil`. Observé : quand
+    /// Microsoft redemande la validation, la page porte un formulaire vers
+    /// `/common/SAS/ProcessAuth` (Authenticator, SMS) ; sinon un champ de mot de
+    /// passe visible (Microsoft, edu-ID), ou une clé d'accès.
+    /// Les pages d'identité où la personne peut être attendue : Microsoft, et
+    /// le fournisseur à mot de passe de la vidéo (edu-ID). Les pages
+    /// intermédiaires (OpenLearnity, WAYF) ont aussi des champs : l'app y
+    /// choisit l'école, elles ne comptent pas.
+    static func isIdentityProvider(_ host: String) -> Bool {
+        host.hasSuffix("microsoftonline.com") || host.hasSuffix("login.live.com")
+            || Institution.current.video?.passwordIdPHost.map { host.hasSuffix($0) } == true
+    }
+
+    static let personStep = #"""
+    (() => {
+      const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+      if ([...document.querySelectorAll('form[action*="/SAS/"]')].length || document.querySelector('#idDiv_SAOTCAS_Title, #idDiv_SAOTCC_Title, #idRichContext_DisplaySign')) return 'validation';
+      if ([...document.querySelectorAll('input[type="password"]')].some(visible)) return 'mot de passe';
+      if (/fido|passkey/i.test(location.pathname)) return 'clé d’accès';
+      return '';
+    })()
+    """#
 
     /// Le bouton de connexion OAuth de Moodle (EPFL : `id=3`, « Entra ID »).
     static func clickOAuth(_ school: Institution) -> String {
@@ -231,6 +311,9 @@ final class SSODriver: NSObject, WKNavigationDelegate {
     private var step: ((URL, WKWebView) async -> Bool)?
     private var finished: CheckedContinuation<Bool, Never>?
     private var busy = false
+    /// La chaîne s'est arrêtée sur une page pour la personne (et laquelle).
+    private(set) var needsPerson = false
+    private(set) var reason: String?
 
     override init() {
         let configuration = WKWebViewConfiguration()
@@ -270,7 +353,9 @@ final class SSODriver: NSObject, WKNavigationDelegate {
     }
 
     private func check() async {
-        guard !busy, let step, let url = view.url, finished != nil else { return }
+        // Pendant un chargement, la page n'accepte pas de script : on attend
+        // `didFinish` (sinon WebKit journalise « runJavaScript failed »).
+        guard !busy, !view.isLoading, let step, let url = view.url, finished != nil else { return }
         #if DEBUG
         if CommandLine.arguments.contains("-epflTrace") {
             FileHandle.standardError.write(Data("SSO \(url.absoluteString.prefix(160))\n".utf8))
@@ -281,9 +366,32 @@ final class SSODriver: NSObject, WKNavigationDelegate {
         }
         #endif
         busy = true
+        if let host = url.host, SchoolConnect.isIdentityProvider(host),
+           let reason = await personStep(), !reason.isEmpty {
+            busy = false
+            needsPerson = true
+            self.reason = reason
+            finish(false)
+            return
+        }
         let done = await step(url, view)
         busy = false
         if done { finish(true) }
+    }
+
+    private func personStep() async -> String? {
+        do {
+            let value = try await view.evaluateJavaScript(SchoolConnect.personStep)
+            #if DEBUG
+            if CommandLine.arguments.contains("-epflTrace") { FileHandle.standardError.write(Data("PERSON \(value ?? "nil")\n".utf8)) }
+            #endif
+            return value as? String
+        } catch {
+            #if DEBUG
+            if CommandLine.arguments.contains("-epflTrace") { FileHandle.standardError.write(Data("PERSON erreur \(error)\n".utf8)) }
+            #endif
+            return nil
+        }
     }
 
     private func finish(_ value: Bool) {

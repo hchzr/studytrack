@@ -37,7 +37,7 @@ struct StudyWorkspace: View {
         // En entrant dans le bureau : chaque site, sans rien afficher, avec la
         // session Microsoft déjà là (rien ne se passe si elle n'y est pas).
         .task {
-            if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll() }
+            if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll(prompting: true) }
         }
     }
 
@@ -403,7 +403,9 @@ private struct StudyDeskHome: View {
             ForEach(SchoolConnect.Site.allCases) { site in
                 let state = connect.state(site)
                 HStack(spacing: 4) {
-                    Circle().fill(state == .connected ? Carnet.correct : (state == .failed ? Carnet.wrong : StudyPalette.inkTertiary))
+                    Circle().fill(state == .connected ? Carnet.correct
+                                  : state == .failed ? Carnet.wrong
+                                  : state == .needsYou ? Carnet.review : StudyPalette.inkTertiary)
                         .frame(width: 6, height: 6)
                     Text(site.title).font(.caption2).foregroundStyle(StudyPalette.inkSecondary)
                 }
@@ -411,8 +413,8 @@ private struct StudyDeskHome: View {
             Spacer()
             if connect.isRunning {
                 ProgressView().controlSize(.mini)
-            } else if SchoolConnect.Site.allCases.contains(where: { connect.state($0) == .failed }) {
-                Button("Se connecter") { desk.signIn = connect.state(.moodle) == .failed ? .moodle : .mediaspace }
+            } else if let site = connect.signInSite {
+                Button(connect.needsYou ? "Confirmer que c'est toi" : "Se connecter") { desk.signIn = site }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(StudyPalette.ink)
             }
         }

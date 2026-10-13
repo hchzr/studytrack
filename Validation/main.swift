@@ -5701,6 +5701,22 @@ do {
     check(ClaudeProject.toolPrefix(server: "claude.ai Claude Docs") == "mcp__claude_ai_Claude_Docs", "préfixe d'outils d'un connecteur")
     check(ClaudeProject.allowedTools(file: ClaudeProject.File(), studyTrack: false, connectors: ["claude.ai Notion"]) == ["Read", "Glob", "Skill", "mcp__claude_ai_Notion"],
           "les connecteurs du compte sont permis")
+    // L'éditeur des boutons ne réécrit que les boutons et les modèles.
+    let original = Data(#"{"skills":["epfl-serie"],"mcpServers":{"todoist":{"url":"https://ai.todoist.net/mcp"}},"maClé":42,"commands":[]}"#.utf8)
+    let edited = ClaudeProject.updating(original, commands: [.init(id: "brief", label: "Brief", icon: "sun.max", prompt: "brief"),
+                                                             .init(id: "bloque", label: "Bloqué", prompt: "indice {exercice}", scope: .series, model: "tutor", capture: true)],
+                                        models: .init(tutor: "haiku", system: nil))
+    let reread = edited.flatMap { ClaudeProject.File.decode($0) }
+    check(reread?.commands.map(\.id) == ["brief", "bloque"] && reread?.commands[1].scope == .series && reread?.commands[1].capture == true
+          && reread?.commands[0].capture == nil, "éditeur : boutons écrits et relus")
+    check(reread?.skills == ["epfl-serie"] && reread?.mcpServers["todoist"]?.url == "https://ai.todoist.net/mcp"
+          && reread?.models.tutor == "haiku" && reread?.models.system == nil, "éditeur : le reste du fichier gardé")
+    check(edited.map { String(decoding: $0, as: UTF8.self).contains("\"maClé\" : 42") } == true, "éditeur : une clé inconnue gardée")
+    check(ClaudeProject.updating(Data("[1]".utf8), commands: [], models: .init()) == nil, "éditeur : un fichier qui n'est pas un objet n'est pas écrasé")
+    check(ClaudeProject.updating(nil, commands: [], models: .init()).flatMap { ClaudeProject.File.decode($0) } != nil, "éditeur : fichier neuf")
+    check(ClaudeProject.commandID(for: "Où j'en suis", taken: []) == "ou-j-en-suis"
+          && ClaudeProject.commandID(for: "Brief", taken: ["brief"]) == "brief-2" && ClaudeProject.commandID(for: "!!", taken: []) == "bouton",
+          "éditeur : identifiant tiré du libellé")
     if let i = project.firstIndex(of: "--allowedTools") { check(project[i + 1] == "Read,Glob,Skill,mcp__notion", "projet EPFL : outils permis") } else { check(false, "projet : --allowedTools") }
     if let i = project.firstIndex(of: "--tools") { check(project[i + 1] == "Read,Glob,Skill", "projet EPFL : ni terminal ni écriture") } else { check(false, "projet : --tools") }
     check(project.contains("--append-system-prompt") && !project.contains("--system-prompt"), "projet EPFL : la consigne s'ajoute à celle de Claude Code")

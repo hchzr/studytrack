@@ -293,7 +293,7 @@ struct CoursePane: View {
                     desk.moodlePages[id] = try await desk.moodle.coursePage(courseID: id)
                     return
                 } catch HiddenSiteSession.SiteError.notSignedIn where attempt == 0 {
-                    await SchoolConnect.shared.connect(.moodle)
+                    await SchoolConnect.shared.refresh(.moodle)
                     try? await desk.moodle.prepare(force: true)
                     continue
                 } catch {

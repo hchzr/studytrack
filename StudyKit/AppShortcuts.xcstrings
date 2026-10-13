@@ -1,56 +1,105 @@
 {
-  "sourceLanguage": "fr",
-  "strings": {
-    "Ajoute une tâche d'étude dans ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a study task in ${applicationName}"
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "Ajoute une tâche d'étude dans ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Add a study task in ${applicationName}"
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Ajoute une tâche d'étude dans ${applicationName}"
+            ]
           }
         }
       }
     },
-    "Démarre une session d'étude dans ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start a study session in ${applicationName}"
+    "Démarre une session d'étude dans ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Start a study session in ${applicationName}"
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Démarre une session d'étude dans ${applicationName}",
+              "Lance mon chrono ${applicationName}"
+            ]
           }
         }
       }
     },
-    "Enregistre une session d'étude dans ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Log a study session in ${applicationName}"
+    "Enregistre une session d'étude dans ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Log a study session in ${applicationName}"
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Enregistre une session d'étude dans ${applicationName}",
+              "Ajoute du temps de travail dans ${applicationName}"
+            ]
           }
         }
       }
     },
-    "Marque un exercice comme fait dans ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark an exercise as done in ${applicationName}"
+    "Marque un exercice comme fait dans ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mark an exercise as done in ${applicationName}"
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Marque un exercice comme fait dans ${applicationName}",
+              "J'ai fini un exercice dans ${applicationName}"
+            ]
           }
         }
       }
     },
-    "Planifie une session d'étude dans ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plan a study session in ${applicationName}"
+    "Planifie une session d'étude dans ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan a study session in ${applicationName}"
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Planifie une session d'étude dans ${applicationName}",
+              "Planifie une session ${applicationName}"
+            ]
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

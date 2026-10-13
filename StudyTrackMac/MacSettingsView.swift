@@ -112,6 +112,7 @@ private struct StudySettingsPane: View {
     @Environment(MacSettings.self) private var settings
     @State private var newSite = ""
     @State private var siteError = false
+    @State private var editingButtons = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -151,6 +152,12 @@ private struct StudySettingsPane: View {
                         HStack {
                             Text(file == nil ? "aucun" : "studytrack.json").foregroundStyle(.secondary)
                             Button(file == nil ? "Créer" : "Ouvrir") { openProjectFile(exists: file != nil) }
+                        }
+                    }
+                    LabeledContent("Boutons") {
+                        HStack {
+                            Text(file.map { "\($0.commands.count)" } ?? "aucun").foregroundStyle(.secondary)
+                            Button("Modifier…") { editingButtons = true }
                         }
                     }
                     LabeledContent("Compétences") {
@@ -233,6 +240,9 @@ private struct StudySettingsPane: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $editingButtons) {
+            ClaudeButtonsEditor(url: ClaudeProjectSetup.fileURL(settings: settings))
+        }
         .frame(height: 520)
     }
 
