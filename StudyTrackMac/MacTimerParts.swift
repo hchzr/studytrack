@@ -60,47 +60,103 @@ struct TimerControls: View {
 /// est ce que « Démarrer » chronomètre.
 struct TimerSetup: View {
     @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
     let courses: [Course]
-    var compact = false
+
+    var body: some View {
+        @Bindable var timer = timer
+        VStack(alignment: .leading, spacing: 12) {
+            TimerSetupRow(courses: courses)
+            Toggle(isOn: $timer.pomodoro) {
+                Text("Pomodoro · \(settings.focusMinutes)/\(settings.shortBreakMinutes) min")
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+        }
+    }
+}
+
+/// Sur quoi chronométrer : le cours, le travail, la cible — un rang de
+/// pastilles-menus (la barre des menus et la page Chrono). Les pastilles de
+/// tous les cours, sur plusieurs lignes, prenaient la moitié du panneau.
+struct TimerSetupRow: View {
+    @Environment(MacTimer.self) private var timer
+    let courses: [Course]
+    /// Un choix fait à la main (le cours de l'horaire n'est plus « proposé »).
+    var onChoice: () -> Void = {}
 
     private var course: Course? { courses.first { $0.id == timer.courseID } }
 
     var body: some View {
         @Bindable var timer = timer
-        VStack(alignment: .leading, spacing: compact ? 10 : 14) {
-            // Les cours en pastilles : un clic choisit.
-            FlowChips(spacing: 6) {
-                CourseChip(title: "Libre", color: Carnet.inkSecondary, selected: timer.courseID == nil) {
-                    timer.courseID = nil
-                    timer.targetID = nil
-                }
+        HStack(spacing: 6) {
+            Menu {
+                Button("Sans cours") { timer.courseID = nil; timer.targetID = nil; onChoice() }
+                Divider()
                 ForEach(courses) { item in
-                    CourseChip(title: item.displayCode, color: Carnet.tint(item.colorHex), selected: timer.courseID == item.id) {
+                    Button("\(item.displayCode) · \(item.name)") {
                         timer.courseID = item.id
                         timer.targetID = nil
+                        onChoice()
                     }
-                    .help(item.name)
                 }
+            } label: {
+                PillLabel(dot: course.map { Carnet.tint($0.colorHex) }, title: course?.displayCode ?? "Sans cours")
             }
-            HStack(spacing: 8) {
-                Picker("Travail", selection: $timer.taskType) {
-                    ForEach(TaskType.choices) { Label($0.label, systemImage: $0.icon).tag($0) }
+            .pillMenu()
+            .help(course?.name ?? "Choisir un cours")
+
+            Menu {
+                ForEach(TaskType.choices) { type in
+                    Button { timer.taskType = type; timer.targetID = nil } label: { Label(type.label, systemImage: type.icon) }
                 }
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: timer.taskType) { _, _ in timer.targetID = nil }
-                if let course {
-                    TargetMenu(course: course, taskType: timer.taskType, selection: $timer.targetID)
-                }
-                Spacer(minLength: 0)
+            } label: {
+                PillLabel(icon: timer.taskType.icon, title: timer.taskType.label)
             }
-            Picker("Mode", selection: $timer.pomodoro) {
-                Text("Chrono libre").tag(false)
-                Text("Pomodoro").tag(true)
+            .pillMenu()
+
+            if let course {
+                TargetMenu(course: course, taskType: timer.taskType, selection: $timer.targetID)
+                    .pillMenu()
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Carnet.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Carnet.sheetRaised, in: Capsule())
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            Spacer(minLength: 0)
         }
+    }
+}
+
+/// Une pastille-menu : un point de couleur ou une icône, un titre, ▾.
+struct PillLabel: View {
+    var dot: Color? = nil
+    var icon: String? = nil
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
+            if let icon { Image(systemName: icon).font(.caption) }
+            Text(title).font(.callout.weight(.medium)).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Carnet.inkTertiary)
+        }
+        .foregroundStyle(Carnet.ink)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Carnet.sheetRaised, in: Capsule())
+        .contentShape(Capsule())
+    }
+}
+
+extension View {
+    /// Un menu qui garde son étiquette telle quelle (pas de bouton système).
+    func pillMenu() -> some View {
+        self.menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
     }
 }
 
