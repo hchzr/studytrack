@@ -87,7 +87,7 @@ enum SeriesAIExtractor {
     /// Le modèle embarqué est-il utilisable sur cet appareil, maintenant ?
     static var isOnDeviceAvailable: Bool {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             if case .available = SystemLanguageModel.default.availability { return true }
         }
         #endif
@@ -97,7 +97,7 @@ enum SeriesAIExtractor {
     /// Pourquoi le modèle embarqué manque, en clair — ou `nil` s'il est là.
     static var onDeviceUnavailabilityReason: String? {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             switch SystemLanguageModel.default.availability {
             case .available:
                 return nil
@@ -348,7 +348,7 @@ enum SeriesAIExtractor {
 
     private static func extractOnDevice(_ text: String) async throws -> [DetectedSeries] {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             let session = LanguageModelSession(instructions: SeriesAIParsing.instructions)
             let response = try await session.respond(
                 to: "Texte du PDF :\n\n\(text)",
@@ -363,7 +363,7 @@ enum SeriesAIExtractor {
 // MARK: - Schéma guidé du modèle embarqué
 
 #if canImport(FoundationModels)
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 @Generable(description: "Les séries d'exercices trouvées dans le texte")
 struct GeneratedSeriesList {
     @Guide(description: "Une entrée par série, dans l'ordre du document ; vide s'il n'y en a aucune")
@@ -392,7 +392,7 @@ struct GeneratedSeriesList {
     }
 }
 
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 @Generable(description: "Une série d'exercices")
 struct GeneratedSeries {
     @Guide(description: "Numéro de la série, tel qu'écrit dans le document (Série 3 → 3)")
@@ -403,7 +403,7 @@ struct GeneratedSeries {
     var exercises: [GeneratedExercise]
 }
 
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 @Generable(description: "Un exercice")
 struct GeneratedExercise {
     @Guide(description: "Numéro au format série.exercice, par exemple 3.2 ; un simple « 2 » est accepté")

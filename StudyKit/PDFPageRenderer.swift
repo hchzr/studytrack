@@ -2,6 +2,8 @@ import Foundation
 import PDFKit
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 /// Rend les pages d'un PDF en JPEG, pour le modèle qui **voit** les pages et pour
@@ -20,7 +22,6 @@ enum PDFPageRenderer {
     static let maxPages = 20
 
     static func jpegPages(of document: PDFDocument) -> [Data] {
-        #if canImport(UIKit)
         var result: [Data] = []
         for index in 0..<min(document.pageCount, maxPages) {
             guard let page = document.page(at: index) else { continue }
@@ -29,13 +30,19 @@ enum PDFPageRenderer {
             let scale = targetWidth / bounds.width
             let size = CGSize(width: targetWidth, height: bounds.height * scale)
             let image = page.thumbnail(of: size, for: .mediaBox)
-            if let data = image.jpegData(compressionQuality: jpegQuality) {
-                result.append(data)
-            }
+            if let data = jpeg(image) { result.append(data) }
         }
         return result
-        #else
-        return []
-        #endif
     }
+
+    #if canImport(UIKit)
+    private static func jpeg(_ image: UIImage) -> Data? {
+        image.jpegData(compressionQuality: jpegQuality)
+    }
+    #elseif canImport(AppKit)
+    private static func jpeg(_ image: NSImage) -> Data? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return NSBitmapImageRep(cgImage: cgImage).representation(using: .jpeg, properties: [.compressionFactor: jpegQuality])
+    }
+    #endif
 }

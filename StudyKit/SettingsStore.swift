@@ -142,7 +142,31 @@ final class SettingsStore {
     var contentLastRefresh: Date? { didSet { defaults.set(contentLastRefresh, forKey: Key.contentLastRefresh) } }
     /// « Moodle : Série 4 ajoutée en MATH-101 » — affiché sur l'accueil
     /// jusqu'à ce qu'on le ferme ; vide quand il n'y a rien de neuf.
-    var contentRefreshNews: String { didSet { defaults.set(contentRefreshNews, forKey: Key.contentRefreshNews) } }
+    ///
+    /// **Partagé** par iCloud (clé-valeur) : la relecture se fait sur un seul
+    /// appareil, ce qu'elle trouve s'annonce sur tous, et le fermer sur l'un le
+    /// ferme sur les autres.
+    var contentRefreshNews: String {
+        didSet {
+            defaults.set(contentRefreshNews, forKey: Key.contentRefreshNews)
+            guard !applyingShared, contentRefreshNews != oldValue else { return }
+            NSUbiquitousKeyValueStore.default.set(contentRefreshNews, forKey: Self.sharedNewsKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    private static let sharedNewsKey = "content.news"
+    @ObservationIgnored private var applyingShared = false
+    @ObservationIgnored private var sharedObserver: NSObjectProtocol?
+
+    /// Reprend ce qu'un autre appareil a écrit.
+    private func applyShared() {
+        guard let news = NSUbiquitousKeyValueStore.default.string(forKey: Self.sharedNewsKey),
+              news != contentRefreshNews else { return }
+        applyingShared = true
+        contentRefreshNews = news
+        applyingShared = false
+    }
 
     // MARK: Nouveautés Moodle
     /// Prévenir d'une série, d'un corrigé, d'un rendu publiés sur Moodle, même
@@ -242,6 +266,11 @@ final class SettingsStore {
         self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         for key in Key.legacyAI { defaults.removeObject(forKey: key) }
+        applyShared()
+        sharedObserver = NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.applyShared()
+        }
     }
 
 }

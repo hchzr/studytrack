@@ -1,7 +1,9 @@
 import Foundation
 import SwiftData
 
-/// Relit Moodle et Botafogo **tout seul**, pour les cours déjà importés.
+/// Relit Moodle et Botafogo **tout seul**, pour les cours déjà importés —
+/// sur l'iPhone comme sur le Mac, avec la même chaîne (règles, IA, Botafogo,
+/// lecture des énoncés).
 ///
 /// Sans elle, la série 4 publiée mardi n'existait dans l'app que si l'on
 /// pensait à réimporter. Au passage au premier plan, au plus toutes les douze
@@ -9,7 +11,10 @@ import SwiftData
 /// Botafogo est relu, et ce qui est **nouveau** est ajouté.
 ///
 /// Un seul appareil s'en charge (`CloudRelay.refreshIsDue`) : la relecture est
-/// réclamée dans iCloud avant de commencer.
+/// réclamée dans iCloud avant de commencer. Le Mac relisait avec ses seules
+/// règles, toutes les six heures : sa réclamation privait l'iPhone de la
+/// relecture complète, et ce qu'il trouvait ne s'annonçait nulle part.
+/// Désormais, celui qui relit fait tout, et l'annonce est partagée.
 ///
 /// Prudente par construction :
 ///   • rien n'est supprimé (`ContentDraftWriter` n'efface jamais) ;
@@ -21,18 +26,24 @@ enum ContentRefresher {
     static let interval: TimeInterval = 12 * 3600
     private static var running = false
 
-    static func refreshIfDue(context: ModelContext, settings: SettingsStore, now: Date = Date()) async {
-        guard settings.contentAutoRefresh, !running else { return }
+    static func refreshIfDue(context: ModelContext, settings: SettingsStore, force: Bool = false, now: Date = Date()) async {
+        guard settings.contentAutoRefresh || force, !running else { return }
         // Un seul appareil relit : l'iPad ouvert une heure après l'iPhone ne
         // relit pas Moodle (ni ne repaie l'IA) — ce qui a été ajouté arrive
         // par iCloud. Sauf si la surveillance d'ici vient de trouver du neuf.
+        #if os(iOS)
         let forced = MoodleWatcher.hasPendingNews
-        guard forced || CloudRelay.refreshIsDue(localLast: settings.contentLastRefresh,
+        #else
+        let forced = false
+        #endif
+        guard force || forced || CloudRelay.refreshIsDue(localLast: settings.contentLastRefresh,
                                                 claim: CloudRelay.moodleRefreshClaim(),
                                                 device: CloudRelay.deviceID,
                                                 interval: interval, now: now) else { return }
         CloudRelay.claimMoodleRefresh(now: now)
+        #if os(iOS)
         MoodleWatcher.hasPendingNews = false
+        #endif
         running = true
         defer { running = false }
 

@@ -15,6 +15,9 @@ final class MacStore {
 
     let container: ModelContainer
     let isCloudSynced: Bool
+    /// Les réglages communs à l'iPhone (relecture des cours, IA de lecture,
+    /// nouveautés annoncées) : le même type, pour la même chaîne d'import.
+    let preferences = SettingsStore()
 
     /// Ce que fait iCloud : la barre latérale le dit.
     enum SyncState: Equatable {

@@ -34,7 +34,7 @@ enum MoodleCourseAIService {
         // **Une** réponse gardée par cours (la dernière) : une clé par empreinte
         // en gardait une nouvelle à chaque changement du cours, sans fin.
         dropLegacyCache()
-        #if DEBUG
+        #if DEBUG && os(iOS)
         AIPayloadDump.record(payload: payload)
         #endif
         let key = "moodleAI4." + hash(snapshot.url.isEmpty ? snapshot.title : snapshot.url)
@@ -57,7 +57,7 @@ enum MoodleCourseAIService {
             raw = try? await askOnDevice(payload)
         }
         guard let raw else { return .init() }
-        #if DEBUG
+        #if DEBUG && os(iOS)
         AIPayloadDump.record(answer: raw)
         #endif
         let answer = MoodleCourseAI.answer(raw)
@@ -76,7 +76,7 @@ enum MoodleCourseAIService {
     static let analysisVersion = "gpt-6-luna.2026-10-03"
 
     private static var debugBypassCache: Bool {
-        #if DEBUG
+        #if DEBUG && os(iOS)
         return AIPayloadDump.isActive
         #else
         return false
@@ -120,7 +120,7 @@ enum MoodleCourseAIService {
 
     private static func askOnDevice(_ payload: [String: Any]) async throws -> String {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *), case .available = SystemLanguageModel.default.availability {
+        if #available(iOS 26.0, macOS 26.0, *), case .available = SystemLanguageModel.default.availability {
             let session = LanguageModelSession(instructions: MoodleCourseAI.instructions)
             var prompt = "Cours : \(payload["course"] ?? "")\nSemaines : \(payload["weeks"] ?? 14)\n\nActivités Moodle :\n\(payload["outline"] ?? "")"
             if let plan = payload["plan"] as? String { prompt += "\n\nPLAN DU COURS :\n" + String(plan.prefix(4000)) }

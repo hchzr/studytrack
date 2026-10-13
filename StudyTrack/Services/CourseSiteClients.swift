@@ -1422,7 +1422,6 @@ enum MoocImport {
 ///    sources) complètent chaque semaine.
 // L'import complet (modèle, réglages) n'existe que sur l'iPhone ; le Mac ne
 // garde de ce fichier que les clients des sites (mode étude).
-#if os(iOS)
 @MainActor
 enum CourseImportPipeline {
     struct Outcome {
@@ -1526,4 +1525,3 @@ enum CourseImportPipeline {
         return Outcome(draft: draft, notes: notes, botafogoTitle: nil)
     }
 }
-#endif

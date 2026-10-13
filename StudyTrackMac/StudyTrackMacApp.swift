@@ -70,6 +70,7 @@ struct StudyTrackMacApp: App {
             TimerLink.shared.startFromBundle(containerID: MacStore.cloudContainerID)
         }
         MacAppDelegate.settings = settings
+        MacAppDelegate.store = store
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         #if DEBUG
         MacDebugLaunch.apply(timer: timer, store: store)
@@ -230,10 +231,15 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var settings: MacSettings?
     @MainActor private var hotKey: GlobalHotKey?
 
-    /// Relit Moodle s'il est temps (`MacContentRefresher`).
+    @MainActor static var store: MacStore?
+
+    /// Relit les cours (Moodle, Botafogo) s'il est temps : la même chaîne que
+    /// l'iPhone (`ContentRefresher`), sur l'appareil qui la réclame le premier.
     @MainActor static func refreshContent(force: Bool = false) {
-        guard let container = StudyModeController.shared.container else { return }
-        Task { @MainActor in await MacContentRefresher.refreshIfDue(context: container.mainContext, force: force) }
+        guard let store else { return }
+        Task { @MainActor in
+            await ContentRefresher.refreshIfDue(context: store.container.mainContext, settings: store.preferences, force: force)
+        }
     }
 
     @MainActor
