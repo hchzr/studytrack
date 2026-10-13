@@ -238,6 +238,8 @@ struct VideoRow: View {
 /// Détail d'une vidéo : dates, résumé, suppression.
 struct VideoDetailSheet: View {
     @Bindable var video: TheoryItem
+    /// Numéro, titre, support, lien : le formulaire commun (`TheoryItemForm`).
+    @State private var editing = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -380,6 +382,14 @@ struct VideoDetailSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Fermer") { dismiss() }
                 }
+                if video.course != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Modifier") { editing = true }
+                    }
+                }
+            }
+            .sheet(isPresented: $editing) {
+                if let course = video.course { TheoryItemForm(course: course, item: video) }
             }
             .onAppear {
                 summary = video.summaryText ?? ""
