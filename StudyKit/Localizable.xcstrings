@@ -85,6 +85,9 @@
         }
       }
     },
+    "{code} {cours} {serie} {titre} {exercice} : remplacés par la session en cours." : {
+
+    },
     "**Essayée en premier.** Le texte du PDF est envoyé à la fonction `extract-series` du projet Supabase de l'app, qui interroge un modèle servi (Groq par défaut). C'est le moteur qui lit le mieux les séries réelles : numéros, bonus, intitulés. Elle doit être **déployée** une fois (voir `Support/SUPABASE.md`) ; sans cela, l'analyse se rabat sur le modèle de l'appareil, puis sur la lecture par motifs." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1721,6 +1724,9 @@
         }
       }
     },
+    "Ajoute-en un avec +." : {
+
+    },
     "Ajoute-les sur ton iPhone, ils arrivent ici." : {
       "localizations" : {
         "en" : {
@@ -2360,6 +2366,9 @@
           }
         }
       }
+    },
+    "Aucun bouton choisi" : {
+
     },
     "Aucun cours" : {
       "localizations" : {
@@ -3207,6 +3216,9 @@
     "Botafogo" : {
 
     },
+    "Boutons" : {
+
+    },
     "Brancher ton assistant" : {
       "localizations" : {
         "en" : {
@@ -3473,6 +3485,9 @@
           }
         }
       }
+    },
+    "Celui de la conversation" : {
+
     },
     "Certains membres apparaissent anonymement." : {
       "localizations" : {
@@ -4442,6 +4457,9 @@
         }
       }
     },
+    "Confirmer que c'est toi" : {
+
+    },
     "Connecté" : {
       "localizations" : {
         "en" : {
@@ -4581,6 +4599,9 @@
           }
         }
       }
+    },
+    "Connexion à %@…" : {
+
     },
     "Connexion à Moodle" : {
       "localizations" : {
@@ -5243,6 +5264,9 @@
           }
         }
       }
+    },
+    "Dans la série" : {
+
     },
     "Dans le cours" : {
       "localizations" : {
@@ -7629,6 +7653,9 @@
         }
       }
     },
+    "Icône" : {
+
+    },
     "ID de la base de données" : {
       "localizations" : {
         "en" : {
@@ -8036,6 +8063,9 @@
         }
       }
     },
+    "Indices" : {
+
+    },
     "indices : %@ · système : %@" : {
       "localizations" : {
         "en" : {
@@ -8045,6 +8075,9 @@
           }
         }
       }
+    },
+    "Indices (%@)" : {
+
     },
     "Inspecteur" : {
       "localizations" : {
@@ -8280,6 +8313,9 @@
           }
         }
       }
+    },
+    "Joindre un fichier" : {
+
     },
     "Joindre un fichier…" : {
       "localizations" : {
@@ -8573,6 +8609,9 @@
         }
       }
     },
+    "La série" : {
+
+    },
     "La série %lld existe déjà (%lld exercices) : les exercices de même numéro sont mis à jour, les autres ajoutés. Tes coches sont conservées." : {
       "localizations" : {
         "en" : {
@@ -8784,6 +8823,9 @@
           }
         }
       }
+    },
+    "Le système" : {
+
     },
     "Le temps compté ne sera pas enregistré." : {
       "localizations" : {
@@ -9057,6 +9099,9 @@
           }
         }
       }
+    },
+    "Libellé" : {
+
     },
     "Libre · %@" : {
       "localizations" : {
@@ -9634,6 +9679,9 @@
         }
       }
     },
+    "Microsoft demande de confirmer que c'est toi." : {
+
+    },
     "min" : {
 
     },
@@ -9716,7 +9764,6 @@
       }
     },
     "Modèle" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10891,6 +10938,9 @@
         }
       }
     },
+    "Par défaut" : {
+
+    },
     "Par exemple 3.2" : {
       "localizations" : {
         "en" : {
@@ -11897,6 +11947,12 @@
           }
         }
       }
+    },
+    "Proposer des verdicts à noter" : {
+
+    },
+    "Proposer une photo d'abord" : {
+
     },
     "Publication…" : {
       "extractionState" : "stale",
@@ -14015,6 +14071,9 @@
         }
       }
     },
+    "sparkle" : {
+
+    },
     "Statistiques" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14667,6 +14726,12 @@
           }
         }
       }
+    },
+    "Système" : {
+
+    },
+    "Système (%@)" : {
+
     },
     "Ta demande" : {
       "localizations" : {

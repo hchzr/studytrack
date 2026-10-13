@@ -88,7 +88,7 @@ private struct SignInWebView {
 
     private var start: URL {
         site == .mediaspace ? URL(string: "https://\(Institution.current.videoHostName)/user/login")!
-                            : URL(string: Institution.current.moodleBase + "/login/index.php")!
+                            : URL(string: Institution.current.moodleBase + "/my/")!
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(site: site, finished: finished) }
@@ -140,14 +140,18 @@ private struct SignInWebView {
             }
             let home = site == .mediaspace ? Institution.current.videoHostName : Institution.current.moodleHostName
             guard url.host == home else { return }
-            if site != .mediaspace, url.path.hasPrefix("/login") {
-                view.evaluateJavaScript(SchoolConnect.clickEntra)
-                return
-            }
+            // Déjà connecté·e (Moodle répond alors « déjà connecté, se
+            // déconnecter ? » sur sa page de connexion) : c'est fini. Sinon,
+            // sur la page de connexion, le bouton de l'école.
             let signedIn = site == .mediaspace ? SchoolConnect.mediaspaceSignedIn : SchoolConnect.moodleSignedIn
+            let onLogin = site != .mediaspace && url.path.hasPrefix("/login")
             view.evaluateJavaScript(signedIn) { [weak self] value, _ in
                 MainActor.assumeIsolated {
-                    guard let self, !self.done, (value as? Bool) == true else { return }
+                    guard let self, !self.done else { return }
+                    guard (value as? Bool) == true else {
+                        if onLogin { view.evaluateJavaScript(SchoolConnect.clickEntra) }
+                        return
+                    }
                     self.done = true
                     self.stop()
                     self.finished()

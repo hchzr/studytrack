@@ -152,12 +152,12 @@ final class SchoolConnect {
         switch site {
         case .moodle:
             done = await driver.run(start: URL(string: school.moodleBase + "/login/index.php")!) { url, view in
-                if url.host == school.moodleHostName, url.path.hasPrefix("/login") {
-                    _ = try? await view.evaluateJavaScript(Self.clickOAuth(school))
-                    return false
-                }
                 if url.host == school.moodleHostName {
-                    return (try? await view.evaluateJavaScript(Self.moodleSignedIn)) as? Bool == true
+                    // Déjà connecté·e, même sur la page de connexion (Moodle y
+                    // demande alors « se déconnecter ? ») : c'est fait.
+                    if (try? await view.evaluateJavaScript(Self.moodleSignedIn)) as? Bool == true { return true }
+                    if url.path.hasPrefix("/login") { _ = try? await view.evaluateJavaScript(Self.clickOAuth(school)) }
+                    return false
                 }
                 await Self.answerMicrosoft(view, email: self.email)
                 return false
@@ -277,7 +277,10 @@ final class SchoolConnect {
         """
     }
     static var clickEntra: String { clickOAuth(Institution.current) }
-    static let moodleSignedIn = "!!document.querySelector('#user-menu-toggle, .usermenu .userbutton')"
+    /// Le menu du compte, ou « Vous êtes connecté·e en tant que … (Déconnexion) »
+    /// en bas de page — seul signe sur la page de connexion quand la session
+    /// existe déjà (observé).
+    static let moodleSignedIn = "!!document.querySelector('#user-menu-toggle, .usermenu .userbutton, .logininfo a[href*=\"login/logout.php\"]')"
     static func chooseSSOIdP(_ idp: String) -> String {
         """
         (() => { const next = new URLSearchParams(location.search).get('next') || '/';
