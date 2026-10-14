@@ -6,7 +6,8 @@ import WidgetKit
 /// StudyTrack sur Mac : le chrono dans la barre des menus, et une fenêtre pour
 /// voir ses cours, cocher ses exercices et relire son bilan. Les données sont
 /// celles de l'iPhone, par iCloud ; le chrono aussi.
-@main
+/// Lancé par `StudyTrackMacEntry` (`StudyGuard.swift`), qui dirige vers le
+/// gardien du verrou quand c'est lui qu'on lance.
 struct StudyTrackMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var delegate
     @State private var store: MacStore

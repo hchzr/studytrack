@@ -180,7 +180,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// Sous verrou, en plus : ni ⌘Tab, ni « Forcer à quitter » (⌥⌘⎋), ni
     /// fermeture de session ou redémarrage, ni ⌘H, ni menu Pomme. Ces options
     /// ne valent que quand StudyTrack est au premier plan ; ailleurs (une app
-    /// permise), le voile prend le relais.
+    /// permise), le voile et le gardien (`StudyGuard`) prennent le relais.
     private func applyPresentation() {
         guard window?.isVisible == true, !previewOnly else { return }
         var options: NSApplication.PresentationOptions = [.hideDock, .hideMenuBar]
@@ -208,6 +208,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private func startBlocking() {
         guard !blocking, !previewOnly else { return }
         blocking = true
+        // Tué de force depuis une app permise, StudyTrack revient (`StudyGuard`).
+        StudyGuard.arm()
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
