@@ -42,8 +42,14 @@ final class StudyLock {
     #if canImport(FamilyControls)
     /// Les apps permises, choisies dans le sélecteur d'Apple.
     var selection = FamilyActivitySelection() {
-        didSet { saveSelection() }
+        didSet {
+            saveSelection()
+            // Choisies pendant un verrou (la première fois) : elles s'ouvrent aussitôt.
+            if isShielding, let shieldUntil { shield(until: shieldUntil) }
+        }
     }
+    /// L'échéance du bouclier posé.
+    private var shieldUntil: Date?
     private let store = ManagedSettingsStore(named: .studyMode)
     #endif
 
@@ -101,9 +107,14 @@ final class StudyLock {
         }
     }
 
+    /// Un verrou est posé et aucune app n'est permise : GoodNotes serait
+    /// fermé avec le reste. L'écran du mode étude ouvre alors le sélecteur.
+    var needsAllowedApps: Bool { isAuthorized && allowedAppCount == 0 }
+
     private func shield(until: Date) {
         #if canImport(FamilyControls)
         guard isAuthorized else { return }
+        shieldUntil = until
         store.shield.applicationCategories = .all(except: selection.applicationTokens)
         store.shield.webDomainCategories = .all(except: selection.webDomainTokens)
         let domains = Set(sites.compactMap(StudyMode.normalizedDomain).map { WebDomain(domain: $0) })

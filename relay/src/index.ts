@@ -14,6 +14,10 @@
  * - Live Activity : un appareil qui publie peut joindre l'état de l'îlot (en
  *   clair : heures, pause, libellés — c'est ce qu'Apple affiche). Le relais
  *   l'envoie par APNs aux iPhone du compte, même app fermée.
+ * - Verrou du mode étude : quand un appareil publie un état qui pose ou lève
+ *   le verrou (`wake`), le relais réveille les iPhone et iPad endormis du
+ *   compte (notification silencieuse, l'état chiffré joint) : ils posent ou
+ *   lèvent leur bouclier du Temps d'écran sans qu'on les ouvre.
  */
 import { DurableObject } from "cloudflare:workers";
 
@@ -46,8 +50,8 @@ export default {
 
 /** Ce qu'un appareil envoie. */
 type Inbound =
-  | { t: "timer"; d: string; u: number; live?: LivePush }
-  | { t: "apns"; kind: "update" | "start"; token: string | null; sandbox: boolean };
+  | { t: "timer"; d: string; u: number; live?: LivePush; wake?: boolean }
+  | { t: "apns"; kind: "update" | "start" | "device"; token: string | null; sandbox: boolean };
 
 /** Ce qu'il faut pousser à l'îlot de l'iPhone. */
 interface LivePush {
@@ -60,8 +64,13 @@ interface LivePush {
 interface Tokens {
   update?: string;
   start?: string;
+  /** Le jeton de l'appareil (notifications silencieuses). */
+  device?: string;
   sandbox: boolean;
 }
+
+/** Au-delà, la notification part sans l'état (APNs refuse plus de 4 Ko). */
+const WAKE_STATE_LIMIT = 3_200;
 
 export class Relay extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -94,6 +103,7 @@ export class Relay extends DurableObject<Env> {
       const tokens = (await this.ctx.storage.get<Tokens>(key)) ?? { sandbox: message.sandbox };
       tokens.sandbox = message.sandbox;
       if (message.kind === "update") tokens.update = message.token ?? undefined;
+      else if (message.kind === "device") tokens.device = message.token ?? undefined;
       else tokens.start = message.token ?? undefined;
       await this.ctx.storage.put(key, tokens);
       return;
@@ -117,6 +127,28 @@ export class Relay extends DurableObject<Env> {
     }
     if (message.live) {
       this.ctx.waitUntil(this.pushLive(device, message.live));
+    }
+    if (message.wake === true) {
+      this.ctx.waitUntil(this.wakeDevices(device, message.d, message.u));
+    }
+  }
+
+  /** Réveille les autres appareils du compte : le verrou a changé. */
+  private async wakeDevices(sender: string, sealed: string, updatedAt: number): Promise<void> {
+    const payload: Record<string, unknown> = { aps: { "content-available": 1 } };
+    if (sealed.length <= WAKE_STATE_LIMIT) payload.st = { d: sealed, u: updatedAt };
+    const body = JSON.stringify(payload);
+    const apns = this.env.APNS.get(this.env.APNS.idFromName("apns"));
+    const entries = await this.ctx.storage.list<Tokens>({ prefix: "tokens:" });
+    for (const [key, tokens] of entries) {
+      const device = key.slice("tokens:".length);
+      if (device === sender || !tokens.device) continue;
+      const status = await apns.push(tokens.device, tokens.sandbox, body, "background");
+      console.log(`réveil → ${device.slice(0, 8)} : ${status}`);
+      if (status === 410 || status === 400) {
+        tokens.device = undefined;
+        await this.ctx.storage.put(key, tokens);
+      }
     }
   }
 
@@ -175,21 +207,27 @@ export class Relay extends DurableObject<Env> {
     // d'APNs. Apple refuse (429) un jeton renouvelé plus d'une fois toutes
     // les ~20 minutes — or chaque relais qui se réveille le refaisait.
     const sender = this.env.APNS.get(this.env.APNS.idFromName("apns"));
-    return sender.push(token, sandbox, JSON.stringify({ aps }));
+    return sender.push(token, sandbox, JSON.stringify({ aps }), "liveactivity");
   }
 }
 
 /** L'expéditeur APNs, unique : un jeton signé, réutilisé 50 minutes. */
 export class ApnsSender extends DurableObject<Env> {
-  async push(token: string, sandbox: boolean, body: string): Promise<number> {
+  /**
+   * `liveactivity` : l'îlot (priorité 10). `background` : une notification
+   * silencieuse (`content-available`), que l'app traite en arrière-plan ;
+   * Apple exige la priorité 5 et le sujet nu (l'identifiant de l'app).
+   */
+  async push(token: string, sandbox: boolean, body: string, type: "liveactivity" | "background"): Promise<number> {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+    const live = type === "liveactivity";
     const response = await fetch(`https://${host}/3/device/${token}`, {
       method: "POST",
       headers: {
         authorization: `bearer ${await this.jwt()}`,
-        "apns-topic": `${this.env.APNS_BUNDLE_ID}.push-type.liveactivity`,
-        "apns-push-type": "liveactivity",
-        "apns-priority": "10",
+        "apns-topic": live ? `${this.env.APNS_BUNDLE_ID}.push-type.liveactivity` : this.env.APNS_BUNDLE_ID,
+        "apns-push-type": type,
+        "apns-priority": live ? "10" : "5",
       },
       body,
     });

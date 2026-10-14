@@ -62,8 +62,9 @@ struct StudyModeEntry: View {
 
     private func enter(_ minutes: Int) {
         app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: blocking)
+        // L'autorisation et les apps permises se demandent dans l'écran du mode
+        // étude, quel que soit le chemin par lequel on y entre.
         app.router.showingStudyMode = true
-        if blocking, !StudyLock.shared.isAuthorized { showingSetup = true }
     }
 }
 
@@ -108,6 +109,11 @@ struct StudyModeScreen: View {
     @Environment(\.modelContext) private var context
     /// L'horaire du jour, relu chaque minute.
     @State private var classes: [ScheduledClass] = []
+    @State private var lock = StudyLock.shared
+    /// Premier verrou sans réglage : autoriser le Temps d'écran, ou choisir les
+    /// apps permises — avant de se retrouver sans GoodNotes.
+    @State private var showingLockSetup = false
+    @State private var showingAllowedApps = false
 
     /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
     enum StudyTab: String, CaseIterable, Identifiable {
@@ -202,6 +208,21 @@ struct StudyModeScreen: View {
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
         // Sous verrou, l'écran ne se referme pas d'un geste.
         .interactiveDismissDisabled(focus.isLocked)
+        .onAppear { checkLockSetup() }
+        .onChange(of: focus.isLocked) { _, _ in checkLockSetup() }
+        .sheet(isPresented: $showingLockSetup) { NavigationStack { StudyModeSettingsView() } }
+        #if canImport(FamilyControls)
+        .familyActivityPicker(isPresented: $showingAllowedApps, selection: $lock.selection)
+        #endif
+    }
+
+    private func checkLockSetup() {
+        guard focus.isLocked else { return }
+        if !lock.isAuthorized {
+            showingLockSetup = true
+        } else if lock.needsAllowedApps {
+            showingAllowedApps = true
+        }
     }
 
     /// Ouvre l'onglet Cours sur ce que l'accueil demande.

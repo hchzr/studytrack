@@ -25,7 +25,9 @@ import CloudKit
 final class TimerLink {
     static let shared = TimerLink()
 
-    enum TokenKind: String { case update, start }
+    /// `update`, `start` : l'îlot (Live Activity). `device` : l'appareil lui-même,
+    /// pour le réveiller quand un verrou du mode étude commence ou finit ailleurs.
+    enum TokenKind: String { case update, start, device }
 
     /// Construit l'état de l'îlot à joindre à une publication (le Mac) :
     /// le relais le pousse aux iPhone verrouillés.
@@ -43,6 +45,9 @@ final class TimerLink {
     private var pending: CloudRelay.TimerSnapshot?
     /// Les jetons APNs de l'îlot, renvoyés à chaque connexion.
     private var tokens: [TokenKind: String?] = [:]
+    /// Le verrou tel qu'on l'a annoncé en dernier (réveiller les autres appareils
+    /// seulement quand il change).
+    private var lastAnnouncedLock: Bool?
 
     // MARK: Démarrage
 
@@ -122,7 +127,29 @@ final class TimerLink {
         if let data = livePayload?(snapshot), let live = try? JSONSerialization.jsonObject(with: data) {
             message["live"] = live
         }
+        // Un verrou qui commence ou finit : le relais réveille l'iPhone et
+        // l'iPad endormis (notification silencieuse), qui posent ou lèvent leur
+        // bouclier sans attendre qu'on les ouvre.
+        let locked = StudyMode.locks(snapshot.state)
+        if Self.shouldWake(previous: lastAnnouncedLock, now: locked) { message["wake"] = true }
+        lastAnnouncedLock = locked
         write(message)
+    }
+
+    /// Réveiller les autres appareils : quand le verrou change (pas au premier
+    /// état, sauf s'il verrouille).
+    nonisolated static func shouldWake(previous: Bool?, now: Bool) -> Bool {
+        guard let previous else { return now }
+        return previous != now
+    }
+
+    /// Un état reçu par notification silencieuse (`st.d`, chiffré comme sur la
+    /// WebSocket). L'app peut avoir été lancée en arrière-plan pour ça : la clé
+    /// se déduit de l'identité retenue.
+    func openWake(_ sealed: String) -> CloudRelay.TimerSnapshot? {
+        let identity = UserDefaults.standard.string(forKey: "timerLink.identity")
+        guard let key = key ?? identity.map(Self.key(for:)) else { return nil }
+        return Self.open(sealed, key: key)
     }
 
     /// Le jeton APNs de l'îlot de cet iPhone (`nil` : l'activité est finie).

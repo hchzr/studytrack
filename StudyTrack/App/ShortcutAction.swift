@@ -40,7 +40,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Avant la fin du lancement : un tap sur une notification qui a lancé
         // l'app arrive juste après.
         UNUserNotificationCenter.current().delegate = self
+        // Le jeton de l'appareil : un verrou lancé sur un autre appareil le
+        // réveille (notification silencieuse du relais).
+        application.registerForRemoteNotifications()
         return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        MainActor.assumeIsolated { TimerLink.shared.registerAPNs(kind: .device, token: hex) }
+    }
+
+    /// Le relais : un verrou a commencé ou fini ailleurs. L'état (chiffré) est
+    /// dans la notification ; il s'applique comme s'il arrivait par la
+    /// WebSocket, et le bouclier du Temps d'écran suit (`StudyLock.sync`).
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        await MainActor.run {
+            if let wake = userInfo["st"] as? [String: Any], let sealed = wake["d"] as? String,
+               let snapshot = TimerLink.shared.openWake(sealed) {
+                CloudRelay.receivedFromLink(snapshot)
+            } else {
+                NSUbiquitousKeyValueStore.default.synchronize()
+            }
+            AppRuntime.container?.focus.applyRemote()
+        }
+        return .newData
     }
 
     /// Une nouveauté Moodle ouvre son cours, sur la bonne page.

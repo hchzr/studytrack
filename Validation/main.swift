@@ -5990,6 +5990,14 @@ do {
     check(StudyMode.defaultSites(for: .epfl).contains("speakup.info"), "sondages en amphi permis")
 }
 
+// MARK: Réveil des autres appareils (verrou)
+do {
+    check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")
+    check(!TimerLink.shouldWake(previous: nil, now: false), "réveil : un premier état libre, non")
+    check(TimerLink.shouldWake(previous: true, now: false), "réveil : le verrou se lève")
+    check(!TimerLink.shouldWake(previous: true, now: true), "réveil : rien ne change, rien n'est envoyé")
+}
+
 // MARK: Bureau : la forme du moment
 do {
     check(DeskMoment.resolve(taskType: .lecture, inGroup: false, daysToExam: nil) == .lecture, "bureau : en cours")
