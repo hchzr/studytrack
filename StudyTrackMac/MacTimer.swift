@@ -108,7 +108,8 @@ final class MacTimer: TimerEngineHost {
         }
         if case .readyForBlock = focusPhase(at: now) { return 1 }
         let block = state.pomodoro ? cycle.blockDuration : 3600
-        return elapsed(at: now).truncatingRemainder(dividingBy: block) / block
+        let counted = state.pomodoro ? state.cycleElapsed(at: now) : elapsed(at: now)
+        return counted.truncatingRemainder(dividingBy: block) / block
     }
 
     /// Ce qui s'affiche en grand : le temps compté, ce qui reste du bloc en
@@ -120,7 +121,7 @@ final class MacTimer: TimerEngineHost {
         if let pause = state.currentBreak { return max(0, pause.endsAt.timeIntervalSince(now)).rounded(.up) }
         if state.pomodoro {
             let block = cycle.blockDuration
-            let into = elapsed(at: now).truncatingRemainder(dividingBy: block)
+            let into = state.cycleElapsed(at: now).truncatingRemainder(dividingBy: block)
             return max(0, block - into).rounded(.up)
         }
         return elapsed(at: now)
@@ -135,7 +136,7 @@ final class MacTimer: TimerEngineHost {
         if case .readyForBlock(let block) = focusPhase(at: now) { return "Bloc \(block) prêt" }
         if !state.isRunning { return "En pause" }
         if state.pomodoro {
-            let block = Int(elapsed(at: now) / cycle.blockDuration) + 1
+            let block = Int(state.cycleElapsed(at: now) / cycle.blockDuration) + 1
             return "Bloc \(block)"
         }
         return nil
@@ -186,6 +187,12 @@ final class MacTimer: TimerEngineHost {
     }
 
     func skipBreak() { engine.skipBreak() }
+
+    /// Allume ou coupe le Pomodoro en cours de séance : le premier bloc part de maintenant.
+    func setPomodoro(_ enabled: Bool) {
+        engine.setPomodoro(enabled)
+        pomodoro = enabled
+    }
 
     /// Change ce qui est chronométré sans couper le chrono : le temps déjà
     /// compté reste à la cible précédente.
@@ -263,7 +270,7 @@ final class MacTimer: TimerEngineHost {
                                                  trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)))
             }
         } else if state.pomodoro, state.isRunning, let end = state.blockEndDate(settings: cycle) {
-            let completed = Int((state.accumulated / cycle.blockDuration).rounded(.down)) + 1
+            let completed = Int((state.cycleAccumulated / cycle.blockDuration).rounded(.down)) + 1
             let kind = cycle.breakKind(afterBlock: completed)
             let content = UNMutableNotificationContent()
             content.title = "Bloc terminé"

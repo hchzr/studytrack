@@ -95,7 +95,7 @@ final class TimerEngine {
 
     /// Où en est le bloc de travail à l'instant `now`.
     func pomodoroStatus(at now: Date = Date()) -> PomodoroStatus {
-        PomodoroEngine.status(elapsed: elapsed(at: now), focusMinutes: cycle.focusMinutes)
+        PomodoroEngine.status(elapsed: elapsed(at: now), focusMinutes: cycle.focusMinutes, origin: state?.cycleOriginSeconds ?? 0)
     }
 
     var isStudying: Bool {
@@ -229,9 +229,8 @@ final class TimerEngine {
     /// pause la termine : sans cycle, il n'y a plus de pause à décompter.
     func setPomodoro(_ enabled: Bool) {
         guard var current = state else { return }
-        current.pomodoro = enabled
         if current.cycle == nil { current.cycle = host?.localCycle }
-        if !enabled { current.clearBreak() }
+        current.setPomodoro(enabled)
         current.advance(settings: current.cycle(or: cycle))
         state = current
         commit(presence: false)

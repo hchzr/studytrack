@@ -187,14 +187,14 @@ final class FocusController: TimerEngineHost {
         }
         let block = settings.blockDuration
         if let pause = state.currentBreak {
-            let next = Int((state.accumulated / block).rounded()) + 1
+            let next = Int((state.cycleAccumulated / block).rounded()) + 1
             app.notifications.schedulePomodoro(blockEndsAt: nil,
                                                breakKind: pause.kind,
                                                breakMinutes: Int(settings.breakDuration(pause.kind) / 60),
                                                breakEndsAt: pause.endsAt,
                                                nextBlock: next)
         } else if let end = state.blockEndDate(settings: settings) {
-            let completed = Int(((state.accumulated / block).rounded(.down))) + 1
+            let completed = Int(((state.cycleAccumulated / block).rounded(.down))) + 1
             let kind = settings.breakKind(afterBlock: completed)
             app.notifications.schedulePomodoro(blockEndsAt: end,
                                                breakKind: kind,

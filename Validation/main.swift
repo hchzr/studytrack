@@ -6341,6 +6341,49 @@ do {
     check(S.decode(S.encode(choice)) == choice && S.decode(nil) == nil && S.decode(Data("x".utf8)) == nil, "bande-son : le choix voyage en JSON")
 }
 
+// MARK: Pomodoro allumé en cours de séance
+do {
+    let cycle = PomodoroSettings(focusMinutes: 25, shortBreakMinutes: 5)
+    let t0 = Date(timeIntervalSince1970: 100_000)
+    // Une séance de 37 minutes de travail, le chrono tourne.
+    var state = FocusTimerState(accumulated: 37 * 60, runningSince: t0, sessionStartedAt: t0.addingTimeInterval(-37 * 60), pomodoro: false)
+    check(state.cycleOriginSeconds == 0 && state.cycleAccumulated == 37 * 60, "pomodoro : sans origine, le cycle compte depuis le début")
+    state.setPomodoro(true, at: t0.addingTimeInterval(120))
+    check(state.pomodoro && abs(state.cycleOriginSeconds - 39 * 60) < 0.01 && state.cycleAccumulated == 0, "pomodoro : allumé à 39 min de travail, le cycle repart de zéro")
+    check(abs(state.elapsed(at: t0.addingTimeInterval(120)) - 39 * 60) < 0.01, "pomodoro : le temps déjà travaillé reste compté")
+    let end = state.blockEndDate(settings: cycle)
+    check(end == t0.addingTimeInterval(120 + 25 * 60), "pomodoro : le premier bloc dure un bloc entier à partir de maintenant")
+    // Avant la fin du bloc : rien ; à la fin : une pause.
+    check(state.advance(settings: cycle, to: t0.addingTimeInterval(120 + 24 * 60)).isEmpty, "pomodoro : pas de pause avant la fin du bloc")
+    let events = state.advance(settings: cycle, to: t0.addingTimeInterval(120 + 26 * 60))
+    check(events == [.blockEnded(block: 1, kind: .short)], "pomodoro : à la fin du premier bloc, la première pause")
+    check(abs(state.accumulated - (39 + 25) * 60) < 0.01 && state.currentBreak != nil, "pomodoro : le travail est coupé à la frontière du bloc")
+    let status = PomodoroEngine.status(elapsed: 64 * 60, focusMinutes: 25, origin: 39 * 60)
+    check(status.completedBlocks == 1 && status.blockNumber == 1, "pomodoro : le statut compte depuis l'origine")
+    // La pause finie, le bloc suivant : numéro 2.
+    _ = state.advance(settings: cycle, to: t0.addingTimeInterval(120 + 26 * 60 + 5 * 60 + 1))
+    check(state.currentBreak == nil, "pomodoro : la pause finit")
+    // Couper pendant une pause : la pause s'arrête, le travail reprend.
+    var paused = state
+    paused.skipBreak(at: t0.addingTimeInterval(4000))
+    var onBreak = FocusTimerState(accumulated: 25 * 60, sessionStartedAt: t0, pomodoro: true)
+    onBreak.breakKindRaw = PomodoroBreak.short.rawValue
+    onBreak.breakStartedAt = t0
+    onBreak.breakEndsAt = t0.addingTimeInterval(300)
+    onBreak.setPomodoro(false, at: t0.addingTimeInterval(60))
+    check(!onBreak.pomodoro && onBreak.currentBreak == nil && onBreak.cycleOrigin == nil && onBreak.runningSince != nil, "pomodoro : coupé pendant une pause, la pause s'arrête et le travail reprend")
+    // Rallumer plus tard repart d'un bloc plein.
+    onBreak.setPomodoro(true, at: t0.addingTimeInterval(600))
+    check(onBreak.cycleOriginSeconds > 25 * 60 && abs(onBreak.cycleAccumulated) < 0.01, "pomodoro : rallumé, un nouveau cycle")
+    // Ancien état sans origine : lu comme avant.
+    let legacy = FocusTimerState(accumulated: 50 * 60, sessionStartedAt: t0, pomodoro: true)
+    check(PomodoroEngine.status(elapsed: 50 * 60, focusMinutes: 25).completedBlocks == 2 && legacy.cycleOrigin == nil, "pomodoro : un état d'avant se lit comme avant")
+    // Aller-retour JSON, groupe compris.
+    let back = try? JSONDecoder().decode(FocusTimerState.self, from: JSONEncoder().encode(state))
+    check(back?.cycleOrigin == state.cycleOrigin, "pomodoro : l'origine voyage d'un appareil à l'autre")
+    check(GroupClock(state).cycleOrigin == state.cycleOrigin, "pomodoro : l'horloge d'un groupe la porte aussi")
+}
+
 // MARK: Une épreuve n'est pas un devoir
 do {
     check(ExamKind.exam.isSitting && ExamKind.midterm.isSitting, "épreuve : un examen et un midterm comptent")

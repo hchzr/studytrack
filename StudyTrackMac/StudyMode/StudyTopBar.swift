@@ -212,6 +212,11 @@ struct StudyTopBar: View {
                     Button { timer.extendStudy(minutes: 25) } label: { Label("Encore 25 min", systemImage: "plus") }
                     Divider()
                 }
+                if timer.state?.groupSession == nil {
+                    Button { timer.setPomodoro(timer.state?.pomodoro != true) } label: {
+                        Label(timer.state?.pomodoro == true ? "Couper le Pomodoro" : "Allumer le Pomodoro", systemImage: "timer")
+                    }
+                }
                 Button("Réorganiser les outils selon mon travail") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
                 Button("Mes cours") {
                     NSApp.setActivationPolicy(.regular)

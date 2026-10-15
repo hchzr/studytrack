@@ -573,7 +573,7 @@ struct FocusTimerPanel: View {
     }
 
     private var nextBlockNumber: Int {
-        let accumulated = focus.state?.accumulated ?? 0
+        let accumulated = focus.state?.cycleAccumulated ?? 0
         return Int((accumulated / pomodoroSettings.blockDuration).rounded()) + 1
     }
 
@@ -612,7 +612,7 @@ struct FocusTimerPanel: View {
     /// Blocs terminés dans le cycle en cours (jusqu'à la pause longue).
     private var completedInCycle: Int {
         let every = max(2, pomodoroSettings.longBreakEvery)
-        let done = Int(((focus.state?.accumulated ?? 0) / pomodoroSettings.blockDuration).rounded(.down))
+        let done = Int(((focus.state?.cycleAccumulated ?? 0) / pomodoroSettings.blockDuration).rounded(.down))
         guard done > 0 else { return 0 }
         let inCycle = done % every
         // Pile sur la pause longue : le cycle est plein, pas vide.

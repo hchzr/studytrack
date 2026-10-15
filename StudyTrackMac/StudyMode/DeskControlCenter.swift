@@ -29,6 +29,7 @@ private struct DeskControlCenter: View {
         @Bindable var settings = settings
         VStack(alignment: .leading, spacing: 14) {
             musicSection
+            pomodoroSection
             Picker("Garder éveillé", selection: $settings.studyKeepAwake) {
                 Text("Non").tag(KeepAwakePolicy.Mode.off)
                 Text("Le Mac").tag(KeepAwakePolicy.Mode.system)
@@ -65,6 +66,27 @@ private struct DeskControlCenter: View {
         .padding(16)
         .frame(width: 320)
         .environment(\.colorScheme, .dark)
+    }
+
+    // MARK: Pomodoro
+
+    /// Allumer ou couper le Pomodoro en cours de séance, et régler ses durées : le premier
+    /// bloc part de maintenant, ce qui a déjà été travaillé reste compté.
+    @ViewBuilder
+    private var pomodoroSection: some View {
+        @Bindable var settings = settings
+        // Dans une session de groupe, l'horloge est commune : on n'y touche pas seul·e.
+        if timer.state?.groupSession == nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Pomodoro", isOn: Binding(get: { timer.state?.pomodoro ?? false }, set: { timer.setPomodoro($0) }))
+                if timer.state?.pomodoro == true {
+                    Stepper("Travail : \(settings.focusMinutes) min", value: $settings.focusMinutes, in: 5...90, step: 5)
+                    Stepper("Pause : \(settings.shortBreakMinutes) min", value: $settings.shortBreakMinutes, in: 1...30)
+                }
+            }
+            .onChange(of: settings.focusMinutes) { _, _ in timer.cycleDidChange() }
+            .onChange(of: settings.shortBreakMinutes) { _, _ in timer.cycleDidChange() }
+        }
     }
 
     // MARK: Musique

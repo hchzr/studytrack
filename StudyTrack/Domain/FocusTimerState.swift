@@ -20,6 +20,10 @@ struct FocusTimerState: Codable, Equatable {
     var note: String
     var contextLabel: String
     var pomodoro: Bool
+    /// Le temps de travail compté quand le cycle Pomodoro a commencé : allumé **en cours
+    /// de séance**, le premier bloc part de ce moment (et non du dernier multiple d'une
+    /// durée de bloc). `nil` : depuis le début — les états écrits avant ce champ.
+    var cycleOrigin: TimeInterval?
     /// Pause Pomodoro en cours : son type et ses bornes.
     ///
     /// Optionnels : un état écrit par une version précédente se relit, et
@@ -292,6 +296,7 @@ struct GroupClock: Codable, Equatable {
     var accumulated: TimeInterval
     var runningSince: Date?
     var pomodoro: Bool
+    var cycleOrigin: TimeInterval?
     var cycle: PomodoroSettings?
     var breakKindRaw: String?
     var breakStartedAt: Date?
@@ -302,6 +307,7 @@ struct GroupClock: Codable, Equatable {
         accumulated = state.accumulated
         runningSince = state.runningSince
         pomodoro = state.pomodoro
+        cycleOrigin = state.cycleOrigin
         cycle = state.cycle
         breakKindRaw = state.breakKindRaw
         breakStartedAt = state.breakStartedAt
@@ -320,6 +326,7 @@ struct GroupClock: Codable, Equatable {
         state.accumulated = accumulated
         state.runningSince = runningSince
         state.pomodoro = pomodoro
+        state.cycleOrigin = cycleOrigin
         state.cycle = cycle
         state.breakKindRaw = breakKindRaw
         state.breakStartedAt = breakStartedAt

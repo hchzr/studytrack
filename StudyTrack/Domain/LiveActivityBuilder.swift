@@ -54,13 +54,13 @@ enum LiveActivityBuilder {
         var block: ActivityPomodoro?
         if timer.pomodoro {
             if let pause = timer.currentBreak {
-                let completed = Int((timer.accumulated / settings.blockDuration).rounded())
+                let completed = Int((timer.cycleAccumulated / settings.blockDuration).rounded())
                 block = .onBreak(kind: pause.kind.rawValue,
                                  startedAt: pause.startedAt,
                                  endsAt: pause.endsAt,
                                  completedBlocks: completed)
             } else {
-                let status = PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes)
+                let status = PomodoroEngine.status(elapsed: elapsed, focusMinutes: settings.focusMinutes, origin: timer.cycleOriginSeconds)
                 block = ActivityPomodoro.make(blockNumber: status.blockNumber,
                                               elapsedInBlock: status.elapsedInBlock,
                                               remaining: status.remaining,

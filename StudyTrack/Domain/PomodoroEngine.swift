@@ -46,10 +46,11 @@ enum PomodoroEngine {
         TimeInterval(max(1, minutes) * 60)
     }
 
-    /// Où en est-on après `elapsed` secondes de travail compté ?
-    static func status(elapsed: TimeInterval, focusMinutes: Int) -> PomodoroStatus {
+    /// Où en est-on après `elapsed` secondes de travail compté ? `origin` : le travail déjà
+    /// compté quand le cycle a commencé (Pomodoro allumé en cours de séance).
+    static func status(elapsed: TimeInterval, focusMinutes: Int, origin: TimeInterval = 0) -> PomodoroStatus {
         let block = blockDuration(minutes: focusMinutes)
-        let safeElapsed = max(0, elapsed)
+        let safeElapsed = max(0, elapsed - origin)
         let completed = Int(safeElapsed / block)
         let inBlock = safeElapsed - Double(completed) * block
 
@@ -153,9 +154,10 @@ extension FocusTimerState {
         guard total >= 1 else { return .idle }
         if pomodoro {
             let block = settings.blockDuration
-            let completed = Int((total / block).rounded(.down))
+            let relative = max(0, total - cycleOriginSeconds)
+            let completed = Int((relative / block).rounded(.down))
             // Pile sur une frontière de bloc, à l'arrêt : c'est la fin d'une pause.
-            if completed > 0, abs(total - Double(completed) * block) < 0.5 {
+            if completed > 0, abs(relative - Double(completed) * block) < 0.5 {
                 return .readyForBlock(completed + 1)
             }
         }
@@ -184,7 +186,7 @@ extension FocusTimerState {
             if let current = currentBreak {
                 guard now >= current.endsAt else { break }
                 clearBreak()
-                let next = Int((accumulated / block).rounded(.down)) + 1
+                let next = Int((cycleAccumulated / block).rounded(.down)) + 1
                 events.append(.breakEnded(nextBlock: next))
                 if settings.autoStartFocus {
                     runningSince = current.endsAt
@@ -193,10 +195,11 @@ extension FocusTimerState {
                 break
             }
             guard let since = runningSince else { break }
-            let nextBoundary = ((accumulated / block).rounded(.down) + 1) * block
-            let boundaryDate = since.addingTimeInterval(nextBoundary - accumulated)
+            let relative = cycleAccumulated
+            let nextBoundary = ((relative / block).rounded(.down) + 1) * block
+            let boundaryDate = since.addingTimeInterval(nextBoundary - relative)
             guard now >= boundaryDate else { break }
-            accumulated = nextBoundary
+            accumulated = cycleOriginSeconds + nextBoundary
             runningSince = nil
             let completed = Int((nextBoundary / block).rounded())
             let kind = settings.breakKind(afterBlock: completed)
@@ -231,7 +234,40 @@ extension FocusTimerState {
     func blockEndDate(settings: PomodoroSettings) -> Date? {
         guard pomodoro, let since = runningSince else { return nil }
         let block = settings.blockDuration
-        let nextBoundary = ((accumulated / block).rounded(.down) + 1) * block
-        return since.addingTimeInterval(nextBoundary - accumulated)
+        let relative = cycleAccumulated
+        let nextBoundary = ((relative / block).rounded(.down) + 1) * block
+        return since.addingTimeInterval(nextBoundary - relative)
+    }
+
+    // MARK: Le cycle compté depuis son début
+
+    /// Le travail compté à l'entrée du cycle (voir `cycleOrigin`).
+    var cycleOriginSeconds: TimeInterval { cycleOrigin ?? 0 }
+
+    /// Le travail arrêté **dans le cycle** : ce que `accumulated` valait depuis son début.
+    var cycleAccumulated: TimeInterval { max(0, accumulated - cycleOriginSeconds) }
+
+    /// Le travail compté dans le cycle à l'instant `now`.
+    func cycleElapsed(at now: Date = Date()) -> TimeInterval { max(0, elapsed(at: now) - cycleOriginSeconds) }
+
+    /// Allume ou coupe le Pomodoro **en cours de séance**. Allumé, le premier bloc part
+    /// de maintenant (le temps déjà travaillé n'est pas perdu : il reste compté, hors cycle) ;
+    /// coupé, la pause en cours s'arrête et le travail reprend.
+    mutating func setPomodoro(_ enabled: Bool, at now: Date = Date()) {
+        guard enabled != pomodoro else { return }
+        if enabled {
+            // Le temps qui court est mis dans le compte, pour que l'origine soit exacte.
+            if let since = runningSince {
+                accumulated += max(0, now.timeIntervalSince(since))
+                runningSince = now
+            }
+            cycleOrigin = accumulated
+        } else {
+            let wasOnBreak = currentBreak != nil
+            clearBreak()
+            cycleOrigin = nil
+            if wasOnBreak { start(at: now) }
+        }
+        pomodoro = enabled
     }
 }

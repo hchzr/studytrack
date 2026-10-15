@@ -490,6 +490,14 @@ struct StudySearchView: View {
         list.append(Result(id: "a.pause", title: timer.phase == .running ? "Mettre en pause" : "Reprendre", icon: "playpause", section: "Actions") {
             timer.toggle()
         })
+        // Le Pomodoro, allumé ou coupé en cours de séance (pas dans un groupe : l'horloge est commune).
+        if timer.state?.groupSession == nil {
+            let on = timer.state?.pomodoro == true
+            list.append(Result(id: "a.pomodoro", title: on ? "Couper le Pomodoro" : "Allumer le Pomodoro",
+                               subtitle: on ? "" : "un bloc de \(settings.focusMinutes) min, à partir de maintenant", icon: "timer", section: "Actions") {
+                timer.setPomodoro(!on)
+            })
+        }
         if timer.phase == .onBreak {
             list.append(Result(id: "a.skip", title: "Écourter la pause", icon: "forward.fill", section: "Actions") { timer.skipBreak() })
         }
