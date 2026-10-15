@@ -6351,6 +6351,10 @@ do {
     check(notPublished.side == [.copy], "bureau : corrigé pas publié → la copie reste")
     check(D.layout(for: ctx { $0.hasTarget = true; $0.seriesComplete = true }).openClaude, "bureau : série finie → Claude pour clore")
     check(!D.layout(for: ctx { $0.hasTarget = true }).openClaude, "bureau : série en cours → pas de Claude d'office")
+    let writing = D.layout(for: ctx { $0.hasTarget = true; $0.hasCopy = true; $0.writingApp = true })
+    check(writing.side == [.series] && writing.sideOpen, "bureau : GoodNotes au centre → l'énoncé à côté (écrire au centre, lire à côté)")
+    check(D.signature(ctx { $0.hasTarget = true; $0.writingApp = true }) != D.signature(ctx { $0.hasTarget = true }), "bureau : entrer dans GoodNotes est un changement de moment")
+    check(D.layout(for: ctx(.lecture) { $0.hasTarget = true; $0.writingApp = true }).side.isEmpty, "bureau : en cours, GoodNotes ne déplace rien")
     let theory = D.layout(for: ctx { $0.isTheory = true; $0.hasCourseNotes = true })
     check(theory.center == .course && theory.side == [.courseNotes], "bureau : théorie → le cours au centre, les notes à côté")
     let lecture = D.layout(for: ctx(.lecture) { $0.hasTarget = true })
@@ -6445,6 +6449,32 @@ do {
           "cartes : jamais plus larges que la place, jamais sous 240")
     check(W.storageKey(.lecture) != W.storageKey(.series), "cartes : un bureau par moment")
     check(W.Size.small.width < W.Size.medium.width && W.Size.medium.width < W.Size.large.width, "cartes : trois tailles")
+}
+
+// MARK: Géométrie du bureau (placement des apps permises)
+do {
+    typealias G = DeskGeometry
+    // Écran principal de 982 pt ; fenêtre du bureau plein écran ; centre à (100, 86), 1100 × 700 depuis le haut.
+    let window = G.Rect(x: 0, y: 0, width: 1512, height: 982)
+    let hole = G.accessibilityRect(window: window, local: G.Rect(x: 100, y: 86, width: 1100, height: 700), primaryHeight: 982)
+    check(hole == G.Rect(x: 100, y: 86, width: 1100, height: 700), "géométrie : fenêtre plein écran, le repère de l'Accessibilité est celui de SwiftUI")
+    let preview = G.Rect(x: 80, y: 20, width: 1440, height: 900)   // en repère AppKit : haut à 920
+    let shifted = G.accessibilityRect(window: preview, local: G.Rect(x: 100, y: 86, width: 1000, height: 600), primaryHeight: 982)
+    check(shifted.x == 180 && shifted.y == 62 + 86, "géométrie : une fenêtre décalée (haut à 982 − 920 = 62)")
+    let fill = G.placement(current: G.Rect(x: 0, y: 0, width: 400, height: 300), minimum: nil, resizable: true, in: hole)
+    check(fill == hole, "placement : une fenêtre redimensionnable remplit le trou")
+    let big = G.placement(current: G.Rect(x: 0, y: 0, width: 400, height: 300), minimum: (width: 1300, height: 500), resizable: true, in: hole)
+    check(big.width == 1300 && big.x == hole.x && big.height == 700, "placement : un minimum plus large que le trou part du coin haut-gauche")
+    let fixed = G.placement(current: G.Rect(x: 0, y: 0, width: 400, height: 300), minimum: nil, resizable: false, in: hole)
+    check(fixed == G.Rect(x: 450, y: 286, width: 400, height: 300), "placement : une fenêtre de taille fixe est centrée dans le trou")
+    let huge = G.placement(current: G.Rect(x: 0, y: 0, width: 2000, height: 1200), minimum: nil, resizable: false, in: hole)
+    check(huge.x == hole.x && huge.y == hole.y, "placement : trop grande, elle part du coin haut-gauche")
+    check(hole.contains(fixed) && !hole.contains(huge) && hole.contains(hole), "géométrie : « contenu dans le trou »")
+    check(StudyReadiness.missing(blocking: false, placeApps: true, trusted: false, hideChrome: true, automationGranted: false).isEmpty, "permissions : sans blocage, rien à demander")
+    check(StudyReadiness.missing(blocking: true, placeApps: true, trusted: false, hideChrome: true, automationGranted: false) == [.accessibility, .systemEvents], "permissions : Accessibilité et System Events manquent")
+    check(StudyReadiness.missing(blocking: true, placeApps: false, trusted: false, hideChrome: false, automationGranted: false).isEmpty, "permissions : réglages éteints, rien à demander")
+    check(StudyReadiness.missing(blocking: true, placeApps: true, trusted: true, hideChrome: true, automationGranted: true).isEmpty, "permissions : tout est accordé")
+    check(StudyMode.writingApps.contains("com.goodnotesapp.x") && !StudyMode.writingApps.contains("com.anthropic.claudefordesktop"), "apps d'écriture : GoodNotes oui, Claude non")
 }
 
 // MARK: Réveil des autres appareils (verrou)

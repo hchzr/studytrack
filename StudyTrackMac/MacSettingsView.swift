@@ -151,6 +151,9 @@ private struct StudySettingsPane: View {
                     Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
                     Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
                 }
+                Toggle("Poser les apps permises dans le bureau", isOn: $settings.studyPlaceApps)
+                    .disabled(!settings.studyBlocking)
+                    .help("GoodNotes, Claude… s'ouvrent au centre du bureau, la barre du haut et le volet d'à côté restant visibles. Demande l'Accessibilité (écran de lancement).")
                 Toggle("Autres écrans au calme", isOn: $settings.studyCalmDisplays)
                     .disabled(!settings.studyBlocking)
                 Toggle("Bloquer les gestes du trackpad", isOn: $settings.studyBlockGestures)

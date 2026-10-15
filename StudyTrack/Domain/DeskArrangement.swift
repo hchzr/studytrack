@@ -30,6 +30,8 @@ enum DeskArrangement {
         var minutesLeft: Int?
         /// La pause du cours (à +45 min) est en cours.
         var classBreak = false
+        /// Une app d'écriture (GoodNotes) occupe le centre : on écrit là, on lit à côté.
+        var writingApp = false
     }
 
     /// Les outils du centre (les mêmes valeurs que `StudyDesk.Pane`).
@@ -75,7 +77,10 @@ enum DeskArrangement {
                 if c.hasCourseNotes { layout.side = [.courseNotes]; layout.sideOpen = true }
             } else if c.hasTarget {
                 layout.center = .exercise
-                if c.targetDone && c.solutionAvailable {
+                if c.writingApp {
+                    // Le centre est à l'app d'écriture : l'énoncé passe à côté.
+                    layout.side = [.series]
+                } else if c.targetDone && c.solutionAvailable {
                     // Faire → corriger : le corrigé vient à côté de l'énoncé.
                     layout.side = [.solution]
                 } else if c.hasCopy {
@@ -108,7 +113,7 @@ enum DeskArrangement {
     static func signature(_ c: Context) -> String {
         [c.moment.rawValue, c.isTheory ? "t" : "e", c.hasTarget ? "cible" : "-",
          c.targetDone ? "fait" : "-", c.seriesComplete ? "série" : "-", c.solutionAvailable ? "corrigé" : "-",
-         c.hasCopy ? "copie" : "-"].joined(separator: "|")
+         c.hasCopy ? "copie" : "-", c.writingApp ? "écrit" : "-"].joined(separator: "|")
     }
 
     /// Les parties du bureau qu'un geste a épinglées.

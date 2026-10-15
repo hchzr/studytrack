@@ -18,6 +18,8 @@ struct StudyWorkspace: View {
     @State private var classes: [ScheduledClass] = []
     /// Relu toutes les 30 s : le bilan des cinq dernières minutes en dépend.
     @State private var now = Date()
+    /// Une app d'écriture (GoodNotes) est au premier plan : l'énoncé passe à côté.
+    @State private var frontWriting = false
     /// Le voile de pause / bilan qu'on a écarté (jusqu'au prochain changement).
     @State private var dismissedTakeover: DeskArrangement.Takeover?
 
@@ -55,6 +57,12 @@ struct StudyWorkspace: View {
         .onChange(of: layout.takeover) { _, _ in dismissedTakeover = nil }
         .onChange(of: arrangementKey) { _, _ in arrange(force: false) }
         .onReceive(NotificationCenter.default.publisher(for: .studyTidyDesk)) { _ in arrange(force: true) }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)) { note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            // StudyTrack lui-même qui revient devant ne change rien : on garde l'état d'avant.
+            guard app?.bundleIdentifier != Bundle.main.bundleIdentifier else { frontWriting = false; return }
+            frontWriting = app?.bundleIdentifier.map(StudyMode.writingApps.contains) ?? false
+        }
         .onChange(of: arrangementContext.solutionAvailable) { old, new in
             if !old, new, arrangementContext.hasTarget {
                 DeskNotifications.shared.post(.solution, "Le corrigé de cette série est publié", icon: "checkmark.seal")
@@ -136,6 +144,7 @@ struct StudyWorkspace: View {
         context.solutionAvailable = series.map { solutionAddress($0) != nil } ?? false
         if let series, let course { context.hasCopy = NotesStore.shared.copy(for: series, course: course, among: courses) != nil }
         context.hasCourseNotes = course != nil
+        context.writingApp = frontWriting
         if !StudyMode.isOpenEnded(timer.state) { context.minutesLeft = Int(StudyMode.remaining(timer.state, at: now) / 60) }
         if moment == .lecture, let klass = DeskSchedule.latest(of: course?.id, in: classes),
            case .pause = LectureClock.phase(of: klass.slot, at: now) {
@@ -367,7 +376,9 @@ struct StudyWorkspace: View {
     private func sideContent(_ item: StudyDesk.SideItem) -> some View {
         switch item.kind {
         case .series:
-            if desk.pane == .exercise {
+            // Au centre, la série n'a pas besoin d'être à côté — sauf si le centre est
+            // à une app d'écriture : l'énoncé est alors à côté.
+            if desk.pane == .exercise && !frontWriting {
                 SidePlaceholder(icon: "doc.text", text: "La série est au centre.",
                                 action: ("Mettre le cours au centre", { desk.pane = .course }))
             } else {
@@ -1013,6 +1024,8 @@ private struct DeskSplit<Center: View, Side: View>: View {
                 center
                     .frame(width: centerWidth, height: geometry.size.height, alignment: .leading)
                     .clipped()
+                    // La place des apps permises : leur fenêtre est posée ici.
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { StudyModeController.shared.publishHole($0) }
                 if desk.sideOpen {
                     SplitHandle(width: width, minimum: StudyDesk.sideMinimum, maximum: maximum,
                                 change: { liveWidth = $0 },

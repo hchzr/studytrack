@@ -277,6 +277,18 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
 
+    /// Le centre du bureau (la place des apps permises), mesuré dans la fenêtre : posé
+    /// en repère de l'Accessibilité pour `AppPlacement`.
+    func publishHole(_ local: CGRect) {
+        guard let window, let primary = NSScreen.screens.first, local.width > 0 else { return }
+        let frame = window.frame
+        let rect = DeskGeometry.accessibilityRect(
+            window: DeskGeometry.Rect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height),
+            local: DeskGeometry.Rect(x: local.minX, y: local.minY, width: local.width, height: local.height),
+            primaryHeight: primary.frame.height)
+        AppPlacement.shared.setHole(rect)
+    }
+
     /// Un blocage est en cours (pour rattraper une fiche restée d'une session morte).
     var isBlocking: Bool { blocking }
 
@@ -315,6 +327,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true, blockGestures: settings?.studyBlockGestures ?? true)
         // ⌘Tab et ⌘Espace, éteints dans le système, reviennent en version d'étude.
         if SystemHotKeys.isAvailable { StudyShell.shared.engage() }
+        // Les apps permises dans le centre du bureau (si l'Accessibilité est accordée).
+        if settings?.studyPlaceApps ?? true { AppPlacement.shared.start(allowed: settings?.studyApps ?? StudyMode.defaultMacApps) }
         // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
         // second écran n'est pas une porte de sortie.
         window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
@@ -381,6 +395,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         screenObserver = nil
         window?.collectionBehavior = [.managed, .fullScreenNone]
         StudyShell.shared.disengage()
+        AppPlacement.shared.stop()
         SystemLock.release()
         log.notice("mode étude : blocage levé")
     }
@@ -440,6 +455,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard blocking, let app else { return }
         guard isBlocked(app) else {
             hideShields()
+            AppPlacement.shared.appActivated(app)
             return
         }
         // Music au premier plan : il joue pour le mode étude, on ne le ferme

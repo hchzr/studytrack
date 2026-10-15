@@ -117,9 +117,25 @@ private struct StudySetupView: View {
     @State private var pomodoro = false
     @State private var classes: [ScheduledClass] = []
     @State private var chromePermission = SystemChrome.permission
+    @State private var trusted = AppPlacement.isTrusted
     @Environment(\.modelContext) private var context
 
     private var currentClass: ScheduledClass? { DeskSchedule.current(in: classes) }
+
+    /// Ce qu'il manque avant de bloquer (`StudyReadiness`, testé).
+    private var missing: [StudyReadiness.Missing] {
+        StudyReadiness.missing(blocking: screen.locks, placeApps: settings.studyPlaceApps, trusted: trusted,
+                               hideChrome: settings.studyHideSystemChrome, automationGranted: chromePermission == .granted)
+    }
+
+    private func message(for item: StudyReadiness.Missing) -> LocalizedStringKey {
+        switch item {
+        case .accessibility: return "Poser GoodNotes et les autres apps permises dans le bureau : autorise l'Accessibilité."
+        case .systemEvents: return chromePermission == .denied
+            ? "Dock et barre des menus : refusé, ils resteront visibles (Réglages Système › Automatisation)."
+            : "Cacher aussi le Dock et la barre des menus ?"
+        }
+    }
 
     private var course: Course? { courses.first { $0.id == screen.courseID } }
     private var tint: Color { MacTargets.tint(course) }
@@ -257,18 +273,18 @@ private struct StudySetupView: View {
                     .toggleStyle(.switch)
                     .tint(Carnet.correct)
                     // Une fois le blocage en route, les Réglages sont fermés : c'est ici
-                    // qu'on autorise StudyTrack à cacher le Dock et la barre des menus.
-                    if screen.locks, settings.studyHideSystemChrome, chromePermission != .granted {
+                    // qu'on autorise ce dont le blocage a besoin.
+                    ForEach(missing, id: \.self) { item in
                         HStack(spacing: 10) {
-                            Text(chromePermission == .denied
-                                 ? "Dock et barre des menus : refusé, ils resteront visibles (Réglages Système › Automatisation)."
-                                 : "Cacher aussi le Dock et la barre des menus ?")
+                            Text(message(for: item))
                                 .font(.caption)
                                 .foregroundStyle(StudyPalette.inkSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            if chromePermission != .denied {
-                                Button("Autoriser") { chromePermission = SystemChrome.request() }
-                                    .buttonStyle(PaperButtonStyle())
+                            if item == .accessibility || chromePermission != .denied {
+                                Button("Autoriser") {
+                                    if item == .accessibility { AppPlacement.requestTrust() } else { chromePermission = SystemChrome.request() }
+                                }
+                                .buttonStyle(PaperButtonStyle())
                             }
                         }
                     }
@@ -312,6 +328,13 @@ private struct StudySetupView: View {
             pomodoro = timer.phase == .idle ? settings.studyPomodoro : (timer.state?.pomodoro ?? false)
             classes = DeskSchedule.today(context: context)
             fitLecture()
+        }
+        .task {
+            // L'autorisation se donne dans les Réglages Système : on relit chaque seconde.
+            while !Task.isCancelled {
+                trusted = AppPlacement.isTrusted
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
         .onChange(of: screen.courseID) { _, _ in fitLecture() }
         .onChange(of: screen.taskType) { _, _ in fitLecture() }
