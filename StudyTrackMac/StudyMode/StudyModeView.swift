@@ -42,7 +42,7 @@ struct StudyModeView: View {
                     // La session a été terminée ailleurs : l'écran va se fermer.
                     ProgressView().controlSize(.large)
                 } else {
-                    StudyWorkspace(screen: screen, browser: browser, desk: desk, courses: tracked, panels: screen.panels)
+                    StudyWorkspace(screen: screen, browser: browser, desk: desk, courses: tracked, panels: screen.panels, sideHosted: screen.sideHosted)
                         .transition(.opacity)
                 }
             }

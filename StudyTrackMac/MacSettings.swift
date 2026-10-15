@@ -102,6 +102,10 @@ final class MacSettings {
     var studyPlaceApps: Bool { didSet { defaults.set(studyPlaceApps, forKey: "mac.studyPlaceApps") } }
     /// La barre du haut et la colonne d'outils en fenêtres flottantes (expérimental).
     var studyPanels: Bool { didSet { defaults.set(studyPanels, forKey: "mac.studyPanels2") } }
+    /// Le volet d'à côté en fenêtre à part (avec les barres flottantes).
+    var studySideWindow: Bool { didSet { defaults.set(studySideWindow, forKey: "mac.studySideWindow") } }
+    /// Le volet d'à côté sur un second écran, quand il y en a un.
+    var studySideOnSecondDisplay: Bool { didSet { defaults.set(studySideOnSecondDisplay, forKey: "mac.studySideOnSecondDisplay") } }
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
@@ -175,6 +179,8 @@ final class MacSettings {
         studyPlaceApps = defaults.object(forKey: "mac.studyPlaceApps") as? Bool ?? true
         // Barres flottantes : le défaut — elles recouvrent aussi la barre des menus de macOS.
         studyPanels = defaults.object(forKey: "mac.studyPanels2") as? Bool ?? true
+        studySideWindow = defaults.object(forKey: "mac.studySideWindow") as? Bool ?? true
+        studySideOnSecondDisplay = defaults.bool(forKey: "mac.studySideOnSecondDisplay")
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off

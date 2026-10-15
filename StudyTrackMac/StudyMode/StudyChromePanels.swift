@@ -69,9 +69,26 @@ struct StudyTopBarHost: View {
                     moment: DeskSchedule.moment(taskType: timer.taskType, inGroup: timer.state?.groupSession != nil, course: course),
                     openMusic: { controller.desk.pane = .music },
                     openResource: { controller.openResource($0, course: course) })
+            // Le volet s'ouvre, se ferme, change de largeur : les fenêtres se replacent.
+            .onChange(of: controller.desk.sideOpen) { _, _ in controller.relayout() }
+            .onChange(of: controller.desk.sideWidth) { _, _ in controller.relayout() }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(StudyPalette.ground)
             .environment(\.colorScheme, .dark)
+            .environment(\.deskPanelHost, true)
+    }
+}
+
+/// Le volet d'à côté dans sa propre fenêtre : par-dessus les apps permises, à droite
+/// du centre (ou sur un second écran), sa poignée à gauche.
+struct StudySideHost: View {
+    @Query(sort: \Course.code) private var courses: [Course]
+    @Environment(MacTimer.self) private var timer
+
+    var body: some View {
+        let controller = StudyModeController.shared
+        StudyWorkspace(screen: controller.screen, browser: controller.browser, desk: controller.desk,
+                       courses: courses.filter(\.isTracked), panels: true, sideHosted: true, onlySide: true)
             .environment(\.deskPanelHost, true)
     }
 }
@@ -98,14 +115,17 @@ extension StudyModeController {
     /// `-studyPanels` : les barres flottantes, même en essai (rien n'est bloqué).
     static var panelsForced: Bool { CommandLine.arguments.contains("-studyPanels") }
 
-    /// Où vont la barre, la colonne et le bureau (le centre et le volet) sur un écran.
-    static func chromeFrames(on screen: NSScreen) -> (bar: NSRect, rail: NSRect, desk: NSRect) {
-        let f = screen.frame
-        let bar = NSRect(x: f.minX, y: f.maxY - barHeight, width: f.width, height: barHeight)
-        let rail = NSRect(x: f.minX, y: f.minY, width: railWidth, height: f.height - barHeight)
-        // Le bureau passe 1 pt sous la barre et la colonne : jamais un trait de vide entre eux.
-        let desk = NSRect(x: f.minX + railWidth - 1, y: f.minY, width: f.width - railWidth + 1, height: f.height - barHeight + 1)
-        return (bar, rail, desk)
+    /// Où vont la barre, la colonne, le centre et le volet (`PanelLayout`, testé).
+    func panelFrames() -> (bar: NSRect, rail: NSRect, desk: NSRect, side: NSRect?)? {
+        guard let primary = NSScreen.screens.first else { return nil }
+        func rect(_ r: NSRect) -> DeskGeometry.Rect { .init(x: r.minX, y: r.minY, width: r.width, height: r.height) }
+        func ns(_ r: DeskGeometry.Rect) -> NSRect { NSRect(x: r.x, y: r.y, width: r.width, height: r.height) }
+        let second = (settings?.studySideOnSecondDisplay ?? false) && NSScreen.screens.count > 1 ? NSScreen.screens[1] : nil
+        let frames = PanelLayout.frames(screen: rect(primary.frame), visible: rect(primary.visibleFrame),
+                                        bar: Double(Self.barHeight), rail: Double(Self.railWidth),
+                                        sideWidth: desk.sideOpen ? Double(desk.sideWidth) : nil,
+                                        secondScreen: second.map { rect($0.frame) })
+        return (ns(frames.bar), ns(frames.rail), ns(frames.desk), frames.side.map(ns))
     }
 
     /// Une ressource gardée, ouverte à côté de ce qu'on fait (le signet de la barre du haut).

@@ -54,6 +54,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         /// L'app arrêtée en dernier, pour le dire.
         /// La barre du haut et la colonne d'outils sont des fenêtres à part (`ChromePanel`).
         var panels = false
+        /// Le volet d'à côté l'est aussi.
+        var sideHosted = false
         var blockedName: String?
         var blockedAt: Date?
     }
@@ -78,6 +80,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private var calmWindows: [NSWindow] = []
     /// La barre du haut et la colonne d'outils flottantes (mode « barres flottantes »).
     private var chromePanels: [NSPanel] = []
+    /// Le volet d'à côté, en fenêtre à part (le centre n'en garde rien).
+    private var sidePanel: NSPanel?
     private var screenObserver: NSObjectProtocol?
     /// Le dernier masquage que nous avons fait : macOS met alors le Finder devant
     /// (plus rien de visible), ce qui n'est pas un clic de l'étudiant·e.
@@ -220,8 +224,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             let realGeometry = !previewOnly || screen.panels
             // Le choix avant de commencer prend tout l'écran ; la session, seulement le
             // centre et le volet (les barres flottantes font le reste).
+            screen.sideHosted = screen.panels && (settings.studySideWindow || Self.panelsForced)
             var frame = !realGeometry ? NSRect(x: 80, y: 80, width: 1440, height: 900)
-                : (screen.panels && screen.stage == .session ? Self.chromeFrames(on: primary!).desk : screenFrame)
+                : (screen.panels && screen.stage == .session ? (panelFrames()?.desk ?? screenFrame) : screenFrame)
             #if DEBUG
             // `-snapshot` : hors de l'écran, rien ne passe devant ce qu'on fait.
             if Self.snapshotPath != nil {
@@ -271,14 +276,16 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// La barre du haut et la colonne d'outils, au-dessus des apps permises : on peut
     /// y cliquer sans que le bureau repasse devant l'app posée au centre.
     private func showChromePanels() {
-        guard screen.panels, screen.stage == .session, let timer, let settings, let primary = NSScreen.screens.first else { return }
-        let frames = Self.chromeFrames(on: primary)
+        guard screen.panels, screen.stage == .session, let timer, let settings, let frames = panelFrames() else { return }
+        func host(_ view: some View) -> AnyView {
+            var root = AnyView(view.environment(timer).environment(settings))
+            if let container { root = AnyView(root.modelContainer(container)) }
+            return root
+        }
+        if screen.sideHosted, sidePanel == nil {
+            sidePanel = ChromePanel(content: host(StudySideHost()), frame: frames.side ?? .zero)
+        }
         if chromePanels.isEmpty {
-            func host(_ view: some View) -> AnyView {
-                var root = AnyView(view.environment(timer).environment(settings))
-                if let container { root = AnyView(root.modelContainer(container)) }
-                return root
-            }
             chromePanels = [ChromePanel(content: host(StudyTopBarHost()), frame: frames.bar, level: StudyLevels.topBar),
                             ChromePanel(content: host(StudyRailHost()), frame: frames.rail)]
         } else {
@@ -286,12 +293,34 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             chromePanels[1].setFrame(frames.rail, display: true)
         }
         for panel in chromePanels { panel.orderFrontRegardless() }
+        relayout()
         MiniTimerPanel.shared.update()
     }
 
     private func hideChromePanels() {
         for panel in chromePanels { panel.orderOut(nil) }
         chromePanels.removeAll()
+        sidePanel?.orderOut(nil)
+        sidePanel = nil
+    }
+
+    /// Replace toutes les fenêtres : le centre (qui perd la place du volet), la barre, la
+    /// colonne et le volet (montré ou rangé). Le Dock qui se cache ou se montre change `visibleFrame`.
+    func relayout() {
+        guard screen.panels, screen.stage == .session, let frames = panelFrames() else { return }
+        window?.setFrame(frames.desk, display: true)
+        if chromePanels.count == 2 {
+            chromePanels[0].setFrame(frames.bar, display: true)
+            chromePanels[1].setFrame(frames.rail, display: true)
+        }
+        if let sidePanel {
+            if let side = frames.side, screen.sideHosted {
+                sidePanel.setFrame(side, display: true)
+                sidePanel.orderFrontRegardless()
+            } else {
+                sidePanel.orderOut(nil)
+            }
+        }
     }
 
     /// Le choix et la session n'ont pas la même mise en page : plein écran avant de
@@ -299,7 +328,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     func stageChanged() {
         guard screen.panels, window?.isVisible == true, let primary = NSScreen.screens.first else { return }
         if screen.stage == .session {
-            window?.setFrame(Self.chromeFrames(on: primary).desk, display: true)
+            window?.setFrame(panelFrames()?.desk ?? primary.frame, display: true)
             showChromePanels()
         } else {
             hideChromePanels()
@@ -400,6 +429,11 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true, blockGestures: settings?.studyBlockGestures ?? true)
         // ⌘Tab et ⌘Espace, éteints dans le système, reviennent en version d'étude.
         if SystemHotKeys.isAvailable { StudyShell.shared.engage() }
+        // Le Dock se cache (System Events) : la place libre change, les fenêtres se replacent.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            self?.relayout()
+        }
         // Les apps permises dans le centre du bureau (si l'Accessibilité est accordée).
         if settings?.studyPlaceApps ?? true { AppPlacement.shared.start(allowed: settings?.studyApps ?? StudyMode.defaultMacApps) }
         // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
@@ -656,8 +690,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         hideCalmWindows()
         showCalmWindows()
         if let first = NSScreen.screens.first {
-            window?.setFrame(screen.panels ? Self.chromeFrames(on: first).desk : first.frame, display: true)
-            if screen.panels { showChromePanels() }
+            window?.setFrame(screen.panels && screen.stage == .session ? (panelFrames()?.desk ?? first.frame) : first.frame, display: true)
+            if screen.panels { showChromePanels(); relayout() }
         }
         if showingShields { showShields() }
     }

@@ -26,16 +26,18 @@ struct Frozen<Content: View>: View, Equatable {
 /// gardée qu'au lâcher.
 struct DeskSplit<Center: View, Side: View>: View {
     var desk: StudyDesk
+    /// Le volet est une fenêtre à part : le centre prend toute la place.
+    var sideHosted = false
     @ViewBuilder var center: Center
     @ViewBuilder var side: Side
     @State private var liveWidth: CGFloat?
 
     var body: some View {
         GeometryReader { geometry in
-            let handle: CGFloat = desk.sideOpen ? 9 : 0
+            let handle: CGFloat = desk.sideOpen && !sideHosted ? 9 : 0
             let maximum = max(StudyDesk.sideMinimum, geometry.size.width - StudyDesk.centerMinimum - 9)
             let width = min(max(StudyDesk.sideMinimum, liveWidth ?? desk.sideWidth), maximum)
-            let centerWidth = max(0, geometry.size.width - handle - (desk.sideOpen ? width : 0))
+            let centerWidth = max(0, geometry.size.width - handle - (desk.sideOpen && !sideHosted ? width : 0))
             // Des largeurs exactes : un outil qui ne veut pas rétrécir (la barre
             // de la série) ne pousse plus le volet hors de la fenêtre.
             HStack(spacing: 0) {
@@ -46,7 +48,7 @@ struct DeskSplit<Center: View, Side: View>: View {
                     .clipped()
                     // La place des apps permises : leur fenêtre est posée ici.
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { StudyModeController.shared.publishHole($0) }
-                if desk.sideOpen {
+                if desk.sideOpen && !sideHosted {
                     SplitHandle(width: width, minimum: StudyDesk.sideMinimum, maximum: maximum,
                                 change: { liveWidth = $0 },
                                 end: { desk.sideWidth = $0; liveWidth = nil },
@@ -56,12 +58,14 @@ struct DeskSplit<Center: View, Side: View>: View {
                 }
                 // Toujours là, à sa largeur, simplement masqué quand le volet est
                 // fermé : ses onglets restent tels quels (la page du PDF, le cahier).
-                side
-                    .frame(width: width, height: geometry.size.height, alignment: .leading)
-                    .frame(width: desk.sideOpen ? width : 0, alignment: .leading)
-                    .clipped()
-                    .opacity(desk.sideOpen ? 1 : 0)
-                    .allowsHitTesting(desk.sideOpen)
+                if !sideHosted {
+                    side
+                        .frame(width: width, height: geometry.size.height, alignment: .leading)
+                        .frame(width: desk.sideOpen ? width : 0, alignment: .leading)
+                        .clipped()
+                        .opacity(desk.sideOpen ? 1 : 0)
+                        .allowsHitTesting(desk.sideOpen)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
         }
@@ -123,6 +127,36 @@ struct SplitHandle: NSViewRepresentable {
             guard startX != nil else { return }
             startX = nil
             end?(last)
+        }
+    }
+}
+
+/// La poignée du volet quand il est une fenêtre à part : la fenêtre bouge pendant qu'on
+/// tire, alors la largeur se lit sur la **souris dans l'écran** (et non dans la fenêtre).
+/// Double-clic : la largeur d'origine.
+struct ScreenSplitHandle: NSViewRepresentable {
+    var desk: StudyDesk
+
+    func makeNSView(context: Context) -> HandleView { HandleView() }
+
+    func updateNSView(_ view: HandleView, context: Context) { view.desk = desk }
+
+    final class HandleView: NSView {
+        weak var desk: StudyDesk?
+
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeLeftRight) }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 2 { Task { @MainActor in self.desk?.sideWidth = 460 } }
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let screen = window?.screen ?? NSScreen.screens.first else { return }
+            let maximum = max(StudyDesk.sideMinimum, screen.frame.width - 76 - StudyDesk.centerMinimum)
+            let width = min(max(StudyDesk.sideMinimum, screen.frame.maxX - NSEvent.mouseLocation.x), maximum)
+            Task { @MainActor in self.desk?.sideWidth = width }
         }
     }
 }

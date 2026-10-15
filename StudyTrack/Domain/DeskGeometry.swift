@@ -56,6 +56,39 @@ enum DeskGeometry {
     }
 }
 
+/// Où vont les fenêtres du bureau d'étude sur un écran (repère AppKit : origine en
+/// bas à gauche) : la barre du haut, la colonne d'outils, le centre et, à part, le
+/// volet d'à côté. Le Dock, s'il est visible, n'est jamais recouvert par le centre
+/// (`visible` l'exclut) ; la barre, elle, recouvre la barre des menus de macOS.
+enum PanelLayout {
+    struct Frames: Equatable {
+        var bar: DeskGeometry.Rect
+        var rail: DeskGeometry.Rect
+        var desk: DeskGeometry.Rect
+        var side: DeskGeometry.Rect?
+    }
+
+    /// - `sideWidth` : la largeur du volet quand il est ouvert (`nil` : fermé).
+    /// - `secondScreen` : le volet occupe tout cet autre écran.
+    static func frames(screen f: DeskGeometry.Rect, visible v: DeskGeometry.Rect, bar: Double, rail: Double,
+                       sideWidth: Double?, secondScreen: DeskGeometry.Rect?) -> Frames {
+        let left = max(0, v.x - f.x), right = max(0, f.maxX - v.maxX), bottom = max(0, v.y - f.y)
+        let y0 = f.y + bottom
+        let height = f.height - bar - bottom
+        let contentLeft = f.x + left + rail - 1
+        let contentRight = f.maxX - right
+        let onThisScreen = secondScreen == nil ? sideWidth : nil
+        let desk = DeskGeometry.Rect(x: contentLeft, y: y0, width: contentRight - contentLeft - (onThisScreen ?? 0), height: height + 1)
+        var side: DeskGeometry.Rect?
+        if let sideWidth {
+            side = secondScreen ?? DeskGeometry.Rect(x: contentRight - sideWidth, y: y0, width: sideWidth, height: height)
+        }
+        return Frames(bar: DeskGeometry.Rect(x: f.x, y: f.maxY - bar, width: f.width, height: bar),
+                      rail: DeskGeometry.Rect(x: f.x + left, y: y0, width: rail, height: height),
+                      desk: desk, side: side)
+    }
+}
+
 /// Ce qu'il manque avant de commencer un blocage : à demander **sur l'écran de
 /// lancement**, car sous blocage les Réglages Système sont fermés.
 enum StudyReadiness {

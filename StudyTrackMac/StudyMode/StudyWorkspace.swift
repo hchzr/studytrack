@@ -12,6 +12,10 @@ struct StudyWorkspace: View {
     let courses: [Course]
     /// La barre du haut et la colonne d'outils sont des fenêtres à part (`-studyPanels`).
     var panels = false
+    /// Le volet d'à côté est lui aussi une fenêtre à part : le centre n'en garde rien.
+    var sideHosted = false
+    /// Cette instance ne montre que le volet d'à côté (la fenêtre du volet).
+    var onlySide = false
 
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
@@ -32,6 +36,22 @@ struct StudyWorkspace: View {
     }
 
     var body: some View {
+        if onlySide {
+            // La fenêtre du volet : la poignée à gauche, puis les onglets d'à côté.
+            HStack(spacing: 0) {
+                ScreenSplitHandle(desk: desk)
+                    .frame(width: 9)
+                    .overlay { Rectangle().fill(Carnet.rule).frame(width: 1).allowsHitTesting(false) }
+                side
+            }
+            .background(Carnet.ground)
+            .environment(\.colorScheme, .dark)
+        } else {
+            whole
+        }
+    }
+
+    private var whole: some View {
         VStack(spacing: 0) {
             if !panels {
                 StudyTopBar(course: course, tint: tint, moment: moment, openMusic: { desk.pane = .music }, openResource: openResource)
@@ -43,7 +63,7 @@ struct StudyWorkspace: View {
                     Rectangle().fill(Carnet.rule).frame(width: 1)
                 }
                 ZStack(alignment: .topLeading) {
-                    DeskSplit(desk: desk) {
+                    DeskSplit(desk: desk, sideHosted: sideHosted) {
                         center
                     } side: {
                         side
