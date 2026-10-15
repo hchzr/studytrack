@@ -228,7 +228,69 @@ final class MacStore {
             context.insert(TheoryItem(course: course, sectionNumber: 3, number: "3.\(i + 1)", title: title, kind: .video,
                                       durationSeconds: 900, plannedWeek: course.currentWeek, sortOrder: i))
         }
+        // `-seedFiche` : une fiche de révision et sa carte (liens, schémas, phrases en clair) pour les captures.
+        if CommandLine.arguments.contains("-seedFiche") { seedFiche(course) }
         try? context.save()
+    }
+
+    /// Une petite fiche d'analyse (trois chapitres, quatorze notions) et ce que Claude en écrirait : de quoi
+    /// voir la carte, les schémas, le parcours et la page d'une notion.
+    private static func seedFiche(_ course: Course) {
+        typealias E = RevisionSheet.Entry
+        func e(_ id: String, _ kind: E.Kind, _ title: String, _ body: String) -> E { E(id: id, kind: kind, title: title, body: body, source: "Cours") }
+        let sheet = RevisionSheet(origin: .ai, generatedAt: Date(), chapters: [
+            .init(id: "c0", title: "Suites réelles", entries: [
+                e("a", .definition, "Définition 1.1 (suite bornée)", "Une suite $(u_n)$ est bornée s'il existe $M$ tel que $|u_n| \\le M$ pour tout $n$."),
+                e("b", .definition, "Définition 1.2 (limite)", "$u_n \\to \\ell$ si pour tout $\\varepsilon > 0$ il existe $N$ tel que $|u_n - \\ell| < \\varepsilon$ dès que $n \\ge N$."),
+                e("c", .theorem, "Théorème 1.3 (suite monotone bornée)", "Par la définition 1.1 : toute suite monotone et bornée converge."),
+                e("d", .method, "Montrer qu'une suite converge", "1. Est-elle monotone ? 2. Est-elle bornée ? Alors le théorème 1.3 conclut. Sinon, la proposition 2.1."),
+                e("e", .pitfall, "Piège : borné n'est pas convergent", "Une suite bornée peut osciller : $(-1)^n$ est bornée sans converger."),
+            ]),
+            .init(id: "c1", title: "Suites de Cauchy", entries: [
+                e("f", .definition, "Définition 2.0 (suite de Cauchy)", "$(u_n)$ est de Cauchy si $|u_n - u_m|$ devient petit quand $n,m$ grandissent."),
+                e("g", .proposition, "Proposition 2.1 (Cauchy implique convergence)", "Dans $\\mathbb{R}$, par la définition 2.0 : une suite de Cauchy converge."),
+                e("h", .pitfall, "Piège : Cauchy dans $\\mathbb{Q}$", "Dans $\\mathbb{Q}$ une suite de Cauchy peut ne pas converger."),
+            ]),
+            .init(id: "c2", title: "Séries numériques", entries: [
+                e("i", .definition, "Définition 3.1 (série)", "La série $\\sum u_n$ converge si la suite de ses sommes partielles converge (définition 1.2)."),
+                e("j", .theorem, "Théorème 3.2 (condition nécessaire)", "Si $\\sum u_n$ converge alors $u_n \\to 0$ ; par la définition 3.1."),
+                e("k", .method, "Étudier la convergence d'une série", "Terme général → 0 ? (théorème 3.2) Puis comparer, ou critère de d'Alembert."),
+                e("l", .formula, "Formule 3.3 (série géométrique)", "$\\sum_{n\\ge 0} q^n = \\frac{1}{1-q}$ si $|q| < 1$."),
+                e("m", .pitfall, "Piège : la réciproque du théorème 3.2", "$u_n \\to 0$ ne suffit pas : la série harmonique diverge."),
+                e("n", .example, "Exemple : série harmonique", "$\\sum 1/n$ diverge bien que $1/n \\to 0$."),
+            ]),
+        ])
+        course.revisionSheet = sheet
+        let answer = """
+        {"entries":[
+         {"id":"e3","gist":"Une suite qui ne fait que monter sans dépasser un plafond finit forcément par se poser quelque part.","why":"C'est le moyen le plus rapide de prouver qu'une limite existe sans la connaître.","example":"$u_n = 1 - 1/n$ monte et reste sous 1.","question":"Pourquoi faut-il « bornée » dans le théorème ?","answer":"Sans plafond, une suite qui monte peut aller à l'infini : elle ne converge pas."},
+         {"id":"e2","gist":"La limite, c'est le nombre dont les termes finissent par rester aussi proches qu'on veut.","why":"Toute l'analyse repose sur cette définition.","question":"Que veut dire « pour tout epsilon » ?","answer":"Aussi petite que soit la distance demandée, on la respecte à partir d'un certain rang."},
+         {"id":"e10","gist":"Si une série converge, ses termes doivent s'éteindre.","why":"Un test d'élimination immédiat.","question":"La réciproque est-elle vraie ?","answer":"Non : la série harmonique."},
+         {"id":"e7","gist":"Les termes se rapprochent entre eux : ils doivent donc se rapprocher de quelque chose."}],
+         "links":[{"from":"e3","to":"e1","relation":"needs","note":"un plafond et un plancher"},{"from":"e3","to":"e2","relation":"needs","note":"converger, c'est avoir une limite"},
+                  {"from":"e7","to":"e6","relation":"needs"},{"from":"e5","to":"e3","relation":"contrast","note":"borné seul ne suffit pas"},
+                  {"from":"e10","to":"e9","relation":"needs"},{"from":"e9","to":"e2","relation":"uses","note":"somme partielle qui converge"},
+                  {"from":"e13","to":"e10","relation":"contrast","note":"la réciproque est fausse"},{"from":"e14","to":"e13","relation":"example"}],
+         "schemas":[
+          {"title":"Montrer qu'une suite converge","kind":"tree","summary":"Quelle méthode choisir selon ce qu'on sait de la suite.","nodes":[
+            {"id":"q1","label":"La suite est-elle monotone ?"},{"id":"q2","label":"Est-elle bornée ?","entry":"e1"},{"id":"r1","label":"Elle converge","entry":"e3","detail":"théorème 1.3"},
+            {"id":"q3","label":"Est-elle de Cauchy ?","entry":"e6"},{"id":"r2","label":"Chercher autre chose","detail":"sous-suites, comparaison"}],
+           "edges":[{"from":"q1","to":"q2","label":"oui"},{"from":"q1","to":"q3","label":"non"},{"from":"q2","to":"r1","label":"oui"},{"from":"q2","to":"r2","label":"non"},{"from":"q3","to":"r1","label":"oui"},{"from":"q3","to":"r2","label":"non"}]},
+          {"title":"Qui découle de quoi","kind":"dependencies","nodes":[
+            {"id":"a","label":"Limite","entry":"e2"},{"id":"b","label":"Suite bornée","entry":"e1"},{"id":"c","label":"Monotone bornée converge","entry":"e3"},{"id":"d","label":"Cauchy converge","entry":"e7"},{"id":"e","label":"Série","entry":"e9"},{"id":"f","label":"Terme général → 0","entry":"e10"}],
+           "edges":[{"from":"a","to":"c"},{"from":"b","to":"c"},{"from":"a","to":"d"},{"from":"a","to":"e"},{"from":"e","to":"f"}]},
+          {"title":"Suite ou série","kind":"comparison","columns":["Suite","Série"],"rows":[["Objet","$u_n$","$\\sum u_n$"],["Converge si","$u_n \\to \\ell$","les sommes partielles convergent"],["Condition nécessaire","aucune","$u_n \\to 0$"]]}]}
+        """
+        var map = StudyMap()
+        let (_, ids) = StudyMapAI.prompt(course: course.name, sheet: sheet)
+        // Le LaTeX est écrit avec une seule barre oblique ci-dessus : en JSON, chacune se double.
+        map = StudyMapAI.apply(answer: answer.replacingOccurrences(of: "\\", with: "\\\\"), sheet: sheet, ids: ids, to: map) ?? map
+        let keyed = sheet.keyed
+        map.progress[keyed[0].key] = .init(level: .solid, at: Date())
+        map.progress[keyed[1].key] = .init(level: .solid, at: Date())
+        map.progress[keyed[2].key] = .init(level: .shaky, at: Date())
+        map.customNodes = [.init(id: "i1", title: "Penser à l'escalier de Cantor ?", note: nil, parent: keyed[2].key)]
+        course.studyMap = map
     }
     #endif
 

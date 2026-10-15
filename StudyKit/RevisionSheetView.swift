@@ -18,7 +18,7 @@ struct RevisionSheetView: View {
             switch self {
             case .all: return "Tout"
             case .statements: return "Énoncés"
-            case .methods: return "Méthodes et pièges"
+            case .methods: return "Méthodes"
             }
         }
 
@@ -31,6 +31,35 @@ struct RevisionSheetView: View {
         }
     }
 
+    /// Les façons de travailler la fiche : la relire, la voir en carte, en schémas, dans l'ordre
+    /// où la comprendre, ou l'écouter (NotebookLM, si c'est allumé dans les Réglages).
+    enum Tab: String, CaseIterable, Identifiable {
+        case fiche, carte, schemas, parcours, ecouter
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .fiche: return String(localized: "Fiche")
+            case .carte: return String(localized: "Carte")
+            case .schemas: return String(localized: "Schémas")
+            case .parcours: return String(localized: "Parcours")
+            case .ecouter: return String(localized: "Écouter")
+            }
+        }
+        var icon: String {
+            switch self {
+            case .fiche: return "doc.text"
+            case .carte: return "point.3.connected.trianglepath.dotted"
+            case .schemas: return "arrow.triangle.branch"
+            case .parcours: return "list.number"
+            case .ecouter: return "waveform"
+            }
+        }
+    }
+
+    @State private var tab: Tab = .fiche
+    /// La notion dont on voit la page (à côté, ou en feuille dans un volet étroit).
+    @State private var concept: String?
+    @AppStorage("notebooklm.enabled") private var notebookOn = false
     @State private var query = ""
     @State private var filter: Filter = .all
     @State private var jump: String?
@@ -61,6 +90,108 @@ struct RevisionSheetView: View {
     private var hasPersonal: Bool { query.isEmpty && filter != .statements && (!mistakes.isEmpty || !redo.isEmpty) }
 
     var body: some View {
+        VStack(spacing: 0) {
+            topBar
+            Rectangle().fill(Carnet.rule).frame(height: 1)
+            content
+        }
+        .background(Carnet.ground)
+        .modifier(ConceptPresenter(course: course, concept: $concept, compact: compact, openPoly: openPoly))
+        .onAppear {
+            StudyMapStore.shared.ensureBase(course)
+            #if DEBUG
+            // `-ficheTab carte|schemas|parcours|ecouter` et `-ficheConcept` : ouvrir directement un onglet, une notion.
+            if let index = CommandLine.arguments.firstIndex(of: "-ficheTab"), index + 1 < CommandLine.arguments.count,
+               let chosen = Tab(rawValue: CommandLine.arguments[index + 1]) { tab = chosen }
+            if CommandLine.arguments.contains("-ficheConcept") { concept = sheet?.keyed.dropFirst(2).first?.key }
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch tab {
+        case .fiche: ficheTab
+        case .carte: MindMapView(course: course, concept: $concept)
+        case .schemas: DiagramsView(course: course, concept: $concept)
+        case .parcours: LearningPathView(course: course, concept: $concept)
+        case .ecouter: NotebookLMPanel(course: course)
+        }
+    }
+
+    // MARK: Le haut : le cours, ce qu'on peut en faire
+
+    private var tabs: [Tab] { Tab.allCases.filter { $0 != .ecouter || notebookOn } }
+
+    private var topBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Kicker("Fiche de révision · \(course.displayCode)", color: tint)
+                    Text(course.name).font(Carnet.serif(compact ? 20 : 26)).foregroundStyle(Carnet.ink).lineLimit(2)
+                }
+                Spacer(minLength: 8)
+                if sheet != nil {
+                    if StudyMapStore.shared.canEnrich {
+                        Button { Task { await StudyMapStore.shared.enrich(course) } } label: {
+                            Label(StudyMapStore.shared.map(course).enrichedAt == nil ? "Comprendre avec Claude" : "Refaire les liens", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.paper)
+                        .disabled(isEnriching)
+                        .help("Claude relie les notions, écrit l'idée de chacune, dessine les schémas")
+                    }
+                    remake(title: "Refaire")
+                }
+            }
+            if let sheet { Text(summary(sheet)).font(.caption).foregroundStyle(Carnet.inkSecondary) }
+            if let state = maker.state(course) { status(state) }
+            if let state = StudyMapStore.shared.state(course) { mapStatus(state) }
+            tabBar
+        }
+        .padding(.horizontal, compact ? 14 : 20)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 6) {
+            ForEach(tabs) { item in
+                Button { tab = item } label: {
+                    Label(item.title, systemImage: item.icon)
+                        .labelStyle(.titleAndIcon)
+                        .font(.callout.weight(tab == item ? .semibold : .regular))
+                        .lineLimit(1)
+                        .padding(.horizontal, compact ? 9 : 13)
+                        .frame(height: 32)
+                        .foregroundStyle(tab == item ? Carnet.ground : Carnet.ink)
+                        .background(tab == item ? Carnet.ink : Carnet.sheetRaised.opacity(0.8), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var isEnriching: Bool {
+        if case .working? = StudyMapStore.shared.state(course) { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private func mapStatus(_ state: StudyMapStore.State) -> some View {
+        switch state {
+        case .working(let message):
+            HStack(spacing: 8) { ProgressView().controlSize(.small); Text(message).font(.callout).foregroundStyle(Carnet.inkSecondary) }
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Carnet.wrong).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: La fiche, relue
+
+    @ViewBuilder
+    private var ficheTab: some View {
         if compact {
             VStack(spacing: 0) {
                 controls.padding(12)
@@ -102,6 +233,7 @@ struct RevisionSheetView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -120,6 +252,7 @@ struct RevisionSheetView: View {
                                 Image(systemName: entry.kind.icon).font(.caption2).foregroundStyle(color(entry.kind)).frame(width: 14)
                                 MacMathText(entry.title, size: 12).foregroundStyle(Carnet.ink).lineLimit(1)
                                 Spacer(minLength: 0)
+                                if let key = keyByID[entry.id] { MasteryDot(level: StudyMapStore.shared.map(course).mastery(key), size: 9) }
                             }
                             .contentShape(Rectangle())
                         }
@@ -156,7 +289,6 @@ struct RevisionSheetView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    header
                     if sheet == nil {
                         empty
                     } else if chapters.isEmpty && !hasPersonal {
@@ -196,22 +328,6 @@ struct RevisionSheetView: View {
             }
         }
         .background(Carnet.ground)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Kicker("Fiche de révision · \(course.displayCode)", color: tint)
-            Text(course.name).font(Carnet.serif(compact ? 26 : 34)).foregroundStyle(Carnet.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            if let sheet {
-                HStack(spacing: 10) {
-                    Text(summary(sheet)).font(.callout).foregroundStyle(Carnet.inkSecondary)
-                    Spacer(minLength: 8)
-                    remake(title: "Refaire")
-                }
-            }
-            if let state = maker.state(course) { status(state) }
-        }
     }
 
     private func summary(_ sheet: RevisionSheet) -> String {
@@ -286,10 +402,18 @@ struct RevisionSheetView: View {
         }
     }
 
+    /// La clé de chaque notion (pour sa maîtrise, ses liens, sa page).
+    private var keyByID: [String: String] {
+        Dictionary(uniqueKeysWithValues: (sheet?.keyed ?? []).map { ($0.entry.id, $0.key) })
+    }
+
     private func card(_ entry: RevisionSheet.Entry) -> some View {
         let accent = color(entry.kind)
+        let key = keyByID[entry.id]
+        let map = StudyMapStore.shared.map(course)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
+                if let key { MasteryDot(level: map.mastery(key), size: 11) }
                 Image(systemName: entry.kind.icon).font(.caption)
                 Text(entry.kind.label.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8)
                 Spacer(minLength: 6)
@@ -308,11 +432,15 @@ struct RevisionSheetView: View {
                 MacMathText(entry.title, size: 16, design: .serif).foregroundStyle(Carnet.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let key, let gist = map.enrichment[key]?.gist {
+                Text(gist).font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
+            }
             RichTextView(text: entry.body, size: 14)
                 .textSelection(.enabled)
             if !entry.source.isEmpty, entry.link.isEmpty || compact {
                 Text(entry.source).font(.caption).foregroundStyle(Carnet.inkTertiary)
             }
+            if let key { cardFooter(key: key, map: map) }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -323,6 +451,32 @@ struct RevisionSheetView: View {
                 .frame(width: 3)
         }
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Carnet.rule))
+    }
+
+    /// Sous une notion : où j'en suis, ce qui la précède, et sa page.
+    private func cardFooter(key: String, map: StudyMap) -> some View {
+        let keys = Set((sheet?.keyed ?? []).map(\.key))
+        let before = StudyLinks.neighbourhood(of: key, in: map, among: keys).before
+        return HStack(spacing: 8) {
+            Menu {
+                ForEach(StudyMap.Mastery.allCases, id: \.rawValue) { level in
+                    Button { StudyMapStore.shared.setMastery(level, for: key, in: course) } label: { Label(level.label, systemImage: level.icon) }
+                }
+            } label: {
+                Label(map.mastery(key).label, systemImage: map.mastery(key).icon)
+                    .font(.caption).foregroundStyle(map.mastery(key).color)
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+            if let first = before.first, let item = sheet?.entry(forKey: first.key) {
+                Button { concept = first.key } label: {
+                    Label("Avant : " + item.entry.title, systemImage: "arrow.turn.up.left").font(.caption).lineLimit(1)
+                }
+                .buttonStyle(.plain).foregroundStyle(Carnet.inkSecondary)
+            }
+            Spacer(minLength: 4)
+            Button { concept = key } label: { Label("Comprendre", systemImage: "lightbulb") }
+                .buttonStyle(.plain).font(.caption.weight(.medium)).foregroundStyle(tint)
+        }
     }
 
     // MARK: De tes séries
@@ -454,5 +608,41 @@ struct ExerciseKnowHow: View {
         }
         .padding(10)
         .background(Carnet.sheetRaised.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+
+// MARK: - La page d'une notion, à côté ou en feuille
+
+/// Où s'ouvre la page d'une notion : à côté de la fiche (volet) quand il y a la place, en feuille
+/// dans un volet étroit ou sur l'iPhone.
+private struct ConceptPresenter: ViewModifier {
+    let course: Course
+    @Binding var concept: String?
+    let compact: Bool
+    var openPoly: (String) -> Void
+
+    private var shown: Binding<Bool> {
+        Binding(get: { concept != nil }, set: { if !$0 { concept = nil } })
+    }
+
+    private var detail: some View {
+        Group {
+            if let key = concept {
+                ConceptDetailView(course: course, key: key, select: { concept = $0 }, openPoly: openPoly, close: { concept = nil })
+            }
+        }
+    }
+
+    func body(content: Content) -> some View {
+        if compact {
+            content.sheet(isPresented: shown) {
+                detail.presentationDetents([.medium, .large]).presentationBackground(Carnet.ground)
+            }
+        } else {
+            content.inspector(isPresented: shown) {
+                detail.inspectorColumnWidth(min: 320, ideal: 400, max: 520)
+            }
+        }
     }
 }

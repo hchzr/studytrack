@@ -112,6 +112,8 @@ final class RevisionSheetMaker {
             guard !sheet.isEmpty else { throw Failure(String(localized: "Rien à mettre sur la fiche.")) }
             course.revisionSheet = sheet
             try? course.modelContext?.save()
+            // Ce qui est à toi (maîtrise, notes, liens, idées) reste ; les liens des citations sont refaits.
+            StudyMapStore.shared.sheetChanged(course, sheet: sheet)
             states[course.id] = nil
             AppLog.record(.info, "fiche", "Fiche de révision faite", detail: "\(course.displayCode) : \(sheet.entries.count) entrées")
         } catch {
