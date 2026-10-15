@@ -23,6 +23,8 @@ final class ClaudeChat: Identifiable {
         /// « Post-mortem », « Rapport » : une demande faite d'un bouton.
         var label: String?
         var attachments: [String] = []
+        /// L'exercice sur lequel l'étudiant·e a écrit (pour les séparateurs de la conversation).
+        var exercise: String?
         var images: [NSImage] = []
         var isStreaming = false
         var error: String?
@@ -103,9 +105,14 @@ final class ClaudeChat: Identifiable {
 
     #if DEBUG
     /// `-claudeDemo` : une conversation d'exemple (captures), sans appeler Claude.
-    func debugInject(_ demo: [(student: Bool, text: String)]) {
+    func debugInject(_ demo: [(student: Bool, text: String)], exercises: [String] = []) {
         guard messages.isEmpty else { return }
-        messages = demo.map { Message(role: $0.student ? .student : .claude, text: $0.text) }
+        var students = 0
+        messages = demo.map { item in
+            defer { if item.student { students += 1 } }
+            return Message(role: item.student ? .student : .claude, text: item.text,
+                           exercise: item.student && exercises.indices.contains(students) ? exercises[students] : nil)
+        }
         opened = true
     }
     #endif
@@ -138,7 +145,7 @@ final class ClaudeChat: Identifiable {
     private func restore() {
         guard let data = try? Data(contentsOf: sessionFile) else { return }
         messages = ClaudeTutor.history(jsonl: String(decoding: data, as: UTF8.self)).map {
-            Message(role: $0.fromStudent ? .student : .claude, text: $0.text)
+            Message(role: $0.fromStudent ? .student : .claude, text: $0.text, exercise: $0.exercise)
         }
         opened = !messages.isEmpty
     }
@@ -187,6 +194,9 @@ final class ClaudeChat: Identifiable {
         var exercise: ClaudeTutor.Context
         /// La compétence à lancer au premier message (projet EPFL).
         var skill: String?
+        /// L'état du tuteur pour ce message (`TutorFramework.card`) : l'exercice, les indices déjà donnés, les pièces jointes.
+        var card = ""
+        var exerciseLabel: String?
     }
 
     /// - Parameter model: le modèle de ce message (`nil` : celui de
@@ -228,13 +238,15 @@ final class ClaudeChat: Identifiable {
             }
             modeSent = mode
         }
+        prompt += situation.card
         if prompt.hasPrefix("/") {
             // La compétence d'abord, la question ensuite.
             prompt += "\n\n" + (trimmed.isEmpty ? "Regarde ce que je t'envoie." : trimmed)
         } else {
             prompt += trimmed.isEmpty ? "Regarde ce que je t'envoie." : trimmed
         }
-        messages.append(Message(role: .student, text: trimmed, label: label, attachments: attachments.map(\.name), images: images))
+        messages.append(Message(role: .student, text: trimmed, label: label, attachments: attachments.map(\.chip),
+                                exercise: situation.exerciseLabel, images: images))
         messages.append(Message(role: .claude, text: "", isStreaming: true))
         isAnswering = true
         isThinking = true

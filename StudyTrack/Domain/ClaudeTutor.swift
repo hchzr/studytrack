@@ -143,6 +143,10 @@ enum ClaudeTutor {
         /// Un cahier de tes notes (ta copie) : n'en partent que les pages que
         /// la conversation n'a pas encore vues.
         var notebookPath: String? = nil
+        /// Ce que c'est, dit à Claude dans l'état du message (`TutorFramework.card`).
+        var origin: TutorFramework.Origin? = nil
+        /// Le nom dans la bulle de l'étudiant·e.
+        var chip: String { origin.map(TutorFramework.chip) ?? name }
     }
 
     /// La ligne JSON d'un message de l'étudiant·e (`--input-format stream-json`).
@@ -270,6 +274,8 @@ enum ClaudeTutor {
     struct HistoryMessage: Equatable {
         var fromStudent: Bool
         var text: String
+        /// L'exercice du message (lu dans son état), pour les séparateurs d'une conversation reprise.
+        var exercise: String? = nil
     }
 
     /// Le fichier d'une session Claude Code → les messages à réafficher : le
@@ -284,6 +290,7 @@ enum ClaudeTutor {
                   (object["isMeta"] as? Bool) != true, (object["isSidechain"] as? Bool) != true,
                   let message = object["message"] as? [String: Any] else { continue }
             var text = ""
+            var exercise: String?
             if let plain = message["content"] as? String {
                 text = plain
             } else if let parts = message["content"] as? [[String: Any]] {
@@ -302,6 +309,7 @@ enum ClaudeTutor {
                 } else if text.hasPrefix("<") {
                     continue
                 }
+                exercise = TutorFramework.exercise(inSent: text)
                 text = displayText(text)
             }
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -311,7 +319,7 @@ enum ClaudeTutor {
             if let last = result.last, last.fromStudent == fromStudent, !fromStudent {
                 result[result.count - 1].text += "\n\n" + text
             } else {
-                result.append(HistoryMessage(fromStudent: fromStudent, text: text))
+                result.append(HistoryMessage(fromStudent: fromStudent, text: text, exercise: exercise))
             }
         }
         return result
@@ -339,27 +347,14 @@ enum ClaudeTutor {
     private static func systemPromptBody(mode: Mode) -> String {
         let common = """
         Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app StudyTrack, en mode étude. \
-        Réponds en français, tutoie, sois bref et précis. Écris les mathématiques en LaTeX léger entre dollars \
+        Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars \
         ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. \
         Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. \
         La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [StudyTrack] et \
-        [/StudyTrack] (la série, l'exercice en cours quand il change, les questions cochées). Appuie-toi dessus \
+        [/StudyTrack] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus \
         et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.
         """
-        switch mode {
-        case .tutor:
-            return common + "\n\n" + """
-            Mode tuteur. Ne donne pas la solution d'emblée. Procède par indices gradués : d'abord une question \
-            qui oriente, puis un indice plus précis si l'étudiant·e bloque encore, puis l'étape suivante seulement. \
-            Quand on te montre un raisonnement, dis exactement ce qui est juste et où est la première erreur, sans \
-            la corriger à sa place. Donne la solution complète seulement si on te la demande explicitement.
-            """
-        case .explain:
-            return common + "\n\n" + """
-            Mode explication. Explique les notions demandées clairement, avec un exemple simple et l'intuition, \
-            puis le lien avec l'exercice en cours. Donne des solutions complètes si on les demande.
-            """
-        }
+        return common + "\n\n" + TutorFramework.contract + "\n\n" + (mode == .tutor ? TutorFramework.tutor : TutorFramework.explain)
     }
 
     enum Mode: String, CaseIterable, Identifiable {

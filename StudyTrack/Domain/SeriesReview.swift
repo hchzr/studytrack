@@ -133,12 +133,25 @@ enum SeriesReview {
                     guard fields.count >= 3, !fields[0].isEmpty, let level = Int(fields[1].filter(\.isNumber)) else { continue }
                     report.hints.append(Hint(exercise: fields[0], level: min(4, max(1, level)),
                                              text: fields[2]))
+                } else if let hint = bareHint(line) {
+                    // « 6.3 | 1 | … » : Claude oublie souvent le mot « indice » (vu en vrai).
+                    report.hints.append(hint)
                 } else if let verdict = ClaudeTutor.verdicts(in: "```\(ClaudeTutor.verdictFence)\n\(line)\n```").first {
                     report.verdicts.append(verdict)
                 }
             }
         }
         return report
+    }
+
+    /// Un indice écrit sans son mot-clé : « numéro | niveau 1 à 4 | texte ».
+    static func bareHint(_ line: String) -> Hint? {
+        let fields = line.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard fields.count == 3, !fields[2].isEmpty, fields[0].first?.isNumber == true,
+              fields[0].allSatisfy({ $0.isNumber || $0 == "." || $0 == "-" }),
+              let level = Int(fields[1]), (1...4).contains(level) else { return nil }
+        return Hint(exercise: fields[0], level: level, text: fields[2])
     }
 
     /// La réponse sans ses blocs (ils s'affichent en carte à part).
@@ -194,8 +207,8 @@ enum SeriesReview {
     /// La consigne des indices, pendant la résolution.
     static let hintInstruction = """
     Quand tu donnes un indice sur un exercice, ajoute à la fin de ta réponse un bloc ```\(ClaudeTutor.verdictFence) \
-    d'une ligne : « indice numéro | niveau | l'indice en une phrase », niveau 1 (orientation), 2 (outil), 3 (amorce) \
-    ou 4 (solution). StudyTrack le note pour la reprise et le post-mortem.
+    d'une ligne, **avec le mot « indice »** : « indice 6.3 | 2 | l'indice en une phrase », niveau 1 (orientation), \
+    2 (outil), 3 (amorce) ou 4 (solution). StudyTrack le note pour la reprise et le post-mortem.
     """
 
     /// Ce qui est allumé (réglages de l'app, et `studytrack.json` du projet).

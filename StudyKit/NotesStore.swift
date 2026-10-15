@@ -218,6 +218,20 @@ final class NotesStore {
                          pages: kept.map { $0.index + 1 }, total: pdf.pageCount, fingerprints: kept.map(\.print))
     }
 
+    /// Des pages précises (« regarde la page 4 ») : jointes même si la conversation les a déjà reçues —
+    /// on les demande pour que Claude les regarde, et elles ont pu changer. Les numéros hors cahier sont ignorés.
+    nonisolated static func copyPages(url: URL, pages: [Int]) -> CopyDelta? {
+        guard let pdf = PDFDocument(url: url) else { return nil }
+        let valid = Set(pages).filter { $0 >= 1 && $0 <= pdf.pageCount }.sorted()
+        guard !valid.isEmpty else { return CopyDelta(data: Data(), pages: [], total: pdf.pageCount, fingerprints: []) }
+        let out = PDFDocument()
+        for (offset, number) in valid.enumerated() {
+            if let page = pdf.page(at: number - 1)?.copy() as? PDFPage { out.insert(page, at: offset) }
+        }
+        let prints = valid.compactMap { pdf.page(at: $0 - 1).map(fingerprint) }
+        return CopyDelta(data: out.dataRepresentation() ?? Data(), pages: valid, total: pdf.pageCount, fingerprints: prints)
+    }
+
     /// Ce que la page montre, en empreinte : son rendu, réduit. Le rendu est
     /// gardé par le contenu brut de la page (ses traits, ses images) : une page
     /// inchangée d'une sauvegarde à l'autre ne se redessine pas.

@@ -5454,6 +5454,80 @@ do {
     check(MathEngine.format(6.02e23).contains("10^23"), "affichage : notation scientifique")
 }
 
+// MARK: Le cadre du tuteur (TutorFramework)
+do {
+    typealias T = TutorFramework
+    // Les numéros de page : le seul texte libre qu'on lit.
+    check(T.pageRequest(in: "regarde page 4") == [4], "page : « regarde page 4 »")
+    check(T.pageRequest(in: "regarde p. 4 et 5") == [4, 5], "page : « p. 4 et 5 »")
+    check(T.pageRequest(in: "pages 3-5") == [3, 4, 5], "page : une plage")
+    check(T.pageRequest(in: "p4") == [4], "page : « p4 »")
+    check(T.pageRequest(in: "je bloque sur le 6.3") == [], "page : pas de page sans le mot")
+    check(T.pageRequest(in: "map 3") == [], "page : un mot qui finit par p n'est pas une page")
+    check(T.pageRequest(in: "pages 1-40").count == 1 || T.pageRequest(in: "pages 1-40") == [1], "page : une plage trop longue n'est pas dépliée")
+    check(T.copyPageRequest(in: "regarde page 4") == [4], "copie : page 4 de la copie")
+    check(T.copyPageRequest(in: "regarde la page 4 de la série") == [] && T.copyPageRequest(in: "page 4 du polycopié") == [],
+          "copie : la page de la série ou du poly n'est pas dans le cahier")
+    check(T.ranges([5, 3, 4, 9]) == "3–5, 9", "pages : plages")
+
+    // L'état : le mot qui ne dit pas « pas essayé », l'indice suivant.
+    var state = T.State(exercise: "Série 6 · Exercice 6.3", hintLevel: 1, questionsDone: 0, questionsTotal: 3,
+                        copy: .init(notebook: "Séance Et Série 6", pagesSeen: [1, 2, 3, 4], total: 11))
+    let card = T.card(state, attached: [.copy(notebook: "Séance Et Série 6", pages: [4], total: 11, requested: true)])
+    check(card.hasPrefix(ClaudeTutor.contextOpen) && card.contains(ClaudeTutor.contextClose), "carte : dans le bloc que l'app retire")
+    check(card.contains("pas encore marqué fait") && !card.contains("à faire"), "carte : « pas encore marqué fait », pas « à faire »")
+    check(card.contains("jusqu'au niveau 1/4") && card.contains("niveau 2 (outil)"), "carte : le niveau suivant est dit")
+    check(card.contains("mon écriture") && card.contains("pas un corrigé"), "carte : la copie est de l'étudiant·e")
+    check(card.contains("celles que je te demande de regarder") && card.contains("1re page est la page 4"), "carte : la page demandée et sa numérotation")
+    check(card.contains("pages que tu as déjà reçues : 1–4 sur 11"), "carte : les pages déjà reçues")
+    check(card.split(separator: "\n").count <= 8, "carte : courte")
+    check(ClaudeTutor.displayText(card + "et maintenant ?") == "et maintenant ?", "carte : retirée à l'affichage")
+    check(T.exercise(inSent: card) == "Série 6 · Exercice 6.3" && T.shortExercise("Série 6 · Exercice 6.3") == "Exercice 6.3",
+          "carte : l'exercice se relit (séparateurs d'une conversation reprise)")
+    state.hintLevel = 0
+    check(T.card(state).contains("Un premier indice est de niveau 1"), "carte : aucun indice → niveau 1")
+    state.tutor = false
+    check(!T.card(state).contains("niveau 1 (orientation)") && T.card(state).contains("explications"), "carte : mode explications")
+    check(T.card(.init()).contains("pas d'exercice choisi") && T.exercise(inSent: T.card(.init())) == nil, "carte : sans exercice")
+    check(T.chip(.copy(notebook: "N", pages: [4], total: 11, requested: true)) == "Ma copie · p. 4", "bulle : « Ma copie · p. 4 »")
+
+    // Les gestes.
+    check(T.hintPrompt(after: 0).contains("niveau 1") && T.hintPrompt(after: 1).contains("niveau 2") && T.hintPrompt(after: 2).contains("niveau 3")
+          && T.hintPrompt(after: 3).contains("niveau 3"), "indice : un cran de plus (le 4 est « La solution »)")
+    var s1 = T.State(exercise: "E", hintLevel: 0, copy: .init(notebook: "N", pagesSeen: [], total: 3))
+    check(T.suggestions(s1, replyAsksQuestion: false).first == .hint(1), "propositions : d'abord l'indice 1")
+    s1.hintLevel = 1
+    check(T.suggestions(s1, replyAsksQuestion: false).first == .hint(2), "propositions : après l'indice 1, l'indice 2")
+    check(T.suggestions(s1, replyAsksQuestion: true).first == .tryIt, "propositions : une question posée → à toi d'essayer")
+    s1.hintLevel = 3
+    check(T.suggestions(s1, replyAsksQuestion: false).contains(.solution) && !T.suggestions(s1, replyAsksQuestion: false).contains(.hint(4)),
+          "propositions : après l'amorce, la solution")
+    s1.copy = nil; s1.hintLevel = 0
+    check(!T.suggestions(s1, replyAsksQuestion: false).contains(.check), "propositions : pas de vérification de copie sans copie")
+    check(T.suggestions(.init(), replyAsksQuestion: false) == [.explain], "propositions : sans exercice, la notion")
+    check(T.suggestions(s1, replyAsksQuestion: false).count <= 3, "propositions : trois au plus")
+    check(T.asksQuestion("Quel X isole une colonne ?\n\n```studytrack\n6.3 | 1 | x\n```") && !T.asksQuestion("Voilà."), "réponse : finit sur une question")
+
+    // Les règles de la consigne.
+    let prompt = ClaudeTutor.systemPrompt(mode: .tutor)
+    check(prompt.contains("Ne refuse jamais de lire") && prompt.contains("niveau **suivant**") && prompt.contains("une centaine de mots"),
+          "consigne : copie à lui, indice suivant, brièveté")
+    check(!ClaudeTutor.systemPrompt(mode: .explain).contains("Échelle d'indices"), "consigne : pas d'échelle en mode explications")
+    // Pour rejouer une conversation avec la vraie consigne : STUDYTRACK_DUMP_PROMPT=/chemin ./validate.sh
+    if let path = ProcessInfo.processInfo.environment["STUDYTRACK_DUMP_PROMPT"] {
+        try? prompt.write(toFile: path, atomically: true, encoding: .utf8)
+        try? T.card(.init(exercise: "Série 6 · Exercice 6.3", hintLevel: 1, questionsTotal: 0), attached: []).write(toFile: path + ".card1", atomically: true, encoding: .utf8)
+    }
+
+    // L'indice sans son mot-clé, vu en vrai (« 6.3 | 1 | … »), est noté.
+    let bare = SeriesReview.parse("Quel X ?\n\n```studytrack\n6.3 | 1 | Choisis un X qui isole une colonne.\n```")
+    check(bare.hints.count == 1 && bare.hints[0].exercise == "6.3" && bare.hints[0].level == 1, "indice : « 6.3 | 1 | … » sans le mot indice")
+    let keyed = SeriesReview.parse("```studytrack\nindice 6.3 | 2 | L'outil\n```")
+    check(keyed.hints.count == 1 && keyed.hints[0].level == 2, "indice : avec le mot indice")
+    check(SeriesReview.parse("```studytrack\n6.3 : juste\n```").hints.isEmpty && SeriesReview.parse("```studytrack\n6.3 : juste\n```").verdicts.count == 1,
+          "indice : un verdict n'est pas pris pour un indice")
+}
+
 // MARK: Claude dans le mode étude (ClaudeTutor, RichMarkup)
 do {
     let series = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
@@ -5626,7 +5700,7 @@ do {
     check(ClaudeTutor.parse(line: #"{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.33}}}}"#) == .usage(0.33),
           "flux : l'usage de l'abonnement")
     check(ClaudeTutor.parse(line: #"{"type":"system","subtype":"init"}"#) == nil && ClaudeTutor.parse(line: "pas du json") == nil, "flux : le bruit est ignoré")
-    check(ClaudeTutor.systemPrompt(mode: .tutor).contains("indices gradués"), "tuteur : indices avant la solution")
+    check(ClaudeTutor.systemPrompt(mode: .tutor).contains("Échelle d'indices"), "tuteur : indices avant la solution")
     let preamble = ClaudeTutor.contextPreamble(.init(courseCode: "MATH-101", exercise: "Série 3 · Ex 2", statement: "Montrer que…", questions: ["1. a", "1. b"], doneQuestions: 1))
     check(preamble.contains("MATH-101") && preamble.contains("(1/2 faites)"), "contexte : cours, exercice, avancement")
     check(ClaudeTutor.contextPreamble(.init()).isEmpty, "contexte vide : rien d'ajouté")
