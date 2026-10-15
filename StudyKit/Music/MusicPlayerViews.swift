@@ -74,6 +74,8 @@ private struct MusicArtworkBackdrop: View {
 struct MusicNowPlayingCard: View {
     var compact: Bool
     @State private var music = StudyMusic.shared
+    /// iPhone : « À suivre » dans une feuille (la file du lecteur système se lit et se modifie).
+    @State private var showingQueue = false
 
     private var playing: StudyMusic.NowPlaying { music.nowPlaying }
 
@@ -200,6 +202,24 @@ struct MusicNowPlayingCard: View {
                     music.cycleRepeat()
                 }
             }
+            // Le volume du téléphone, et la file : comme sur le Mac.
+            if music.volume != nil { MusicVolume() }
+            #if os(iOS)
+            Button { showingQueue = true } label: {
+                Label("À suivre", systemImage: "list.bullet")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(StudyPalette.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showingQueue) {
+                ScrollView { MusicUpNextList().padding(16) }
+                    .background(StudyPalette.ground)
+                    .presentationDetents([.medium, .large])
+                    .environment(\.colorScheme, .dark)
+            }
+            #endif
         }
         .padding(12)
         .background {

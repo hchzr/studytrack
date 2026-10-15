@@ -5,6 +5,7 @@ import Observation
 import SwiftUI
 import OSLog
 #if os(iOS)
+import AVFoundation
 import MediaPlayer
 import UIKit
 #else
@@ -634,14 +635,25 @@ private let log = Logger(subsystem: "com.hczr.studytrack", category: "music")
 private final class Backend {
     var onChange: (() -> Void)?
     private(set) var state = StudyMusic.NowPlaying()
-    let volume: Double? = nil
+    /// Le volume du téléphone (0…1) : lu sur la session audio, réglé par un `MPVolumeView`
+    /// caché (la seule voie permise) — comme dans Tournesol.
+    private(set) var volume: Double?
 
-    // Le lecteur système ne laisse ni lire ni modifier sa file depuis une autre app.
-    let upNext: [StudyMusic.QueueItem] = []
-    let canEditQueue = false
+    /// La file du lecteur système : lue par les sélecteurs `numberOfItems` et
+    /// `nowPlayingItemAtIndex:` (comme Tournesol), modifiée en ajoutant, en sautant ce
+    /// qu'on retire, ou en la rebâtissant autour du morceau en cours.
+    private(set) var upNext: [StudyMusic.QueueItem] = []
+    let canEditQueue = true
 
     private let player = MPMusicPlayerController.systemMusicPlayer
     private var observers: [NSObjectProtocol] = []
+    private let session = AVAudioSession.sharedInstance()
+    private var volumeObservation: NSKeyValueObservation?
+    private let volumeView = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 1, height: 1))
+    /// Les morceaux retirés de la file : le lecteur ne sait pas en lâcher un, alors chacun
+    /// est sauté quand il arrive.
+    private var skipped: [String] = []
+    private var queueWanted = false
 
     func start() {
         guard observers.isEmpty else { return }
@@ -656,20 +668,48 @@ private final class Backend {
                 MainActor.assumeIsolated { self?.refresh() }
             }
         }
+        // Les boutons de volume du téléphone : lus quand ils bougent.
+        volumeObservation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.refresh() }
+        }
+        attachVolumeView()
         // Pas de relecture périodique : l'aléatoire et la répétition, qui ne
         // préviennent pas, sont relus au retour dans l'app et après nos gestes.
         refresh()
     }
 
-    func setQueueWanted(_ wanted: Bool) {}
+    func setQueueWanted(_ wanted: Bool) {
+        queueWanted = wanted
+        if wanted { refresh() }
+    }
 
     func stop() {
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
+        volumeObservation = nil
+        volumeView.removeFromSuperview()
         player.endGeneratingPlaybackNotifications()
     }
 
+    /// Le curseur de volume du système doit être dans une fenêtre pour répondre.
+    private func attachVolumeView() {
+        guard volumeView.superview == nil else { return }
+        volumeView.alpha = 0.01
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first { $0.isKeyWindow }
+        window?.addSubview(volumeView)
+    }
+
     func refresh() {
+        // Un morceau retiré de la file qui arrive : on le saute.
+        if let item = player.nowPlayingItem, !skipped.isEmpty,
+           let index = skipped.firstIndex(of: Self.signature(item.title, item.artist, item.albumTitle)) {
+            skipped.remove(at: index)
+            player.skipToNextItem()
+            return
+        }
+        volume = Double(session.outputVolume)
+        upNext = queueWanted ? upcoming() : []
         var next = StudyMusic.NowPlaying()
         if let item = player.nowPlayingItem {
             next.title = item.title
@@ -707,9 +747,122 @@ private final class Backend {
             case .all: .all
             case .one: .one
             }
-        case .volume: break
+        case .volume(let value): setVolume(value)
         }
         settle()
+    }
+
+    // MARK: Volume
+
+    private func setVolume(_ value: Double) {
+        attachVolumeView()
+        let level = Float(min(1, max(0, value)))
+        if let slider = volumeView.subviews.lazy.compactMap({ $0 as? UISlider }).first {
+            slider.setValue(level, animated: false)
+            slider.sendActions(for: .valueChanged)
+            volume = Double(level)
+        }
+    }
+
+    // MARK: File
+
+    private static func signature(_ title: String?, _ artist: String?, _ album: String?) -> String {
+        [title, artist, album].map { ($0 ?? "").lowercased() }.joined(separator: "|")
+    }
+
+    /// Les morceaux à venir (vingt-cinq au plus), moins ceux qu'on a retirés.
+    private func upcoming() -> [StudyMusic.QueueItem] {
+        let countSelector = NSSelectorFromString("numberOfItems")
+        let itemSelector = NSSelectorFromString("nowPlayingItemAtIndex:")
+        guard player.responds(to: countSelector), player.responds(to: itemSelector) else { return [] }
+        typealias Count = @convention(c) (AnyObject, Selector) -> UInt
+        typealias Item = @convention(c) (AnyObject, Selector, UInt) -> MPMediaItem?
+        let count = unsafeBitCast(player.method(for: countSelector), to: Count.self)(player, countSelector)
+        let itemAt = unsafeBitCast(player.method(for: itemSelector), to: Item.self)
+        let current = UInt(player.indexOfNowPlayingItem)
+        guard current != UInt(NSNotFound), count > current + 1 else { return [] }
+        var pending = skipped
+        var items: [StudyMusic.QueueItem] = []
+        for index in (current + 1)..<min(count, current + 26) {
+            guard let item = itemAt(player, itemSelector, index) else { continue }
+            let signature = Self.signature(item.title, item.artist, item.albumTitle)
+            if let at = pending.firstIndex(of: signature) { pending.remove(at: at); continue }
+            let store = item.playbackStoreID == "0" ? "" : item.playbackStoreID
+            items.append(StudyMusic.QueueItem(id: "\(item.persistentID)|\(store)|\(index)", title: item.title, artist: item.artist,
+                                              album: item.albumTitle, duration: item.playbackDuration))
+        }
+        return items
+    }
+
+    /// L'identité d'un morceau de la file : son numéro dans la bibliothèque, ou son numéro du catalogue.
+    private func reference(_ item: StudyMusic.QueueItem) -> (library: UInt64?, store: String?) {
+        let parts = item.id.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 2 else { return (nil, nil) }
+        let library = UInt64(parts[0]).flatMap { $0 == 0 ? nil : $0 }
+        return (library, parts[1].isEmpty ? nil : parts[1])
+    }
+
+    private func libraryItem(_ id: UInt64) -> MPMediaItem? {
+        let query = MPMediaQuery.songs()
+        query.addFilterPredicate(MPMediaPropertyPredicate(value: NSNumber(value: id), forProperty: MPMediaItemPropertyPersistentID))
+        return query.items?.first
+    }
+
+    /// Les retraits seuls (l'ordre est gardé) : les signatures retirées ; `nil` si l'ordre a changé.
+    private static func removals(from existing: [StudyMusic.QueueItem], to target: [StudyMusic.QueueItem]) -> [StudyMusic.QueueItem]? {
+        var kept = 0
+        var removed: [StudyMusic.QueueItem] = []
+        for item in existing {
+            if kept < target.count, item.id == target[kept].id { kept += 1 } else { removed.append(item) }
+        }
+        return kept == target.count ? removed : nil
+    }
+
+    func editQueue(to target: [StudyMusic.QueueItem]) async -> String? {
+        let existing = upcoming()
+        guard existing.map(\.id) != target.map(\.id) else { return nil }
+        if !target.isEmpty, let removed = Self.removals(from: existing, to: target) {
+            skipped += removed.map { Self.signature($0.title, $0.artist, $0.album) }
+            upNext = target
+            return nil
+        }
+        skipped = []
+        return await rebuild(current: player.nowPlayingItem, upcoming: target)
+    }
+
+    func playQueued(_ item: StudyMusic.QueueItem) async -> String? {
+        let existing = upcoming()
+        guard let index = existing.firstIndex(where: { $0.id == item.id }) else { return nil }
+        skipped = []
+        // Le morceau choisi devient le morceau en cours ; la suite est celle qui le suivait.
+        return await rebuild(currentReference: reference(item), upcoming: Array(existing.dropFirst(index + 1)), start: true)
+    }
+
+    /// La file est remplacée autour d'un morceau : identifiants du catalogue si tous en ont,
+    /// sinon morceaux de la bibliothèque.
+    private func rebuild(current: MPMediaItem?, upcoming target: [StudyMusic.QueueItem]) async -> String? {
+        guard let current else { return nil }
+        let store = current.playbackStoreID == "0" ? nil : current.playbackStoreID
+        let library: UInt64? = current.persistentID == 0 ? nil : current.persistentID
+        return await rebuild(currentReference: (library, store), upcoming: target, start: player.playbackState == .playing,
+                             position: player.currentPlaybackTime)
+    }
+
+    private func rebuild(currentReference: (library: UInt64?, store: String?), upcoming target: [StudyMusic.QueueItem],
+                         start: Bool, position: TimeInterval = 0) async -> String? {
+        let references = [currentReference] + target.map(reference)
+        if references.allSatisfy({ $0.store != nil }) {
+            player.setQueue(with: MPMusicPlayerStoreQueueDescriptor(storeIDs: references.compactMap(\.store)))
+        } else {
+            let items = references.compactMap { $0.library.flatMap(libraryItem) }
+            guard items.count == references.count else { return String(localized: "Un morceau de la file n'a pas pu être retrouvé.") }
+            player.setQueue(with: MPMediaItemCollection(items: items))
+        }
+        try? await player.prepareToPlay()
+        if position > 0 { player.currentPlaybackTime = position }
+        if start { player.play() }
+        settle()
+        return nil
     }
 
     func play(_ songs: [Song], from index: Int, shuffled: Bool) async -> String? {
@@ -741,9 +894,6 @@ private final class Backend {
             return MusicCatalogLookup.describe(error)
         }
     }
-
-    func playQueued(_ item: StudyMusic.QueueItem) async -> String? { nil }
-    func editQueue(to target: [StudyMusic.QueueItem]) async -> String? { nil }
 
     private func start(_ system: SystemMusicPlayer) async -> String? {
         do {
