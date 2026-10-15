@@ -1,5 +1,8 @@
 import MusicKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 // Le lecteur du mode étude : la pochette, le morceau, les commandes — en grand
 // dans l'onglet Musique, en petit dans la barre du haut (Mac) ou au-dessus des
@@ -117,6 +120,24 @@ struct MusicNowPlayingCard: View {
                 #endif
                 MusicDevicePicker()
                     .padding(.top, 16)
+            } else if music.automationDenied {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("StudyTrack ne peut pas contrôler Music")
+                        .font(Carnet.serif(.title3, weight: .semibold))
+                        .foregroundStyle(StudyPalette.ink)
+                    Text("macOS a refusé l'accès. Active Music pour StudyTrack dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage).")
+                        .font(.callout)
+                        .foregroundStyle(StudyPalette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    #if os(macOS)
+                    Button("Ouvrir les Réglages Système") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.paper)
+                    #endif
+                }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Rien ne joue")
@@ -310,7 +331,7 @@ struct MusicMiniPlayer: View {
                 HStack(spacing: 9) {
                     MusicNowArtwork(side: wide ? 34 : 28, radius: 5)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(playing.title ?? "")
+                        Text(playing.hasTrack ? (playing.title ?? "") : (music.automationDenied ? String(localized: "Music n'est pas autorisé") : String(localized: "Musique")))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(StudyPalette.ink)
                         HStack(spacing: 4) {
@@ -318,7 +339,9 @@ struct MusicMiniPlayer: View {
                                 Image(systemName: music.playingOn.icon).font(.system(size: 9, weight: .semibold))
                                     .foregroundStyle(music.artworkTint ?? StudyPalette.inkSecondary)
                             }
-                            Text(music.isRemote ? "Sur ton \(music.playingOn.label)" + (playing.artist.map { " · \($0)" } ?? "") : (playing.artist ?? ""))
+                            Text(!playing.hasTrack
+                                 ? (music.automationDenied ? String(localized: "Réglages Système › Confidentialité › Automatisation") : String(localized: "Rien ne joue"))
+                                 : music.isRemote ? "Sur ton \(music.playingOn.label)" + (playing.artist.map { " · \($0)" } ?? "") : (playing.artist ?? ""))
                                 .font(.caption)
                                 .foregroundStyle(StudyPalette.inkSecondary)
                         }
@@ -330,9 +353,12 @@ struct MusicMiniPlayer: View {
             }
             .buttonStyle(.plain)
             .help("Ouvrir la musique")
-            MusicGlyphButton(icon: playing.isPlaying ? "pause.fill" : "play.fill", size: 15,
-                             label: playing.isPlaying ? "Pause" : "Lecture") { music.togglePlayPause() }
-            MusicGlyphButton(icon: "forward.fill", size: 13, label: "Suivant") { music.next() }
+            if playing.hasTrack {
+                MusicGlyphButton(icon: "backward.fill", size: 13, label: "Précédent") { music.previous() }
+                MusicGlyphButton(icon: playing.isPlaying ? "pause.fill" : "play.fill", size: 15,
+                                 label: playing.isPlaying ? "Pause" : "Lecture") { music.togglePlayPause() }
+                MusicGlyphButton(icon: "forward.fill", size: 13, label: "Suivant") { music.next() }
+            }
         }
         .padding(.leading, 5)
         .padding(.trailing, 3)
@@ -342,9 +368,19 @@ struct MusicMiniPlayer: View {
                 .fill(hovering ? StudyPalette.rule : StudyPalette.raisedMore)
         }
         .overlay(alignment: .bottom) {
-            MiniProgressLine(playing: playing)
+            if playing.hasTrack {
+                // Au survol, la ligne devient un curseur qu'on tire.
+                Group {
+                    if hovering {
+                        MusicProgress(playing: playing, onSeek: { music.seek(to: $0) }, showsTimes: false)
+                            .frame(height: 12)
+                    } else {
+                        MiniProgressLine(playing: playing)
+                    }
+                }
                 .padding(.horizontal, 9)
                 .padding(.bottom, 1)
+            }
         }
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)

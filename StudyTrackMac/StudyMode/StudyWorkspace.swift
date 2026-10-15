@@ -536,11 +536,9 @@ private struct StudyTopBar: View {
         HStack(spacing: 12) {
             resourcesMenu
             // Ce qui joue dans Music : à part, séparé des gestes de la session.
-            if music.nowPlaying.hasTrack {
-                MusicMiniPlayer(open: openMusic)
-                    .transition(.opacity)
-                Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
-            }
+            // Toujours là : au repos, il ouvre le choix de la musique.
+            MusicMiniPlayer(open: openMusic)
+            Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
             if timer.isLocked {
                 // Sous verrou : une seule sortie, qu'on ne prend pas par réflexe.
                 Image(systemName: "lock.fill")

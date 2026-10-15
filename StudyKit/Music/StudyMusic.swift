@@ -103,6 +103,9 @@ final class StudyMusic {
     private(set) var authorization = MusicAuthorization.currentStatus
     /// La dernière chose qui n'a pas marché (lecture refusée, Music fermé…).
     var lastError: String?
+    /// macOS a refusé à StudyTrack de contrôler Music (Automatisation) : sans cela,
+    /// l'écran disait seulement « Rien ne joue ».
+    var automationDenied = false
 
     var isAuthorized: Bool { authorization == .authorized }
 
@@ -1337,20 +1340,34 @@ private final class Backend {
 private final class MusicScript: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.hczr.studytrack.music-script", qos: .userInitiated)
 
+    /// Dernier état connu du refus, lu et écrit sur la file seulement.
+    private var denied = false
+
+    /// -1743 : « l'utilisateur·rice n'a pas autorisé ce contrôle » (Automatisation).
+    private func note(_ error: NSDictionary?) {
+        let nowDenied = (error?[NSAppleScript.errorNumber] as? Int) == -1743
+        let succeeded = error == nil
+        guard nowDenied != denied, nowDenied || succeeded else { return }
+        denied = nowDenied
+        Task { @MainActor in StudyMusic.shared.automationDenied = nowDenied }
+    }
+
     func send(_ command: String) {
-        queue.async {
+        queue.async { [self] in
             var error: NSDictionary?
             _ = NSAppleScript(source: "tell application \"Music\" to \(command)")?.executeAndReturnError(&error)
             if let error { log.error("script [\(command, privacy: .public)] : \(String(describing: error), privacy: .public)") }
+            note(error)
         }
     }
 
     func run<T: Sendable>(_ source: String, parse: @escaping @Sendable (NSAppleEventDescriptor) -> T?) async -> T? {
         await withCheckedContinuation { continuation in
-            queue.async {
+            queue.async { [self] in
                 var error: NSDictionary?
                 let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
                 if let error { log.error("script : \(String(describing: error), privacy: .public)") }
+                note(error)
                 continuation.resume(returning: error == nil ? result.flatMap(parse) : nil)
             }
         }
