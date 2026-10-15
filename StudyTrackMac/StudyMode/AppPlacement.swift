@@ -105,21 +105,45 @@ final class AppPlacement {
         guard observers[pid] == nil else { return }
         var created: AXObserver?
         let callback: AXObserverCallback = { _, element, _, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { AppPlacement.shared.place(element) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { AppPlacement.shared.windowEvent(element) } }
         }
         guard AXObserverCreate(pid, callback, &created) == .success, let observer = created else { return }
         let application = AXUIElementCreateApplication(pid)
-        AXObserverAddNotification(observer, application, kAXWindowCreatedNotification as CFString, nil)
+        // Une fenêtre apparaît, ou l'app change de fenêtre principale ou active.
+        for name in [kAXWindowCreatedNotification, kAXMainWindowChangedNotification, kAXFocusedWindowChangedNotification] {
+            AXObserverAddNotification(observer, application, name as CFString, nil)
+        }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         observers[pid] = observer
     }
 
+    /// Une notification d'une app permise : l'élément est la fenêtre, ou l'app (on prend
+    /// alors sa fenêtre active).
+    private func windowEvent(_ element: AXUIElement) {
+        var role: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+        if (role as? String) == (kAXWindowRole as String) { place(element); return }
+        var focused: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXFocusedWindowAttribute as CFString, &focused) == .success,
+           let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
+            place(focused as! AXUIElement)
+        }
+    }
+
     private func place(_ window: AXUIElement) {
-        guard active, hole != nil else { return }
+        guard active, let hole else { return }
         var subrole: CFTypeRef?
         AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subrole)
+        let kind = subrole as? String
+        // Une boîte de dialogue : centrée dans le trou, jamais étirée, jamais retenue.
+        if kind == (kAXDialogSubrole as String) || kind == (kAXSystemDialogSubrole as String) {
+            if let current = frame(of: window) {
+                set(window, to: DeskGeometry.centred(width: current.width, height: current.height, in: hole))
+            }
+            return
+        }
         // Les fenêtres standard seulement : pas les feuilles, les palettes, les menus.
-        guard (subrole as? String) == (kAXStandardWindowSubrole as String) else { return }
+        guard kind == (kAXStandardWindowSubrole as String) else { return }
         let key = Int(CFHash(window))
         guard placed[key] == nil, let original = frame(of: window) else { return }
         // Plein écran natif : on en sort d'abord (l'animation prend un instant).
@@ -133,7 +157,7 @@ final class AppPlacement {
             return
         }
         placed[key] = (window, original)
-        if let hole { apply(window, in: hole) }
+        apply(window, in: hole)
     }
 
     /// Redimensionnable : le trou entier ; sinon, centrée. Taille, position, taille : la

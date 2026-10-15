@@ -13,17 +13,51 @@ import SwiftUI
 final class DeskGround {
     static let shared = DeskGround()
 
-    private(set) var image: NSImage?
-    private var loadedFor: URL?
+    /// Le fond flouté de l'écran principal (le bureau d'étude).
+    var image: NSImage? { images[Self.key(NSScreen.screens.first)] }
+    /// Un fond par écran (les écrans calmes ont chacun le leur).
+    private(set) var images: [String: NSImage] = [:]
+    private var loadedFor: [String: URL] = [:]
+
+    static func key(_ screen: NSScreen?) -> String {
+        (screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map { "\($0)" } ?? "main"
+    }
+
+    func image(for screen: NSScreen?) -> NSImage? { images[Self.key(screen)] }
 
     func load() {
-        guard let screen = NSScreen.screens.first,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen), url != loadedFor else { return }
-        loadedFor = url
+        for screen in NSScreen.screens { load(screen) }
+    }
+
+    /// Lu une fois : sur disque (`~/Library/Caches/StudyTrack/wallpaper-…`, clé : adresse,
+    /// date de modification et largeur), sinon flouté puis écrit.
+    private func load(_ screen: NSScreen) {
+        let key = Self.key(screen)
+        guard let url = NSWorkspace.shared.desktopImageURL(for: screen), loadedFor[key] != url else { return }
+        loadedFor[key] = url
         Task.detached(priority: .utility) {
-            let blurred = Self.blurred(url)
-            await MainActor.run { DeskGround.shared.image = blurred }
+            let blurred = Self.cached(url) ?? Self.blurred(url).map { Self.store($0, for: url) }
+            await MainActor.run { DeskGround.shared.images[key] = blurred }
         }
+    }
+
+    nonisolated private static func cacheURL(_ url: URL) -> URL? {
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        let name = "wallpaper-\(abs(url.path.hashValue))-\(Int(modified)).png"
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appending(path: "StudyTrack/\(name)")
+    }
+
+    nonisolated private static func cached(_ url: URL) -> NSImage? {
+        guard let file = cacheURL(url), FileManager.default.fileExists(atPath: file.path) else { return nil }
+        return NSImage(contentsOf: file)
+    }
+
+    nonisolated private static func store(_ image: NSImage, for url: URL) -> NSImage {
+        guard let file = cacheURL(url), let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else { return image }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: file, options: .atomic)
+        return image
     }
 
     /// Réduit à 640 px de large, floute, rend une image. Hors du fil principal.

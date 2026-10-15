@@ -17,6 +17,12 @@ struct StudyCalmView: View {
         let tint = MacTargets.tint(course)
         ZStack {
             StudyPalette.ground
+            if let image = DeskGround.shared.image(for: NSScreen.screens.first { $0.frame == screenFrame }) {
+                Color.clear
+                    .overlay { Image(nsImage: image).resizable().scaledToFill() }
+                    .clipped()
+                    .overlay(StudyPalette.ground.opacity(0.86))
+            }
             RadialGradient(colors: [tint.opacity(0.12), .clear], center: .center, startRadius: 40, endRadius: 700)
             VStack(spacing: 14) {
                 if let course { CourseTag(code: course.displayCode, tint: tint) }
@@ -50,6 +56,7 @@ struct StudyCalmView: View {
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
+        .onAppear { DeskGround.shared.load() }
     }
 
     /// Ouvre l'app et pose sa fenêtre sur cet écran.

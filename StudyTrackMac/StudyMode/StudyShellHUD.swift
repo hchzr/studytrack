@@ -77,6 +77,7 @@ final class StudyShell {
     private var model = StudySwitcherModel()
     private var keys: [UInt32] = []
     private var escape: UInt32?
+    private var arrows: [UInt32] = []
     private var switcherPanel: HUDPanel?
     private var searchPanel: HUDPanel?
     private var poll: Timer?
@@ -198,6 +199,11 @@ final class StudyShell {
         panel.place(on: NSScreen.screens.first)
         panel.orderFrontRegardless()
         escape = StudyHotKeys.shared.register(key: kVK_Escape, modifiers: 0) { [weak self] in self?.hideSwitcher(commit: false) }
+        // ⌘← et ⌘→ : avancer ou reculer dans le sélecteur, sans lâcher ⌘.
+        arrows = [
+            StudyHotKeys.shared.register(key: kVK_LeftArrow, modifiers: cmdKey) { [weak self] in self?.advanceSwitcher(by: -1) },
+            StudyHotKeys.shared.register(key: kVK_RightArrow, modifiers: cmdKey) { [weak self] in self?.advanceSwitcher(by: 1) },
+        ].compactMap { $0 }
         switcherClicks = watchClicks(outside: { [weak self] in self?.switcherPanel }, cancel: { [weak self] in self?.hideSwitcher(commit: false) })
         // On valide au relâchement de ⌘ : lu sans permission, 60 fois par seconde.
         poll = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
@@ -213,6 +219,8 @@ final class StudyShell {
         stopWatching(&switcherClicks)
         StudyHotKeys.shared.unregister(escape)
         escape = nil
+        for key in arrows { StudyHotKeys.shared.unregister(key) }
+        arrows = []
         guard switcherPanel?.isVisible == true else { return }
         switcherPanel?.orderOut(nil)
         if commit, switcher.entries.indices.contains(switcher.selected) {

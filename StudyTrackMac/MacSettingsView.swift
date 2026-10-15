@@ -44,6 +44,10 @@ private struct GeneralSettings: View {
                 Toggle("Avec les secondes", isOn: $settings.menuBarSeconds)
                     .disabled(!settings.showTimeInMenuBar)
                 Toggle("Raccourci global ⌃⌥Espace", isOn: $settings.globalShortcut)
+                if settings.globalShortcut, GlobalHotKey.lastRegistrationFailed {
+                    Label("⌃⌥Espace est déjà pris (Réglages Clavier › Raccourcis › Sources de saisie).", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             } footer: {
                 Text("Sans les secondes, ça use moins la batterie.")
             }

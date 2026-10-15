@@ -8,6 +8,9 @@ import Foundation
 /// d'accessibilité, contrairement à une surveillance du clavier.
 @MainActor
 final class GlobalHotKey {
+    /// L'inscription a échoué (le raccourci est pris — ⌃⌥Espace est aussi « source de
+    /// saisie suivante » dans les réglages du clavier) : les Réglages le disent.
+    static var lastRegistrationFailed = false
     private var reference: EventHotKeyRef?
     private var handler: EventHandlerRef?
     private let action: () -> Void
@@ -33,8 +36,9 @@ final class GlobalHotKey {
             return noErr
         }, 1, &type, context, &handler)
         let id = EventHotKeyID(signature: OSType(0x5354524B), id: 1)  // « STRK »
-        RegisterEventHotKey(UInt32(kVK_Space), UInt32(controlKey | optionKey), id,
-                            GetApplicationEventTarget(), 0, &reference)
+        let status = RegisterEventHotKey(UInt32(kVK_Space), UInt32(controlKey | optionKey), id,
+                                         GetApplicationEventTarget(), 0, &reference)
+        Self.lastRegistrationFailed = status != noErr
     }
 
     func unregister() {
