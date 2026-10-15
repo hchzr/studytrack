@@ -40,6 +40,35 @@ enum StudySearchQuery {
                                 "abs", "det", "inv", "rref", "transpose", "rank", "trace", "solve",
                                 "pi", "int", "root", "re", "im", "conj", "arg", "sinh", "cosh", "tanh"]
 
+    /// D'où vient un résultat, pour les ranger : un calcul d'abord, puis l'outil dont le
+    /// nom commence par ce qu'on tape, puis le contenu du cours, les autres outils, les
+    /// actions, ce qu'on a gardé, les sites.
+    enum Group: Int, Comparable {
+        case math, toolPrefix, content, tool, action, kept, site
+        static func < (a: Group, b: Group) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// Le groupe d'un résultat : un outil ou une app dont le titre **commence** par la
+    /// requête passe avant le contenu ; un autre outil après.
+    static func group(_ base: Group, title: String, needle: String) -> Group {
+        guard base == .tool else { return base }
+        return fold(title).hasPrefix(fold(needle)) ? .toolPrefix : .tool
+    }
+
+    private static func fold(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Une question à Claude : ce que l'étudiant·e a tapé, si c'est une phrase (au moins
+    /// deux mots, ou un point d'interrogation) et pas un nom d'outil.
+    static func claudeQuestion(_ query: String) -> String? {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let words = text.split(whereSeparator: { $0.isWhitespace })
+        return words.count >= 2 || text.hasSuffix("?") ? text : nil
+    }
+
     /// L'expression à calculer, ou `nil` si la requête est une recherche.
     /// `=` en tête force le calcul ; sinon il faut un chiffre, un opérateur, et
     /// aucun mot (« série 3 », « PHYS-101 » restent des recherches).

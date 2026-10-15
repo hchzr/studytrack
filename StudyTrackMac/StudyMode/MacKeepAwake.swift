@@ -117,19 +117,5 @@ final class MacKeepAwake {
         }
     }
 
-    private static func power() -> KeepAwakePolicy.Power {
-        var power = KeepAwakePolicy.Power(lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled)
-        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else { return power }
-        if let providing = IOPSGetProvidingPowerSourceType(info)?.takeUnretainedValue() as String? {
-            power.onBattery = providing == kIOPMBatteryPowerKey
-        }
-        let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] ?? []
-        for source in sources {
-            guard let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-                  let current = description[kIOPSCurrentCapacityKey] as? Int,
-                  let max = description[kIOPSMaxCapacityKey] as? Int, max > 0 else { continue }
-            power.batteryLevel = Double(current) / Double(max)
-        }
-        return power
-    }
+    private static func power() -> KeepAwakePolicy.Power { PowerReader.keepAwakePower() }
 }

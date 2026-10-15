@@ -8,11 +8,14 @@ final class DeskNotifications {
     static let shared = DeskNotifications()
 
     private(set) var items: [DeskNotice.Item] = []
+    /// Tout ce qui a été dit (vingt au plus), pour le relire dans le centre de contrôle.
+    private(set) var history: [DeskNotice.Item] = []
 
     func post(_ kind: DeskNotice.Kind, _ text: String, icon: String) {
         let item = DeskNotice.Item(kind: kind, text: text, icon: icon, at: Date())
         items = DeskNotice.adding(item, to: items)
         let id = items.first { $0.kind == kind }?.id
+        if let shown = items.first(where: { $0.kind == kind }) { history = DeskNotice.remembering(shown, in: history) }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(DeskNotice.duration(kind) + 0.2))
             self?.items.removeAll { $0.id == id && Date().timeIntervalSince($0.at) >= DeskNotice.duration(kind) }

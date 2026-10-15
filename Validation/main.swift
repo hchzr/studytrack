@@ -6306,6 +6306,14 @@ do {
     check(StudySearchQuery.mathExpression("série 3") == nil && StudySearchQuery.mathExpression("PHYS-101") == nil, "recherche : « série 3 » et un code de cours restent des recherches")
     check(StudySearchQuery.mathExpression("analyse") == nil && StudySearchQuery.mathExpression("") == nil && StudySearchQuery.mathExpression("=") == nil, "recherche : des mots, du vide")
     check(StudySearchQuery.mathExpression("12") == nil, "recherche : un nombre seul n'est pas un calcul")
+    typealias Q = StudySearchQuery
+    check(Q.group(.tool, title: "GoodNotes", needle: "good") == .toolPrefix && Q.group(.tool, title: "GoodNotes", needle: "notes") == .tool, "recherche : un outil dont le nom commence par la requête passe avant")
+    check(Q.group(.tool, title: "Calcul", needle: "CALC") == .toolPrefix && Q.group(.tool, title: "Écrire", needle: "ecr") == .toolPrefix, "recherche : sans casse ni accents")
+    check(Q.group(.content, title: "Série 3", needle: "se") == .content && Q.group(.site, title: "x", needle: "x") == .site, "recherche : le reste garde son groupe")
+    check(Q.Group.math < .toolPrefix && Q.Group.toolPrefix < .content && Q.Group.content < .tool && Q.Group.tool < .action && Q.Group.action < .kept && Q.Group.kept < .site,
+          "recherche : calcul, outil préfixé, contenu, autres outils, actions, gardés, sites")
+    check(Q.claudeQuestion("pourquoi la suite est croissante ?") != nil && Q.claudeQuestion("comment faire 3.2") != nil && Q.claudeQuestion("calcul") == nil && Q.claudeQuestion("  ") == nil && Q.claudeQuestion("quoi?") != nil,
+          "recherche : une phrase devient une question pour Claude, un mot reste une recherche")
 }
 
 // MARK: Bande-son de la session
@@ -6414,6 +6422,14 @@ do {
     check(N.visible(queue, at: t0.addingTimeInterval(30)).isEmpty, "notifications : puis plus rien")
     check(N.duration(.claude) > N.duration(.blockedApp), "notifications : la réponse de Claude reste plus longtemps")
     check([N.Kind.classSoon, .solution, .breakSoon, .info].allSatisfy { N.duration($0) > 0 }, "notifications : chaque genre a une durée")
+    var history: [N.Item] = []
+    for i in 0..<30 { history = N.remembering(item(.info, "n\(i)", at: Double(i)), in: history) }
+    check(history.count == N.historyLimit && history.first?.text == "n29" && history.last?.text == "n10", "notifications : l'historique garde les vingt dernières, la plus récente d'abord")
+    let again = item(.info, "frais", at: 40)
+    var merged = N.remembering(again, in: [])
+    var refreshed = again; refreshed.text = "plus frais"
+    merged = N.remembering(refreshed, in: merged)
+    check(merged.count == 1 && merged[0].text == "plus frais", "notifications : une notification fusionnée n'est qu'une fois dans l'historique")
 }
 
 // MARK: Cartes du bureau

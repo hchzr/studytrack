@@ -55,6 +55,19 @@ enum DeskNotice {
         return result
     }
 
+    /// L'historique : tout ce qui a été dit, du plus récent au plus ancien, vingt au plus.
+    /// Une notification fusionnée n'y est qu'une fois (la plus fraîche).
+    static let historyLimit = 20
+
+    static func remembering(_ item: Item, in history: [Item]) -> [Item] {
+        var result = history
+        if let index = result.firstIndex(where: { $0.id == item.id }) {
+            result.remove(at: index)
+        }
+        result.insert(item, at: 0)
+        return Array(result.prefix(historyLimit))
+    }
+
     /// Ce qui est encore à l'écran à `now`.
     static func visible(_ items: [Item], at now: Date) -> [Item] {
         items.filter { now.timeIntervalSince($0.at) < duration($0.kind) }

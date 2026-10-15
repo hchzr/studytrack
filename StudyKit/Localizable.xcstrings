@@ -763,6 +763,9 @@
         }
       }
     },
+    "%@ seul · ⇥ pour tous les cours" : {
+
+    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -5918,6 +5921,9 @@
           }
         }
       }
+    },
+    "Chercher dans %@…" : {
+
     },
     "Chercher dans ce que disent les vidéos" : {
 
@@ -20570,6 +20576,9 @@
           }
         }
       }
+    },
+    "Tous les cours · ⇥ pour %@ seul" : {
+
     },
     "Tous les cours suivis" : {
       "extractionState" : "stale",

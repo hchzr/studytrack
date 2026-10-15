@@ -20,18 +20,7 @@ struct CommandPalette: View {
     @State private var selected = 0
     @FocusState private var focused: Bool
 
-    struct Item: Identifiable {
-        var id: String
-        var title: String
-        var subtitle: String = ""
-        var icon: String
-        var tint: Color = Carnet.inkSecondary
-        var section: String
-        var shortcut: String?
-        var run: () -> Void
-        /// ⌘↩ : chronométrer cet élément.
-        var time: (() -> Void)?
-    }
+    typealias Item = PaletteItem
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
@@ -226,34 +215,5 @@ struct CommandPalette: View {
             return tracked.first { $0.exams.contains { $0.id == id } }.map { ($0.id, nil) }
         default: return nil
         }
-    }
-}
-
-private struct PaletteRow: View {
-    let item: CommandPalette.Item
-    let selected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: item.icon)
-                .foregroundStyle(selected ? Carnet.ground : item.tint)
-                .frame(width: 20)
-            Text(item.title).lineLimit(1)
-            if !item.subtitle.isEmpty {
-                Text(item.subtitle)
-                    .foregroundStyle(selected ? Carnet.ground.opacity(0.75) : Carnet.inkSecondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if let shortcut = item.shortcut {
-                Text(shortcut).font(.callout)
-                    .foregroundStyle(selected ? Carnet.ground.opacity(0.75) : Carnet.inkTertiary)
-            }
-        }
-        .foregroundStyle(selected ? Carnet.ground : Carnet.ink)
-        .padding(.horizontal, 10)
-        .frame(height: 34)
-        .background(selected ? Carnet.ink : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .contentShape(Rectangle())
     }
 }

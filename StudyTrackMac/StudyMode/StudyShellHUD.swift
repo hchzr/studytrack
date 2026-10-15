@@ -322,14 +322,7 @@ struct StudySearchView: View {
     @State private var everyCourse = false
     @FocusState private var focused: Bool
 
-    struct Result: Identifiable {
-        let id: String
-        var title: String
-        var subtitle = ""
-        var icon: String
-        var section: String
-        var run: () -> Void
-    }
+    typealias Result = PaletteItem
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
     private var controller: StudyModeController { .shared }
@@ -372,10 +365,9 @@ struct StudySearchView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             if index == 0 || items[index - 1].section != item.section {
-                                Text(item.section).font(.caption.weight(.semibold)).foregroundStyle(StudyPalette.inkTertiary)
-                                    .padding(.horizontal, 12).padding(.top, index == 0 ? 6 : 10).padding(.bottom, 3)
+                                PaletteSectionTitle(title: item.section, first: index == 0)
                             }
-                            row(item, selected: index == selected)
+                            PaletteRow(item: item, selected: index == selected, style: .glass)
                                 .onTapGesture { selected = index; run(items) }
                         }
                     }
@@ -400,21 +392,6 @@ struct StudySearchView: View {
         .onChange(of: everyCourse) { _, _ in selected = 0 }
     }
 
-    private func row(_ item: Result, selected: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: item.icon).frame(width: 22)
-            Text(item.title).lineLimit(1)
-            if !item.subtitle.isEmpty {
-                Text(item.subtitle).foregroundStyle(StudyPalette.inkSecondary).lineLimit(1)
-            }
-            Spacer()
-        }
-        .foregroundStyle(StudyPalette.ink)
-        .padding(.horizontal, 10).frame(height: 34)
-        .background(selected ? StudyPalette.ink.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .contentShape(Rectangle())
-    }
-
     private func move(_ delta: Int, _ count: Int) {
         guard count > 0 else { return }
         selected = StudySwitcherModel.move(from: selected, by: delta, count: count)
@@ -428,8 +405,30 @@ struct StudySearchView: View {
 
     // MARK: Résultats
 
+    /// Le groupe d'une ligne, d'après sa section (voir `StudySearchQuery.Group`).
+    private func group(of item: Result, needle: String) -> StudySearchQuery.Group {
+        switch item.section {
+        case "Calcul": return .math
+        case "Aller à", "Outils": return StudySearchQuery.group(.tool, title: item.title, needle: needle)
+        case "Actions": return .action
+        case "Gardés", "Cahiers": return .kept
+        case "Sites": return .site
+        default: return .content
+        }
+    }
+
     private var results: [Result] {
         let needle = query.trimmingCharacters(in: .whitespaces)
+        let found = unordered(needle)
+        guard !needle.isEmpty else { return found }
+        // Rangés par groupe (stable : l'ordre de chaque groupe est celui de la source).
+        return found.enumerated().sorted { a, b in
+            let ga = group(of: a.element, needle: needle), gb = group(of: b.element, needle: needle)
+            return ga != gb ? ga < gb : a.offset < b.offset
+        }.map(\.element)
+    }
+
+    private func unordered(_ needle: String) -> [Result] {
         var found: [Result] = []
         if let expression = StudySearchQuery.mathExpression(needle), let answer = Self.evaluate(expression) {
             found.append(Result(id: "math", title: "= \(answer)", subtitle: "↩ copie le résultat", icon: "equal.circle", section: "Calcul") {
@@ -438,6 +437,13 @@ struct StudySearchView: View {
             })
         }
         found += actions.filter { needle.isEmpty || matches($0.title, needle) }
+        // Une phrase : la poser à Claude, tapée telle quelle.
+        if let question = StudySearchQuery.claudeQuestion(needle) {
+            found.append(Result(id: "a.ask", title: "Demander à Claude", subtitle: question, icon: "sparkle", section: "Actions") {
+                controller.desk.ask(question, attachSeries: true)
+                controller.present()
+            })
+        }
         found += library.filter { !needle.isEmpty && matches($0.title, needle) }
         found += tools.filter { !needle.isEmpty && matches($0.title, needle) }
         if !needle.isEmpty {
@@ -476,6 +482,9 @@ struct StudySearchView: View {
         list.append(Result(id: "a.pause", title: timer.phase == .running ? "Mettre en pause" : "Reprendre", icon: "playpause", section: "Actions") {
             timer.toggle()
         })
+        if timer.phase == .onBreak {
+            list.append(Result(id: "a.skip", title: "Écourter la pause", icon: "forward.fill", section: "Actions") { timer.skipBreak() })
+        }
         if !StudyMode.isOpenEnded(timer.state) {
             list.append(Result(id: "a.more", title: "Encore 25 min", icon: "plus", section: "Actions") { timer.extendStudy(minutes: 25) })
         }
@@ -486,7 +495,7 @@ struct StudySearchView: View {
     private var tools: [Result] {
         let course = tracked.first { $0.id == timer.courseID }
         return StudyTools.tools(for: course, settings: settings).map { tool in
-            Result(id: "tool.\(tool.id)", title: tool.title, subtitle: tool.subtitle, icon: tool.icon, section: "Outils") {
+            Result(id: "tool.\(tool.id)", title: tool.title, subtitle: tool.subtitle, icon: tool.icon, section: tool.isApp ? "Outils" : "Sites") {
                 switch tool.kind {
                 case .app(let bundleID, _): controller.openApp(bundleID: bundleID)
                 case .web(let url):
