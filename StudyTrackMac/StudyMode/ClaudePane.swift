@@ -293,11 +293,7 @@ struct ClaudePane: View {
                               state: .info))
         }
         guard scope == .series else {
-            for server in chat.info?.mcpServers ?? [] {
-                rows.append(.init(icon: "point.3.connected.trianglepath.dotted", title: ClaudeTutor.toolLabel("mcp__" + server.name),
-                                  detail: server.status == "connected" ? "connecté" : "à connecter (claude puis /mcp dans le Terminal)",
-                                  state: server.status == "connected" ? .ok : .warning))
-            }
+            if let tools = toolsRow(chat) { rows.append(tools) }
             return rows
         }
         if let series {
@@ -332,16 +328,28 @@ struct ClaudePane: View {
             rows.append(.init(icon: "pencil.and.scribble", title: "Copie introuvable dans tes notes",
                               detail: "range ta série dans un cahier du cours (« Série \(series?.seriesNumber ?? 0) »), ou joins une photo", state: .missing))
         }
-        for server in chat.info?.mcpServers ?? [] {
-            rows.append(.init(icon: "point.3.connected.trianglepath.dotted", title: ClaudeTutor.toolLabel("mcp__" + server.name),
-                              detail: server.status == "connected" ? "connecté" : "à connecter (claude puis /mcp dans le Terminal)",
-                              state: server.status == "connected" ? .ok : .warning))
-        }
+        if let tools = toolsRow(chat) { rows.append(tools) }
         if let tokens = chat.contextTokens {
             rows.append(.init(icon: "gauge.with.dots.needle.33percent", title: "Contexte : \(tokens >= 1000 ? "\(tokens / 1000) k" : "\(tokens)") jetons",
                               detail: file?.model(for: nil, scope: .series).map { "modèle \($0)" }, state: .info))
         }
         return rows
+    }
+
+    /// Les outils de Claude en **une** ligne : une ligne par serveur MCP noyait le contexte
+    /// (une vingtaine de lignes, la plupart des plugins que tu n'utilises pas ici). Les noms
+    /// sont dans l'infobulle ; ce qui n'est pas connecté n'est pas une alerte.
+    private func toolsRow(_ chat: ClaudeChat) -> ClaudeContextPanel.Row? {
+        let servers = chat.info?.mcpServers ?? []
+        guard !servers.isEmpty else { return nil }
+        let on = servers.filter { $0.status == "connected" }
+        let off = servers.filter { $0.status != "connected" }
+        let label = { (server: ClaudeTutor.SessionInfo.MCPServer) in ClaudeTutor.toolLabel("mcp__" + server.name) }
+        var help = ""
+        if !on.isEmpty { help += "Connectés : " + on.map(label).joined(separator: ", ") }
+        if !off.isEmpty { help += (help.isEmpty ? "" : "\n") + "À connecter (claude puis /mcp dans le Terminal) : " + off.map(label).joined(separator: ", ") }
+        return .init(icon: "point.3.connected.trianglepath.dotted", title: "Outils : \(on.count) connecté\(on.count > 1 ? "s" : "")",
+                     detail: off.isEmpty ? nil : "\(off.count) à connecter — voir l'infobulle", state: on.isEmpty ? .info : .ok, help: help)
     }
 
     private func name(_ series: ExerciseSeries) -> String {
