@@ -251,6 +251,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
 
+    /// Un blocage est en cours (pour rattraper une fiche restée d'une session morte).
+    var isBlocking: Bool { blocking }
+
     func windowDidBecomeKey(_ notification: Notification) {
         applyPresentation()
         MiniTimerPanel.shared.update()
@@ -281,6 +284,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         blocking = true
         // Tué de force depuis une app permise, StudyTrack revient (`StudyGuard`).
         StudyGuard.arm()
+        // Les raccourcis du système (Spotlight, ⌘Tab, Mission Control…) éteints,
+        // la fiche pour les rallumer écrite d'abord.
+        SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true)
         // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
         // second écran n'est pas une porte de sortie.
         window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
@@ -321,6 +327,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         window?.collectionBehavior = [.managed, .fullScreenNone]
+        SystemLock.release()
         log.notice("mode étude : blocage levé")
     }
 

@@ -91,6 +91,7 @@ private struct StudySetupView: View {
     @State private var openEnded = false
     @State private var pomodoro = false
     @State private var classes: [ScheduledClass] = []
+    @State private var chromePermission = SystemChrome.permission
     @Environment(\.modelContext) private var context
 
     private var currentClass: ScheduledClass? { DeskSchedule.current(in: classes) }
@@ -222,6 +223,26 @@ private struct StudySetupView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Carnet.correct)
+            }
+
+            if screen.locks, settings.studyHideSystemChrome, chromePermission != .granted {
+                // Une fois le blocage en route, les Réglages sont fermés : c'est ici
+                // qu'on autorise StudyTrack à cacher le Dock et la barre des menus.
+                field("Dock et barre des menus") {
+                    HStack(spacing: 12) {
+                        Text(chromePermission == .denied
+                             ? "Refusé : ils resteront visibles. À changer dans Réglages Système › Confidentialité › Automatisation."
+                             : "Pour les cacher aussi quand une autre app est devant.")
+                            .font(.callout)
+                            .foregroundStyle(StudyPalette.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        if chromePermission != .denied {
+                            Button("Autoriser") { chromePermission = SystemChrome.request() }
+                                .buttonStyle(PaperButtonStyle())
+                        }
+                    }
+                }
             }
 
             if screen.locks {

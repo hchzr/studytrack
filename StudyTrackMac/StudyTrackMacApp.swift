@@ -317,6 +317,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { TimerLink.shared.suspend() }
         }
         StudyModeController.shared.update()
+        // Une fiche restée d'une session morte (plantage, redémarrage) et aucun
+        // blocage en cours : tout est rétabli.
+        if !StudyModeController.shared.isBlocking { SystemLock.release() }
         hotKey = GlobalHotKey { Self.timer?.toggle() }
         updateHotKey()
         withObservationTracking({ _ = Self.settings?.globalShortcut }, onChange: { [weak self] in
@@ -365,6 +368,12 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         StudyModeController.shared.confirmQuit() ? .terminateNow : .terminateCancel
+    }
+
+    /// L'app s'en va (permis : pas de verrou) : les raccourcis du système sont rallumés.
+    @MainActor
+    func applicationWillTerminate(_ notification: Notification) {
+        SystemLock.release()
     }
 }
 

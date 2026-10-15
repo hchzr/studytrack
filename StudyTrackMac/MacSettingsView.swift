@@ -146,6 +146,10 @@ private struct StudySettingsPane: View {
                 Toggle("Bloquer le reste", isOn: $settings.studyBlocking)
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                     .disabled(!settings.studyBlocking)
+                Toggle("Cacher le Dock et la barre des menus", isOn: $settings.studyHideSystemChrome)
+                    .disabled(!settings.studyBlocking)
+                Button("Rétablir les raccourcis du système") { SystemLock.release() }
+                    .help("Si un blocage s'est mal fini : rallume Spotlight, ⌘Tab, Mission Control, le Dock et la barre des menus.")
             } header: {
                 Text("Session")
             } footer: {

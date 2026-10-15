@@ -105,19 +105,27 @@ private final class Watcher {
     func tick() {
         // Les préférences ont pu changer dans l'autre processus.
         UserDefaults.standard.synchronize()
-        guard StudyMode.locks(FocusTimerStore.load()) else {
+        let state = FocusTimerStore.load()
+        let id = Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+            .filter { $0.processIdentifier != getpid() && !$0.isTerminated }
+        guard StudyMode.locks(state) else {
+            // Un blocage sans verrou et l'app n'est plus là (tuée) : on ne la relance
+            // pas — on rallume ce qu'elle avait éteint, pour qu'on puisse travailler.
+            if StudyMode.blocks(state), others.isEmpty, SystemLock.hasRecord {
+                StudyGuard.log.notice("gardien : app disparue sous blocage, système rétabli")
+                SystemLock.release()
+            }
             // Plus de verrou depuis une quinzaine de secondes : on s'arrête.
             calmTicks += 1
             if calmTicks >= 10 {
+                if others.isEmpty { SystemLock.release() }
                 StudyGuard.log.notice("gardien : plus de verrou, fin")
                 exit(0)
             }
             return
         }
         calmTicks = 0
-        let id = Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"
-        let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
-            .filter { $0.processIdentifier != getpid() && !$0.isTerminated }
         guard others.isEmpty else { return }
         if let relaunchedAt, Date().timeIntervalSince(relaunchedAt) < 6 { return }
         relaunchedAt = Date()

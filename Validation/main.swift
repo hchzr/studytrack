@@ -6246,6 +6246,36 @@ do {
     check(StudyMode.removingFinder(from: StudyMode.removingFinder(from: ["com.apple.finder"])) == [], "migration : sans effet la seconde fois")
 }
 
+// MARK: Verrou du Mac : raccourcis du système éteints, puis rallumés
+do {
+    let on: Set<Int> = [1, 2, 64, 65, 32, 52]
+    let first = StudyLockPlan.plan(wanted: [1, 2, 64, 65, 118, 28], enabledNow: { on.contains($0) }, existing: nil,
+                                   dockNow: false, menuBarNow: true, now: Date(timeIntervalSince1970: 100))
+    check(Set(first.disable) == [1, 2, 64, 65], "verrou : seuls les raccourcis allumés sont éteints")
+    check(!first.record.shortcuts.contains(118), "verrou : un raccourci déjà éteint par l'utilisateur·rice n'est pas sur la fiche")
+    check(!first.disable.contains(28) && !first.record.shortcuts.contains(28), "verrou : les captures d'écran ne sont jamais touchées")
+    check(first.record.dockAutohide == false && first.record.menuBarAutohide == true, "verrou : les valeurs d'origine du Dock et des menus sont gardées")
+    // L'app est relancée en plein blocage : tout ce qu'elle avait éteint se lit « éteint ».
+    let second = StudyLockPlan.plan(wanted: [1, 2, 64, 65, 32], enabledNow: { _ in false }, existing: first.record,
+                                    dockNow: true, menuBarNow: false, now: Date(timeIntervalSince1970: 200))
+    check(second.record.shortcuts == first.record.shortcuts, "relance : la fiche d'origine gagne, rien ne s'ajoute à tort")
+    check(second.record.dockAutohide == false && second.record.menuBarAutohide == true, "relance : les valeurs d'origine ne sont pas remplacées par celles que nous avons posées")
+    check(second.record.createdAt == first.record.createdAt, "relance : la fiche garde sa date")
+    check(Set(second.disable) == Set(first.disable), "relance : on éteint encore ce qui est sur la fiche")
+    // Un raccourci rallumé entre-temps (32 devient allumé) rejoint la fiche.
+    let third = StudyLockPlan.plan(wanted: [32], enabledNow: { $0 == 32 }, existing: first.record, dockNow: nil, menuBarNow: nil)
+    check(third.record.shortcuts.contains(32), "un raccourci allumé et voulu rejoint la fiche existante")
+    check(Set(StudyLockPlan.restore(first.record)) == [1, 2, 64, 65], "rétablir : seulement ce que nous avons éteint")
+    check(StudyLockPlan.restore(first.record) == StudyLockPlan.restore(first.record), "rétablir deux fois : le même résultat")
+    check(StudyLockPlan.restore(StudyLockPlan.Record(shortcuts: [27, 118], createdAt: Date())) == [118], "rétablir : jamais ⌘` ni les captures")
+    let back = StudyLockPlan.decode(StudyLockPlan.encode(first.record))
+    check(back == first.record, "fiche : relue telle qu'écrite")
+    check(StudyLockPlan.decode(Data("pas du json".utf8)) == nil && StudyLockPlan.decode(nil) == nil, "fiche illisible : ignorée")
+    check(Set(StudyLockPlan.shortcutIDs).isDisjoint(with: StudyLockPlan.neverTouched), "la liste ne contient aucun raccourci intouchable")
+    check(StudyLockPlan.shortcutIDs.contains(64) && StudyLockPlan.shortcutIDs.contains(65) && StudyLockPlan.shortcutIDs.contains(1),
+          "la liste couvre Spotlight, ⌥⌘Espace et ⌘Tab")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

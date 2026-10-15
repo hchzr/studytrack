@@ -80,6 +80,8 @@ final class MacSettings {
     var studyHoldToLeave: Bool { didSet { defaults.set(studyHoldToLeave, forKey: "mac.studyHoldToLeave") } }
     /// Fermer les apps non permises (sinon : seulement les couvrir d'un voile).
     var studyCloseApps: Bool { didSet { defaults.set(studyCloseApps, forKey: "mac.studyCloseApps") } }
+    /// Cacher le Dock et la barre des menus pendant un blocage (System Events).
+    var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
     var studyBlocking: Bool { didSet { defaults.set(studyBlocking, forKey: "mac.studyBlocking") } }
@@ -140,6 +142,7 @@ final class MacSettings {
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
         studyOpenEnded = defaults.bool(forKey: "mac.studyOpenEnded")
         studyCloseApps = defaults.object(forKey: "mac.studyCloseApps") as? Bool ?? true
+        studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off
         claudeProject = defaults.bool(forKey: "mac.claudeProject")
