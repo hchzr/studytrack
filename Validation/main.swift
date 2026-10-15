@@ -6384,6 +6384,187 @@ do {
     check(GroupClock(state).cycleOrigin == state.cycleOrigin, "pomodoro : l'horloge d'un groupe la porte aussi")
 }
 
+// MARK: Fiche compréhensible : liens, carte, schémas, parcours
+do {
+    typealias E = RevisionSheet.Entry
+    func entry(_ id: String, _ kind: E.Kind, _ title: String, _ body: String = "…") -> E { E(id: id, kind: kind, title: title, body: body) }
+    let sheet = RevisionSheet(origin: .ai, generatedAt: Date(timeIntervalSince1970: 0), chapters: [
+        .init(id: "c0", title: "Suites", entries: [
+            entry("a", .definition, "Définition 1.1 (suite bornée)", "Une suite est bornée si…"),
+            entry("b", .theorem, "Théorème 1.2 (monotone bornée)", "Par la définition 1.1, une suite monotone bornée converge."),
+            entry("c", .method, "Montrer qu'une suite converge", "Utiliser le théorème 1.2 puis la proposition 2.1."),
+        ]),
+        .init(id: "c1", title: "Séries", entries: [
+            entry("d", .proposition, "Proposition 2.1 (critère de Cauchy)", "Une suite de Cauchy converge."),
+            entry("e", .pitfall, "Piège : série et suite", "Ne pas confondre une série et sa suite des termes."),
+            entry("f", .definition, "Définition 1.1 (suite bornée)", "doublon"),
+        ]),
+    ])
+    let keyed = sheet.keyed
+    check(keyed.count == 6 && Set(keyed.map(\.key)).count == 6, "carte : chaque notion a une clé, un doublon prend « #2 »")
+    check(keyed[0].key == "definition 1.1 (suite bornee)" && keyed[5].key == "definition 1.1 (suite bornee)#2", "carte : la clé est le titre sans accents ni casse")
+    check(sheet.entry(forKey: keyed[1].key)?.entry.id == "b", "carte : on retrouve une notion par sa clé")
+
+    // Liens déduits des citations
+    let cited = StudyLinks.cited(in: sheet)
+    let byID = Dictionary(uniqueKeysWithValues: keyed.map { ($0.entry.id, $0.key) })
+    func has(_ from: String, _ to: String) -> Bool { cited.contains { $0.from == byID[from] && $0.to == byID[to] && $0.relation == .uses } }
+    check(has("b", "a"), "liens : « par la définition 1.1 » → le théorème se sert de la définition")
+    check(has("c", "b") && has("c", "d"), "liens : la méthode cite le théorème 1.2 et la proposition 2.1")
+    check(!cited.contains { $0.from == $0.to }, "liens : jamais une notion qui se cite elle-même")
+    check(!has("a", "b"), "liens : le sens est celui de la citation")
+
+    // Fusion : ce qu'on a posé à la main reste
+    var userLink = StudyMap.Link(from: byID["e"]!, to: byID["d"]!, relation: .contrast, note: "à ne pas confondre", userMade: true)
+    userLink.userMade = true
+    let stale = StudyMap.Link(from: byID["a"]!, to: "disparu", relation: .needs)
+    let merged = StudyLinks.merged(existing: [userLink, stale], generated: cited, keys: Set(keyed.map(\.key)))
+    check(merged.contains(userLink) && !merged.contains(stale) && merged.count == cited.count + 1, "liens : ceux posés à la main restent, un lien vers rien tombe")
+    check(StudyLinks.merged(existing: [userLink], generated: [userLink], keys: Set(keyed.map(\.key))).count == 1, "liens : pas de doublon")
+
+    // Voisinage
+    var map = StudyMap()
+    map.links = cited + [userLink]
+    let near = StudyLinks.neighbourhood(of: byID["b"]!, in: map, among: Set(keyed.map(\.key)))
+    check(near.before.map(\.key) == [byID["a"]!] && near.after.map(\.key) == [byID["c"]!], "voisinage : ce qui précède (la définition), ce qui suit (la méthode)")
+    check(StudyLinks.neighbourhood(of: byID["e"]!, in: map, among: Set(keyed.map(\.key))).aside.map(\.key) == [byID["d"]!], "voisinage : à ne pas confondre, dans les deux sens")
+    check(StudyLinks.neighbourhood(of: byID["d"]!, in: map, among: Set(keyed.map(\.key))).aside.map(\.key) == [byID["e"]!], "voisinage : de l'autre côté aussi")
+
+    // Parcours : une notion jamais avant ce dont elle a besoin
+    var inverted = StudyMap()
+    inverted.links = [StudyMap.Link(from: byID["a"]!, to: byID["d"]!, relation: .needs)]   // la définition 1.1 a besoin de la proposition 2.1 (située plus loin)
+    let order = LearningPath.order(sheet: sheet, map: inverted)
+    check(order.firstIndex(of: byID["d"]!)! < order.firstIndex(of: byID["a"]!)!, "parcours : la proposition passe avant ce qui en a besoin, même plus loin dans la fiche")
+    check(Set(order) == Set(keyed.map(\.key)) && order.count == 6, "parcours : toutes les notions, une fois")
+    check(LearningPath.order(sheet: sheet, map: StudyMap()) == keyed.map(\.key), "parcours : sans lien, l'ordre de la fiche")
+    var cyclic = StudyMap()
+    cyclic.links = [StudyMap.Link(from: byID["a"]!, to: byID["b"]!, relation: .needs), StudyMap.Link(from: byID["b"]!, to: byID["a"]!, relation: .needs)]
+    check(LearningPath.order(sheet: sheet, map: cyclic).count == 6, "parcours : un cycle ne bloque rien")
+    var progress = StudyMap()
+    progress.links = cited
+    check(LearningPath.next(sheet: sheet, map: progress) == keyed[0].key, "parcours : on commence par la première notion pas solide")
+    progress.progress[keyed[0].key] = .init(level: .solid, at: Date())
+    check(LearningPath.next(sheet: sheet, map: progress) != keyed[0].key, "parcours : une notion solide passe")
+    progress.progress[keyed[1].key] = .init(level: .shaky, at: Date())
+    let counts = LearningPath.counts(sheet: sheet, map: progress)
+    check(counts.solid == 1 && counts.shaky == 1 && counts.unknown == 4 && counts.total == 6 && abs(counts.fraction - 1.0 / 6) < 1e-9, "parcours : le compte (solide, fragile, pas encore)")
+    // Ce qui porte beaucoup pèse plus.
+    var weak = StudyMap()
+    weak.links = [StudyMap.Link(from: byID["b"]!, to: byID["a"]!, relation: .needs), StudyMap.Link(from: byID["c"]!, to: byID["a"]!, relation: .needs), StudyMap.Link(from: byID["e"]!, to: byID["a"]!, relation: .needs)]
+    check(LearningPath.weakSpots(sheet: sheet, map: weak, limit: 1) == [byID["a"]!], "parcours : la notion dont trois autres dépendent est à reprendre d'abord")
+    weak.progress[byID["a"]!] = .init(level: .solid, at: Date())
+    check(!LearningPath.weakSpots(sheet: sheet, map: weak, limit: 10).contains(byID["a"]!), "parcours : le solide n'est pas à reprendre")
+    check(LearningPath.shakyPrerequisites(of: byID["b"]!, map: weak, among: Set(keyed.map(\.key))).isEmpty, "parcours : prérequis tous solides, rien à reprendre d'abord")
+    weak.progress[byID["a"]!] = .init(level: .shaky, at: Date())
+    check(LearningPath.shakyPrerequisites(of: byID["b"]!, map: weak, among: Set(keyed.map(\.key))) == [byID["a"]!], "parcours : « reprends d'abord… » quand un prérequis est fragile")
+
+    // Carte mentale
+    var tidy = StudyMap()
+    tidy.customNodes = [.init(id: "x1", title: "Mon idée", note: nil, parent: byID["b"]!), .init(id: "x2", title: "Orpheline", note: nil, parent: "disparu")]
+    let nodes = MindGraph.nodes(sheet: sheet, map: tidy, courseTitle: "Analyse")
+    check(nodes.first?.id == "root" && nodes.filter { $0.role == .chapter }.count == 2 && nodes.count == 1 + 2 + 6 + 2, "carte : la racine, les chapitres, les notions, les idées")
+    check(nodes.first { $0.id == "custom:x1" }?.parent == byID["b"]! && nodes.first { $0.id == "custom:x2" }?.parent == "root", "carte : une idée est accrochée à sa notion, sinon à la racine")
+    let positions = MindLayout.twoSided(nodes)
+    check(positions["root"] == StudyMap.Point(x: 0, y: 0), "carte : la racine est au centre")
+    check(nodes.filter { $0.depth == 1 && $0.role == .chapter }.contains { (positions[$0.id]?.x ?? 0) > 0 } && nodes.filter { $0.role == .chapter }.contains { (positions[$0.id]?.x ?? 0) < 0 }, "carte : les chapitres des deux côtés de la racine")
+    var seenPoints = Set<String>()
+    var overlap = false
+    for node in nodes { if let p = positions[node.id], !seenPoints.insert("\(p.x)|\(p.y)").inserted { overlap = true } }
+    check(!overlap && positions.count == nodes.count, "carte : pas deux nœuds au même endroit")
+    let chapterX = nodes.filter { $0.role == .chapter }.compactMap { positions[$0.id]?.x }.map(abs)
+    let entryX = nodes.filter { if case .entry = $0.role { return true } else { return false } }.compactMap { positions[$0.id]?.x }.map(abs)
+    check(Set(chapterX).count == 1 && Set(entryX).count == 1 && entryX[0] > chapterX[0], "carte : une colonne par profondeur, les notions plus loin que les chapitres")
+    let hiddenNodes = MindGraph.visible(nodes, collapsed: [MindGraph.chapterNode("c0")])
+    check(hiddenNodes.count == nodes.count - 3 - 1 && !hiddenNodes.contains { $0.id == byID["a"]! } && hiddenNodes.contains { $0.id == MindGraph.chapterNode("c0") }, "carte : replier un chapitre cache ses notions (et leurs idées)")
+    check(MindLayout.twoSided([]) .isEmpty, "carte : rien à placer, rien")
+    let box = MindLayout.bounds(positions)!
+    check(box.minX < 0 && box.maxX > 0, "carte : les bornes englobent les deux côtés")
+
+    // Schémas
+    var diagram = Diagram(id: "s", title: "Choisir", kind: .tree)
+    diagram.nodes = [.init(id: "q", label: "Monotone ?"), .init(id: "y", label: "Oui : bornée ?"), .init(id: "n", label: "Non : Cauchy ?"), .init(id: "z", label: "Converge")]
+    diagram.edges = [.init(from: "q", to: "y", label: "oui"), .init(from: "q", to: "n", label: "non"), .init(from: "y", to: "z"), .init(from: "n", to: "z")]
+    let layout = DiagramLayout.layered(diagram)
+    check(layout.layers.count == 3 && layout.layers[0] == ["q"] && Set(layout.layers[1]) == ["y", "n"] && layout.layers[2] == ["z"], "schéma : couches du plus long chemin")
+    check(layout.positions["q"]!.y < layout.positions["y"]!.y && layout.positions["y"]!.y < layout.positions["z"]!.y, "schéma : de haut en bas")
+    check(layout.positions["y"]!.x != layout.positions["n"]!.x && layout.width > 0 && layout.height > 0, "schéma : deux nœuds d'une couche côte à côte")
+    check(abs(layout.positions["q"]!.x - layout.width / 2) < 1e-9 && abs(layout.positions["z"]!.x - layout.width / 2) < 1e-9, "schéma : une couche seule est centrée")
+    var cycle = Diagram(id: "c", title: "Boucle", kind: .flow)
+    cycle.nodes = [.init(id: "a", label: "A"), .init(id: "b", label: "B"), .init(id: "c", label: "C")]
+    cycle.edges = [.init(from: "a", to: "b"), .init(from: "b", to: "c"), .init(from: "c", to: "a")]
+    let looped = DiagramLayout.layered(cycle)
+    check(looped.layers.count == 3 && looped.backEdges.count == 1 && looped.positions.count == 3, "schéma : un cycle est tracé, la flèche de retour mise à part")
+    var broken = diagram
+    broken.edges.append(.init(from: "q", to: "inconnu"))
+    broken.edges.append(.init(from: "z", to: "z"))
+    check(DiagramLayout.layered(broken).positions.count == 4, "schéma : une flèche vers rien ou vers soi-même est ignorée")
+    check(DiagramLayout.layered(Diagram(id: "v", title: "Vide", kind: .flow)).positions.isEmpty, "schéma : vide, rien")
+
+    // Réponse de Claude
+    let (prompt, ids) = StudyMapAI.prompt(course: "Analyse", sheet: sheet)
+    check(ids.count == 6 && prompt.contains("[e1] (definition) Définition 1.1") && prompt.contains("## Séries"), "IA : le message donne chaque notion avec son identifiant")
+    let answer = """
+    Voici :
+    ```json
+    {"entries":[{"id":"e2","gist":"Une suite qui monte sans dépasser un plafond finit par se poser.","why":"C'est le critère de convergence le plus utilisé.","example":"$u_n = 1 - 1/n$","question":"Pourquoi borné est-il nécessaire ?","answer":"Sinon elle peut diverger vers l'infini."},
+                {"id":"e99","gist":"inconnue"}, {"id":"e5","gist":""}],
+     "links":[{"from":"e2","to":"e1","relation":"needs","note":"borné"},{"from":"e5","to":"e4","relation":"à ne pas confondre"},{"from":"e2","to":"e77","relation":"needs"},{"from":"e2","to":"e1","relation":"???"}],
+     "schemas":[{"title":"Choisir un critère","kind":"tree","nodes":[{"id":"n1","label":"Monotone ?","entry":"e2"},{"id":"n2","label":"Converge","entry":"e99"}],"edges":[{"from":"n1","to":"n2","label":"oui"},{"from":"n1","to":"zz"}]},
+                {"title":"Trop petit","kind":"flow","nodes":[{"id":"x","label":"seul"}],"edges":[]},
+                {"title":"Suite ou série","kind":"comparison","columns":["Suite","Série"],"rows":[["Objet","u_n","somme"]]},
+                {"kind":"flow"}]}
+    ```
+    """
+    var seeded = StudyMap()
+    seeded.progress[byID["a"]!] = .init(level: .solid, at: Date(timeIntervalSince1970: 5))
+    seeded.notes[byID["a"]!] = "ma note"
+    seeded.links = [userLink]
+    let applied = StudyMapAI.apply(answer: answer, sheet: sheet, ids: ids, to: seeded, now: Date(timeIntervalSince1970: 99))
+    check(applied != nil, "IA : une réponse avec du texte et un bloc de code se lit")
+    check(applied?.enrichment[byID["b"]!]?.gist?.hasPrefix("Une suite qui monte") == true && applied?.enrichment[byID["b"]!]?.check?.answer == "Sinon elle peut diverger vers l'infini.", "IA : la phrase en clair et la question")
+    check(applied?.enrichment.count == 1, "IA : une notion inconnue ou vide ne donne rien")
+    check(applied?.links.contains(userLink) == true && applied?.links.contains { $0.from == byID["b"]! && $0.to == byID["a"]! && $0.relation == .needs && $0.note == "borné" } == true, "IA : ses liens s'ajoutent, ceux posés à la main restent")
+    check(applied?.links.contains { $0.relation == .contrast && $0.from == byID["e"]! && $0.to == byID["d"]! } == true, "IA : « à ne pas confondre » en toutes lettres devient un lien de contraste")
+    check(applied?.links.filter { $0.to == "e77" || $0.relation == .needs && $0.to == byID["a"]! && $0.from == byID["b"]! }.count == 1, "IA : un lien vers une notion inconnue ou à la relation illisible tombe (sans doublon)")
+    check(applied?.links.contains { $0.from == byID["b"]! && $0.to == byID["a"]! && $0.relation == .uses } == true, "IA : les citations de la fiche s'ajoutent aussi")
+    check(applied?.diagrams.count == 2 && applied?.diagrams[0].kind == .tree && applied?.diagrams[0].nodes.count == 2, "IA : un schéma d'un seul nœud ou sans titre tombe")
+    check(applied?.diagrams[0].nodes[0].entry == byID["b"]! && applied?.diagrams[0].nodes[1].entry == nil, "IA : un nœud désigne sa notion, ou rien si elle n'existe pas")
+    check(applied?.diagrams[0].edges.count == 1, "IA : une flèche vers un nœud absent tombe")
+    check(applied?.diagrams[1].kind == .comparison && applied?.diagrams[1].rows?.first == ["Objet", "u_n", "somme"], "IA : une comparaison garde ses colonnes et ses lignes")
+    check(applied?.progress[byID["a"]!]?.level == .solid && applied?.notes[byID["a"]!] == "ma note", "IA : où tu en es et tes notes ne bougent pas")
+    check(applied?.enrichedAt == Date(timeIntervalSince1970: 99), "IA : la date de l'enrichissement")
+    check(StudyMapAI.apply(answer: "pas de json", sheet: sheet, ids: ids, to: seeded) == nil, "IA : une réponse sans JSON est refusée")
+
+    // Une nouvelle fiche : ce qui désigne encore quelque chose reste
+    let shorter = RevisionSheet(origin: .ai, generatedAt: Date(), chapters: [.init(id: "z0", title: "Nouveau", entries: [entry("a2", .definition, "Définition 1.1 (suite bornée)"), entry("b2", .theorem, "Théorème nouveau")])])
+    var richer = applied!
+    richer.customNodes = [.init(id: "x", title: "idée", note: nil, parent: nil)]
+    let rebased = StudyMapAI.rebased(richer, onto: shorter)
+    check(rebased.progress.keys.contains(byID["a"]!) && rebased.notes.count == 1, "nouvelle fiche : la maîtrise et les notes d'une notion qui existe encore restent")
+    check(rebased.enrichment.isEmpty && rebased.links.allSatisfy { Set(shorter.keyed.map(\.key)).contains($0.from) && Set(shorter.keyed.map(\.key)).contains($0.to) }, "nouvelle fiche : ce qui désignait une notion disparue tombe")
+    check(rebased.customNodes.count == 1, "nouvelle fiche : tes idées restent")
+
+    // Garder
+    let back = StudyMap.decode(applied!.encoded())
+    check(back == applied, "carte : se relit telle qu'écrite")
+    check(StudyMap.decode("") == nil && StudyMap.decode("pas du json") == nil, "carte : vide ou illisible, rien")
+    check(StudyMap().isEmpty && !applied!.isEmpty, "carte : « vide » veut dire rien du tout")
+    check(StudyMap.Relation.needs.label != StudyMap.Relation.needs.inverseLabel && StudyMap.Link(from: "a", to: "b", relation: .implies).prerequisite! == (before: "a", after: "b"), "liens : « implique » met le premier avant, « a besoin de » le second")
+    check(StudyMap.Link(from: "a", to: "b", relation: .contrast).prerequisite == nil, "liens : un contraste n'a pas d'ordre")
+
+    // NotebookLM
+    var notebook = applied!
+    notebook.enrichment[byID["a"]!] = .init(gist: "Un plafond et un plancher.", why: nil, example: nil, check: nil)
+    let files = NotebookExport.files(courseName: "Analyse I", code: "MATH-101", sheet: sheet, map: notebook)
+    check(files.map(\.name).contains("01 Fiche · MATH-101.md") && files.map(\.name).contains("02 Liens entre les notions · MATH-101.md") && files.map(\.name).contains("03 Schémas · MATH-101.md")
+          && files.map(\.name).contains("04 Questions pour se tester · MATH-101.md") && files.map(\.name).contains("00 Lis-moi · MATH-101.md"), "NotebookLM : la fiche, les liens, les schémas, les questions, le mode d'emploi")
+    let sheetFile = files.first { $0.name.hasPrefix("01") }!.text
+    check(sheetFile.contains("### Théorème 1.2 (monotone bornée) (Théorème)") && sheetFile.contains("En clair : Un plafond et un plancher.") && sheetFile.contains("À comprendre avant : Définition 1.1 (suite bornée)"), "NotebookLM : chaque notion avec son en clair et ce qu'il faut comprendre avant")
+    check(files.first { $0.name.hasPrefix("02") }!.text.contains("**Théorème 1.2 (monotone bornée)** a besoin de **Définition 1.1 (suite bornée)** — borné"), "NotebookLM : les liens en phrases")
+    check(files.first { $0.name.hasPrefix("03") }!.text.contains("| Objet | u_n | somme |") && files.first { $0.name.hasPrefix("03") }!.text.contains("Monotone ? →"), "NotebookLM : un tableau et les flèches des schémas")
+    check(NotebookExport.files(courseName: "X", code: "X", sheet: sheet, map: StudyMap()).map(\.name) == ["01 Fiche · X.md", "00 Lis-moi · X.md"], "NotebookLM : sans liens ni schémas, la fiche seule")
+}
+
 // MARK: Une épreuve n'est pas un devoir
 do {
     check(ExamKind.exam.isSitting && ExamKind.midterm.isSitting, "épreuve : un examen et un midterm comptent")

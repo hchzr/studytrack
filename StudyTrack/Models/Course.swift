@@ -110,6 +110,16 @@ final class Course {
         set { revisionSheetRaw = newValue?.encoded() ?? "" }
     }
 
+    /// Ce qui rend la fiche compréhensible, et à toi : liens entre les notions, où tu en es, phrases
+    /// en clair, schémas, idées de ta carte mentale, ressources NotebookLM (JSON de `StudyMap`).
+    /// Séparé de la fiche : une nouvelle fiche ne l'efface pas.
+    var studyMapRaw: String = ""
+
+    var studyMap: StudyMap {
+        get { StudyMap.decode(studyMapRaw) ?? StudyMap() }
+        set { studyMapRaw = newValue.isEmpty && newValue.enrichedAt == nil ? "" : newValue.encoded() }
+    }
+
     @Relationship(deleteRule: .cascade, originalName: "theoryItems", inverse: \TheoryItem.course)
     var theoryItemsStore: [TheoryItem]? = []
     var theoryItems: [TheoryItem] {
