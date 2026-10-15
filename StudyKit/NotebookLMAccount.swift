@@ -55,13 +55,19 @@ final class NotebookLMAccount {
     /// Vérifie si une session Google valable existe déjà.
     func refresh() async {
         state = .checking
-        let all = await Self.store.httpCookieStore.allCookies().filter { $0.domain.hasSuffix("google.com") }
+        let all = await Self.store.httpCookieStore.allCookies().filter { $0.domain.hasSuffix("google.com") || $0.domain.hasSuffix("googleusercontent.com") }
         guard NotebookLMWire.isSignedIn(cookieNames: all.map(\.name)) else { state = .signedOut; return }
+        // Les cookies vont dans le pot du client (par domaine et chemin, comme un navigateur) :
+        // Google en repose en chemin (`CheckCookie`, rotation) et, sans pot, la redirection
+        // tournait en boucle (« trop de redirections »).
+        if let jar = Self.client.configuration.httpCookieStorage {
+            for old in jar.cookies ?? [] { jar.deleteCookie(old) }
+            all.forEach { jar.setCookie($0) }
+        }
         cookies = all.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
         for candidate in NotebookLMWire.hosts {
             guard let url = URL(string: candidate + "/") else { continue }
             var request = URLRequest(url: url, timeoutInterval: 30)
-            request.setValue(cookies, forHTTPHeaderField: "Cookie")
             request.setValue(agent, forHTTPHeaderField: "User-Agent")
             guard let (data, response) = try? await Self.client.data(for: request),
                   let final = response.url?.host, NotebookLMWire.isApp(host: final),
@@ -82,13 +88,24 @@ final class NotebookLMAccount {
         state = .signedOut
     }
 
-    /// Un client sans cookies à lui : ceux de la session Google sont écrits à la main.
+    /// Un client à pot de cookies à lui (éphémère) : celui de la session Google y est copié.
+    /// Les redirections sont tracées dans le journal : « trop de redirections » dit alors où ça boucle.
     private static let client: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpShouldSetCookies = false
-        configuration.httpCookieStorage = nil
-        return URLSession(configuration: configuration)
+        configuration.httpShouldSetCookies = true
+        configuration.httpCookieAcceptPolicy = .always
+        return URLSession(configuration: configuration, delegate: RedirectLog(), delegateQueue: nil)
     }()
+
+    private final class RedirectLog: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+            let from = response.url.map { ($0.host ?? "?") + $0.path } ?? "?"
+            let to = request.url.map { ($0.host ?? "?") + $0.path } ?? "?"
+            Task { @MainActor in AppLog.record(.info, "notebooklm", "Redirection \(response.statusCode)", detail: "\(from) → \(to)") }
+            completionHandler(request)
+        }
+    }
 
     // MARK: Appels
 
@@ -99,7 +116,6 @@ final class NotebookLMAccount {
         request.httpMethod = "POST"
         request.httpBody = NotebookLMWire.body(rpc: rpc, params: params, token: token).data(using: .utf8)
         request.setValue("application/x-www-form-urlencoded;charset=UTF-8", forHTTPHeaderField: "Content-Type")
-        request.setValue(cookies, forHTTPHeaderField: "Cookie")
         request.setValue(host, forHTTPHeaderField: "Origin")
         request.setValue(host + "/", forHTTPHeaderField: "Referer")
         request.setValue("1", forHTTPHeaderField: "X-Same-Domain")
@@ -234,7 +250,6 @@ final class NotebookLMAccount {
         guard let source = podcast.audioURL else { throw Failure.noAudio }
         progress[key] = String(localized: "Je télécharge le podcast…")
         var request = URLRequest(url: source, timeoutInterval: 300)
-        request.setValue(cookies, forHTTPHeaderField: "Cookie")
         request.setValue(agent, forHTTPHeaderField: "User-Agent")
         let (temporary, response) = try await Self.client.download(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.noAudio }
