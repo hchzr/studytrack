@@ -240,7 +240,7 @@ struct ExercisePane: View {
         if let exercise, !exercise.statement.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(exercise.displayNumber).font(Carnet.serif(26)).foregroundStyle(Carnet.ink)
+                    Text(exercise.displayNumber).font(Carnet.serif(.largeTitle)).foregroundStyle(Carnet.ink)
                     MacMathText(exercise.statement, size: 15).foregroundStyle(Carnet.ink).textSelection(.enabled)
                     if !exercise.hint.isEmpty {
                         DisclosureGroup("Indication") {
@@ -335,7 +335,7 @@ private struct SeriesBar: View {
                     ThinRing(fraction: series.requiredExercises.isEmpty ? 0 : Double(series.doneCount) / Double(series.requiredExercises.count), tint: tint)
                         .frame(width: 16, height: 16)
                     Text(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title)
-                        .font(Carnet.serif(15, weight: .medium))
+                        .font(Carnet.serif(.title3, weight: .medium))
                         .foregroundStyle(Carnet.ink)
                         .lineLimit(1)
                 }
@@ -460,7 +460,7 @@ private struct DoneControl: View {
         .help(exercise.isDone ? "Fait — modifier" : "J'ai fini cet exercice (⇧⌘↩)")
         .popover(isPresented: $asking, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(exercise.displayNumber).font(Carnet.serif(20)).foregroundStyle(Carnet.ink)
+                Text(exercise.displayNumber).font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
                 if exercise.hasSubQuestions {
                     VStack(alignment: .leading, spacing: 6) {
                         Kicker("Les questions faites")
@@ -549,7 +549,7 @@ private struct ExerciseChip: View {
                     .strokeBorder(isCurrent ? tint : Carnet.rule, lineWidth: isCurrent ? 1.5 : 1)
                 HStack(spacing: 4) {
                     Text(number)
-                        .font(.system(size: 12, weight: isCurrent ? .semibold : .medium).monospacedDigit())
+                        .font(.callout.weight(isCurrent ? .semibold : .medium).monospacedDigit())
                         .foregroundStyle(isCurrent ? Carnet.ink : Carnet.inkSecondary)
                     marker
                 }
@@ -577,11 +577,11 @@ private struct ExerciseChip: View {
         case .inProgress(let done, let total):
             ThinRing(fraction: Double(done) / Double(max(total, 1)), tint: tint).frame(width: 9, height: 9)
         case .toCorrect:
-            Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(tint)
+            Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(tint)
         case .corrected:
             Circle().fill(fill).frame(width: 7, height: 7)
         case .redo:
-            Image(systemName: "arrow.counterclockwise").font(.system(size: 8, weight: .bold)).foregroundStyle(Carnet.wrong)
+            Image(systemName: "arrow.counterclockwise").font(.caption2.weight(.bold)).foregroundStyle(Carnet.wrong)
         }
     }
 }
@@ -604,7 +604,7 @@ private struct SeriesOverview: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let course = series.course { Kicker(course.displayCode, color: tint) }
                     Text(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title)
-                        .font(Carnet.serif(34))
+                        .font(StudyType.display)
                         .foregroundStyle(Carnet.ink)
                     HStack(spacing: 14) {
                         Label("\(series.doneCount) sur \(series.requiredExercises.count) faits", systemImage: "checkmark.circle")
@@ -634,7 +634,7 @@ private struct SeriesOverview: View {
                                 Text(ExerciseStage(resume) == .toDo && series.doneCount == 0 ? "Commencer" : "Reprendre")
                                     .font(.caption.weight(.semibold)).textCase(.uppercase).opacity(0.8)
                                 Text(resume.displayNumber + (resume.title.isEmpty ? "" : " — \(resume.title)"))
-                                    .font(Carnet.serif(18, weight: .medium))
+                                    .font(Carnet.serif(.title2, weight: .medium))
                                     .lineLimit(1)
                             }
                             Spacer()
@@ -650,7 +650,7 @@ private struct SeriesOverview: View {
                     .keyboardShortcut(.return, modifiers: [])
                 } else {
                     Label("Toute la série est corrigée.", systemImage: "checkmark.seal")
-                        .font(Carnet.serif(18))
+                        .font(Carnet.serif(.title2))
                         .foregroundStyle(Carnet.correct)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 180 : 220), spacing: 10)], spacing: 10) {
@@ -689,7 +689,7 @@ private struct ExerciseCard: View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(exercise.displayNumber).font(Carnet.serif(16, weight: .medium)).foregroundStyle(Carnet.ink)
+                    Text(exercise.displayNumber).font(Carnet.serif(.title3, weight: .medium)).foregroundStyle(Carnet.ink)
                     if exercise.isBonus { Text("bonus").font(.caption2).foregroundStyle(Carnet.inkTertiary) }
                     Spacer()
                     Text(stage.label)

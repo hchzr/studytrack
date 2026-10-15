@@ -73,11 +73,11 @@ struct MiniTimerView: View {
             ZStack {
                 LiveTimerRing(tint: tint, lineWidth: 3.5)
                 if timer.phase == .paused {
-                    Image(systemName: "pause.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(tint)
+                    Image(systemName: "pause.fill").font(.caption2.weight(.bold)).foregroundStyle(tint)
                 } else if timer.phase == .onBreak {
-                    Image(systemName: "cup.and.saucer.fill").font(.system(size: 9)).foregroundStyle(MacStyle.breakTint)
+                    Image(systemName: "cup.and.saucer.fill").font(.caption2).foregroundStyle(MacStyle.breakTint)
                 } else if timer.isStudying {
-                    Image(systemName: "moon.stars.fill").font(.system(size: 9)).foregroundStyle(tint)
+                    Image(systemName: "moon.stars.fill").font(.caption2).foregroundStyle(tint)
                 }
             }
             .frame(width: 30, height: 30)

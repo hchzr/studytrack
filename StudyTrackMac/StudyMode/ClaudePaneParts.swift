@@ -22,7 +22,7 @@ struct ClaudeContextPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ce que Claude sait").font(Carnet.serif(17, weight: .medium)).foregroundStyle(Carnet.ink)
+            Text("Ce que Claude sait").font(Carnet.serif(.title3, weight: .medium)).foregroundStyle(Carnet.ink)
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(rows) { row in
                     HStack(alignment: .top, spacing: 10) {

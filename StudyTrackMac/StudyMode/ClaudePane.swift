@@ -241,7 +241,7 @@ struct ClaudePane: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 Text(scope == .system ? "Général" : (series.map(name) ?? "Claude"))
-                    .font(Carnet.serif(17, weight: .medium))
+                    .font(Carnet.serif(.title3, weight: .medium))
                     .foregroundStyle(Carnet.ink)
                     .lineLimit(1)
                 Text(scope == .system ? "brief, semaine, revue" : (course?.displayCode ?? ""))
@@ -390,7 +390,7 @@ struct ClaudePane: View {
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(scope == .system ? "On fait quoi ?" : (exercise.map { "On attaque l'\($0.displayNumber.lowercased()) ?" } ?? (series == nil ? "Une question ?" : "On attaque ?")))
-                .font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
+                .font(StudyType.displaySmall).foregroundStyle(Carnet.ink)
             Text(scope == .system
                  ? "La conversation générale : ton brief, ta semaine, ta revue — les commandes de ton projet."
                  : "Une seule conversation pour toute la série : Claude suit l'exercice du chrono, garde les indices donnés et, à la fin, propose de noter tes erreurs et ce qu'il faut refaire.")
@@ -596,7 +596,7 @@ struct ClaudePane: View {
                         VStack(spacing: 1) {
                             Image(systemName: "pencil.and.scribble").font(.title3)
                             Text(copy.modified.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
-                                .font(.system(size: 9))
+                                .font(.caption2)
                         }
                     }
                     .buttonStyle(.plain)

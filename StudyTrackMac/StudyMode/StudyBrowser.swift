@@ -201,7 +201,7 @@ struct StudyBrowserPane: View {
                     Text(tab.title).lineLimit(1).font(.callout)
                         .foregroundStyle(selected ? StudyPalette.ink : StudyPalette.inkSecondary)
                     Button { browser.close(tab) } label: {
-                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                        Image(systemName: "xmark").font(.caption2.weight(.bold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(StudyPalette.inkTertiary)

@@ -186,7 +186,7 @@ struct NotesPane: View {
             }
         } label: {
             Image(systemName: listHidden ? "sidebar.left" : "arrow.left.to.line")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
                 .frame(width: 32, height: 32)
                 .background(.regularMaterial, in: Circle())
                 .overlay(Circle().strokeBorder(Carnet.rule))

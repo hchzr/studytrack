@@ -135,6 +135,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     func update() {
         guard let timer else { return }
         updateSoundtrack(timer)
+        window?.appearance = (settings?.studyAlwaysDark ?? true) ? NSAppearance(named: .darkAqua) : nil
         MacKeepAwake.shared.update(mode: settings?.studyKeepAwake ?? .off, studying: timer.isStudying,
                                    running: timer.phase == .running, onBreak: timer.phase == .onBreak,
                                    // Sans fin : pas d'échéance (une date sentinelle lointaine) — un bail renouvelé.

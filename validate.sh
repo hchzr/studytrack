@@ -13,6 +13,14 @@
 
 set -euo pipefail
 
+# Mode étude du Mac : aucune taille de texte écrite en dur hors de StudyType.swift
+# (et des glyphes proportionnels à leur cadre, « size * »).
+if grep -nE '\.system\(size: [0-9]|Carnet\.(serif|clock)\([0-9]' "$(cd "$(dirname "$0")" && pwd)"/StudyTrackMac/StudyMode/*.swift \
+    | grep -v 'StudyType.swift' | grep -v 'size \*' | grep .; then
+  echo "❌ taille de texte écrite en dur dans StudyTrackMac/StudyMode (voir StudyType.swift)"
+  exit 1
+fi
+
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # Scratch dir OUTSIDE the project tree. Never write Swift sources into the repo:

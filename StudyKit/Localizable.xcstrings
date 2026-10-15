@@ -4522,7 +4522,6 @@
       }
     },
     "Aucune" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4687,6 +4686,9 @@
           }
         }
       }
+    },
+    "Aucune playlist trouvée" : {
+
     },
     "Aucune séance. Importe ton horaire (.ics) depuis l'onglet Agenda ou le profil." : {
       "extractionState" : "stale",
@@ -5824,6 +5826,9 @@
         }
       }
     },
+    "Chargement…" : {
+
+    },
     "Charger un exemple CSV" : {
       "localizations" : {
         "en" : {
@@ -6950,6 +6955,9 @@
         }
       }
     },
+    "Continue" : {
+
+    },
     "Continuer" : {
       "localizations" : {
         "en" : {
@@ -7596,6 +7604,9 @@
           }
         }
       }
+    },
+    "D'accord" : {
+
     },
     "D'où viennent ces chiffres" : {
       "extractionState" : "stale",
@@ -11927,6 +11938,9 @@
     "Le cours est fini." : {
 
     },
+    "Le cours reprend dans quelques minutes." : {
+
+    },
     "Le groupe est supprimé côté serveur : les %lld membres le perdent, avec l'avancement partagé. Pour partir seul·e, utilise « Quitter »." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12096,6 +12110,9 @@
           }
         }
       }
+    },
+    "Le temps ne compte plus." : {
+
     },
     "Le volet d'à côté : un cahier, l'énoncé, un PDF… (⌘\\)" : {
       "localizations" : {
@@ -12436,6 +12453,9 @@
     "Les vidéos du chapitre, à la suite" : {
 
     },
+    "Lève les yeux. Le bloc suivant t'attend." : {
+
+    },
     "Libellé" : {
       "localizations" : {
         "en" : {
@@ -12628,6 +12648,9 @@
           }
         }
       }
+    },
+    "macOS a refusé l'accès. Active Music pour StudyTrack dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage)." : {
+
     },
     "Maintenant, %@" : {
       "localizations" : {
@@ -13674,6 +13697,9 @@
     "Music n'a pas pu sauter à ce morceau." : {
 
     },
+    "Music n'est pas autorisé" : {
+
+    },
     "Musique" : {
       "localizations" : {
         "en" : {
@@ -13683,6 +13709,9 @@
           }
         }
       }
+    },
+    "Musique pendant une pause" : {
+
     },
     "n°" : {
       "localizations" : {
@@ -13851,6 +13880,9 @@
           }
         }
       }
+    },
+    "Note où tu t'arrêtes, ou prolonge." : {
+
     },
     "Note rapide" : {
       "localizations" : {
@@ -14686,6 +14718,9 @@
         }
       }
     },
+    "Ouvrir les Réglages Système" : {
+
+    },
     "Ouvrir Moodle et choisir la page moi-même" : {
       "localizations" : {
         "en" : {
@@ -15363,6 +15398,9 @@
         }
       }
     },
+    "Pause du cours" : {
+
+    },
     "Pause longue" : {
       "localizations" : {
         "en" : {
@@ -15605,6 +15643,9 @@
         }
       }
     },
+    "Plus bas" : {
+
+    },
     "Plus d'actions" : {
       "localizations" : {
         "en" : {
@@ -15614,6 +15655,9 @@
           }
         }
       }
+    },
+    "Plus que %lld min" : {
+
     },
     "Plus rien à l'horaire" : {
       "extractionState" : "stale",
@@ -16342,6 +16386,9 @@
         }
       }
     },
+    "Ranger le bureau" : {
+
+    },
     "Rappel quotidien" : {
       "localizations" : {
         "en" : {
@@ -16628,6 +16675,9 @@
           }
         }
       }
+    },
+    "Réglages Système › Confidentialité › Automatisation" : {
+
     },
     "Réimporter un PDF…" : {
       "localizations" : {
@@ -17062,6 +17112,9 @@
           }
         }
       }
+    },
+    "Rester ici" : {
+
     },
     "Résultat" : {
       "localizations" : {
@@ -17859,6 +17912,9 @@
           }
         }
       }
+    },
+    "Se tait pendant les pauses, s'éteint à la fin." : {
+
     },
     "Séance d'exercices" : {
       "localizations" : {
@@ -18762,6 +18818,9 @@
           }
         }
       }
+    },
+    "StudyTrack ne peut pas contrôler Music" : {
+
     },
     "studytrack.json" : {
       "localizations" : {

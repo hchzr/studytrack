@@ -47,8 +47,7 @@ struct StudyModeView: View {
                 }
             }
         }
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
+        .modifier(StudyScheme(alwaysDark: settings.studyAlwaysDark))
         .tint(StudyPalette.ink)
         .animation(.smooth(duration: 0.35), value: screen.stage)
         .animation(.smooth(duration: 0.35), value: timer.studyIsOver)
@@ -64,17 +63,38 @@ struct StudyModeView: View {
     }
 }
 
+/// Sombre d'office, ou l'apparence du Mac (Réglages › Mode étude › « Toujours sombre »).
+private struct StudyScheme: ViewModifier {
+    var alwaysDark: Bool
+
+    func body(content: Content) -> some View {
+        if alwaysDark {
+            content.environment(\.colorScheme, .dark).preferredColorScheme(.dark)
+        } else {
+            content
+        }
+    }
+}
+
 /// Le fond : le papier de nuit, et une lueur de la couleur du cours.
 private struct StudyBackground: View {
     var tint: Color
+    @State private var ground = DeskGround.shared
 
     var body: some View {
         ZStack {
             StudyPalette.ground
+            // Le fond d'écran, flouté une fois, sous le papier de nuit : le verre du
+            // dessus a quelque chose à traverser.
+            if let image = ground.image {
+                Image(nsImage: image).resizable().scaledToFill()
+                    .overlay(StudyPalette.ground.opacity(0.7))
+            }
             RadialGradient(colors: [tint.opacity(0.14), .clear], center: .topLeading, startRadius: 40, endRadius: 900)
             RadialGradient(colors: [tint.opacity(0.06), .clear], center: .bottomTrailing, startRadius: 20, endRadius: 700)
         }
         .ignoresSafeArea()
+        .onAppear { ground.load() }
     }
 }
 
@@ -104,7 +124,7 @@ private struct StudySetupView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Kicker("Mode étude", color: tint)
                 Text("On s'y met ?")
-                    .font(Carnet.serif(52))
+                    .font(StudyType.hero)
                     .foregroundStyle(StudyPalette.ink)
                 Text("Seulement tes outils de cours, jusqu'à la fin.")
                     .font(.title3)
@@ -458,7 +478,7 @@ struct StudyTargetCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let course { CourseTag(code: course.displayCode, tint: tint) }
                 Text(MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID))
-                    .font(Carnet.serif(26))
+                    .font(Carnet.serif(.largeTitle))
                     .foregroundStyle(StudyPalette.ink)
                     .lineLimit(2)
                 if let exercise, !exercise.title.isEmpty, exercise.title != exercise.displayNumber {
@@ -620,10 +640,10 @@ private struct StudyDoneView: View {
     var body: some View {
         VStack(spacing: 22) {
             Image(systemName: "checkmark.seal")
-                .font(.system(size: 44, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(Carnet.correct)
             Text("C'est fait.")
-                .font(Carnet.serif(60))
+                .font(StudyType.heroDone)
                 .foregroundStyle(StudyPalette.ink)
             TimerTimeline(interval: 60) { date in
                 Text("\(DateUtils.durationLabel(seconds: Int(timer.elapsed(at: date)))) de travail.")
@@ -660,10 +680,10 @@ struct StudyShieldView: View {
             StudyPalette.ground.opacity(0.97).ignoresSafeArea()
             VStack(spacing: 24) {
                 Image(systemName: "moon.stars.fill")
-                    .font(.system(size: 40, weight: .light))
+                    .font(.largeTitle.weight(.light))
                     .foregroundStyle(StudyPalette.inkSecondary)
                 Text("\(screen.blockedName ?? "Cette app") attendra")
-                    .font(Carnet.serif(48))
+                    .font(StudyType.heroShield)
                     .foregroundStyle(StudyPalette.ink)
                 StudyTimeline(interval: 60) { date in
                     Text(StudyMode.isOpenEnded(timer.state) ? "Sans heure de fin : termine quand tu as fini."

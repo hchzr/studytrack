@@ -151,6 +151,8 @@ private struct StudySettingsPane: View {
                     Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
                     Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
                 }
+                Toggle("Toujours sombre", isOn: $settings.studyAlwaysDark)
+                    .onChange(of: settings.studyAlwaysDark) { _, _ in StudyModeController.shared.update() }
                 Toggle("Cacher le Dock et la barre des menus", isOn: $settings.studyHideSystemChrome)
                     .disabled(!settings.studyBlocking)
                 Button("Rétablir les raccourcis du système") { SystemLock.release() }

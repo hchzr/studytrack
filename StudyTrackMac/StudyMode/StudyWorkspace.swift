@@ -585,7 +585,7 @@ private struct StudyTopBar: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
-        .background(StudyPalette.raised.opacity(0.6))
+        .deskGlass(in: Rectangle())
         // Suivie toute la session : la musique lancée dans Music apparaît
         // ici sans passer d'abord par l'onglet Musique.
         .musicAttached()
@@ -606,7 +606,7 @@ private struct StudyTopBar: View {
                 }
             }
             Text(MacTargets.headline(course: course, taskType: timer.taskType, targetID: timer.targetID))
-                .font(Carnet.serif(19))
+                .font(Carnet.serif(.title2))
                 .foregroundStyle(StudyPalette.ink)
                 .lineLimit(1)
         }
@@ -623,7 +623,7 @@ private struct StudyTopBar: View {
             VStack(alignment: .leading, spacing: 0) {
                 StudyTimeline { date in
                     Text(StudyMode.clock(timer.state, at: date).clockLabel)
-                        .font(Carnet.clock(20))
+                        .font(StudyType.barClock)
                         .foregroundStyle(paused ? StudyPalette.inkSecondary : StudyPalette.ink)
                 }
                 HStack(spacing: 4) {
@@ -643,7 +643,7 @@ private struct StudyTopBar: View {
                 if timer.phase == .onBreak { timer.skipBreak() } else { timer.toggle() }
             } label: {
                 Image(systemName: timer.phase == .running ? "pause.fill" : (timer.phase == .onBreak ? "forward.fill" : "play.fill"))
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.callout.weight(.bold))
                     .foregroundStyle(StudyPalette.ground)
                     .frame(width: 30, height: 30)
                     .background(paused ? tint : StudyPalette.ink, in: Circle())
@@ -674,6 +674,9 @@ private struct StudyTopBar: View {
             // Ce qui joue dans Music : à part, séparé des gestes de la session.
             // Toujours là : au repos, il ouvre le choix de la musique.
             MusicMiniPlayer(open: openMusic)
+            Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
+            // Ce que la barre des menus de macOS montrait, et qu'un blocage cache.
+            DeskStatusItems()
             Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
             if timer.isLocked {
                 // Sous verrou : une seule sortie, qu'on ne prend pas par réflexe.
@@ -759,7 +762,7 @@ private struct StudyTopBar: View {
                 Text("·").foregroundStyle(StudyPalette.inkTertiary)
                 Image(systemName: moment.icon)
                 Text(moment.title)
-                Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold))
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(StudyPalette.inkSecondary)
@@ -808,7 +811,7 @@ private struct StudyRail: View {
                         if let icon = StudyModeController.icon(for: bundleID) {
                             Image(nsImage: icon).resizable().frame(width: 30, height: 30)
                         }
-                        Text(StudyModeController.name(for: bundleID)).font(.system(size: 9)).foregroundStyle(StudyPalette.inkTertiary)
+                        Text(StudyModeController.name(for: bundleID)).font(.caption2).foregroundStyle(StudyPalette.inkTertiary)
                             .lineLimit(1)
                     }
                     .frame(width: 64)
@@ -819,7 +822,7 @@ private struct StudyRail: View {
         }
         .padding(.vertical, 14)
         .frame(width: 76)
-        .background(StudyPalette.raised.opacity(0.4))
+        .deskGlass(in: Rectangle())
     }
 
     /// Les apps permises et installées (sauf le Finder et la Calculette : le
@@ -859,7 +862,7 @@ private struct RailButtonLabel: View {
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: selected ? .semibold : .regular))
+                .font(.title3.weight(selected ? .semibold : .regular))
                 .frame(width: 44, height: 34)
                 .background(selected ? StudyPalette.ink : (hovering ? StudyPalette.raisedMore : .clear),
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -871,11 +874,11 @@ private struct RailButtonLabel: View {
                 .foregroundStyle(selected ? StudyPalette.ground : StudyPalette.ink)
                 .overlay(alignment: .topTrailing) {
                     if let badge {
-                        Text(badge).font(.system(size: 9, weight: .bold)).padding(3)
+                        Text(badge).font(.caption2.weight(.bold)).padding(3)
                             .background(Carnet.wrong, in: Circle()).foregroundStyle(.white).offset(x: 4, y: -4)
                     }
                 }
-            Text(title).font(.system(size: 10, weight: selected || beside ? .semibold : .regular))
+            Text(title).font(.caption2.weight(selected || beside ? .semibold : .regular))
                 .foregroundStyle(selected || beside ? StudyPalette.ink : StudyPalette.inkSecondary)
         }
         .frame(width: 64)
@@ -1025,7 +1028,7 @@ private struct SideTabBar: View {
                     let choosing = !items.contains { $0.id == desk.sideSelection }
                     Button { desk.sideSelection = nil } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .frame(width: 28, height: 26)
                             .background(choosing ? Carnet.ground : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                             .contentShape(Rectangle())
@@ -1055,7 +1058,7 @@ private struct SideTab: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: item.icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(selected ? tint : StudyPalette.inkTertiary)
             Text(item.title)
                 .font(.callout.weight(selected ? .medium : .regular))
@@ -1063,7 +1066,7 @@ private struct SideTab: View {
                 .frame(maxWidth: 150, alignment: .leading)
                 .fixedSize(horizontal: true, vertical: false)
             Button(action: close) {
-                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                Image(systemName: "xmark").font(.caption2.weight(.bold))
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
@@ -1113,7 +1116,7 @@ private struct SidePicker: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("À côté").font(Carnet.serif(26)).foregroundStyle(StudyPalette.ink)
+                    Text("À côté").font(Carnet.serif(.largeTitle)).foregroundStyle(StudyPalette.ink)
                     Text("Ce que tu veux garder sous les yeux pendant que tu travailles au centre.")
                         .font(.callout).foregroundStyle(StudyPalette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1142,7 +1145,7 @@ private struct SidePicker: View {
         return Button { open(entry.item) } label: {
             HStack(spacing: 12) {
                 Image(systemName: entry.item.icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(tint)
                     .frame(width: 32, height: 32)
                     .background(StudyPalette.raisedMore, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1208,7 +1211,7 @@ private struct NotebookReader: View {
                 .overlay(alignment: .topTrailing) {
                     Button { Task { await store.refresh(force: true) } } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .frame(width: 28, height: 28)
                             .background(.regularMaterial, in: Circle())
                     }
@@ -1233,7 +1236,7 @@ struct DeskIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }

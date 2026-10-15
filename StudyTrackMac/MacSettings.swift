@@ -88,6 +88,8 @@ final class MacSettings {
     var studySoundtrackOnBreak: SessionSoundtrack.BreakPolicy {
         didSet { defaults.set(studySoundtrackOnBreak.rawValue, forKey: "mac.studySoundtrackOnBreak") }
     }
+    /// Le mode étude reste sombre (défaut) ou suit l'apparence du Mac.
+    var studyAlwaysDark: Bool { didSet { defaults.set(studyAlwaysDark, forKey: "mac.studyAlwaysDark") } }
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
@@ -154,6 +156,7 @@ final class MacSettings {
         studySoundtrack = SessionSoundtrack.decode(defaults.data(forKey: "mac.studySoundtrack"))
         studySoundtrackOnBreak = defaults.string(forKey: "mac.studySoundtrackOnBreak")
             .flatMap(SessionSoundtrack.BreakPolicy.init(rawValue:)) ?? .pause
+        studyAlwaysDark = defaults.object(forKey: "mac.studyAlwaysDark") as? Bool ?? true
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off
