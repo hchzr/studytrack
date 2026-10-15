@@ -29,6 +29,10 @@ enum SystemLock {
 
     static var hasRecord: Bool { StudyLockStore.load() != nil }
 
+    /// ⌘Tab du système est bel et bien éteint (relu après coup) : sinon, la
+    /// présentation de StudyTrack reste le seul frein quand il est devant.
+    private(set) static var processSwitchingOff = false
+
     /// Début de blocage : raccourcis éteints, Dock et barre des menus cachés.
     static func engage(hideChrome: Bool) {
         guard !untouched else { return }
@@ -44,6 +48,7 @@ enum SystemLock {
         StudyLockStore.save(record)
         guard available else { return }
         for id in disable { SystemHotKeys.setEnabled(id, false) }
+        processSwitchingOff = [1, 2].allSatisfy { !SystemHotKeys.isEnabled($0) }
         let stuck = disable.filter(SystemHotKeys.isEnabled)
         if !stuck.isEmpty { log.notice("raccourcis restés allumés : \(stuck.map(String.init).joined(separator: ","), privacy: .public)") }
         if chrome != nil, record.dockAutohide != nil {
@@ -58,12 +63,17 @@ enum SystemLock {
         if SystemHotKeys.isAvailable {
             for id in StudyLockPlan.restore(record) { SystemHotKeys.setEnabled(id, true) }
         }
-        if record.dockAutohide != nil || record.menuBarAutohide != nil {
-            if SystemChrome.permission == .granted {
-                SystemChrome.set(dock: record.dockAutohide, menuBar: record.menuBarAutohide)
-            } else {
-                log.notice("Dock et barre des menus : permission retirée, pas rétablis")
-            }
+        processSwitchingOff = false
+        // On essaie toujours de rétablir le Dock et la barre des menus ; la fiche ne
+        // les oublie que si c'est fait. Sinon elle les garde pour la prochaine fois
+        // (un Dock caché pour toujours est pire qu'une fiche qui reste).
+        if record.dockAutohide != nil || record.menuBarAutohide != nil,
+           !SystemChrome.set(dock: record.dockAutohide, menuBar: record.menuBarAutohide) {
+            var kept = record
+            kept.shortcuts = []
+            StudyLockStore.save(kept)
+            log.notice("Dock et barre des menus : pas rétablis, la fiche les garde")
+            return
         }
         StudyLockStore.clear()
         log.notice("raccourcis du système rétablis")
@@ -134,7 +144,21 @@ enum SystemChrome {
     @discardableResult
     static func request() -> Permission { check(ask: true) }
 
+    /// System Events n'est pas toujours ouvert, et la permission ne se lit que
+    /// pour une app qui tourne (sinon -600) : on le lance, masqué, et on attend.
+    private static func ensureRunning() {
+        func running() -> Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: target).isEmpty }
+        guard !running() else { return }
+        let open = Process()
+        open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        open.arguments = ["-g", "-j", "-b", target]
+        try? open.run()
+        open.waitUntilExit()
+        for _ in 0..<30 where !running() { Thread.sleep(forTimeInterval: 0.1) }
+    }
+
     private static func check(ask: Bool) -> Permission {
+        ensureRunning()
         // Le descripteur reste à `NSAppleEventDescriptor` : on n'en copie ni n'en libère rien.
         let address = NSAppleEventDescriptor(bundleIdentifier: target)
         guard let pointer = address.aeDesc else { return .undetermined }
@@ -156,13 +180,17 @@ enum SystemChrome {
         return (dock, menuBar)
     }
 
-    static func set(dock: Bool?, menuBar: Bool?) {
+    /// Vrai si le Dock et la barre des menus ont bien pris la valeur demandée.
+    @discardableResult
+    static func set(dock: Bool?, menuBar: Bool?) -> Bool {
         var lines: [String] = []
         if let dock { lines.append("set autohide to \(dock)") }
         if let menuBar { lines.append("set autohide menu bar to \(menuBar)") }
-        guard !lines.isEmpty else { return }
+        guard !lines.isEmpty else { return true }
+        ensureRunning()
         let source = "tell application \"System Events\" to tell dock preferences\n\(lines.joined(separator: "\n"))\nend tell"
         var error: NSDictionary?
         NSAppleScript(source: source)?.executeAndReturnError(&error)
+        return error == nil
     }
 }

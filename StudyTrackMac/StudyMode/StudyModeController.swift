@@ -105,17 +105,6 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // d'être masquée) ; fermé seulement si le réglage le demande. Les
         // lanceurs et sélecteurs de fenêtres (AltTab, Raycast) sont toujours fermés.
         let locks = screen.locks
-        if locks {
-            for app in runningBlockedApps() where !neverQuit(app) {
-                if isLauncher(app) {
-                    ask(app, toQuit: true, force: true)
-                } else if settings?.studyCloseApps ?? false {
-                    ask(app, toQuit: true, force: false)
-                } else {
-                    app.hide()
-                }
-            }
-        }
         if timer.phase == .idle { timer.pomodoro = pomodoro }
         timer.enterStudy(minutes: minutes, courseID: screen.courseID, taskType: screen.taskType,
                          targetID: screen.targetID, label: screen.label, locks: locks)
@@ -257,7 +246,12 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         NSApp.presentationOptions = []
         browser.closeAll()
         desk.closeAll()
+        // Pas un geste : rien n'est épinglé, et la prochaine session s'arrange comme neuve.
+        desk.applying = true
         desk.pane = .desk
+        desk.applying = false
+        desk.pins = DeskArrangement.Pins()
+        desk.lastSignature = nil
     }
 
     /// Dock et barre des menus cachés tant que StudyTrack est au premier plan.
@@ -273,9 +267,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // comprise ; le verrou (ne pas finir avant l'heure) ajoute ce qui ferme.
         if timer?.studyLocks == true {
             options.formUnion([.disableHideApplication, .disableAppleMenu])
-            // Si ⌘Tab du système est éteint, c'est le nôtre qui répond : l'option
-            // l'avalerait. Sans les fonctions du système, elle reste le seul frein.
-            if !SystemHotKeys.isAvailable { options.insert(.disableProcessSwitching) }
+            // Si ⌘Tab du système est bien éteint (relu après coup), c'est le nôtre qui
+            // répond : l'option l'avalerait. Sinon, elle reste le seul frein.
+            if !SystemLock.processSwitchingOff { options.insert(.disableProcessSwitching) }
         }
         if timer?.isLocked == true {
             options.formUnion([.disableForceQuit, .disableSessionTermination])
@@ -343,6 +337,19 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated { self?.launched(app) }
+        }
+        // Les apps déjà ouvertes : masquées (fermées si le réglage le demande) ; les
+        // lanceurs et sélecteurs de fenêtres, toujours fermés. Ici et non dans
+        // `begin` : un blocage lancé depuis l'iPhone, relancé ou rétabli par le
+        // gardien passe aussi par là.
+        for app in runningBlockedApps() where !neverQuit(app) {
+            if isLauncher(app) {
+                ask(app, toQuit: true, force: true)
+            } else if settings?.studyCloseApps ?? false {
+                ask(app, toQuit: true, force: false)
+            } else {
+                app.hide()
+            }
         }
         check(NSWorkspace.shared.frontmostApplication)
         // Une app qui s'est installée devant sans qu'on l'« active » (un sélecteur
@@ -460,6 +467,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if let asked = quitting[app.processIdentifier], Date().timeIntervalSince(asked) < 20 { return }
         screen.blockedName = app.localizedName
         screen.blockedAt = Date()
+        DeskNotifications.shared.post(.blockedApp, "\(app.localizedName ?? "Une app") reste fermée pendant le mode étude", icon: "hand.raised.fill")
         log.notice("mode étude : \(app.bundleIdentifier ?? "?", privacy: .public) arrêtée")
         // Le voile d'abord : rien de l'app ne se voit, même une fraction de seconde.
         showShields()

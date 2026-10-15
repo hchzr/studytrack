@@ -20,7 +20,13 @@ final class GlobalHotKey {
         guard reference == nil else { return }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let context = Unmanaged.passUnretained(self).toOpaque()
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
+            // Chaque raccourci de l'app arrive à tous les gestionnaires : on ne
+            // répond qu'au sien (« STRK »), sinon ⌘Tab d'étude lancerait le chrono.
+            var identifier = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                              nil, MemoryLayout<EventHotKeyID>.size, nil, &identifier)
+            guard identifier.signature == OSType(0x5354524B) else { return OSStatus(eventNotHandledErr) }
             guard let userData else { return noErr }
             let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
             MainActor.assumeIsolated { hotKey.action() }

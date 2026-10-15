@@ -254,9 +254,6 @@ final class StudyDesk {
 
     /// Une copie arrivée de l'iPhone, à joindre au prochain message (sans l'envoyer).
     var pendingDraftAttachment: ClaudeTutor.Attachment?
-    /// Ce que l'iPhone vient d'envoyer, dit en haut de l'écran un instant.
-    var dropNotice: String?
-
     /// Une photo, un « je bloque », une question venus de l'iPhone.
     func receive(_ drop: DeskDrop) {
         let attachment = drop.document.map {
@@ -267,21 +264,16 @@ final class StudyDesk {
         case .copy:
             pendingDraftAttachment = attachment
             showClaude()
-            dropNotice = "Ta copie, depuis l'iPhone : jointe à la conversation"
+            DeskNotifications.shared.post(.iPhone, "Ta copie, depuis l'iPhone : jointe à la conversation", icon: "iphone.and.arrow.forward")
         case .stuck:
             ask(drop.question ?? "Je bloque. Voici ma tentative (photo prise à l'iPhone) : dis-moi où ça décroche et donne-moi l'indice du niveau minimal suffisant, sans la solution.",
                 attachment: attachment)
-            dropNotice = "« Je bloque », depuis l'iPhone"
+            DeskNotifications.shared.post(.iPhone, "« Je bloque », depuis l'iPhone", icon: "iphone.and.arrow.forward")
         case .ask:
             if let question = drop.question, !question.isEmpty {
                 if let attachment { ask(question, attachment: attachment) } else { ask(question) }
-                dropNotice = "Ta question, depuis l'iPhone"
+                DeskNotifications.shared.post(.iPhone, "Ta question, depuis l'iPhone", icon: "iphone.and.arrow.forward")
             }
-        }
-        let notice = dropNotice
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(4))
-            if self.dropNotice == notice { self.dropNotice = nil }
         }
     }
 

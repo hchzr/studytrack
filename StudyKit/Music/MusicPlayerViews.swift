@@ -162,24 +162,40 @@ struct MusicNowPlayingCard: View {
     }
 
     private var compactBody: some View {
-        HStack(spacing: 12) {
-            MusicNowArtwork(side: 52, radius: 6)
-            VStack(alignment: .leading, spacing: 6) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(playing.title ?? "")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(StudyPalette.ink)
-                    Text(playing.artist ?? "")
-                        .font(.caption)
-                        .foregroundStyle(StudyPalette.inkSecondary)
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                MusicNowArtwork(side: 52, radius: 6)
+                VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(playing.title ?? "")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(StudyPalette.ink)
+                        Text(playing.artist ?? "")
+                            .font(.caption)
+                            .foregroundStyle(StudyPalette.inkSecondary)
+                    }
+                    .lineLimit(1)
+                    MusicProgress(playing: playing, onSeek: music.seek(to:), showsTimes: false)
                 }
-                .lineLimit(1)
-                MusicProgress(playing: playing, onSeek: music.seek(to:), showsTimes: false)
+                if music.devices.count > 1 { MusicDevicePicker(compact: true) }
             }
-            MusicGlyphButton(icon: playing.isPlaying ? "pause.fill" : "play.fill", size: 22,
-                             label: playing.isPlaying ? "Pause" : "Lecture") { music.togglePlayPause() }
-            MusicGlyphButton(icon: "forward.fill", size: 17, label: "Suivant") { music.next() }
-            if music.devices.count > 1 { MusicDevicePicker(compact: true) }
+            // Les mêmes gestes que le grand lecteur : l'iPhone n'en est plus privé.
+            HStack(spacing: 0) {
+                MusicGlyphButton(icon: "shuffle", size: 13, label: "Aléatoire", active: playing.shuffle) {
+                    music.setShuffle(!playing.shuffle)
+                }
+                Spacer()
+                MusicGlyphButton(icon: "backward.fill", size: 18, label: "Précédent") { music.previous() }
+                Spacer()
+                MusicGlyphButton(icon: playing.isPlaying ? "pause.fill" : "play.fill", size: 24,
+                                 label: playing.isPlaying ? "Pause" : "Lecture") { music.togglePlayPause() }
+                Spacer()
+                MusicGlyphButton(icon: "forward.fill", size: 18, label: "Suivant") { music.next() }
+                Spacer()
+                MusicGlyphButton(icon: playing.repeatMode.icon, size: 13, label: "Répéter", active: playing.repeatMode != .off) {
+                    music.cycleRepeat()
+                }
+            }
         }
         .padding(12)
         .background {

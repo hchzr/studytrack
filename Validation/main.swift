@@ -6373,6 +6373,27 @@ do {
     check(again.center == .exercise && again.side == nil && !again.claude, "bureau : le côté et Claude épinglés ne bougent pas")
 }
 
+// MARK: Notifications du bureau
+do {
+    typealias N = DeskNotice
+    let t0 = Date(timeIntervalSince1970: 1000)
+    func item(_ kind: N.Kind, _ text: String, at offset: TimeInterval) -> N.Item { N.Item(kind: kind, text: text, icon: "x", at: t0.addingTimeInterval(offset)) }
+    var queue: [N.Item] = []
+    queue = N.adding(item(.blockedApp, "Safari", at: 0), to: queue)
+    let firstID = queue[0].id
+    queue = N.adding(item(.blockedApp, "Mail", at: 2), to: queue)
+    check(queue.count == 1 && queue[0].text == "Mail" && queue[0].id == firstID, "notifications : deux du même genre à moins de 4 s n'en font qu'une")
+    queue = N.adding(item(.blockedApp, "Notes", at: 10), to: queue)
+    check(queue.count == 2, "notifications : plus de 4 s après, une autre")
+    queue = N.adding(item(.iPhone, "Photo", at: 10), to: queue)
+    queue = N.adding(item(.claude, "Réponse", at: 11), to: queue)
+    check(queue.count == N.maxVisible && queue.first?.text == "Notes", "notifications : trois au plus, la plus ancienne part")
+    check(N.visible(queue, at: t0.addingTimeInterval(12)).count == 3, "notifications : elles restent un moment")
+    check(N.visible(queue, at: t0.addingTimeInterval(15)).map(\.kind) == [.claude], "notifications : chacune part à son heure")
+    check(N.visible(queue, at: t0.addingTimeInterval(30)).isEmpty, "notifications : puis plus rien")
+    check(N.duration(.claude) > N.duration(.blockedApp), "notifications : la réponse de Claude reste plus longtemps")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

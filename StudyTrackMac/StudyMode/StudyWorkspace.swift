@@ -16,7 +16,6 @@ struct StudyWorkspace: View {
     @Environment(\.modelContext) private var context
     /// L'horaire du jour, relu chaque minute (le cours en cours, la suite).
     @State private var classes: [ScheduledClass] = []
-    @State private var toastVisible = false
     /// Relu toutes les 30 s : le bilan des cinq dernières minutes en dépend.
     @State private var now = Date()
     /// Le voile de pause / bilan qu'on a écarté (jusqu'au prochain changement).
@@ -50,7 +49,7 @@ struct StudyWorkspace: View {
                 }
             }
         }
-        .overlay(alignment: .top) { blockedToast }
+        .overlay { DeskNoticeStack() }
         .overlay { takeoverView }
         .animation(.smooth(duration: 0.3), value: layout.takeover)
         .onChange(of: layout.takeover) { _, _ in dismissedTakeover = nil }
@@ -60,20 +59,14 @@ struct StudyWorkspace: View {
             arrange(force: false)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
-                now = Date()
+                // Relu seulement quand cela peut changer quelque chose : en cours
+                // (la pause), ou dans les dernières minutes (le bilan).
+                let left = StudyMode.remaining(timer.state, at: Date()) / 60
+                if moment == .lecture || (!StudyMode.isOpenEnded(timer.state) && left <= Double(DeskArrangement.wrapUpMinutes + 2)) {
+                    now = Date()
+                }
             }
         }
-        .overlay(alignment: .top) {
-            if let notice = desk.dropNotice {
-                Label(notice, systemImage: "iphone.and.arrow.forward")
-                    .font(.callout.weight(.medium))
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.top, 70)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy, value: desk.dropNotice)
         .background(paneShortcuts)
         // Music suivi pendant toute la session (le petit lecteur de la barre du haut).
         .musicAttached()
@@ -532,31 +525,6 @@ struct StudyWorkspace: View {
         .accessibilityHidden(true)
     }
 
-    /// Quatre secondes, puis plus rien : un minuteur unique, et non une
-    /// horloge qui redessinait l'écran chaque seconde de toute la session.
-    private var blockedToast: some View {
-        ZStack {
-            if toastVisible, let name = screen.blockedName {
-                Label("\(name) est fermé", systemImage: "hand.raised.fill")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(StudyPalette.ground)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(StudyPalette.ink, in: Capsule())
-                    .padding(.top, 60)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.smooth(duration: 0.3), value: toastVisible)
-        .task(id: screen.blockedAt) {
-            guard let at = screen.blockedAt else { return }
-            let remaining = 4 - Date().timeIntervalSince(at)
-            guard remaining > 0 else { return }
-            toastVisible = true
-            try? await Task.sleep(for: .seconds(remaining))
-            if !Task.isCancelled { toastVisible = false }
-        }
-    }
 }
 
 // MARK: - Barre du haut
@@ -677,6 +645,7 @@ private struct StudyTopBar: View {
             Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
             // Ce que la barre des menus de macOS montrait, et qu'un blocage cache.
             DeskStatusItems()
+            DeskControlCenterButton()
             Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
             if timer.isLocked {
                 // Sous verrou : une seule sortie, qu'on ne prend pas par réflexe.

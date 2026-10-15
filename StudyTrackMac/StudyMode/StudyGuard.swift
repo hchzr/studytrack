@@ -110,11 +110,16 @@ private final class Watcher {
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
             .filter { $0.processIdentifier != getpid() && !$0.isTerminated }
         guard StudyMode.locks(state) else {
-            // Un blocage sans verrou et l'app n'est plus là (tuée) : on ne la relance
-            // pas — on rallume ce qu'elle avait éteint, pour qu'on puisse travailler.
-            if StudyMode.blocks(state), others.isEmpty, SystemLock.hasRecord {
-                StudyGuard.log.notice("gardien : app disparue sous blocage, système rétabli")
-                SystemLock.release()
+            if StudyMode.blocks(state) {
+                // Un blocage sans verrou (session sans fin) : le gardien reste, et si
+                // l'app a disparu (tuée) on ne la relance pas — on rallume ce qu'elle
+                // avait éteint, pour qu'on puisse travailler.
+                calmTicks = 0
+                if others.isEmpty, SystemLock.hasRecord {
+                    StudyGuard.log.notice("gardien : app disparue sous blocage, système rétabli")
+                    SystemLock.release()
+                }
+                return
             }
             // Plus de verrou depuis une quinzaine de secondes : on s'arrête.
             calmTicks += 1

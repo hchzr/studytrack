@@ -7,6 +7,9 @@
     " " : {
 
     },
+    " Raccourcis du système éteints." : {
+
+    },
     "–" : {
 
     },
@@ -646,6 +649,7 @@
       }
     },
     "%@ est fermé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5577,6 +5581,9 @@
           }
         }
       }
+    },
+    "Centre de contrôle" : {
+
     },
     "Certains membres apparaissent anonymement." : {
       "localizations" : {
@@ -15133,6 +15140,9 @@
     "Pas de quiz cette semaine" : {
 
     },
+    "Pas de réseau" : {
+
+    },
     "Pas de série" : {
       "localizations" : {
         "en" : {
@@ -17578,6 +17588,9 @@
         }
       }
     },
+    "Rien n'est bloqué." : {
+
+    },
     "Rien n'est rangé dans cette semaine." : {
       "localizations" : {
         "en" : {
@@ -19283,6 +19296,9 @@
         }
       }
     },
+    "Sur batterie" : {
+
+    },
     "Sur ce %@" : {
 
     },
@@ -19352,6 +19368,9 @@
           }
         }
       }
+    },
+    "Sur secteur" : {
+
     },
     "Sur ton %@" : {
 
@@ -20463,6 +20482,9 @@
         }
       }
     },
+    "Toujours sombre" : {
+
+    },
     "Tous les cours" : {
       "localizations" : {
         "en" : {
@@ -20555,6 +20577,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Everything is up to date."
+          }
+        }
+      }
+    },
+    "Tout est bloqué sauf %lld apps et %lld sites." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tout est bloqué sauf %1$lld apps et %2$lld sites."
           }
         }
       }
