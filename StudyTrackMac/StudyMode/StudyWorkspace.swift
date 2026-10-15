@@ -364,7 +364,7 @@ struct StudyWorkspace: View {
             ExercisePane(course: course, desk: desk, openWeb: openWeb)
         case .course:
             CoursePane(course: course, desk: desk.sites, openWeb: openWeb, ask: { desk.ask($0, attachSeries: false) },
-                       sendBeside: { reading, title in openBeside(reading, title: title) })
+                       sendBeside: { reading, title in openBeside(reading, title: title) }, hasNotesTool: true)
         case .notes:
             NotesPane(course: course, sendBeside: { path, title in
                 desk.openSide(.init(kind: .notebook(path: path), title: title, icon: "pencil.and.scribble", courseID: course?.id))

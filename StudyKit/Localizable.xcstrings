@@ -5872,6 +5872,12 @@
         }
       }
     },
+    "Chapitre précédent" : {
+
+    },
+    "Chapitre suivant" : {
+
+    },
     "Chapitres" : {
       "localizations" : {
         "en" : {
@@ -6432,7 +6438,7 @@
     "Claude écrit les méthodes des séries…" : {
 
     },
-    "Claude lit la fiche et dessine, chapitre par chapitre, ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre." : {
+    "Claude lit la fiche et dessine ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre — pour tout le cours ou un chapitre à la fois." : {
 
     },
     "Claude lit tout le cours — diapositives, notes, séries et corrigés — et en écrit la fiche : définitions, théorèmes, formules, méthodes, pièges." : {
@@ -6461,6 +6467,9 @@
 
     },
     "Claude relie les notions, écrit l'idée de chacune, dessine les schémas" : {
+
+    },
+    "Claude relit ce chapitre et dessine ses schémas…" : {
 
     },
     "Claude, à droite (⌘J)" : {
@@ -6788,6 +6797,9 @@
 
     },
     "Comprendre avec Claude" : {
+
+    },
+    "Comprendre ce chapitre" : {
 
     },
     "Compte" : {
@@ -7676,6 +7688,9 @@
       }
     },
     "Créer le podcast" : {
+
+    },
+    "Créer le podcast de ce chapitre" : {
 
     },
     "Créer un compte" : {
@@ -8755,6 +8770,9 @@
       }
     },
     "Écouter" : {
+
+    },
+    "Écouter : %@" : {
 
     },
     "Écouter sur" : {
@@ -15280,6 +15298,9 @@
     "Parcours" : {
 
     },
+    "Pareil, mais pour ce chapitre seulement" : {
+
+    },
     "Partage" : {
       "localizations" : {
         "en" : {
@@ -15543,6 +15564,9 @@
       }
     },
     "Pas encore de fiche" : {
+
+    },
+    "Pas encore de schéma pour ce chapitre" : {
 
     },
     "Pas encore de session." : {
@@ -16298,6 +16322,9 @@
         }
       }
     },
+    "Premier chapitre" : {
+
+    },
     "Prénom (affiché dans l'app)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16984,7 +17011,7 @@
     "Refaire" : {
 
     },
-    "Refaire avec Claude" : {
+    "Refaire ce chapitre" : {
 
     },
     "Refaire ceux ratés" : {

@@ -26,6 +26,8 @@ struct CoursePane: View {
     var sendBeside: ((Reading, String) -> Void)? = nil
     /// Un seul document, sans la liste ni son en-tête (un onglet du volet d'à côté).
     var document: Reading? = nil
+    /// Tes notes ont leur propre outil (le Mac) : elles ne sont pas redites ici.
+    var hasNotesTool = false
 
     /// La liste de gauche, repliée pour lire en grand (une par disposition).
     @AppStorage("course.listHidden") private var listHiddenAlone = false
@@ -50,6 +52,18 @@ struct CoursePane: View {
             case .courseware: return "Courseware"
             case .botafogo: return "Le cours"
             case .ed: return "Ed"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .sheet: return "rectangle.stack"
+            case .saved: return "bookmark"
+            case .studytrack: return "calendar"
+            case .notes: return "pencil.and.scribble"
+            case .moodle: return "graduationcap"
+            case .courseware: return "play.rectangle"
+            case .botafogo: return "book"
+            case .ed: return "bubble.left.and.bubble.right"
             }
         }
     }
@@ -128,7 +142,7 @@ struct CoursePane: View {
         Source.allCases.filter {
             // La semaine d'abord, pour tous les cours (Botafogo compris) : ce
             // qu'il y a à voir et à lire, d'où que ça vienne.
-            ($0 == .studytrack && (course.map { !$0.theoryItems.isEmpty || !$0.series.isEmpty } ?? false)) || $0 == .sheet || $0 == .saved || ($0 == .notes && !notes.isEmpty) || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
+            ($0 == .studytrack && (course.map { !$0.theoryItems.isEmpty || !$0.series.isEmpty } ?? false)) || $0 == .sheet || $0 == .saved || ($0 == .notes && !hasNotesTool && !notes.isEmpty) || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
                 || ($0 == .botafogo && botafogoURL != nil)
                 || ($0 == .ed && (edCourse != nil || desk.edNeedsLogin))
         }
@@ -262,23 +276,8 @@ struct CoursePane: View {
     private func sourceColumn(_ course: Course) -> some View {
         VStack(spacing: 0) {
             if sources.count > 1 {
-                if compact {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Picker("Source", selection: $source) {
-                            ForEach(sources) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .padding(.horizontal, 12)
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    // Les onglets quand ils tiennent ; sinon un menu (la colonne
-                    // est étroite à côté de la série) — un contrôle segmenté du
-                    // Mac ne rétrécit pas et débordait sur la barre latérale.
-                    sourcePicker
-                        .padding(12)
-                }
+                sourcePicker
+                    .padding(.horizontal, 12).padding(.vertical, compact ? 8 : 12)
             }
             switch source {
             case .studytrack: studyTrackList(course)
@@ -313,21 +312,28 @@ struct CoursePane: View {
     /// est étroite à côté de la série) — un contrôle segmenté du Mac ne
     /// rétrécit pas et débordait sur la barre latérale.
     private var sourcePicker: some View {
-        ViewThatFits(in: .horizontal) {
-            Picker("Source", selection: $source) {
-                ForEach(sources) { Text($0.label).tag($0) }
+        Menu {
+            ForEach(sources) { item in
+                Button { source = item } label: {
+                    Label(item.label, systemImage: item.icon)
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            Picker("Source", selection: $source) {
-                ForEach(sources) { Text($0.label).tag($0) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: source.icon).foregroundStyle(Carnet.inkSecondary)
+                Text(source.label).font(.body.weight(.medium))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Carnet.inkSecondary)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .foregroundStyle(Carnet.ink)
+        .accessibilityLabel("Source")
     }
 
     // MARK: StudyTrack
