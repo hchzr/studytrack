@@ -32,7 +32,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     @Observable
     final class Screen {
         enum Stage: Equatable { case setup, session }
-        var stage: Stage = .setup
+        var stage: Stage = .setup {
+            didSet { if stage != oldValue { StudyModeController.shared.stageChanged() } }
+        }
         /// Ce que le choix propose d'abord (depuis une ligne « À faire »).
         var courseID: UUID?
         var taskType: TaskType = .exercise
@@ -204,8 +206,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             // Barres flottantes : le bureau ne garde que le centre et le volet d'à côté.
             screen.panels = (settings.studyPanels || Self.panelsForced) && primary != nil
             let realGeometry = !previewOnly || screen.panels
+            // Le choix avant de commencer prend tout l'écran ; la session, seulement le
+            // centre et le volet (les barres flottantes font le reste).
             var frame = !realGeometry ? NSRect(x: 80, y: 80, width: 1440, height: 900)
-                : (screen.panels ? Self.chromeFrames(on: primary!).desk : screenFrame)
+                : (screen.panels && screen.stage == .session ? Self.chromeFrames(on: primary!).desk : screenFrame)
             #if DEBUG
             // `-snapshot` : hors de l'écran, rien ne passe devant ce qu'on fait.
             if Self.snapshotPath != nil {
@@ -255,7 +259,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// La barre du haut et la colonne d'outils, au-dessus des apps permises : on peut
     /// y cliquer sans que le bureau repasse devant l'app posée au centre.
     private func showChromePanels() {
-        guard screen.panels, let timer, let settings, let primary = NSScreen.screens.first else { return }
+        guard screen.panels, screen.stage == .session, let timer, let settings, let primary = NSScreen.screens.first else { return }
         let frames = Self.chromeFrames(on: primary)
         if chromePanels.isEmpty {
             func host(_ view: some View) -> AnyView {
@@ -276,6 +280,20 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private func hideChromePanels() {
         for panel in chromePanels { panel.orderOut(nil) }
         chromePanels.removeAll()
+    }
+
+    /// Le choix et la session n'ont pas la même mise en page : plein écran avant de
+    /// commencer, puis le centre et le volet entre les barres flottantes.
+    func stageChanged() {
+        guard screen.panels, window?.isVisible == true, let primary = NSScreen.screens.first else { return }
+        if screen.stage == .session {
+            window?.setFrame(Self.chromeFrames(on: primary).desk, display: true)
+            showChromePanels()
+        } else {
+            hideChromePanels()
+            window?.setFrame(primary.frame, display: true)
+            MiniTimerPanel.shared.update()
+        }
     }
 
     /// Les barres flottantes sont en place : le chrono flottant n'a rien à faire.

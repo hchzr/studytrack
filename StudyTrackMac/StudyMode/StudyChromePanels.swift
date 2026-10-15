@@ -61,6 +61,7 @@ struct StudyTopBarHost: View {
                     openMusic: { controller.desk.pane = .music },
                     openResource: { controller.openResource($0, course: course) })
             .environment(\.colorScheme, .dark)
+            .environment(\.deskPanelHost, true)
     }
 }
 
@@ -73,6 +74,7 @@ struct StudyRailHost: View {
         let controller = StudyModeController.shared
         StudyRail(desk: controller.desk, browser: controller.browser, course: courses.first { $0.id == timer.courseID })
             .environment(\.colorScheme, .dark)
+            .environment(\.deskPanelHost, true)
     }
 }
 

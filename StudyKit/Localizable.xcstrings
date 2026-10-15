@@ -5073,7 +5073,7 @@
         }
       }
     },
-    "Barres flottantes (expérimental)" : {
+    "Barres flottantes" : {
 
     },
     "Base" : {
@@ -11682,7 +11682,7 @@
         }
       }
     },
-    "La barre du haut et la colonne d'outils deviennent des fenêtres à part, visibles par-dessus GoodNotes et les autres apps permises. Au prochain mode étude." : {
+    "La barre du haut et la colonne d'outils sont des fenêtres à part, visibles par-dessus GoodNotes et les autres apps permises ; la barre du haut recouvre la barre des menus de macOS. Au prochain mode étude." : {
 
     },
     "La calculatrice" : {

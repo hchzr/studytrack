@@ -629,7 +629,7 @@ struct StudyTopBar: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
-        .deskGlass(in: Rectangle())
+        .deskChrome(edge: .bottom)
         // Suivie toute la session : la musique lancée dans Music apparaît
         // ici sans passer d'abord par l'onglet Musique.
         .musicAttached()
@@ -927,7 +927,7 @@ struct StudyRail: View {
         .onAppear { running.start() }
         .padding(.vertical, 14)
         .frame(width: 76)
-        .deskGlass(in: Rectangle())
+        .deskChrome(edge: .trailing)
     }
 
     /// Les apps permises et installées (sauf le Finder et la Calculette : le
