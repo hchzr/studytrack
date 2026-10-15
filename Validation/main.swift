@@ -6423,7 +6423,12 @@ do {
     check(!kinds(W.defaults(W.Context(moment: .series, hasCourse: true))).contains(.upNext), "cartes : sans série, pas de « suite »")
     check(!kinds(course).contains(.redo) && kinds(W.defaults(W.Context(moment: .series, hasCourse: true, redosDue: 2))).contains(.redo), "cartes : les reprises seulement quand il y en a")
     check(kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 10))).contains(.exam) && !kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 60))).contains(.exam), "cartes : l'examen à moins de trois semaines")
-    check(kinds(W.defaults(W.Context(moment: .revision, hasCourse: true))).contains(.exam), "cartes : en révision, l'examen est là")
+    let revisionCards = kinds(W.defaults(W.Context(moment: .revision, hasCourse: true)))
+    check(revisionCards.first == .revisionExam && revisionCards.contains(.revisionPast) && revisionCards.contains(.revisionSheet), "cartes : en révision, l'examen, la fiche, les annales")
+    let lectureCards = kinds(W.defaults(W.Context(moment: .lecture, hasCourse: true)))
+    check(lectureCards.first == .lectureClock && lectureCards.contains(.lectureMarks) && lectureCards.contains(.lectureWeek) && !lectureCards.contains(.target),
+          "cartes : en cours, l'horloge, les repères, la semaine — pas d'exercice")
+    check(!kinds(W.defaults(W.Context(moment: .lecture, hasCourse: false))).contains(.lectureClock), "cartes : un cours sans cours choisi reste une session libre")
     // Rangement de l'étudiant·e
     var mine = course
     mine = W.toggled(.claude, in: mine)

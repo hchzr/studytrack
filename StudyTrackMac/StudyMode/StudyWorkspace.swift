@@ -321,17 +321,21 @@ struct StudyWorkspace: View {
     private var home: some View {
         switch moment {
         case .lecture where course != nil:
-            LectureDeskView(course: course!,
-                            klass: DeskSchedule.latest(of: course?.id, in: classes),
-                            next: DeskSchedule.next(in: classes),
-                            hub: desk.sites, openCourse: openCourse,
-                            openApp: { bundleID, _ in StudyModeController.shared.openApp(bundleID: bundleID) },
-                            openWeb: openWeb)
+            StudyDeskHome(course: course, tint: tint, desk: desk, open: open, moment: moment, lecturePart: { part in
+                AnyView(LectureDeskView(course: course!,
+                                        klass: DeskSchedule.latest(of: course?.id, in: classes),
+                                        next: DeskSchedule.next(in: classes),
+                                        hub: desk.sites, compact: true, openCourse: openCourse,
+                                        openApp: { bundleID, _ in StudyModeController.shared.openApp(bundleID: bundleID) },
+                                        openWeb: openWeb, only: part))
+            })
         case .revision where course != nil:
-            RevisionDeskView(course: course!, openCourse: openCourse) { exercise in
-                timer.retarget(courseID: course?.id, taskType: .exercise, targetID: exercise.id)
-                desk.pane = .exercise
-            }
+            StudyDeskHome(course: course, tint: tint, desk: desk, open: open, moment: moment, revisionPart: { part in
+                AnyView(RevisionDeskView(course: course!, compact: true, openCourse: openCourse, work: { exercise in
+                    timer.retarget(courseID: course?.id, taskType: .exercise, targetID: exercise.id)
+                    desk.pane = .exercise
+                }, only: part))
+            })
         default:
             StudyDeskHome(course: course, tint: tint, desk: desk, open: open, moment: moment)
         }
@@ -1465,6 +1469,9 @@ private struct StudyDeskHome: View {
     @State private var classes: [ScheduledClass] = []
 
     var moment: DeskMoment = .series
+    /// Les sections de l'accueil « en cours » et « révision », fournies par le bureau.
+    var lecturePart: ((LectureDeskView.Part) -> AnyView)?
+    var revisionPart: ((RevisionDeskView.Part) -> AnyView)?
     @State private var placements: [DeskWidgets.Placement] = []
     @State private var editing = false
     /// La largeur du centre : une carte large ne la dépasse pas (le volet d'à côté la réduit).
@@ -1580,6 +1587,16 @@ private struct StudyDeskHome: View {
         case .claude: return "Claude"
         case .courses: return String(localized: "Sur quoi ?")
         case .accounts: return String(localized: "Comptes")
+        case .lectureClock: return String(localized: "Le cours")
+        case .lectureMarks: return String(localized: "Repères")
+        case .lectureTools: return String(localized: "Outils du cours")
+        case .lectureWeek: return String(localized: "La semaine")
+        case .lectureTheory: return String(localized: "Théorie")
+        case .revisionExam: return String(localized: "Examen")
+        case .revisionSheet: return String(localized: "Fiche")
+        case .revisionPast: return String(localized: "Annales")
+        case .revisionRedo: return String(localized: "À refaire")
+        case .revisionTheory: return String(localized: "Théorie")
         }
     }
 
@@ -1680,6 +1697,16 @@ private struct StudyDeskHome: View {
             }
         case .accounts:
             glassCard { accounts }
+        case .lectureClock: glassCard { lecturePart?(.clock) }
+        case .lectureMarks: glassCard { lecturePart?(.marks) }
+        case .lectureTools: glassCard { lecturePart?(.tools) }
+        case .lectureWeek: glassCard { lecturePart?(.week) }
+        case .lectureTheory: glassCard { lecturePart?(.theory) }
+        case .revisionExam: glassCard { revisionPart?(.exam) }
+        case .revisionSheet: glassCard { revisionPart?(.sheet) }
+        case .revisionPast: glassCard { revisionPart?(.past) }
+        case .revisionRedo: glassCard { revisionPart?(.redo) }
+        case .revisionTheory: glassCard { revisionPart?(.theory) }
         }
     }
 

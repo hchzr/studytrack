@@ -32,6 +32,10 @@ enum DeskWidgets {
         case courses
         /// L'état des comptes de l'école.
         case accounts
+        // En cours : les sections de l'accueil du cours, une carte chacune.
+        case lectureClock, lectureMarks, lectureTools, lectureWeek, lectureTheory
+        // Avant un examen : les sections de l'accueil de révision.
+        case revisionExam, revisionSheet, revisionPast, revisionRedo, revisionTheory
 
         var id: String { rawValue }
     }
@@ -82,6 +86,14 @@ enum DeskWidgets {
     /// Les cartes d'un moment, dans l'ordre où elles servent.
     static func defaults(_ c: Context) -> [Placement] {
         func p(_ kind: Kind, _ size: Size) -> Placement { Placement(kind: kind, size: size) }
+        if c.hasCourse && c.moment == .lecture {
+            return [p(.lectureClock, .medium), p(.lectureMarks, .medium), p(.lectureTools, .medium), p(.lectureWeek, .large),
+                    p(.lectureTheory, .medium), p(.session, .small), p(.music, .small)]
+        }
+        if c.hasCourse && c.moment == .revision {
+            return [p(.revisionExam, .medium), p(.revisionSheet, .medium), p(.revisionRedo, .medium), p(.revisionPast, .large),
+                    p(.revisionTheory, .medium), p(.session, .small), p(.music, .small)]
+        }
         guard c.hasCourse else {
             // Session libre : choisir, puis ce que la journée réserve.
             return [p(.courses, .medium), p(.today, .medium), p(.session, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]

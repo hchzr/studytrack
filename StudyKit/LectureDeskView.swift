@@ -35,7 +35,45 @@ struct LectureDeskView: View {
     private var page: MoodleCoursePage? { moodleID.flatMap { hub.moodlePages[$0] } }
     private var section: MoodleCoursePage.Section? { page?.currentSection() }
 
+    /// Une section seule, pour la poser comme une carte du bureau (Mac) ; sans elle, la
+    /// page entière (l'iPhone la garde en colonne).
+    enum Part { case clock, marks, tools, week, theory }
+    var only: Part?
+
     var body: some View {
+        if let only {
+            part(only)
+                .task(id: moodleID) {
+                    if let moodleID, hub.moodlePages[moodleID] == nil { await hub.loadMoodlePage(moodleID, title: course.name) }
+                }
+        } else {
+            full
+        }
+    }
+
+    @ViewBuilder
+    private func part(_ part: Part) -> some View {
+        switch part {
+        case .clock: clock
+        case .marks:
+            VStack(alignment: .leading, spacing: 18) {
+                markButton
+                earlierMarks
+            }
+            .background {
+                // ⌘R : un repère, sans lâcher le clavier.
+                Button("") { addMark() }
+                    .keyboardShortcut("r", modifiers: [.command])
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+        case .tools: tools
+        case .week: week
+        case .theory: theory
+        }
+    }
+
+    private var full: some View {
         ScrollView {
             if compact {
                 VStack(alignment: .leading, spacing: 22) {

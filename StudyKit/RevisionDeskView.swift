@@ -18,7 +18,31 @@ struct RevisionDeskView: View {
 
     private var tint: Color { Carnet.tint(course.colorHex) }
 
+    /// Une section seule, pour la poser comme une carte du bureau (Mac) ; sans elle, la
+    /// page entière (l'iPhone la garde en colonne).
+    enum Part { case exam, sheet, past, redo, theory }
+    var only: Part?
+
     var body: some View {
+        if let only {
+            part(only)
+        } else {
+            full
+        }
+    }
+
+    @ViewBuilder
+    private func part(_ part: Part) -> some View {
+        switch part {
+        case .exam: exam
+        case .sheet: sheet
+        case .past: pastExams
+        case .redo: redo
+        case .theory: theory
+        }
+    }
+
+    private var full: some View {
         ScrollView {
             if compact {
                 VStack(alignment: .leading, spacing: 22) {
