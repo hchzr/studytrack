@@ -43,6 +43,13 @@ private struct DeskControlCenter: View {
             .onChange(of: settings.studyKeepAwake) { _, _ in StudyModeController.shared.update() }
             Toggle("Toujours sombre", isOn: $settings.studyAlwaysDark)
                 .onChange(of: settings.studyAlwaysDark) { _, _ in StudyModeController.shared.update() }
+            if let level = DeskStatus.shared.battery {
+                Label("\(Int((level * 100).rounded())) % · \(DeskStatus.shared.charging ? "sur secteur" : "sur batterie")"
+                      + (level < 0.2 && !DeskStatus.shared.charging ? " · pense à brancher le Mac" : ""),
+                      systemImage: DeskStatus.shared.charging ? "battery.100.bolt" : "battery.50")
+                    .font(.caption)
+                    .foregroundStyle(level < 0.2 && !DeskStatus.shared.charging ? Carnet.review : StudyPalette.inkSecondary)
+            }
             Divider()
             HStack(spacing: 10) {
                 Button("Réorganiser les outils") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }

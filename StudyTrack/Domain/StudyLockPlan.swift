@@ -135,3 +135,24 @@ enum StudyLockPlan {
         return try? decoder.decode(Record.self, from: data)
     }
 }
+
+/// Une app permise **un moment** : les Réglages Système, ouverts depuis le bouton
+/// « Ouvrir les Réglages » de Music pendant un blocage (autrement, le voile les
+/// couvrirait). Elle redevient bloquée à l'heure dite.
+struct TemporaryAllowance: Equatable {
+    private var until: [String: Date] = [:]
+
+    mutating func allow(_ bundleID: String, for seconds: TimeInterval, now: Date = Date()) {
+        until[bundleID] = now.addingTimeInterval(seconds)
+    }
+
+    /// Les apps encore permises à `now`.
+    func allowed(at now: Date = Date()) -> Set<String> {
+        Set(until.filter { $0.value > now }.keys)
+    }
+
+    /// Quand la plus proche permission prend fin (pour recouvrir l'app à ce moment-là).
+    func nextExpiry(after now: Date = Date()) -> Date? {
+        until.values.filter { $0 > now }.min()
+    }
+}

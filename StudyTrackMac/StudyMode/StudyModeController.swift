@@ -23,6 +23,15 @@ import OSLog
 final class StudyModeController: NSObject, NSWindowDelegate {
     static let shared = StudyModeController()
 
+    override init() {
+        super.init()
+        // « Ouvrir les Réglages » de Music pendant un blocage : les Réglages Système sont
+        // permis un moment, sinon le voile les couvrirait aussitôt.
+        settingsObserver = NotificationCenter.default.addObserver(forName: .studyAllowSystemSettings, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.allowSystemSettings() }
+        }
+    }
+
     weak var timer: MacTimer?
     weak var settings: MacSettings?
     var container: ModelContainer?
@@ -62,6 +71,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private var quitting: [pid_t: Date] = [:]
     private var blocking = false
     private var enforcer: Timer?
+    /// Une app permise un moment (voir `allowSystemSettings`).
+    private var temporary = TemporaryAllowance()
+    private var settingsObserver: NSObjectProtocol?
     /// Les autres écrans pendant un blocage : calmes, sans rien à y faire.
     private var calmWindows: [NSWindow] = []
     /// La barre du haut et la colonne d'outils flottantes (mode « barres flottantes »).
@@ -470,7 +482,18 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         StudyMode.disposition(bundleID: app.bundleIdentifier,
                               isRegular: app.activationPolicy == .regular,
                               own: Bundle.main.bundleIdentifier ?? "",
-                              allowed: settings?.studyApps ?? StudyMode.defaultMacApps)
+                              allowed: (settings?.studyApps ?? StudyMode.defaultMacApps) + temporary.allowed())
+    }
+
+    /// Les Réglages Système, le temps de régler une permission : permis 90 secondes
+    /// (« Ouvrir les Réglages » de Music), puis recouverts de nouveau.
+    func allowSystemSettings(seconds: TimeInterval = 90) {
+        temporary.allow("com.apple.systempreferences", for: seconds)
+        guard let expiry = temporary.nextExpiry() else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(0.5, expiry.timeIntervalSinceNow + 0.5)))
+            self?.check(NSWorkspace.shared.frontmostApplication)
+        }
     }
 
     private func isBlocked(_ app: NSRunningApplication) -> Bool {

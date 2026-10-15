@@ -133,6 +133,8 @@ struct MusicNowPlayingCard: View {
                     Button("Redemander l'autorisation") { StudyMusic.shared.askAutomationAgain() }
                         .buttonStyle(.paper)
                     Button("Ouvrir les Réglages Système") {
+                        // Pendant un blocage, les Réglages sont permis 90 secondes.
+                        NotificationCenter.default.post(name: .studyAllowSystemSettings, object: nil)
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
                             NSWorkspace.shared.open(url)
                         }
@@ -694,4 +696,9 @@ struct MusicDevicePicker: View {
             .help("Où joue la musique — la faire passer d'un appareil à l'autre")
         }
     }
+}
+
+extension Notification.Name {
+    /// Les Réglages Système sont permis un moment pendant un blocage (le mode étude du Mac l'écoute).
+    static let studyAllowSystemSettings = Notification.Name("study.allowSystemSettings")
 }

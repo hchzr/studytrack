@@ -6492,6 +6492,19 @@ do {
     check(StudyMode.writingApps.contains("com.goodnotesapp.x") && !StudyMode.writingApps.contains("com.anthropic.claudefordesktop"), "apps d'écriture : GoodNotes oui, Claude non")
 }
 
+// MARK: Une app permise un moment
+do {
+    let t0 = Date(timeIntervalSince1970: 5000)
+    var allowance = TemporaryAllowance()
+    check(allowance.allowed(at: t0).isEmpty && allowance.nextExpiry(after: t0) == nil, "permission brève : rien au départ")
+    allowance.allow("com.apple.systempreferences", for: 90, now: t0)
+    check(allowance.allowed(at: t0.addingTimeInterval(60)) == ["com.apple.systempreferences"], "permission brève : permise pendant sa durée")
+    check(allowance.allowed(at: t0.addingTimeInterval(91)).isEmpty, "permission brève : bloquée de nouveau après")
+    check(allowance.nextExpiry(after: t0) == t0.addingTimeInterval(90) && allowance.nextExpiry(after: t0.addingTimeInterval(100)) == nil, "permission brève : l'heure de fin")
+    allowance.allow("com.apple.systempreferences", for: 30, now: t0.addingTimeInterval(80))
+    check(allowance.allowed(at: t0.addingTimeInterval(100)) == ["com.apple.systempreferences"], "permission brève : redemandée, elle repart")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")
