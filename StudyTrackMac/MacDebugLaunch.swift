@@ -9,6 +9,38 @@ import SwiftUI
 @MainActor
 enum MacDebugLaunch {
     static func apply(timer: MacTimer, store: MacStore) {
+        // `-dumpHotKeys <fichier>` : les raccourcis du système (numéro, nom, état, touche) —
+        // lecture seule, sert à confirmer les numéros que le blocage éteint (spike S1).
+        if let index = CommandLine.arguments.firstIndex(of: "-dumpHotKeys"), index + 1 < CommandLine.arguments.count {
+            let path = CommandLine.arguments[index + 1]
+            var lines = ["disponible : \(SystemHotKeys.isAvailable)"]
+            for id in 0...400 {
+                guard let name = SystemHotKeys.name(id) else { continue }
+                let binding = SystemHotKeys.binding(id).map { "touche \($0.code) modificateurs \(String($0.modifiers, radix: 16))" } ?? "-"
+                lines.append("\(id)\t\(SystemHotKeys.isEnabled(id) ? "allumé" : "éteint")\t\(name)\t\(binding)")
+            }
+            try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+            exit(0)
+        }
+        // `-hotKeyTrial 64,65,1,2 20` : éteint ces raccourcis 20 s (fiche écrite d'abord),
+        // puis les rallume — pour vérifier à la main qu'un `kill -9` ne les laisse pas éteints
+        // (spike S1b). Lancer avec `-isolatedTimer` désactive tout le reste.
+        if let index = CommandLine.arguments.firstIndex(of: "-hotKeyTrial"), index + 2 < CommandLine.arguments.count {
+            let ids = CommandLine.arguments[index + 1].split(separator: ",").compactMap { Int($0) }
+            let seconds = Double(CommandLine.arguments[index + 2]) ?? 20
+            let (disable, record) = StudyLockPlan.plan(wanted: ids, enabledNow: SystemHotKeys.isEnabled, existing: StudyLockStore.load(),
+                                                       dockNow: nil, menuBarNow: nil)
+            StudyLockStore.save(record)
+            for id in disable { SystemHotKeys.setEnabled(id, false) }
+            NSLog("hotKeyTrial : %d raccourcis éteints pour %.0f s", disable.count, seconds)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(seconds))
+                for id in StudyLockPlan.restore(record) { SystemHotKeys.setEnabled(id, true) }
+                StudyLockStore.clear()
+                NSLog("hotKeyTrial : rétablis")
+                exit(0)
+            }
+        }
         // `-debugTimer start|discard` : vérifier le chrono partagé sans cliquer.
         if let index = CommandLine.arguments.firstIndex(of: "-debugTimer"), index + 1 < CommandLine.arguments.count {
             let action = CommandLine.arguments[index + 1]

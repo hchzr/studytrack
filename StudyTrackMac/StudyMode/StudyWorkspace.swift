@@ -300,20 +300,21 @@ struct StudyWorkspace: View {
             HStack(spacing: 10) {
                 switch kind {
                 case .onBreak:
-                    Button("Écourter la pause") { timer.skipBreak() }.buttonStyle(.ink)
-                    Button("Rester ici") { dismissedTakeover = kind }.buttonStyle(.paper)
+                    Button("Écourter la pause") { timer.skipBreak() }.deskButton(prominent: true)
+                    Button("Rester ici") { dismissedTakeover = kind }.deskButton()
                 case .paused:
-                    Button("Reprendre") { timer.resume() }.buttonStyle(.ink)
-                    Button("Plus tard") { dismissedTakeover = kind }.buttonStyle(.paper)
+                    Button("Reprendre") { timer.resume() }.deskButton(prominent: true)
+                    Button("Plus tard") { dismissedTakeover = kind }.deskButton()
                 case .wrapUp:
                     if !StudyMode.isOpenEnded(timer.state) {
-                        Button("Encore 25 min") { timer.extendStudy(minutes: 25) }.buttonStyle(.paper)
+                        Button("Encore 25 min") { timer.extendStudy(minutes: 25) }.deskButton()
                     }
-                    Button("D'accord") { dismissedTakeover = kind }.buttonStyle(.ink)
+                    Button("D'accord") { dismissedTakeover = kind }.deskButton(prominent: true)
                 default:
-                    Button("D'accord") { dismissedTakeover = kind }.buttonStyle(.ink)
+                    Button("D'accord") { dismissedTakeover = kind }.deskButton(prominent: true)
                 }
             }
+            .deskGlassGroup()
         }
         .padding(28)
         .frame(width: 380)

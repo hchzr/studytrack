@@ -34,6 +34,28 @@ private struct DeskChrome: ViewModifier {
 }
 
 extension View {
+    /// Un bouton d'action du bureau : le verre natif de macOS 26 (`.glass`, `.glassProminent`),
+    /// l'encre ou le papier avant.
+    @ViewBuilder
+    func deskButton(prominent: Bool = false) -> some View {
+        if #available(macOS 26.0, *) {
+            if prominent { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.glass) }
+        } else {
+            if prominent { self.buttonStyle(.ink) } else { self.buttonStyle(.paper) }
+        }
+    }
+
+    /// Plusieurs éléments de verre côte à côte : ils se fondent l'un dans l'autre
+    /// (`GlassEffectContainer`) au lieu de se superposer.
+    @ViewBuilder
+    func deskGlassGroup(spacing: CGFloat = 12) -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) { self }
+        } else {
+            self
+        }
+    }
+
     /// Le fond d'une barre du bureau ; `edge` : le bord où elle touche le contenu.
     func deskChrome(edge: Edge) -> some View { modifier(DeskChrome(edge: edge)) }
 

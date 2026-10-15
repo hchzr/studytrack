@@ -116,10 +116,24 @@ enum StudyLockStore {
 enum SystemHotKeys {
     private typealias SetFunction = @convention(c) (Int32, Bool) -> Int32
     private typealias IsFunction = @convention(c) (Int32) -> Bool
+    private typealias NameFunction = @convention(c) (Int32) -> UnsafePointer<CChar>?
+    private typealias ValueFunction = @convention(c) (Int32, UnsafeMutablePointer<UInt16>, UnsafeMutablePointer<UInt16>, UnsafeMutablePointer<UInt32>) -> Int32
 
     private static let handle = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_NOW)
     private static let setter: SetFunction? = symbol("SLSSetSymbolicHotKeyEnabled")
     private static let getter: IsFunction? = symbol("SLSIsSymbolicHotKeyEnabled")
+    private static let namer: NameFunction? = symbol("SLSSymbolicHotKeyName")
+    private static let valuer: ValueFunction? = symbol("SLSGetSymbolicHotKeyValue")
+
+    /// Le nom d'un raccourci du système (« Spotlight », « SwitchFwd »), pour les essais.
+    static func name(_ id: Int) -> String? { namer?(Int32(id)).map { String(cString: $0) } }
+
+    /// Sa touche et ses modificateurs (code, modificateurs), pour les essais.
+    static func binding(_ id: Int) -> (code: Int, modifiers: Int)? {
+        var ascii: UInt16 = 0, code: UInt16 = 0, modifiers: UInt32 = 0
+        guard valuer?(Int32(id), &ascii, &code, &modifiers) == 0 else { return nil }
+        return (Int(code), Int(modifiers))
+    }
 
     private static func symbol<T>(_ name: String) -> T? {
         guard let pointer = dlsym(handle ?? UnsafeMutableRawPointer(bitPattern: -2), name) else { return nil }

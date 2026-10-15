@@ -96,7 +96,7 @@ struct StudyDeskHome: View {
     /// L'outil du centre où une carte mène (« zoomer » dessus).
     private func centerPane(for kind: DeskWidgets.Kind) -> StudyDesk.Pane? {
         switch kind {
-        case .target, .upNext, .redo, .steps: return .exercise
+        case .target, .upNext, .redo: return .exercise
         case .music: return .music
         case .lectureWeek, .lectureTheory, .revisionSheet, .revisionPast, .revisionTheory: return .course
         default: return nil
@@ -515,7 +515,7 @@ struct StudyDeskHome: View {
     /// Les comptes EPFL : connectés sans rien demander, ou un bouton.
     private var accounts: some View {
         let connect = SchoolConnect.shared
-        return HStack(spacing: 10) {
+        return FlowLayout(spacing: 12) {
             ForEach(SchoolConnect.Site.allCases) { site in
                 let state = connect.state(site)
                 HStack(spacing: 4) {
@@ -523,10 +523,9 @@ struct StudyDeskHome: View {
                                   : state == .failed ? Carnet.wrong
                                   : state == .needsYou ? Carnet.review : StudyPalette.inkTertiary)
                         .frame(width: 6, height: 6)
-                    Text(site.title).font(.caption2).foregroundStyle(StudyPalette.inkSecondary)
+                    Text(site.title).font(.caption2).foregroundStyle(StudyPalette.inkSecondary).lineLimit(1).fixedSize()
                 }
             }
-            Spacer()
             if connect.isRunning {
                 ProgressView().controlSize(.mini)
             } else if let site = connect.signInSite {
