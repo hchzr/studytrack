@@ -707,5 +707,7 @@ extension StudyMode.Tool {
 }
 
 extension Notification.Name {
+    /// « Ranger le bureau » : l'arrangement du moment, malgré ce qu'on a déplacé.
+    static let studyTidyDesk = Notification.Name("study.tidyDesk")
     static let macOpenMainWindow = Notification.Name("mac.openMainWindow")
 }

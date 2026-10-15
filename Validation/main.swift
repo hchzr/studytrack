@@ -6323,6 +6323,56 @@ do {
     check(S.decode(S.encode(choice)) == choice && S.decode(nil) == nil && S.decode(Data("x".utf8)) == nil, "bande-son : le choix voyage en JSON")
 }
 
+// MARK: Bureau selon le contexte
+do {
+    typealias D = DeskArrangement
+    func ctx(_ moment: DeskMoment = .series, _ edit: (inout D.Context) -> Void = { _ in }) -> D.Context {
+        var c = D.Context(moment: moment); edit(&c); return c
+    }
+    let doing = D.layout(for: ctx { $0.hasTarget = true; $0.hasCopy = true })
+    check(doing.center == .exercise && doing.side == [.copy] && doing.sideOpen, "bureau : un exercice en cours → l'énoncé au centre, ta copie à côté")
+    let notesOnly = D.layout(for: ctx { $0.hasTarget = true; $0.hasCourseNotes = true })
+    check(notesOnly.side == [.courseNotes], "bureau : sans copie, les notes du cours à côté")
+    let nothing = D.layout(for: ctx { $0.hasTarget = true })
+    check(nothing.center == .exercise && nothing.side.isEmpty && !nothing.sideOpen, "bureau : rien à garder à côté, le volet reste fermé")
+    let done = D.layout(for: ctx { $0.hasTarget = true; $0.targetDone = true; $0.solutionAvailable = true; $0.hasCopy = true })
+    check(done.side == [.solution], "bureau : fait et corrigé publié → le corrigé vient à côté")
+    let notPublished = D.layout(for: ctx { $0.hasTarget = true; $0.targetDone = true; $0.hasCopy = true })
+    check(notPublished.side == [.copy], "bureau : corrigé pas publié → la copie reste")
+    check(D.layout(for: ctx { $0.hasTarget = true; $0.seriesComplete = true }).openClaude, "bureau : série finie → Claude pour clore")
+    check(!D.layout(for: ctx { $0.hasTarget = true }).openClaude, "bureau : série en cours → pas de Claude d'office")
+    let theory = D.layout(for: ctx { $0.isTheory = true; $0.hasCourseNotes = true })
+    check(theory.center == .course && theory.side == [.courseNotes], "bureau : théorie → le cours au centre, les notes à côté")
+    let lecture = D.layout(for: ctx(.lecture) { $0.hasTarget = true })
+    check(lecture.center == .desk && lecture.side.isEmpty && !lecture.openClaude, "bureau : en cours → l'accueil du cours, rien à côté")
+    let revision = D.layout(for: ctx(.revision))
+    check(revision.center == .desk && revision.side == [.sheet] && revision.sideOpen, "bureau : révision → l'accueil et la fiche à côté")
+    check(D.layout(for: ctx()).center == .desk, "bureau : sans cible → l'accueil")
+    check(D.layout(for: ctx(.together) { $0.hasTarget = true }).center == .exercise, "bureau : ensemble → comme une série")
+    // Ce qui prend l'écran.
+    check(D.takeover(for: ctx { $0.phase = .onBreak }) == .onBreak, "bureau : une pause Pomodoro prend l'écran")
+    check(D.takeover(for: ctx { $0.phase = .paused }) == .paused, "bureau : la pause manuelle aussi")
+    check(D.takeover(for: ctx { $0.minutesLeft = 4 }) == .wrapUp && D.takeover(for: ctx { $0.minutesLeft = 5 }) == .wrapUp, "bureau : cinq minutes avant la fin → le bilan")
+    check(D.takeover(for: ctx { $0.minutesLeft = 6 }) == .none && D.takeover(for: ctx()) == .none, "bureau : assez de temps, ou sans fin → rien")
+    check(D.takeover(for: ctx(.lecture) { $0.classBreak = true }) == .classBreak, "bureau : la pause du cours")
+    check(D.takeover(for: ctx { $0.phase = .ended; $0.minutesLeft = 1 }) == .none, "bureau : session finie → rien")
+    // Épingles : le bureau ne bouge pas sous les mains.
+    let base = ctx { $0.hasTarget = true; $0.hasCopy = true }
+    let key = D.signature(base)
+    check(key == D.signature(base) && key != D.signature(ctx { $0.hasTarget = true; $0.hasCopy = true; $0.targetDone = true }), "bureau : la clé change avec le moment")
+    check(D.signature(ctx { $0.minutesLeft = 40 }) == D.signature(ctx { $0.minutesLeft = 12 }), "bureau : les minutes qui passent ne changent pas la clé")
+    check(D.signature(ctx { $0.phase = .paused }) == D.signature(ctx { $0.phase = .running }), "bureau : mettre en pause puis reprendre ne réarrange pas")
+    check(D.signature(ctx { $0.phase = .onBreak }) == D.signature(ctx { $0.minutesLeft = 3 }), "bureau : une pause ou le bilan ne réarrangent pas non plus")
+    var pins = D.Pins(center: true, side: false, claude: false)
+    check(D.pins(pins, previous: key, current: key) == pins, "bureau : même moment → les épingles restent")
+    check(D.pins(pins, previous: key, current: "autre").isEmpty, "bureau : nouveau moment → les épingles tombent")
+    let applicable = D.applicable(D.layout(for: base), pins: pins)
+    check(applicable.center == nil && applicable.side == [.copy], "bureau : le centre épinglé n'est pas touché, le côté oui")
+    pins = D.Pins(center: false, side: true, claude: true)
+    let again = D.applicable(D.layout(for: ctx { $0.hasTarget = true; $0.seriesComplete = true }), pins: pins)
+    check(again.center == .exercise && again.side == nil && !again.claude, "bureau : le côté et Claude épinglés ne bougent pas")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

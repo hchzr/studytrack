@@ -17,6 +17,10 @@ struct StudyWorkspace: View {
     /// L'horaire du jour, relu chaque minute (le cours en cours, la suite).
     @State private var classes: [ScheduledClass] = []
     @State private var toastVisible = false
+    /// Relu toutes les 30 s : le bilan des cinq dernières minutes en dépend.
+    @State private var now = Date()
+    /// Le voile de pause / bilan qu'on a écarté (jusqu'au prochain changement).
+    @State private var dismissedTakeover: DeskArrangement.Takeover?
 
     private var course: Course? { courses.first { $0.id == timer.courseID } }
     private var tint: Color { MacTargets.tint(course) }
@@ -47,6 +51,18 @@ struct StudyWorkspace: View {
             }
         }
         .overlay(alignment: .top) { blockedToast }
+        .overlay { takeoverView }
+        .animation(.smooth(duration: 0.3), value: layout.takeover)
+        .onChange(of: layout.takeover) { _, _ in dismissedTakeover = nil }
+        .onChange(of: arrangementKey) { _, _ in arrange(force: false) }
+        .onReceive(NotificationCenter.default.publisher(for: .studyTidyDesk)) { _ in arrange(force: true) }
+        .task {
+            arrange(force: false)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                now = Date()
+            }
+        }
         .overlay(alignment: .top) {
             if let notice = desk.dropNotice {
                 Label(notice, systemImage: "iphone.and.arrow.forward")
@@ -78,6 +94,126 @@ struct StudyWorkspace: View {
                 try? await Task.sleep(for: .seconds(max(1, wake.timeIntervalSinceNow + 0.5)))
             }
         }
+    }
+
+    // MARK: Le bureau s'arrange
+
+    /// Ce que le bureau sait du moment (voir `DeskArrangement`).
+    private var arrangementContext: DeskArrangement.Context {
+        var context = DeskArrangement.Context(moment: moment)
+        context.isTheory = timer.taskType.canonical == .theory
+        context.phase = !timer.isStudying ? .ended : (timer.phase == .onBreak ? .onBreak : (timer.phase == .paused ? .paused : .running))
+        let exercise = course?.allExercises.first { $0.id == timer.targetID }
+        context.hasTarget = exercise != nil
+        context.targetDone = exercise?.isDone ?? false
+        let series = exercise?.series
+        context.seriesComplete = exercise != nil && (series?.isComplete ?? false)
+        context.solutionAvailable = series.map { solutionAddress($0) != nil } ?? false
+        if let series, let course { context.hasCopy = NotesStore.shared.copy(for: series, course: course, among: courses) != nil }
+        context.hasCourseNotes = course != nil
+        if !StudyMode.isOpenEnded(timer.state) { context.minutesLeft = Int(StudyMode.remaining(timer.state, at: now) / 60) }
+        if moment == .lecture, let klass = DeskSchedule.latest(of: course?.id, in: classes),
+           case .pause = LectureClock.phase(of: klass.slot, at: now) {
+            context.classBreak = true
+        }
+        return context
+    }
+
+    private var layout: DeskArrangement.Layout { DeskArrangement.layout(for: arrangementContext) }
+    private var arrangementKey: String { DeskArrangement.signature(arrangementContext) }
+
+    /// À un changement de moment (ou « Ranger le bureau ») : le centre, le côté
+    /// et Claude se mettent en place, sauf ce que l'étudiant·e a déplacé.
+    private func arrange(force: Bool) {
+        let key = arrangementKey
+        desk.pins = DeskArrangement.pins(desk.pins, previous: desk.lastSignature, current: key)
+        guard force || key != desk.lastSignature else { return }
+        desk.lastSignature = key
+        if force { desk.pins = DeskArrangement.Pins() }
+        let wanted = layout
+        let apply = DeskArrangement.applicable(wanted, pins: desk.pins)
+        desk.applying = true
+        defer { desk.applying = false }
+        if let center = apply.center, let pane = StudyDesk.Pane(rawValue: center.rawValue) { desk.pane = pane }
+        if let sides = apply.side {
+            if let first = sides.compactMap(sideItem).first { desk.openSide(first) }
+            desk.sideOpen = wanted.sideOpen
+        }
+        if apply.claude { desk.showClaude() }
+    }
+
+    /// Ce que `DeskArrangement.Side` ouvre : une entrée de ce que le volet propose déjà.
+    private func sideItem(for side: DeskArrangement.Side) -> StudyDesk.SideItem? {
+        let entries = sideSuggestions.flatMap(\.entries).map(\.item)
+        switch side {
+        case .series: return entries.first { $0.kind == .series }
+        case .copy: return entries.first { if case .notebook = $0.kind { return true } else { return false } }
+        case .solution: return entries.first { if case .reading(.pdf) = $0.kind { return $0.title == String(localized: "Corrigé") } else { return false } }
+        case .courseNotes: return entries.first { $0.kind == .courseNotes }
+        case .sheet: return entries.first { $0.kind == .sheet }
+        }
+    }
+
+    // MARK: Ce qui prend l'écran
+
+    @ViewBuilder
+    private var takeoverView: some View {
+        let kind = layout.takeover
+        if kind != .none, dismissedTakeover != kind {
+            ZStack {
+                if kind != .wrapUp {
+                    Color.black.opacity(0.4).ignoresSafeArea()
+                        .onTapGesture { dismissedTakeover = kind }
+                }
+                VStack {
+                    if kind == .wrapUp { Spacer() }
+                    takeoverCard(kind)
+                        .padding(kind == .wrapUp ? 24 : 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    private func takeoverCard(_ kind: DeskArrangement.Takeover) -> some View {
+        let minutes = arrangementContext.minutesLeft ?? 0
+        let title: String, detail: String, icon: String
+        switch kind {
+        case .onBreak:
+            title = String(localized: "Pause"); detail = String(localized: "Lève les yeux. Le bloc suivant t'attend."); icon = "cup.and.saucer"
+        case .paused:
+            title = String(localized: "En pause"); detail = String(localized: "Le temps ne compte plus."); icon = "pause.circle"
+        case .classBreak:
+            title = String(localized: "Pause du cours"); detail = String(localized: "Le cours reprend dans quelques minutes."); icon = "person.wave.2"
+        default:
+            title = String(localized: "Plus que \(minutes) min"); detail = String(localized: "Note où tu t'arrêtes, ou prolonge."); icon = "hourglass"
+        }
+        return VStack(spacing: 14) {
+            Image(systemName: icon).font(.largeTitle).foregroundStyle(StudyPalette.inkSecondary)
+            Text(title).font(Carnet.serif(.title)).foregroundStyle(StudyPalette.ink)
+            Text(detail).font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+            HStack(spacing: 10) {
+                switch kind {
+                case .onBreak:
+                    Button("Écourter la pause") { timer.skipBreak() }.buttonStyle(.ink)
+                    Button("Rester ici") { dismissedTakeover = kind }.buttonStyle(.paper)
+                case .paused:
+                    Button("Reprendre") { timer.resume() }.buttonStyle(.ink)
+                    Button("Plus tard") { dismissedTakeover = kind }.buttonStyle(.paper)
+                case .wrapUp:
+                    if !StudyMode.isOpenEnded(timer.state) {
+                        Button("Encore 25 min") { timer.extendStudy(minutes: 25) }.buttonStyle(.paper)
+                    }
+                    Button("D'accord") { dismissedTakeover = kind }.buttonStyle(.ink)
+                default:
+                    Button("D'accord") { dismissedTakeover = kind }.buttonStyle(.ink)
+                }
+            }
+        }
+        .padding(28)
+        .frame(width: 380)
+        .deskGlass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     // MARK: Le centre
@@ -559,6 +695,7 @@ private struct StudyTopBar: View {
                     Button { timer.extendStudy(minutes: 25) } label: { Label("Encore 25 min", systemImage: "plus") }
                     Divider()
                 }
+                Button("Ranger le bureau") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
                 Button("Mes cours") {
                     NSApp.setActivationPolicy(.regular)
                     NotificationCenter.default.post(name: .macOpenMainWindow, object: nil)

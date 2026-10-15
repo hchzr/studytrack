@@ -50,8 +50,21 @@ final class StudyDesk {
     /// L'outil au centre. Un outil ouvert une fois reste vivant, caché : on le
     /// retrouve tel qu'on l'a laissé (le document lu, la page, le cahier).
     var pane: Pane = .desk {
-        didSet { opened.insert(pane) }
+        didSet {
+            opened.insert(pane)
+            if !applying { pins.center = true }
+        }
     }
+
+    // MARK: Le bureau s'arrange
+
+    /// Ce que l'étudiant·e a déplacé à la main : le bureau n'y touche plus jusqu'au
+    /// moment suivant (`DeskArrangement.pins`).
+    var pins = DeskArrangement.Pins()
+    /// La clé du dernier arrangement appliqué.
+    var lastSignature: String?
+    /// Vrai pendant qu'un arrangement s'applique : ce ne sont pas des gestes.
+    var applying = false
     private(set) var opened: Set<Pane> = [.desk]
 
     // MARK: À côté
@@ -77,7 +90,10 @@ final class StudyDesk {
     private(set) var sideItems: [SideItem] = []
     var sideSelection: SideItem.ID?
     var sideOpen = UserDefaults.standard.bool(forKey: "desk.sideOpen") {
-        didSet { UserDefaults.standard.set(sideOpen, forKey: "desk.sideOpen") }
+        didSet {
+            UserDefaults.standard.set(sideOpen, forKey: "desk.sideOpen")
+            if !applying { pins.side = true }
+        }
     }
     var sideWidth: CGFloat = {
         let saved = UserDefaults.standard.double(forKey: "desk.sideWidth")
@@ -104,6 +120,7 @@ final class StudyDesk {
     }
 
     func closeSide(_ id: SideItem.ID) {
+        if !applying { pins.side = true }
         guard let index = sideItems.firstIndex(where: { $0.id == id }) else { return }
         let item = sideItems.remove(at: index)
         if item.kind == .claude { claudePlacement = .floating }
@@ -152,6 +169,7 @@ final class StudyDesk {
     }
 
     func showClaude() {
+        if !applying { pins.claude = true }
         if claudePlacement == .docked { openSide(claudeItem) } else { claudeShown = true }
     }
 
