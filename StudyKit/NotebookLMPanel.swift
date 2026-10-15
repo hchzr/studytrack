@@ -11,6 +11,8 @@ import UniformTypeIdentifiers
 /// Réglages › « NotebookLM » l'allume ou l'éteint.
 struct NotebookLMPanel: View {
     @Bindable var course: Course
+    /// Le chapitre dont on parle (`nil` : tout le cours). Chaque chapitre a son carnet et ses podcasts.
+    var chapter: String?
 
     @Environment(\.openURL) private var openURL
     @State private var player = PodcastPlayer.shared
@@ -26,6 +28,13 @@ struct NotebookLMPanel: View {
     @State private var signingIn = false
     private var store: StudyMapStore { .shared }
     private var tint: Color { Carnet.tint(course.colorHex) }
+    private var chapterTitle: String? { course.revisionSheet?.chapter(chapter)?.title }
+
+    /// L'adresse du carnet de ce cours, ou de ce chapitre.
+    private func address(_ map: StudyMap) -> String? {
+        if let chapter { return map.chapterNotebooks?[chapter] }
+        return map.notebookURL
+    }
 
     var body: some View {
         let map = store.map(course)
@@ -44,7 +53,7 @@ struct NotebookLMPanel: View {
             .frame(maxWidth: .infinity)
         }
         .background(Carnet.ground)
-        .onAppear { notebook = map.notebookURL ?? "" }
+        .onAppear { notebook = address(map) ?? "" }
         .task { if account.state == .unknown { await account.refresh() } }
         .sheet(isPresented: $signingIn) {
             NotebookLMLogin { signingIn = false; Task { await account.refresh() } }
@@ -60,7 +69,7 @@ struct NotebookLMPanel: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 6) {
             Kicker("NotebookLM · \(course.displayCode)", color: tint)
-            Text("Écouter ton cours").font(Carnet.serif(26)).foregroundStyle(Carnet.ink)
+            Text(chapterTitle.map { "Écouter : \($0)" } ?? "Écouter ton cours").font(Carnet.serif(26)).foregroundStyle(Carnet.ink)
             Text("NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien.")
                 .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -103,13 +112,13 @@ struct NotebookLMPanel: View {
 
     @ViewBuilder
     private var automaticReady: some View {
-        let working = account.progress[course.id]
+        let working = account.working(course, chapter: chapter)
         if let sheet = course.revisionSheet {
             HStack(spacing: 10) {
-                Button { account.makePodcast(for: course, sheet: sheet) } label: { Label("Créer le podcast", systemImage: "waveform") }
+                Button { account.makePodcast(for: course, sheet: sheet, chapter: chapter) } label: { Label(chapter == nil ? "Créer le podcast" : "Créer le podcast de ce chapitre", systemImage: "waveform") }
                     .buttonStyle(.ink).disabled(working != nil)
-                if store.map(course).notebookURL != nil {
-                    Button { account.fetchLatest(for: course) } label: { Label("Récupérer", systemImage: "arrow.down.circle") }
+                if address(store.map(course)) != nil {
+                    Button { account.fetchLatest(for: course, chapter: chapter) } label: { Label("Récupérer", systemImage: "arrow.down.circle") }
                         .buttonStyle(.paper).disabled(working != nil)
                         .help("Retrouve le dernier podcast du carnet (si le lancement a été interrompu)")
                 }
@@ -124,11 +133,11 @@ struct NotebookLMPanel: View {
                 ProgressView().controlSize(.small)
                 Text(working).font(.callout).foregroundStyle(Carnet.inkSecondary)
                 Spacer(minLength: 4)
-                Button("Arrêter") { account.cancel(course) }.buttonStyle(.plain).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                Button("Arrêter") { account.cancel(course, chapter: chapter) }.buttonStyle(.plain).font(.caption).foregroundStyle(Carnet.inkSecondary)
             }
             Text("Tu peux continuer à travailler : le podcast arrive dans « Rapporte le podcast » plus bas.").font(.caption).foregroundStyle(Carnet.inkTertiary)
         }
-        if let failure = account.failure[course.id] {
+        if let failure = account.problem(course, chapter: chapter) {
             Label(failure, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Carnet.wrong).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -165,12 +174,13 @@ struct NotebookLMPanel: View {
 
     private func writeSources() {
         guard let sheet = course.revisionSheet else { return }
-        let files = NotebookExport.files(courseName: course.name, code: course.displayCode, sheet: sheet, map: store.map(course))
-        var urls = PodcastStore.writeSources(files, code: course.displayCode)
+        let files = NotebookExport.files(courseName: course.name, code: course.displayCode, sheet: sheet, map: store.map(course), chapter: chapter)
+        let tag = chapterTitle.map { "\(course.displayCode) · \($0.prefix(24))" } ?? course.displayCode
+        var urls = PodcastStore.writeSources(files, code: tag.replacingOccurrences(of: "/", with: "-"))
         #if os(macOS)
         // Sur le Mac, les fichiers vont dans Documents : on les retrouve, on les glisse dans le navigateur.
         if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let folder = documents.appending(path: "StudyTrack NotebookLM/\(course.displayCode)", directoryHint: .isDirectory)
+            let folder = documents.appending(path: "StudyTrack NotebookLM/\(tag.replacingOccurrences(of: "/", with: "-"))", directoryHint: .isDirectory)
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             urls = urls.compactMap { source in
                 let target = folder.appending(path: source.lastPathComponent)
@@ -194,8 +204,8 @@ struct NotebookLMPanel: View {
                 TextField("Adresse de ton carnet (à coller une fois)", text: $notebook)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { saveNotebook() }
-                Button("Garder") { saveNotebook() }.buttonStyle(.paper).disabled(notebook == (map.notebookURL ?? ""))
-                if let address = map.notebookURL, let url = URL(string: address) {
+                Button("Garder") { saveNotebook() }.buttonStyle(.paper).disabled(notebook == (address(map) ?? ""))
+                if let address = address(map), let url = URL(string: address) {
                     Button { openURL(url) } label: { Label("Mon carnet", systemImage: "book") }.buttonStyle(.ink)
                 }
             }
@@ -206,7 +216,15 @@ struct NotebookLMPanel: View {
 
     private func saveNotebook() {
         let address = notebook.trimmingCharacters(in: .whitespacesAndNewlines)
-        store.update(course) { $0.notebookURL = address.isEmpty ? nil : address }
+        store.update(course) { map in
+            if let chapter {
+                var all = map.chapterNotebooks ?? [:]
+                all[chapter] = address.isEmpty ? nil : address
+                map.chapterNotebooks = all.isEmpty ? nil : all
+            } else {
+                map.notebookURL = address.isEmpty ? nil : address
+            }
+        }
     }
 
     private func copyPrompt() {
@@ -230,8 +248,9 @@ struct NotebookLMPanel: View {
                     .popover(isPresented: $addingLink) { linkForm }
             }
             if player.hasEpisode { nowPlaying }
-            ForEach(map.resources) { resource in row(resource) }
-            if map.resources.isEmpty {
+            let shown = map.resources.filter { chapter == nil || $0.chapter == chapter }
+            ForEach(shown) { resource in row(resource) }
+            if shown.isEmpty {
                 Text("Rien pour l'instant.").font(.callout).foregroundStyle(Carnet.inkTertiary)
             }
         }
@@ -243,7 +262,7 @@ struct NotebookLMPanel: View {
             return
         }
         let title = url.deletingPathExtension().lastPathComponent
-        store.update(course) { $0.resources.append(.init(id: UUID().uuidString, kind: .podcast, title: title, url: nil, fileName: name, addedAt: Date())) }
+        store.update(course) { $0.resources.append(.init(id: UUID().uuidString, kind: .podcast, title: title, url: nil, fileName: name, addedAt: Date(), chapter: chapter)) }
         if let file = PodcastStore.url(for: store.map(course).resources.last!, in: course) { player.play(file, title: title) }
     }
 
@@ -252,7 +271,7 @@ struct NotebookLMPanel: View {
             Image(systemName: resource.kind.icon).foregroundStyle(tint).frame(width: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(resource.title).font(.callout.weight(.medium)).foregroundStyle(Carnet.ink).lineLimit(2)
-                Text(resource.kind.label + (resource.fileName != nil ? " · sur cet appareil" : "")).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                Text(resource.kind.label + (chapter == nil ? (course.revisionSheet?.chapter(resource.chapter)?.title).map { " · \($0)" } ?? "" : "") + (resource.fileName != nil ? " · sur cet appareil" : "")).font(.caption).foregroundStyle(Carnet.inkSecondary)
             }
             Spacer(minLength: 4)
             if let file = PodcastStore.url(for: resource, in: course) {
@@ -284,7 +303,7 @@ struct NotebookLMPanel: View {
                 let address = linkAddress.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard URL(string: address)?.scheme?.hasPrefix("http") == true else { return }
                 let title = linkTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.update(course) { $0.resources.append(.init(id: UUID().uuidString, kind: linkKind, title: title.isEmpty ? address : title, url: address, fileName: nil, addedAt: Date())) }
+                store.update(course) { $0.resources.append(.init(id: UUID().uuidString, kind: linkKind, title: title.isEmpty ? address : title, url: address, fileName: nil, addedAt: Date(), chapter: chapter)) }
                 linkTitle = ""; linkAddress = ""; addingLink = false
             }
             .buttonStyle(.ink)

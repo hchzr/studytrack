@@ -7,23 +7,30 @@ struct DiagramsView: View {
     @Bindable var course: Course
     @Binding var concept: String?
 
+    /// Le chapitre regardé (`nil` : tout le cours — ses schémas, puis ceux de chaque chapitre).
+    var chapter: String?
     @State private var chosen: String?
     private var store: StudyMapStore { .shared }
     private var tint: Color { Carnet.tint(course.colorHex) }
 
     var body: some View {
         let map = store.map(course)
-        if map.diagrams.isEmpty {
+        // Les schémas du cours d'abord, puis ceux des chapitres, dans l'ordre de la fiche.
+        let order = course.revisionSheet?.chapters.map(\.id) ?? []
+        let shown = map.diagrams
+            .filter { chapter == nil || $0.chapter == chapter }
+            .sorted { (order.firstIndex(of: $0.chapter ?? "") ?? -1) < (order.firstIndex(of: $1.chapter ?? "") ?? -1) }
+        if shown.isEmpty {
             empty
         } else {
-            let current = map.diagrams.first { $0.id == chosen } ?? map.diagrams[0]
+            let current = shown.first { $0.id == chosen } ?? shown[0]
             VStack(spacing: 0) {
-                picker(map.diagrams, current: current)
+                picker(shown, current: current)
                 Rectangle().fill(Carnet.rule).frame(height: 1)
                 ScrollView([.vertical]) {
                     VStack(alignment: .leading, spacing: 14) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Kicker(current.kind.label, color: tint)
+                            Kicker(chapter == nil ? [current.kind.label, course.revisionSheet?.chapter(current.chapter)?.title].compactMap { $0 }.joined(separator: " · ") : current.kind.label, color: tint)
                             Text(current.title).font(Carnet.serif(24)).foregroundStyle(Carnet.ink).fixedSize(horizontal: false, vertical: true)
                             if let summary = current.summary {
                                 Text(summary).font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
@@ -64,10 +71,10 @@ struct DiagramsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.largeTitle).foregroundStyle(Carnet.inkTertiary)
-                Text("Des schémas pour comprendre").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
-                Text("Claude lit la fiche et dessine, chapitre par chapitre, ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre.")
+                Text(chapter == nil ? "Des schémas pour comprendre" : "Pas encore de schéma pour ce chapitre").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
+                Text("Claude lit la fiche et dessine ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre — pour tout le cours ou un chapitre à la fois.")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary)
-                ComprehendButton(course: course)
+                ComprehendButton(course: course, chapter: chapter)
             }
             .padding(28)
             .frame(maxWidth: 560, alignment: .leading)
@@ -209,6 +216,7 @@ struct DiagramCanvas: View {
 /// « Comprendre avec Claude » : les liens, les phrases en clair, les schémas, les questions.
 struct ComprehendButton: View {
     let course: Course
+    var chapter: String?
     private var store: StudyMapStore { .shared }
 
     var body: some View {
@@ -216,8 +224,8 @@ struct ComprehendButton: View {
             if course.revisionSheet == nil {
                 Label("Fais d'abord la fiche du cours.", systemImage: "doc.text").font(.callout).foregroundStyle(Carnet.inkSecondary)
             } else if store.canEnrich {
-                Button { Task { await store.enrich(course) } } label: {
-                    Label(store.map(course).enrichedAt == nil ? "Comprendre avec Claude" : "Refaire avec Claude", systemImage: "sparkles")
+                Button { Task { await store.enrich(course, chapter: chapter) } } label: {
+                    Label(StudyMapStore.enrichLabel(store.map(course), chapter: chapter), systemImage: "sparkles")
                 }
                 .buttonStyle(.ink)
                 .disabled(isWorking)
@@ -225,7 +233,7 @@ struct ComprehendButton: View {
                 Label("Claude relie les notions sur le Mac ; ça arrive ici par iCloud.", systemImage: "desktopcomputer")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary)
             }
-            if let state = store.state(course) {
+            if let state = store.state(course, chapter: chapter) {
                 switch state {
                 case .working(let message):
                     HStack(spacing: 8) { ProgressView().controlSize(.small); Text(message).font(.callout).foregroundStyle(Carnet.inkSecondary) }
@@ -237,7 +245,7 @@ struct ComprehendButton: View {
     }
 
     private var isWorking: Bool {
-        if case .working? = store.state(course) { return true }
+        if case .working? = store.state(course, chapter: chapter) { return true }
         return false
     }
 }

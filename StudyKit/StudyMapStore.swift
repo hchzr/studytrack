@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// Lire et écrire ce qui rend la fiche compréhensible (`Course.studyMap`) — liens, maîtrise, notes,
 /// idées, schémas — et la faire écrire par Claude (sur le Mac : l'iPhone montre ce que le Mac a
@@ -15,12 +16,12 @@ final class StudyMapStore {
         case failed(String)
     }
 
-    private(set) var states: [UUID: State] = [:]
+    private(set) var states: [String: State] = [:]
 
     /// La dernière lecture de chaque carte : décoder un JSON à chaque tour d'écran coûterait.
     @ObservationIgnored private var cache: [UUID: (raw: String, map: StudyMap)] = [:]
 
-    func state(_ course: Course) -> State? { states[course.id] }
+    func state(_ course: Course, chapter: String? = nil) -> State? { states[Self.key(course, chapter)] }
 
     var canEnrich: Bool { RevisionSheetMaker.shared.writer != nil }
 
@@ -78,30 +79,49 @@ final class StudyMapStore {
 
     // MARK: Claude écrit
 
-    func enrich(_ course: Course) async {
-        guard states[course.id].map({ if case .working = $0 { return false }; return true }) ?? true else { return }
+    /// Claude relit la fiche entière, ou **un chapitre** (`chapter`) : plus court, plus précis, et
+    /// ce qui est écrit ne touche que ce chapitre.
+    func enrich(_ course: Course, chapter: String? = nil) async {
+        let key = Self.key(course, chapter)
+        guard states[key].map({ if case .working = $0 { return false }; return true }) ?? true else { return }
         guard let writer = RevisionSheetMaker.shared.writer else {
-            states[course.id] = .failed(String(localized: "Claude relie les notions sur le Mac ; ça arrive ici par iCloud."))
+            states[key] = .failed(String(localized: "Claude relie les notions sur le Mac ; ça arrive ici par iCloud."))
             return
         }
-        guard let sheet = course.revisionSheet, !sheet.isEmpty else {
-            states[course.id] = .failed(String(localized: "Fais d'abord la fiche du cours."))
+        guard let sheet = course.revisionSheet, !sheet.isEmpty, chapter == nil || sheet.chapter(chapter) != nil else {
+            states[key] = .failed(String(localized: "Fais d'abord la fiche du cours."))
             return
         }
-        states[course.id] = .working(String(localized: "Claude relie les notions et dessine les schémas…"))
+        states[key] = .working(chapter == nil ? String(localized: "Claude relie les notions et dessine les schémas…")
+                                              : String(localized: "Claude relit ce chapitre et dessine ses schémas…"))
         do {
-            let (prompt, ids) = StudyMapAI.prompt(course: course.name, sheet: sheet)
-            let answer = try await writer(StudyMapAI.instructions, prompt)
-            guard let enriched = StudyMapAI.apply(answer: answer, sheet: sheet, ids: ids, to: map(course)) else {
+            let (prompt, ids) = StudyMapAI.prompt(course: course.name, sheet: sheet, chapter: chapter)
+            let answer = try await writer(chapter == nil ? StudyMapAI.instructions : StudyMapAI.chapterInstructions, prompt)
+            // Appliquée à la carte **d'après l'attente** : une maîtrise cochée pendant que Claude écrivait reste.
+            guard let enriched = StudyMapAI.apply(answer: answer, sheet: sheet, ids: ids, to: map(course), chapter: chapter) else {
                 throw RevisionSheetMaker.Failure(String(localized: "Claude n'a pas rendu de réponse lisible. Réessaie."))
             }
             update(course) { $0 = enriched }
-            states[course.id] = nil
+            states[key] = nil
             AppLog.record(.info, "fiche", "Carte de la fiche écrite",
-                          detail: "\(course.displayCode) : \(enriched.links.count) liens, \(enriched.diagrams.count) schémas, \(enriched.enrichment.count) notions expliquées")
+                          detail: "\(course.displayCode)\(chapter.map { " · \($0)" } ?? "") : \(enriched.links.count) liens, \(enriched.diagrams.count) schémas, \(enriched.enrichment.count) notions expliquées")
         } catch {
-            states[course.id] = .failed((error as? RevisionSheetMaker.Failure)?.message ?? error.localizedDescription)
+            states[key] = .failed((error as? RevisionSheetMaker.Failure)?.message ?? error.localizedDescription)
             AppLog.record(.info, "fiche", "Carte de la fiche impossible", detail: "\(course.displayCode) : \(error.localizedDescription)")
         }
     }
+
+    /// Le libellé du bouton : le premier passage, ou refaire.
+    static func enrichLabel(_ map: StudyMap, chapter: String?) -> LocalizedStringKey {
+        let done = chapter.map { map.enrichedChapters?[$0] != nil } ?? (map.enrichedAt != nil)
+        switch (chapter == nil, done) {
+        case (true, false): return "Comprendre avec Claude"
+        case (true, true): return "Refaire les liens"
+        case (false, false): return "Comprendre ce chapitre"
+        case (false, true): return "Refaire ce chapitre"
+        }
+    }
+
+    /// Où en est Claude pour ce cours, ou ce chapitre.
+    static func key(_ course: Course, _ chapter: String?) -> String { "\(course.id.uuidString)|\(chapter ?? "")" }
 }

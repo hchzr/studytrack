@@ -28,13 +28,23 @@ enum StudyMapAI {
     Écris dans la langue de la fiche. N'invente rien qui ne soit pas dans la fiche.
     """
 
+    /// La même consigne pour **un seul chapitre** : des schémas qui l'éclairent, des liens entre ses notions.
+    static var chapterInstructions: String {
+        instructions
+            .replacingOccurrences(of: "4 à 8 au total, chacun utile pour comprendre un chapitre", with: "1 à 3 au total, tous pour CE chapitre (la fiche reçue n'est que ce chapitre)")
+            .replacingOccurrences(of: "toutes les notions de la fiche", with: "toutes les notions d'UN chapitre de la fiche")
+    }
+
     /// Le message : la fiche, notion par notion, avec les identifiants `e1`, `e2`… (rendus à part
     /// pour relire la réponse).
-    static func prompt(course: String, sheet: RevisionSheet, bodyLimit: Int = 220, entryLimit: Int = 400) -> (text: String, ids: [String: String]) {
-        var lines = ["COURS : \(course)", ""]
+    /// Avec `chapter` : seulement ses notions (les identifiants restent ceux de la fiche entière).
+    static func prompt(course: String, sheet: RevisionSheet, bodyLimit: Int = 220, entryLimit: Int = 400, chapter: String? = nil) -> (text: String, ids: [String: String]) {
+        var lines = ["COURS : \(course)"]
+        if let title = sheet.chapter(chapter)?.title { lines.append("CHAPITRE : \(title)") }
+        lines.append("")
         var ids: [String: String] = [:]
         var current = ""
-        for item in sheet.keyed.prefix(entryLimit) {
+        for item in sheet.keyed(in: chapter).prefix(entryLimit) {
             if item.chapterID != current {
                 current = item.chapterID
                 lines.append("")
@@ -83,7 +93,8 @@ enum StudyMapAI {
     /// La carte d'avant, complétée par la réponse de Claude : ses phrases en clair, ses liens (avec
     /// ceux qu'on déduit des citations, et **sans toucher à ceux posés à la main**), ses schémas.
     /// `nil` si la réponse n'est pas lisible.
-    static func apply(answer: String, sheet: RevisionSheet, ids: [String: String], to map: StudyMap, now: Date = Date()) -> StudyMap? {
+    /// Avec `chapter` : ce qui est écrit ne touche que ce chapitre — les liens et les schémas des autres restent.
+    static func apply(answer: String, sheet: RevisionSheet, ids: [String: String], to map: StudyMap, now: Date = Date(), chapter: String? = nil) -> StudyMap? {
         guard let start = answer.firstIndex(of: "{"), let end = answer.lastIndex(of: "}"), start < end,
               let object = try? JSONSerialization.jsonObject(with: Data(answer[start...end].utf8)) as? [String: Any] else { return nil }
         let resolve = resolver(sheet: sheet, ids: ids)
@@ -102,6 +113,11 @@ enum StudyMapAI {
         }
 
         var generated = StudyLinks.cited(in: sheet)
+        if let chapter {
+            // Les liens que Claude avait posés ailleurs restent ; ceux entre notions de ce chapitre sont refaits.
+            let mine = Set(sheet.keyed(in: chapter).map(\.key))
+            generated += map.links.filter { !$0.userMade && !(mine.contains($0.from) && mine.contains($0.to)) }
+        }
         for link in object["links"] as? [[String: Any]] ?? [] {
             guard let from = resolve(link["from"]), let to = resolve(link["to"]),
                   let relation = parseRelation(link["relation"] as? String ?? "") else { continue }
@@ -113,8 +129,9 @@ enum StudyMapAI {
         for (index, raw) in (object["schemas"] as? [[String: Any]] ?? []).enumerated() {
             guard let title = clean(raw["title"]) else { continue }
             let kind = Diagram.Kind(rawValue: RevisionText.fold(raw["kind"] as? String ?? "")) ?? .flow
-            var schema = Diagram(id: "s\(index)-\(String(RevisionText.fold(title).filter(\.isLetter).prefix(16)))", title: title,
+            var schema = Diagram(id: "\(chapter.map { $0 + "/" } ?? "")s\(index)-\(String(RevisionText.fold(title).filter(\.isLetter).prefix(16)))", title: title,
                                 summary: clean(raw["summary"]), kind: kind)
+            schema.chapter = chapter
             if kind == .comparison {
                 schema.columns = (raw["columns"] as? [Any])?.compactMap(clean)
                 schema.rows = (raw["rows"] as? [[Any]])?.map { $0.map { clean($0) ?? "" } }
@@ -133,8 +150,17 @@ enum StudyMapAI {
             }
             diagrams.append(schema)
         }
-        if !diagrams.isEmpty { result.diagrams = diagrams }
-        result.enrichedAt = now
+        if !diagrams.isEmpty {
+            // Seuls les schémas de la même portée sont remplacés.
+            result.diagrams = map.diagrams.filter { $0.chapter != chapter } + diagrams
+        }
+        if let chapter {
+            var done = result.enrichedChapters ?? [:]
+            done[chapter] = now
+            result.enrichedChapters = done
+        } else {
+            result.enrichedAt = now
+        }
         return result
     }
 
@@ -146,10 +172,19 @@ enum StudyMapAI {
         result.notes = map.notes.filter { keys.contains($0.key) }
         result.enrichment = map.enrichment.filter { keys.contains($0.key) }
         result.links = map.links.filter { keys.contains($0.from) && keys.contains($0.to) }
-        result.layout = map.layout.filter { keys.contains($0.key) || $0.key == MindGraph.rootID || $0.key.hasPrefix("chap:") || $0.key.hasPrefix("custom:") }
+        result.layout = map.layout.filter { keys.contains($0.key) || $0.key == MindGraph.rootID || $0.key.hasPrefix("chap:") || $0.key.hasPrefix("custom:") || $0.key.hasPrefix("◆") }
         result.customNodes = map.customNodes
+        let chapterIDs = Set(sheet.chapters.map(\.id))
+        result.chapterNotebooks = map.chapterNotebooks?.filter { chapterIDs.contains($0.key) }
+        result.enrichedChapters = map.enrichedChapters?.filter { chapterIDs.contains($0.key) }
+        result.resources = map.resources.map { resource in
+            var copy = resource
+            if let chapter = resource.chapter, !chapterIDs.contains(chapter) { copy.chapter = nil }
+            return copy
+        }
         result.diagrams = map.diagrams.map { schema in
             var copy = schema
+            if let chapter = schema.chapter, !chapterIDs.contains(chapter) { copy.chapter = nil }
             copy.nodes = schema.nodes.map { node in
                 var n = node
                 if let entry = node.entry, !keys.contains(entry) { n.entry = nil }

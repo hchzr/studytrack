@@ -12,13 +12,16 @@ enum NotebookExport {
     }
 
     /// Les fichiers à déposer dans NotebookLM.
-    static func files(courseName: String, code: String, sheet: RevisionSheet, map: StudyMap) -> [File] {
-        [
-            File(name: "01 Fiche · \(code).md", text: sheetText(courseName: courseName, sheet: sheet, map: map)),
-            File(name: "02 Liens entre les notions · \(code).md", text: linksText(courseName: courseName, sheet: sheet, map: map)),
-            File(name: "03 Schémas · \(code).md", text: schemasText(courseName: courseName, map: map, sheet: sheet)),
-            File(name: "04 Questions pour se tester · \(code).md", text: questionsText(courseName: courseName, sheet: sheet, map: map)),
-            File(name: "00 Lis-moi · \(code).md", text: readme(courseName: courseName)),
+    /// Avec `chapter` : seulement ce chapitre (ses notions, les liens entre elles, ses schémas, ses questions).
+    static func files(courseName: String, code: String, sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> [File] {
+        let name = sheet.chapter(chapter).map { "\(courseName) — \($0.title)" } ?? courseName
+        let tag = sheet.chapter(chapter).map { "\(code) · \(String($0.title.prefix(24)))" } ?? code
+        return [
+            File(name: "01 Fiche · \(tag).md", text: sheetText(courseName: name, sheet: sheet, map: map, chapter: chapter)),
+            File(name: "02 Liens entre les notions · \(tag).md", text: linksText(courseName: name, sheet: sheet, map: map, chapter: chapter)),
+            File(name: "03 Schémas · \(tag).md", text: schemasText(courseName: name, map: map, sheet: sheet, chapter: chapter)),
+            File(name: "04 Questions pour se tester · \(tag).md", text: questionsText(courseName: name, sheet: sheet, map: map, chapter: chapter)),
+            File(name: "00 Lis-moi · \(tag).md", text: readme(courseName: name)),
         ].filter { !$0.text.isEmpty }
     }
 
@@ -26,9 +29,9 @@ enum NotebookExport {
         sheet.entry(forKey: key)?.entry.title ?? key
     }
 
-    static func sheetText(courseName: String, sheet: RevisionSheet, map: StudyMap) -> String {
+    static func sheetText(courseName: String, sheet: RevisionSheet, map: StudyMap, chapter only: String? = nil) -> String {
         var lines = ["# Fiche de révision — \(courseName)", ""]
-        for chapter in sheet.chapters where !chapter.entries.isEmpty {
+        for chapter in sheet.chapters where !chapter.entries.isEmpty && (only == nil || chapter.id == only) {
             lines.append("## \(chapter.title)")
             lines.append("")
             for item in sheet.keyed where item.chapterID == chapter.id {
@@ -48,11 +51,13 @@ enum NotebookExport {
         return lines.joined(separator: "\n")
     }
 
-    static func linksText(courseName: String, sheet: RevisionSheet, map: StudyMap) -> String {
-        guard !map.links.isEmpty else { return "" }
+    static func linksText(courseName: String, sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> String {
+        let mine = Set(sheet.keyed(in: chapter).map(\.key))
+        let links = map.links.filter { chapter == nil || (mine.contains($0.from) && mine.contains($0.to)) }
+        guard !links.isEmpty else { return "" }
         var lines = ["# Comment les notions de \(courseName) s'enchaînent", "",
                      "Chaque ligne dit une dépendance réelle du cours : ce qu'il faut comprendre pour comprendre autre chose.", ""]
-        for link in map.links {
+        for link in links {
             var line = "- **\(title(link.from, sheet))** \(link.relation.label) **\(title(link.to, sheet))**"
             if let note = link.note { line += " — \(note)" }
             lines.append(line)
@@ -60,10 +65,11 @@ enum NotebookExport {
         return lines.joined(separator: "\n")
     }
 
-    static func schemasText(courseName: String, map: StudyMap, sheet: RevisionSheet) -> String {
-        guard !map.diagrams.isEmpty else { return "" }
+    static func schemasText(courseName: String, map: StudyMap, sheet: RevisionSheet, chapter: String? = nil) -> String {
+        let diagrams = map.diagrams.filter { chapter == nil || $0.chapter == chapter }
+        guard !diagrams.isEmpty else { return "" }
         var lines = ["# Schémas de \(courseName)", ""]
-        for schema in map.diagrams {
+        for schema in diagrams {
             lines.append("## \(schema.title) (\(schema.kind.label))")
             if let summary = schema.summary { lines.append(summary) }
             lines.append("")
@@ -86,8 +92,8 @@ enum NotebookExport {
         return lines.joined(separator: "\n")
     }
 
-    static func questionsText(courseName: String, sheet: RevisionSheet, map: StudyMap) -> String {
-        let items = sheet.keyed.compactMap { item in map.enrichment[item.key]?.check.map { (item, $0) } }
+    static func questionsText(courseName: String, sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> String {
+        let items = sheet.keyed(in: chapter).compactMap { item in map.enrichment[item.key]?.check.map { (item, $0) } }
         guard !items.isEmpty else { return "" }
         var lines = ["# Pour se tester — \(courseName)", ""]
         for (item, check) in items {

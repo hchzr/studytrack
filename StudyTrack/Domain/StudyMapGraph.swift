@@ -59,6 +59,8 @@ struct Diagram: Codable, Equatable, Identifiable {
     /// Pour une comparaison : les colonnes et les lignes (la première cellule d'une ligne est son critère).
     var columns: [String]?
     var rows: [[String]]?
+    /// Le chapitre qu'il éclaire (`nil` : tout le cours).
+    var chapter: String?
 }
 
 /// La disposition d'un schéma en couches, de haut en bas.
@@ -184,7 +186,24 @@ enum MindGraph {
 
     /// Tous les nœuds : la racine, ses chapitres, leurs notions, puis les idées ajoutées
     /// (accrochées à ce qu'on a choisi ; si le parent n'existe plus, à la racine).
-    static func nodes(sheet: RevisionSheet, map: StudyMap, courseTitle: String) -> [MindNode] {
+    /// Avec `chapter` : la carte de ce chapitre seul, lui en racine et ses notions autour.
+    static func nodes(sheet: RevisionSheet, map: StudyMap, courseTitle: String, chapter: String? = nil) -> [MindNode] {
+        if let chapter, let scoped = sheet.chapter(chapter) {
+            var result = [MindNode(id: rootID, title: scoped.title, role: .root, parent: nil, depth: 0)]
+            let items = sheet.keyed(in: chapter)
+            for item in items {
+                result.append(MindNode(id: item.key, title: item.entry.title, role: .entry(item.entry.kind), parent: rootID, depth: 1))
+            }
+            // Les idées accrochées à ce chapitre ou à l'une de ses notions.
+            for custom in map.customNodes {
+                guard let wanted = custom.parent else { continue }
+                let parent = wanted == chapterNode(chapter) ? rootID : wanted
+                guard result.contains(where: { $0.id == parent }) else { continue }
+                let depth = (result.first { $0.id == parent }?.depth ?? 0) + 1
+                result.append(MindNode(id: customNode(custom.id), title: custom.title, role: .custom, parent: parent, depth: depth))
+            }
+            return result
+        }
         var result = [MindNode(id: rootID, title: courseTitle, role: .root, parent: nil, depth: 0)]
         for chapter in sheet.chapters where !chapter.entries.isEmpty {
             result.append(MindNode(id: chapterNode(chapter.id), title: chapter.title, role: .chapter, parent: rootID, depth: 1))
@@ -394,8 +413,8 @@ enum LearningPath {
 
     /// Les notions dans l'ordre où les comprendre : celui de la fiche, sauf qu'une notion
     /// ne passe jamais avant ce dont elle a besoin. Un cycle est coupé à l'ordre de la fiche.
-    static func order(sheet: RevisionSheet, map: StudyMap) -> [String] {
-        let items = sheet.keyed
+    static func order(sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> [String] {
+        let items = sheet.keyed(in: chapter)
         let keys = items.map(\.key)
         let known = Set(keys)
         var before: [String: Set<String>] = [:]
@@ -423,8 +442,8 @@ enum LearningPath {
     }
 
     /// Par où continuer : la première notion de l'ordre qui n'est pas encore solide.
-    static func next(sheet: RevisionSheet, map: StudyMap) -> String? {
-        order(sheet: sheet, map: map).first { map.mastery($0) != .solid }
+    static func next(sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> String? {
+        order(sheet: sheet, map: map, chapter: chapter).first { map.mastery($0) != .solid }
     }
 
     struct Counts: Equatable {
@@ -435,9 +454,9 @@ enum LearningPath {
         var fraction: Double { total == 0 ? 0 : Double(solid) / Double(total) }
     }
 
-    static func counts(sheet: RevisionSheet, map: StudyMap) -> Counts {
+    static func counts(sheet: RevisionSheet, map: StudyMap, chapter: String? = nil) -> Counts {
         var result = Counts()
-        for item in sheet.keyed {
+        for item in sheet.keyed(in: chapter) {
             switch map.mastery(item.key) {
             case .unknown: result.unknown += 1
             case .shaky: result.shaky += 1
@@ -449,14 +468,14 @@ enum LearningPath {
 
     /// Ce qu'il vaut mieux reprendre d'abord : pas solide, et dont d'autres dépendent (une
     /// notion fragile qui en porte dix pèse plus qu'une feuille).
-    static func weakSpots(sheet: RevisionSheet, map: StudyMap, limit: Int = 5) -> [String] {
-        let known = Set(sheet.keyed.map(\.key))
+    static func weakSpots(sheet: RevisionSheet, map: StudyMap, limit: Int = 5, chapter: String? = nil) -> [String] {
+        let known = Set(sheet.keyed(in: chapter).map(\.key))
         var dependents: [String: Int] = [:]
         for link in map.links {
             guard let pair = link.prerequisite, known.contains(pair.before), known.contains(pair.after) else { continue }
             dependents[pair.before, default: 0] += 1
         }
-        let scored = sheet.keyed.compactMap { item -> (String, Double, Int)? in
+        let scored = sheet.keyed(in: chapter).compactMap { item -> (String, Double, Int)? in
             let level = map.mastery(item.key)
             guard level != .solid else { return nil }
             let weight = Double(1 + dependents[item.key, default: 0]) * (level == .unknown ? 1.5 : 1)

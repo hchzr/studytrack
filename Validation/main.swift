@@ -6558,6 +6558,46 @@ do {
     let once = StudyLinks.neighbourhood(of: "x", in: twice, among: ["x", "y"])
     check(once.before.count == 1 && once.before[0].note == "un plafond", "voisinage : un voisin une seule fois, avec l'explication")
 
+    // Par chapitre : la même fiche, regardée un chapitre à la fois
+    check(sheet.keyed(in: "c1").map(\.entry.id) == ["d", "e", "f"] && sheet.keyed(in: nil).count == 6 && sheet.keyed(in: "inconnu").isEmpty, "chapitre : ses notions, ou toutes")
+    check(sheet.keyed(in: "c1").first?.key == keyed[3].key, "chapitre : les clés restent celles de la fiche entière")
+    let oneChapter = MindGraph.nodes(sheet: sheet, map: StudyMap(), courseTitle: "Analyse", chapter: "c1")
+    check(oneChapter.first?.title == "Séries" && oneChapter.first?.role == .root && oneChapter.count == 4 && oneChapter.dropFirst().allSatisfy { $0.parent == MindGraph.rootID && $0.depth == 1 }, "carte d'un chapitre : lui en racine, ses notions autour")
+    var withIdea = StudyMap()
+    withIdea.customNodes = [.init(id: "i", title: "idée", note: nil, parent: MindGraph.chapterNode("c1")), .init(id: "j", title: "ailleurs", note: nil, parent: MindGraph.chapterNode("c0"))]
+    let ideas = MindGraph.nodes(sheet: sheet, map: withIdea, courseTitle: "Analyse", chapter: "c1").filter { $0.role == .custom }
+    check(ideas.map(\.title) == ["idée"] && ideas[0].parent == MindGraph.rootID, "carte d'un chapitre : seulement les idées de ce chapitre")
+    var mastered = StudyMap()
+    mastered.progress[keyed[3].key] = .init(level: .solid, at: Date())
+    check(LearningPath.counts(sheet: sheet, map: mastered, chapter: "c1") == .init(unknown: 2, shaky: 0, solid: 1) && LearningPath.counts(sheet: sheet, map: mastered).total == 6, "parcours d'un chapitre : le compte de ce chapitre seul")
+    check(LearningPath.order(sheet: sheet, map: mastered, chapter: "c1").count == 3 && LearningPath.next(sheet: sheet, map: mastered, chapter: "c1") == keyed[4].key, "parcours d'un chapitre : l'ordre et la suite de ce chapitre")
+
+    let scopedPrompt = StudyMapAI.prompt(course: "Analyse", sheet: sheet, chapter: "c1")
+    check(scopedPrompt.text.contains("CHAPITRE : Séries") && !scopedPrompt.text.contains("Théorème 1.2") && scopedPrompt.ids.count == 3 && scopedPrompt.ids["e4"] == keyed[3].key, "IA d'un chapitre : seulement ses notions, avec leurs identifiants de la fiche entière")
+    let chapterAnswer = """
+    {"entries":[{"id":"e4","gist":"Si les termes se rapprochent, ça converge."}],
+     "links":[{"from":"e5","to":"e4","relation":"contrast","note":"à ne pas confondre"}],
+     "schemas":[{"title":"Cauchy","kind":"flow","nodes":[{"id":"a","label":"Termes proches"},{"id":"b","label":"Converge"}],"edges":[{"from":"a","to":"b"}]}]}
+    """
+    var base = StudyMap()
+    base.links = [.init(from: keyed[1].key, to: keyed[0].key, relation: .needs, note: "d'ailleurs")]
+    base.diagrams = [Diagram(id: "ailleurs", title: "Autre chapitre", summary: nil, kind: .flow)]
+    let scoped = StudyMapAI.apply(answer: chapterAnswer, sheet: sheet, ids: scopedPrompt.ids, to: base, now: Date(timeIntervalSince1970: 5), chapter: "c1")
+    check(scoped != nil && scoped!.enrichment[keyed[3].key]?.gist != nil && scoped!.enrichedChapters?["c1"] == Date(timeIntervalSince1970: 5) && scoped!.enrichedAt == nil, "IA d'un chapitre : la phrase en clair, et ce chapitre est noté comme relu (pas le cours)")
+    check(scoped!.links.contains { $0.from == keyed[1].key && $0.note == "d'ailleurs" } && scoped!.links.contains { $0.relation == .contrast }, "IA d'un chapitre : les liens des autres chapitres restent, les siens s'ajoutent")
+    check(scoped!.diagrams.count == 2 && scoped!.diagrams.contains { $0.chapter == "c1" && $0.title == "Cauchy" } && scoped!.diagrams.contains { $0.id == "ailleurs" }, "IA d'un chapitre : son schéma s'ajoute, celui d'un autre reste")
+    let again = StudyMapAI.apply(answer: chapterAnswer, sheet: sheet, ids: scopedPrompt.ids, to: scoped!, chapter: "c1")!
+    check(again.diagrams.count == 2, "IA d'un chapitre : refaire remplace ses schémas au lieu de les doubler")
+    let whole = StudyMapAI.apply(answer: "{\"schemas\":[{\"title\":\"Tout\",\"kind\":\"flow\",\"nodes\":[{\"id\":\"a\",\"label\":\"x\"},{\"id\":\"b\",\"label\":\"y\"}],\"edges\":[{\"from\":\"a\",\"to\":\"b\"}]}]}", sheet: sheet, ids: [:], to: scoped!)!
+    check(whole.diagrams.contains { $0.chapter == "c1" } && whole.diagrams.contains { $0.title == "Tout" && $0.chapter == nil } && !whole.diagrams.contains { $0.id == "ailleurs" }, "IA du cours : remplace ceux du cours, garde ceux des chapitres")
+    let gone = StudyMapAI.rebased(scoped!, onto: RevisionSheet(origin: .ai, generatedAt: Date(), chapters: [.init(id: "c0", title: "Suites", entries: [entry("a", .definition, "Définition 1.1 (suite bornée)", "x")])]))
+    check(gone.enrichedChapters?["c1"] == nil && gone.diagrams.allSatisfy { $0.chapter == nil }, "nouvelle fiche : un chapitre disparu ne laisse rien derrière lui")
+
+    let chapterFiles = NotebookExport.files(courseName: "Analyse", code: "MATH-101", sheet: sheet, map: scoped!, chapter: "c1")
+    let chapterSheet = chapterFiles.first { $0.name.hasPrefix("01") }?.text ?? ""
+    check(chapterSheet.contains("Piège : série et suite") && !chapterSheet.contains("Théorème 1.2") && chapterFiles.allSatisfy { $0.name.contains("Séries") }, "NotebookLM d'un chapitre : seulement ses notions, nommé d'après lui")
+    check((chapterFiles.first { $0.name.hasPrefix("03") }?.text ?? "").contains("Cauchy") && !(chapterFiles.first { $0.name.hasPrefix("03") }?.text ?? "").contains("Autre chapitre"), "NotebookLM d'un chapitre : seulement ses schémas")
+
     // NotebookLM
     var notebook = applied!
     notebook.enrichment[byID["a"]!] = .init(gist: "Un plafond et un plancher.", why: nil, example: nil, check: nil)

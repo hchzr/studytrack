@@ -57,6 +57,10 @@ struct RevisionSheetView: View {
     }
 
     @State private var tab: Tab = .fiche
+    /// Le chapitre regardé, dans tous les onglets (`nil` : le cours entier). Un chapitre qui n'existe
+    /// plus (fiche refaite) revient au cours entier.
+    @State private var chapterScope: String?
+    private var scope: String? { sheet?.chapter(chapterScope) == nil ? nil : chapterScope }
     /// La notion dont on voit la page (à côté, ou en feuille dans un volet étroit).
     @State private var concept: String?
     @AppStorage("notebooklm.enabled") private var notebookOn = false
@@ -71,6 +75,7 @@ struct RevisionSheetView: View {
 
     private var chapters: [RevisionSheet.Chapter] {
         (sheet?.filtered(query) ?? []).compactMap { chapter in
+            if let scope, chapter.id != scope { return nil }
             let kept = chapter.entries.filter { filter.keeps($0.kind) }
             return kept.isEmpty ? nil : RevisionSheet.Chapter(id: chapter.id, title: chapter.title, entries: kept)
         }
@@ -87,14 +92,14 @@ struct RevisionSheetView: View {
         course.sortedSeries.flatMap(\.sortedExercises).filter { $0.redoRequired || $0.isQueuedForRedo }
     }
 
-    private var hasPersonal: Bool { query.isEmpty && filter != .statements && (!mistakes.isEmpty || !redo.isEmpty) }
+    private var hasPersonal: Bool { scope == nil && query.isEmpty && filter != .statements && (!mistakes.isEmpty || !redo.isEmpty) }
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
             Rectangle().fill(Carnet.rule).frame(height: 1)
             // Quel que soit l'onglet, le contenu prend toute la place : sinon la pile se centre et le haut descend.
-            content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            content.id(scope ?? "tout").frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Carnet.ground)
@@ -104,6 +109,8 @@ struct RevisionSheetView: View {
             // `-ficheTab carte|schemas|parcours|ecouter` et `-ficheConcept` : ouvrir directement un onglet, une notion.
             if let index = CommandLine.arguments.firstIndex(of: "-ficheTab"), index + 1 < CommandLine.arguments.count,
                let chosen = Tab(rawValue: CommandLine.arguments[index + 1]) { tab = chosen }
+            // `-ficheChapter <id>` : ne regarder que ce chapitre (c0, c1, c2 dans la fiche d'essai).
+            if let index = CommandLine.arguments.firstIndex(of: "-ficheChapter"), index + 1 < CommandLine.arguments.count { chapterScope = CommandLine.arguments[index + 1] }
             if CommandLine.arguments.contains("-ficheConcept") { concept = sheet?.keyed.dropFirst(2).first?.key }
             #endif
         }
@@ -113,10 +120,10 @@ struct RevisionSheetView: View {
     private var content: some View {
         switch tab {
         case .fiche: ficheTab
-        case .carte: MindMapView(course: course, concept: $concept)
-        case .schemas: DiagramsView(course: course, concept: $concept)
-        case .parcours: LearningPathView(course: course, concept: $concept)
-        case .ecouter: NotebookLMPanel(course: course)
+        case .carte: MindMapView(course: course, concept: $concept, chapter: scope)
+        case .schemas: DiagramsView(course: course, concept: $concept, chapter: scope)
+        case .parcours: LearningPathView(course: course, concept: $concept, chapter: scope, select: { chapterScope = $0 })
+        case .ecouter: NotebookLMPanel(course: course, chapter: scope)
         }
     }
 
@@ -134,20 +141,21 @@ struct RevisionSheetView: View {
                 Spacer(minLength: 8)
                 if sheet != nil {
                     if StudyMapStore.shared.canEnrich {
-                        Button { Task { await StudyMapStore.shared.enrich(course) } } label: {
-                            Label(StudyMapStore.shared.map(course).enrichedAt == nil ? "Comprendre avec Claude" : "Refaire les liens", systemImage: "sparkles")
+                        Button { Task { await StudyMapStore.shared.enrich(course, chapter: scope) } } label: {
+                            Label(StudyMapStore.enrichLabel(StudyMapStore.shared.map(course), chapter: scope), systemImage: "sparkles")
                         }
                         .buttonStyle(.paper)
                         .disabled(isEnriching)
-                        .help("Claude relie les notions, écrit l'idée de chacune, dessine les schémas")
+                        .help(scope == nil ? "Claude relie les notions, écrit l'idée de chacune, dessine les schémas" : "Pareil, mais pour ce chapitre seulement")
                     }
                     remake(title: "Refaire")
                 }
             }
             if let sheet { Text(summary(sheet)).font(.caption).foregroundStyle(Carnet.inkSecondary) }
             if let state = maker.state(course) { status(state) }
-            if let state = StudyMapStore.shared.state(course) { mapStatus(state) }
+            if let state = StudyMapStore.shared.state(course, chapter: scope) { mapStatus(state) }
             tabBar
+            if sheet.map({ $0.chapters.filter { !$0.entries.isEmpty }.count > 1 }) == true { scopeBar }
         }
         .padding(.horizontal, compact ? 14 : 20)
         .padding(.top, 12)
@@ -174,8 +182,48 @@ struct RevisionSheetView: View {
         }
     }
 
+    /// Tout le cours, ou un chapitre : ce qui est regardé dans tous les onglets.
+    private var scopeBar: some View {
+        let list = sheet?.chapters.filter { !$0.entries.isEmpty } ?? []
+        let index = list.firstIndex { $0.id == scope }
+        return HStack(spacing: 8) {
+            Menu {
+                Button { chapterScope = nil } label: { Label("Tout le cours", systemImage: scope == nil ? "checkmark" : "books.vertical") }
+                Divider()
+                ForEach(list) { chapter in
+                    Button { chapterScope = chapter.id } label: {
+                        Label(MathMarkup.plain(chapter.title), systemImage: scope == chapter.id ? "checkmark" : "bookmark")
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: scope == nil ? "books.vertical" : "bookmark.fill").foregroundStyle(tint)
+                    Text(scope == nil ? "Tout le cours" : MathMarkup.plain(sheet?.chapter(scope)?.title ?? "")).lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Carnet.inkTertiary)
+                }
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(Carnet.sheetRaised.opacity(0.8), in: Capsule())
+            }
+            .menuStyle(.button).buttonStyle(.plain).fixedSize()
+            if let index {
+                Button { chapterScope = index > 0 ? list[index - 1].id : nil } label: { Image(systemName: "chevron.left") }
+                    .help("Chapitre précédent")
+                Button { if index + 1 < list.count { chapterScope = list[index + 1].id } } label: { Image(systemName: "chevron.right") }
+                    .disabled(index + 1 >= list.count).help("Chapitre suivant")
+                Button { chapterScope = nil } label: { Label("Tout le cours", systemImage: "xmark").labelStyle(.titleAndIcon) }
+                    .font(.caption).foregroundStyle(Carnet.inkSecondary)
+            } else if let first = list.first {
+                Button { chapterScope = first.id } label: { Image(systemName: "chevron.right") }.help("Premier chapitre")
+            }
+            Spacer(minLength: 0)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Carnet.ink)
+    }
+
     private var isEnriching: Bool {
-        if case .working? = StudyMapStore.shared.state(course) { return true }
+        if case .working? = StudyMapStore.shared.state(course, chapter: scope) { return true }
         return false
     }
 
@@ -332,6 +380,10 @@ struct RevisionSheetView: View {
     }
 
     private func summary(_ sheet: RevisionSheet) -> String {
+        if let scope, let chapter = sheet.chapter(scope) {
+            let counts = LearningPath.counts(sheet: sheet, map: StudyMapStore.shared.map(course), chapter: scope)
+            return "\(chapter.entries.count) entrées dans ce chapitre · \(counts.solid) solides"
+        }
         let count = sheet.entries.count
         let origin = sheet.origin == .handout ? String(localized: "tirés du polycopié") : String(localized: "écrits par Claude d'après le cours")
         return "\(count) entrées, \(origin) · \(sheet.generatedAt.formatted(.dateTime.day().month(.abbreviated)))"

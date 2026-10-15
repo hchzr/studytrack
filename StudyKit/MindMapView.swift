@@ -8,6 +8,8 @@ struct MindMapView: View {
     @Bindable var course: Course
     /// La notion dont on ouvre la page (le conteneur la montre).
     @Binding var concept: String?
+    /// Le chapitre regardé (`nil` : le cours entier). Un chapitre a sa propre disposition.
+    var chapter: String?
 
     @State private var zoom: CGFloat = 0.85
     @State private var selected: String?
@@ -36,6 +38,10 @@ struct MindMapView: View {
 
     private let margin = 50.0
 
+    /// La clé d'une position : celle du nœud, préfixée du chapitre quand on ne regarde que lui
+    /// (le même nœud n'a pas la même place sur la carte du cours et sur celle de son chapitre).
+    private func layoutKey(_ id: String) -> String { chapter.map { "◆\($0)◆" + id } ?? id }
+
     private func size(of node: MindNode) -> CGSize {
         switch node.role {
         case .root: return CGSize(width: 170, height: 48)
@@ -46,10 +52,10 @@ struct MindMapView: View {
     }
 
     private func model(sheet: RevisionSheet, map: StudyMap) -> Model {
-        let all = MindGraph.nodes(sheet: sheet, map: map, courseTitle: course.name)
+        let all = MindGraph.nodes(sheet: sheet, map: map, courseTitle: course.name, chapter: chapter)
         let nodes = MindGraph.visible(all, collapsed: map.collapsed)
         var positions = MindLayout.twoSided(nodes)
-        for (id, point) in map.layout where positions[id] != nil { positions[id] = point }
+        for id in positions.keys { if let point = map.layout[layoutKey(id)] { positions[id] = point } }
         var children: [String: [String]] = [:]
         for node in nodes { if let parent = node.parent { children[parent, default: []].append(node.id) } }
         let bounds = MindLayout.bounds(positions) ?? (0, 0, 0, 0)
@@ -330,7 +336,7 @@ struct MindMapView: View {
         store.update(course) { map in
             for id in moved {
                 guard let base = model.positions[id] else { continue }
-                map.layout[id] = StudyMap.Point(x: base.x + dx, y: base.y + dy)
+                map.layout[layoutKey(id)] = StudyMap.Point(x: base.x + dx, y: base.y + dy)
             }
         }
     }
@@ -363,7 +369,8 @@ struct MindMapView: View {
         defer { ideaTitle = ""; ideaParent = nil }
         guard !title.isEmpty, let parent = ideaParent else { return }
         let id = UUID().uuidString.prefix(8).lowercased()
-        let parentKey = parent == MindGraph.rootID ? nil : parent
+        // Une idée posée sur la racine d'un chapitre s'accroche à ce chapitre.
+        let parentKey = parent == MindGraph.rootID ? chapter.map(MindGraph.chapterNode) : parent
         store.update(course) { $0.customNodes.append(.init(id: String(id), title: title, note: nil, parent: parentKey)) }
     }
 
@@ -381,7 +388,7 @@ struct MindMapView: View {
         let id = String(node.dropFirst("custom:".count))
         store.update(course) { map in
             map.customNodes.removeAll { $0.id == id }
-            map.layout["custom:" + id] = nil
+            map.layout = map.layout.filter { !$0.key.hasSuffix("custom:" + id) }
         }
     }
 
@@ -423,22 +430,24 @@ struct MindMapView: View {
                 Button { userZoomed = true; zoom = min(2, zoom + 0.15) } label: { Image(systemName: "plus.magnifyingglass") }.help("Agrandir")
                 Button { userZoomed = false; fit(model) } label: { Image(systemName: "arrow.up.left.and.down.right.magnifyingglass") }.help("Tout voir")
                 Divider().frame(height: 16)
-                let chapterIDs = model.nodes.filter { $0.role == .chapter }.map(\.id)
-                Button {
-                    withAnimation(.snappy) {
-                        store.update(course) { m in
-                            if m.collapsed.isEmpty { m.collapsed = Set(chapterIDs) } else { m.collapsed = [] }
+                if chapter == nil {
+                    let chapterIDs = model.nodes.filter { $0.role == .chapter }.map(\.id)
+                    Button {
+                        withAnimation(.snappy) {
+                            store.update(course) { m in
+                                if m.collapsed.isEmpty { m.collapsed = Set(chapterIDs) } else { m.collapsed = [] }
+                            }
                         }
-                    }
-                } label: { Image(systemName: map.collapsed.isEmpty ? "rectangle.compress.vertical" : "rectangle.expand.vertical") }
-                    .help(map.collapsed.isEmpty ? "Replier les chapitres" : "Déplier les chapitres")
-                Divider().frame(height: 16)
+                    } label: { Image(systemName: map.collapsed.isEmpty ? "rectangle.compress.vertical" : "rectangle.expand.vertical") }
+                        .help(map.collapsed.isEmpty ? "Replier les chapitres" : "Déplier les chapitres")
+                    Divider().frame(height: 16)
+                }
                 Button { ideaParent = selected ?? MindGraph.rootID } label: { Image(systemName: "plus.bubble") }.help("Ajouter une idée")
                 Button { linkFrom = selected } label: { Image(systemName: "link.badge.plus") }
                     .disabled(!canLink(model))
                     .help("Relier la notion choisie à une autre")
-                if !map.layout.isEmpty {
-                    Button { store.update(course) { $0.layout = [:] } } label: { Image(systemName: "arrow.uturn.backward") }.help("Remettre la disposition automatique")
+                if map.layout.keys.contains(where: { chapter == nil ? !$0.hasPrefix("◆") : $0.hasPrefix("◆\(chapter!)◆") }) {
+                    Button { store.update(course) { m in m.layout = m.layout.filter { entry in chapter == nil ? entry.key.hasPrefix("◆") : !entry.key.hasPrefix("◆\(chapter!)◆") } } } label: { Image(systemName: "arrow.uturn.backward") }.help("Remettre la disposition automatique")
                 }
             }
             .buttonStyle(.plain)

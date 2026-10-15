@@ -192,17 +192,23 @@ struct StudyMap: Codable, Equatable {
         /// …un fichier gardé dans l'app (un podcast importé).
         var fileName: String?
         var addedAt: Date
+        /// Le chapitre dont il parle (`nil` : tout le cours).
+        var chapter: String?
     }
 
     /// L'adresse du carnet NotebookLM de ce cours, collée une fois.
     var notebookURL: String?
+    /// Un carnet NotebookLM par chapitre (clé : l'identifiant du chapitre).
+    var chapterNotebooks: [String: String]?
+    /// Les chapitres que Claude a relus, et quand (`enrichedAt` : le cours entier).
+    var enrichedChapters: [String: Date]?
     var resources: [Resource] = []
 
     /// Quand les liens, les phrases en clair et les schémas ont été écrits (par Claude).
     var enrichedAt: Date?
 
     var isEmpty: Bool {
-        links.isEmpty && progress.isEmpty && enrichment.isEmpty && diagrams.isEmpty && customNodes.isEmpty && resources.isEmpty
+        links.isEmpty && progress.isEmpty && enrichment.isEmpty && diagrams.isEmpty && customNodes.isEmpty && resources.isEmpty && (enrichedChapters ?? [:]).isEmpty
     }
 
     // MARK: Garder
@@ -253,4 +259,13 @@ extension RevisionSheet {
     }
 
     func entry(forKey key: String) -> KeyedEntry? { keyed.first { $0.key == key } }
+
+    /// Les notions d'un chapitre (`nil` : toutes). Les clés restent celles de la fiche entière :
+    /// la maîtrise, les liens et les notes d'une notion ne changent pas selon ce qu'on regarde.
+    func keyed(in chapter: String?) -> [KeyedEntry] {
+        guard let chapter else { return keyed }
+        return keyed.filter { $0.chapterID == chapter }
+    }
+
+    func chapter(_ id: String?) -> Chapter? { id.flatMap { id in chapters.first { $0.id == id } } }
 }

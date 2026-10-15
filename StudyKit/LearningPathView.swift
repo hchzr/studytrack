@@ -5,6 +5,9 @@ import SwiftUI
 struct LearningPathView: View {
     @Bindable var course: Course
     @Binding var concept: String?
+    /// Le chapitre regardé (`nil` : tout le cours), et comment en choisir un depuis l'aperçu.
+    var chapter: String?
+    var select: (String?) -> Void = { _ in }
 
     private var store: StudyMapStore { .shared }
     private var tint: Color { Carnet.tint(course.colorHex) }
@@ -12,13 +15,14 @@ struct LearningPathView: View {
     var body: some View {
         if let sheet = course.revisionSheet, !sheet.isEmpty {
             let map = store.map(course)
-            let counts = LearningPath.counts(sheet: sheet, map: map)
-            let order = LearningPath.order(sheet: sheet, map: map)
-            let next = LearningPath.next(sheet: sheet, map: map)
-            let weak = LearningPath.weakSpots(sheet: sheet, map: map, limit: 4)
+            let counts = LearningPath.counts(sheet: sheet, map: map, chapter: chapter)
+            let order = LearningPath.order(sheet: sheet, map: map, chapter: chapter)
+            let next = LearningPath.next(sheet: sheet, map: map, chapter: chapter)
+            let weak = LearningPath.weakSpots(sheet: sheet, map: map, limit: 4, chapter: chapter)
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     summary(counts)
+                    if chapter == nil, sheet.chapters.filter({ !$0.entries.isEmpty }).count > 1 { chaptersSection(sheet: sheet, map: map) }
                     if let next, let item = sheet.entry(forKey: next) { continueCard(item, level: map.mastery(next)) }
                     if !weak.isEmpty, counts.solid + counts.shaky > 0 { weakSection(weak, sheet: sheet, map: map) }
                     pathSection(order, sheet: sheet, map: map)
@@ -30,6 +34,30 @@ struct LearningPathView: View {
             .background(Carnet.ground)
         } else {
             ContentUnavailableView("Pas encore de fiche", systemImage: "list.number")
+        }
+    }
+
+    // MARK: Chapitre par chapitre
+
+    /// Chaque chapitre et où l'on en est : toucher une ligne ne montre plus que ce chapitre.
+    private func chaptersSection(sheet: RevisionSheet, map: StudyMap) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Kicker("Chapitre par chapitre")
+            ForEach(sheet.chapters.filter { !$0.entries.isEmpty }) { item in
+                let counts = LearningPath.counts(sheet: sheet, map: map, chapter: item.id)
+                Button { select(item.id) } label: {
+                    HStack(spacing: 12) {
+                        MacMathText(item.title, size: 14).foregroundStyle(Carnet.ink).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        ProgressView(value: counts.fraction).tint(Carnet.correct).frame(width: 90)
+                        Text("\(counts.solid)/\(counts.total)").font(.caption.monospacedDigit()).foregroundStyle(Carnet.inkSecondary).frame(width: 40, alignment: .trailing)
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Carnet.inkTertiary)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 

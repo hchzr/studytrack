@@ -19,14 +19,14 @@ final class NotebookLMAccount {
 
     private(set) var state: State = .unknown
     /// Ce qui se passe, par cours (« Je dépose la fiche… »).
-    private(set) var progress: [UUID: String] = [:]
-    private(set) var failure: [UUID: String] = [:]
+    private(set) var progress: [String: String] = [:]
+    private(set) var failure: [String: String] = [:]
 
     private var token: String?
     private var session: String?
     private var cookies = ""
     private var host = NotebookLMWire.hosts[0]
-    private var jobs: [UUID: Task<Void, Never>] = [:]
+    private var jobs: [String: Task<Void, Never>] = [:]
 
     private let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
 
@@ -124,83 +124,96 @@ final class NotebookLMAccount {
         return try await call(rpc, params, path: path, retry: false)
     }
 
-    // MARK: Le podcast d'un cours
+    // MARK: Le podcast d'un cours, ou d'un chapitre
 
-    var isWorking: Set<UUID> { Set(jobs.keys) }
+    /// Où en est le travail de ce cours, ou de ce chapitre (`chapter` : son identifiant).
+    func working(_ course: Course, chapter: String? = nil) -> String? { progress[StudyMapStore.key(course, chapter)] }
+    func problem(_ course: Course, chapter: String? = nil) -> String? { failure[StudyMapStore.key(course, chapter)] }
 
-    func cancel(_ course: Course) {
-        jobs[course.id]?.cancel()
-        jobs[course.id] = nil
-        progress[course.id] = nil
+    func cancel(_ course: Course, chapter: String? = nil) {
+        let key = StudyMapStore.key(course, chapter)
+        jobs[key]?.cancel()
+        jobs[key] = nil
+        progress[key] = nil
     }
 
-    /// Crée un carnet, y dépose la fiche, lance le podcast, l'attend et le rapporte dans le cours.
-    func makePodcast(for course: Course, sheet: RevisionSheet) {
-        guard jobs[course.id] == nil, isReady else { return }
-        failure[course.id] = nil
-        let id = course.id
-        jobs[id] = Task { [weak self] in
+    /// Crée un carnet, y dépose la fiche (ou le chapitre), lance le podcast, l'attend et le rapporte dans le cours.
+    func makePodcast(for course: Course, sheet: RevisionSheet, chapter: String? = nil) {
+        let key = StudyMapStore.key(course, chapter)
+        guard jobs[key] == nil, isReady else { return }
+        failure[key] = nil
+        jobs[key] = Task { [weak self] in
             guard let self else { return }
-            do { try await self.run(course, sheet: sheet) }
+            do { try await self.run(course, sheet: sheet, chapter: chapter, key: key) }
             catch is CancellationError {}
-            catch { self.failure[id] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
-            self.progress[id] = nil
-            self.jobs[id] = nil
+            catch { self.failure[key] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
+            self.progress[key] = nil
+            self.jobs[key] = nil
         }
     }
 
     /// Retrouve et rapporte le dernier podcast du carnet gardé (après un lancement interrompu).
-    func fetchLatest(for course: Course) {
-        guard jobs[course.id] == nil, isReady, let address = StudyMapStore.shared.map(course).notebookURL,
+    func fetchLatest(for course: Course, chapter: String? = nil) {
+        let key = StudyMapStore.key(course, chapter)
+        let map = StudyMapStore.shared.map(course)
+        guard jobs[key] == nil, isReady, let address = chapter.map({ map.chapterNotebooks?[$0] }) ?? map.notebookURL,
               let notebook = NotebookLMWire.notebookID(fromURL: address) else { return }
-        failure[course.id] = nil
-        let id = course.id
-        jobs[id] = Task { [weak self] in
+        failure[key] = nil
+        jobs[key] = Task { [weak self] in
             guard let self else { return }
             do {
-                self.progress[id] = String(localized: "Je cherche le podcast dans ton carnet…")
+                self.progress[key] = String(localized: "Je cherche le podcast dans ton carnet…")
                 let list = NotebookLMWire.artifacts(from: try await self.call(.listArtifacts, NotebookLMWire.listArtifactsParams(notebookID: notebook), path: "/notebook/\(notebook)"))
                 guard let podcast = list.last(where: { $0.type == 1 && $0.state == .ready && $0.audioURL != nil }) else { throw Failure.noAudio }
-                try await self.bring(podcast, to: course)
+                try await self.bring(podcast, to: course, chapter: chapter, key: key)
             } catch is CancellationError {}
-            catch { self.failure[id] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
-            self.progress[id] = nil
-            self.jobs[id] = nil
+            catch { self.failure[key] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
+            self.progress[key] = nil
+            self.jobs[key] = nil
         }
     }
 
-    private func run(_ course: Course, sheet: RevisionSheet) async throws {
-        let id = course.id
+    private func run(_ course: Course, sheet: RevisionSheet, chapter: String?, key: String) async throws {
         let map = StudyMapStore.shared.map(course)
-        let files = NotebookExport.files(courseName: course.name, code: course.displayCode, sheet: sheet, map: map)
+        let files = NotebookExport.files(courseName: course.name, code: course.displayCode, sheet: sheet, map: map, chapter: chapter)
             .filter { !$0.name.hasPrefix("00") }
+        let scope = sheet.chapter(chapter)?.title
+        let label = scope.map { "\(course.name) — \($0)" } ?? course.name
 
-        progress[id] = String(localized: "Je crée le carnet…")
-        let title = "StudyTrack · \(course.name)"
-        let created = try await call(.createNotebook, NotebookLMWire.createNotebookParams(title: title))
+        progress[key] = String(localized: "Je crée le carnet…")
+        let created = try await call(.createNotebook, NotebookLMWire.createNotebookParams(title: "StudyTrack · \(label)"))
         guard let notebook = NotebookLMWire.firstID(in: created) else { throw Failure.noAnswer }
         let path = "/notebook/\(notebook)"
-        StudyMapStore.shared.update(course) { $0.notebookURL = NotebookLMWire.notebookURL(id: notebook, host: self.host) }
+        let address = NotebookLMWire.notebookURL(id: notebook, host: host)
+        StudyMapStore.shared.update(course) { map in
+            if let chapter {
+                var all = map.chapterNotebooks ?? [:]
+                all[chapter] = address
+                map.chapterNotebooks = all
+            } else {
+                map.notebookURL = address
+            }
+        }
 
         var sources: [String] = []
         for (index, file) in files.enumerated() {
             try Task.checkCancellation()
-            progress[id] = String(localized: "Je dépose la fiche (\(index + 1)/\(files.count))…")
+            progress[key] = String(localized: "Je dépose la fiche (\(index + 1)/\(files.count))…")
             let added = try await call(.addSource, NotebookLMWire.addTextSourceParams(notebookID: notebook, title: file.name.replacingOccurrences(of: ".md", with: ""), text: file.text), path: path)
             if let source = NotebookLMWire.firstID(in: added) { sources.append(source) }
         }
         guard !sources.isEmpty else { throw Failure.noAnswer }
 
-        progress[id] = String(localized: "Je lance le podcast…")
+        progress[key] = String(localized: "Je lance le podcast…")
         let started = try await call(.createArtifact, NotebookLMWire.createAudioParams(
-            notebookID: notebook, sourceIDs: sources, instructions: NotebookLMWire.podcastInstructions(courseName: course.name),
+            notebookID: notebook, sourceIDs: sources, instructions: NotebookLMWire.podcastInstructions(courseName: label),
             language: "fr", format: .deepDive, length: .standard), path: path)
         let artifact = NotebookLMWire.firstID(in: started)
 
         // Un podcast met de 3 à 10 minutes : on revient voir toutes les 10 s, 20 minutes au plus.
         for attempt in 0..<120 {
             try Task.checkCancellation()
-            progress[id] = String(localized: "NotebookLM prépare le podcast… (\(attempt * 10 / 60) min)")
+            progress[key] = String(localized: "NotebookLM prépare le podcast… (\(attempt * 10 / 60) min)")
             try await Task.sleep(for: .seconds(10))
             let list = NotebookLMWire.artifacts(from: try await call(.listArtifacts, NotebookLMWire.listArtifactsParams(notebookID: notebook), path: path))
             let mine = list.first { $0.id == artifact } ?? list.last { $0.type == 1 }
@@ -208,7 +221,7 @@ final class NotebookLMAccount {
             case .failed: throw Failure.failed
             case .ready:
                 guard let mine, mine.audioURL != nil else { continue }
-                try await bring(mine, to: course)
+                try await bring(mine, to: course, chapter: chapter, key: key)
                 return
             default: continue
             }
@@ -217,22 +230,23 @@ final class NotebookLMAccount {
     }
 
     /// Télécharge le son (avec la session : l'adresse n'est pas publique) et l'ajoute au cours.
-    private func bring(_ podcast: NotebookLMWire.Artifact, to course: Course) async throws {
+    private func bring(_ podcast: NotebookLMWire.Artifact, to course: Course, chapter: String?, key: String) async throws {
         guard let source = podcast.audioURL else { throw Failure.noAudio }
-        progress[course.id] = String(localized: "Je télécharge le podcast…")
+        progress[key] = String(localized: "Je télécharge le podcast…")
         var request = URLRequest(url: source, timeoutInterval: 300)
         request.setValue(cookies, forHTTPHeaderField: "Cookie")
         request.setValue(agent, forHTTPHeaderField: "User-Agent")
         let (temporary, response) = try await Self.client.download(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.noAudio }
-        let name = "Podcast · \(course.displayCode) · \(Date.now.formatted(.dateTime.day().month(.abbreviated))).m4a"
+        let scope = course.revisionSheet?.chapter(chapter)?.title.prefix(28)
+        let name = "Podcast · \(course.displayCode)\(scope.map { " · \($0)" } ?? "") · \(Date.now.formatted(.dateTime.day().month(.abbreviated))).m4a"
         let file = FileManager.default.temporaryDirectory.appending(path: name.replacingOccurrences(of: "/", with: "-"))
         try? FileManager.default.removeItem(at: file)
         try FileManager.default.moveItem(at: temporary, to: file)
         guard let stored = PodcastStore.importFile(file, for: course) else { throw Failure.noAudio }
         let title = (name as NSString).deletingPathExtension
         StudyMapStore.shared.update(course) {
-            $0.resources.append(.init(id: UUID().uuidString, kind: .podcast, title: title, url: nil, fileName: stored, addedAt: Date()))
+            $0.resources.append(.init(id: UUID().uuidString, kind: .podcast, title: title, url: nil, fileName: stored, addedAt: Date(), chapter: chapter))
         }
         if let resource = StudyMapStore.shared.map(course).resources.last, let played = PodcastStore.url(for: resource, in: course) {
             PodcastPlayer.shared.play(played, title: title)
