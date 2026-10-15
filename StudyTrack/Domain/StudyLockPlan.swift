@@ -38,6 +38,52 @@ enum StudyLockPlan {
     /// Jamais touchés : captures d'écran, ⌘` (changer de fenêtre de l'app).
     static let neverTouched: Set<Int> = [27, 28, 29, 30, 31, 184, 185]
 
+    // MARK: Gestes du trackpad
+
+    /// Une préférence qui commande un geste (Mission Control, changer de bureau,
+    /// Launchpad, Centre de notifications) : ce qu'on y écrit pour le bloquer.
+    struct GestureTarget: Equatable {
+        var domain: String
+        var key: String
+        /// La valeur qui bloque (0 / faux).
+        var blocked: Int
+        var isBool: Bool
+    }
+
+    static let trackpadDomains = ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"]
+
+    static let gestureTargets: [GestureTarget] = {
+        var targets: [GestureTarget] = []
+        for domain in trackpadDomains {
+            for key in ["TrackpadThreeFingerVertSwipeGesture", "TrackpadFourFingerVertSwipeGesture",
+                        "TrackpadThreeFingerHorizSwipeGesture", "TrackpadFourFingerHorizSwipeGesture",
+                        "TrackpadFourFingerPinchGesture", "TrackpadFiveFingerPinchGesture",
+                        "TrackpadTwoFingerFromRightEdgeSwipeGesture"] {
+                targets.append(GestureTarget(domain: domain, key: key, blocked: 0, isBool: false))
+            }
+        }
+        for key in ["showMissionControlGestureEnabled", "showAppExposeGestureEnabled",
+                    "showDesktopGestureEnabled", "showLaunchpadGestureEnabled"] {
+            targets.append(GestureTarget(domain: "com.apple.dock", key: key, blocked: 0, isBool: true))
+        }
+        // Mission Control entier (clavier compris), pour le Dock.
+        targets.append(GestureTarget(domain: "com.apple.dock", key: "mcx-expose-disabled", blocked: 1, isBool: true))
+        return targets
+    }()
+
+    /// La valeur d'origine d'une préférence de geste (`nil` : elle n'existait pas).
+    struct GestureOriginal: Codable, Equatable {
+        var domain: String
+        var key: String
+        var value: Int?
+    }
+
+    /// Les valeurs d'origine à garder : celles d'une fiche existante gagnent (après
+    /// un relancement en plein blocage, ce qu'on lit est ce que nous avons posé).
+    static func mergeGestures(existing: [GestureOriginal]?, current: [GestureOriginal]) -> [GestureOriginal] {
+        existing ?? current
+    }
+
     /// Ce que le blocage a changé, écrit **avant** de changer quoi que ce soit.
     struct Record: Codable, Equatable {
         var version = 1
@@ -47,6 +93,8 @@ enum StudyLockPlan {
         /// automatiquement ou non) ; `nil` : pas touchés.
         var dockAutohide: Bool?
         var menuBarAutohide: Bool?
+        /// Les préférences de gestes du trackpad d'avant le blocage ; `nil` : pas touchées.
+        var gestures: [GestureOriginal]?
         var createdAt: Date
     }
 

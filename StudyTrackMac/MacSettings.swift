@@ -90,6 +90,8 @@ final class MacSettings {
     }
     /// Le mode étude reste sombre (défaut) ou suit l'apparence du Mac.
     var studyAlwaysDark: Bool { didSet { defaults.set(studyAlwaysDark, forKey: "mac.studyAlwaysDark") } }
+    /// Bloquer aussi les gestes du trackpad (Mission Control, changer de bureau…).
+    var studyBlockGestures: Bool { didSet { defaults.set(studyBlockGestures, forKey: "mac.studyBlockGestures") } }
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
@@ -157,6 +159,7 @@ final class MacSettings {
         studySoundtrackOnBreak = defaults.string(forKey: "mac.studySoundtrackOnBreak")
             .flatMap(SessionSoundtrack.BreakPolicy.init(rawValue:)) ?? .pause
         studyAlwaysDark = defaults.object(forKey: "mac.studyAlwaysDark") as? Bool ?? true
+        studyBlockGestures = defaults.object(forKey: "mac.studyBlockGestures") as? Bool ?? true
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off

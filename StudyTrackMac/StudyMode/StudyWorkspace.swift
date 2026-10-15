@@ -545,23 +545,28 @@ private struct StudyTopBar: View {
     /// y cache ce qu'on pose.
     var body: some View {
         HStack(spacing: 16) {
-            sessionClock
-            subject
-                .frame(maxWidth: 360, alignment: .leading)
-                .layoutPriority(-1)
-            Spacer(minLength: 12)
-            // Les outils se replient quand la place manque (musique, état, centre de
-            // contrôle) ; la sortie, elle, est toujours là — elle ne se replie jamais.
-            ViewThatFits(in: .horizontal) {
-                tools(.full)
-                tools(.medium)
-                tools(.small)
-                tools(.minimal)
+            if let notch = Self.notch {
+                // L'encoche : rien dessous. La session et la cible à sa gauche, tout le
+                // reste à sa droite, chacun dans la place qu'elle laisse.
+                HStack(spacing: 16) {
+                    sessionClock
+                    subject
+                        .frame(maxWidth: 360, alignment: .leading)
+                        .layoutPriority(-1)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: notch.left, alignment: .leading)
+                Spacer(minLength: notch.gap)
+                rightGroup
+                    .frame(width: notch.right, alignment: .trailing)
+            } else {
+                sessionClock
+                subject
+                    .frame(maxWidth: 360, alignment: .leading)
+                    .layoutPriority(-1)
+                Spacer(minLength: 12)
+                rightGroup
             }
-            .layoutPriority(1)
-            exitControls
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
@@ -648,6 +653,32 @@ private struct StudyTopBar: View {
         return "jusqu'à \(DateUtils.time.string(from: timer.state?.studyUntil ?? Date()))"
     }
 
+    /// Les outils (qui se replient quand la place manque) puis la sortie (qui ne se
+    /// replie jamais).
+    private var rightGroup: some View {
+        HStack(spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                tools(.full)
+                tools(.medium)
+                tools(.small)
+                tools(.minimal)
+            }
+            .layoutPriority(1)
+            exitControls
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
+        }
+    }
+
+    /// L'encoche de l'écran principal (MacBook) : la place à gauche, à droite, et
+    /// l'espace qu'elle prend au milieu. `nil` sans encoche.
+    private static var notch: (left: CGFloat, right: CGFloat, gap: CGFloat)? {
+        guard let screen = NSScreen.screens.first, screen.safeAreaInsets.top > 0,
+              let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea else { return nil }
+        let margin: CGFloat = 18
+        return (max(0, left.width - margin), max(0, right.width - margin), max(0, right.minX - left.maxX))
+    }
+
     private enum ToolsLevel { case full, medium, small, minimal }
 
     /// Ce qui se replie : les ressources, la musique, l'état, le centre de contrôle.
@@ -704,7 +735,7 @@ private struct StudyTopBar: View {
                     Button { timer.extendStudy(minutes: 25) } label: { Label("Encore 25 min", systemImage: "plus") }
                     Divider()
                 }
-                Button("Ranger le bureau") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
+                Button("Réorganiser les outils selon mon travail") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
                 Button("Mes cours") {
                     NSApp.setActivationPolicy(.regular)
                     NotificationCenter.default.post(name: .macOpenMainWindow, object: nil)
@@ -1369,16 +1400,26 @@ private struct StudyDeskHome: View {
     var desk: StudyDesk
     var open: (StudyMode.Tool) -> Void
     @Environment(MacTimer.self) private var timer
+    @Environment(\.modelContext) private var context
+    @Query(sort: \Course.code) private var allCourses: [Course]
+    @State private var classes: [ScheduledClass] = []
 
     var body: some View {
         ScrollView {
             HStack(alignment: .top, spacing: 40) {
                 VStack(spacing: 26) {
                     StudyDial(tint: tint, size: 360)
-                    StudyTargetCard(course: course, tint: tint)
-                        .frame(maxWidth: 520)
+                    // Une session libre n'a pas de cible : pas de carte vide.
+                    if course != nil {
+                        StudyTargetCard(course: course, tint: tint)
+                            .frame(maxWidth: 520)
+                    }
                 }
                 .frame(maxWidth: .infinity)
+                if course == nil {
+                    freeColumn
+                        .frame(width: 420)
+                } else {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Ta session").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
                     // La file de reprise passe avant le reste quand quelque chose est dû.
@@ -1406,7 +1447,9 @@ private struct StudyDeskHome: View {
                         .buttonStyle(.plain)
                     }
                     // Les étapes et leur ordre : Personnaliser › Ta session (les mêmes sur l'iPhone).
-                    ForEach(Array(SessionFlow.load().steps.enumerated()), id: \.element) { index, item in
+                    // Seulement les étapes qui ont un sens ici : pas de « Faire la série » sans
+                    // série, pas de débrief avant la fin.
+                    ForEach(Array(SessionFlow.load().steps.filter(applies).enumerated()), id: \.element) { index, item in
                         switch item {
                         case .course:
                             step(index + 1, item.title, detail: theoryDetail, icon: "books.vertical", done: theoryLeft == 0) { desk.pane = .course }
@@ -1421,18 +1464,74 @@ private struct StudyDeskHome: View {
                             step(index + 1, item.title, detail: debriefDetail, icon: "checklist", done: false) { desk.showClaude() }
                         }
                     }
-                    HStack(spacing: 8) {
-                        mini(.calc)
-                        mini(.web)
-                        Button { desk.showClaude() } label: { Label("Claude", systemImage: "sparkle") }
-                            .buttonStyle(.paper)
-                    }
-                    .padding(.top, 4)
+                    toolsRow
                     accounts
                 }
                 .frame(width: 420)
+                }
             }
             .padding(40)
+        }
+        .task {
+            while !Task.isCancelled {
+                classes = DeskSchedule.today(context: context)
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
+    }
+
+    // MARK: Une session libre
+
+    /// Sans cours : choisir sur quoi on travaille, et ce que la journée réserve.
+    private var freeColumn: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Sur quoi ?").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
+            FlowLayout(spacing: 7) {
+                ForEach(allCourses.filter(\.isTracked)) { item in
+                    CourseChip(title: item.displayCode, color: Carnet.tint(item.colorHex), selected: false) {
+                        timer.retarget(courseID: item.id, taskType: .exercise)
+                    }
+                    .help(item.name)
+                }
+            }
+            let upcoming = classes.filter { $0.slot.end > Date() }.prefix(4)
+            if !upcoming.isEmpty {
+                Text("Aujourd'hui").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink).padding(.top, 4)
+                ForEach(Array(upcoming)) { klass in
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1.5).fill(Carnet.tint(klass.colorHex)).frame(width: 3, height: 30)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("\(klass.slot.courseCode) · \(klass.kindLabel)").font(.callout.weight(.medium)).foregroundStyle(StudyPalette.ink)
+                            Text(DateUtils.time.string(from: klass.slot.start) + " – " + DateUtils.time.string(from: klass.slot.end)
+                                 + (klass.location.isEmpty ? "" : " · \(klass.location)"))
+                                .font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                        }
+                    }
+                }
+            }
+            toolsRow
+            accounts
+        }
+    }
+
+    private var toolsRow: some View {
+        HStack(spacing: 8) {
+            mini(.calc)
+            mini(.web)
+            Button { desk.showClaude() } label: { Label("Claude", systemImage: "sparkle") }
+                .buttonStyle(.paper)
+        }
+        .padding(.top, 4)
+    }
+
+    /// Une étape de « Ta session » n'est montrée que si elle a un sens maintenant.
+    private func applies(_ item: SessionFlow.Step) -> Bool {
+        guard course != nil else { return false }
+        switch item {
+        case .course: return true
+        case .series: return series != nil
+        case .help: return series != nil && series?.isComplete != true
+        case .debrief: return series.map { $0.requiredExercises.allSatisfy { ExerciseStage($0).isDone } } ?? false
         }
     }
 

@@ -151,6 +151,9 @@ private struct StudySettingsPane: View {
                     Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
                     Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
                 }
+                Toggle("Bloquer les gestes du trackpad", isOn: $settings.studyBlockGestures)
+                    .disabled(!settings.studyBlocking)
+                    .help("Mission Control, changer de bureau, Launchpad : les gestes à trois ou quatre doigts. Le Dock se relance au début et à la fin.")
                 Toggle("Toujours sombre", isOn: $settings.studyAlwaysDark)
                     .onChange(of: settings.studyAlwaysDark) { _, _ in StudyModeController.shared.update() }
                 Toggle("Cacher le Dock et la barre des menus", isOn: $settings.studyHideSystemChrome)

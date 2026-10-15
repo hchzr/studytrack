@@ -45,7 +45,7 @@ private struct DeskControlCenter: View {
                 .onChange(of: settings.studyAlwaysDark) { _, _ in StudyModeController.shared.update() }
             Divider()
             HStack(spacing: 10) {
-                Button("Ranger le bureau") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
+                Button("Réorganiser les outils") { NotificationCenter.default.post(name: .studyTidyDesk, object: nil) }
                 if !StudyMode.isOpenEnded(timer.state) {
                     Button("Encore 25 min") { timer.extendStudy(minutes: 25) }
                 }

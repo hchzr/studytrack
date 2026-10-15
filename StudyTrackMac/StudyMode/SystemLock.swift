@@ -34,18 +34,23 @@ enum SystemLock {
     private(set) static var processSwitchingOff = false
 
     /// Début de blocage : raccourcis éteints, Dock et barre des menus cachés.
-    static func engage(hideChrome: Bool) {
+    static func engage(hideChrome: Bool, blockGestures: Bool = true) {
         guard !untouched else { return }
         let chrome = hideChrome && SystemChrome.permission == .granted ? SystemChrome.read() : nil
         let available = SystemHotKeys.isAvailable
         if !available { log.notice("raccourcis du système : fonctions introuvables, rien d'éteint") }
-        let (disable, record) = StudyLockPlan.plan(
+        let (disable, planned) = StudyLockPlan.plan(
             wanted: StudyLockPlan.shortcutIDs,
             enabledNow: { available && SystemHotKeys.isEnabled($0) },
             existing: StudyLockStore.load(),
             dockNow: chrome?.dock, menuBarNow: chrome?.menuBar)
+        var record = planned
+        if blockGestures {
+            record.gestures = StudyLockPlan.mergeGestures(existing: record.gestures, current: SystemGestures.read())
+        }
         // La fiche d'abord : si l'app meurt entre les deux, on saura quoi rallumer.
         StudyLockStore.save(record)
+        if blockGestures { SystemGestures.block() }
         guard available else { return }
         for id in disable { SystemHotKeys.setEnabled(id, false) }
         processSwitchingOff = [1, 2].allSatisfy { !SystemHotKeys.isEnabled($0) }
@@ -64,6 +69,7 @@ enum SystemLock {
             for id in StudyLockPlan.restore(record) { SystemHotKeys.setEnabled(id, true) }
         }
         processSwitchingOff = false
+        if let gestures = record.gestures { SystemGestures.restore(gestures) }
         // On essaie toujours de rétablir le Dock et la barre des menus ; la fiche ne
         // les oublie que si c'est fait. Sinon elle les garde pour la prochaine fois
         // (un Dock caché pour toujours est pire qu'une fiche qui reste).
@@ -71,6 +77,7 @@ enum SystemLock {
            !SystemChrome.set(dock: record.dockAutohide, menuBar: record.menuBarAutohide) {
             var kept = record
             kept.shortcuts = []
+            kept.gestures = nil
             StudyLockStore.save(kept)
             log.notice("Dock et barre des menus : pas rétablis, la fiche les garde")
             return
@@ -192,5 +199,52 @@ enum SystemChrome {
         var error: NSDictionary?
         NSAppleScript(source: source)?.executeAndReturnError(&error)
         return error == nil
+    }
+}
+
+// MARK: - Gestes du trackpad
+
+/// Mission Control, changer de bureau, Launchpad, Centre de notifications : des
+/// gestes que les raccourcis éteints n'arrêtent pas. Ils se règlent dans les
+/// préférences du trackpad et du Dock ; on y écrit « bloqué » pendant le blocage
+/// (les valeurs d'origine sur la fiche) et on relance le Dock pour qu'il relise.
+/// Le Dock se relance tout seul (un clignotement).
+enum SystemGestures {
+    static func read() -> [StudyLockPlan.GestureOriginal] {
+        StudyLockPlan.gestureTargets.map { target in
+            let value = CFPreferencesCopyAppValue(target.key as CFString, target.domain as CFString)
+            let number: Int? = (value as? NSNumber).map { $0.intValue }
+            return StudyLockPlan.GestureOriginal(domain: target.domain, key: target.key, value: number)
+        }
+    }
+
+    static func block() {
+        for target in StudyLockPlan.gestureTargets {
+            write(target.blocked, isBool: target.isBool, key: target.key, domain: target.domain)
+        }
+        reloadDock()
+    }
+
+    static func restore(_ originals: [StudyLockPlan.GestureOriginal]) {
+        for original in originals {
+            let isBool = StudyLockPlan.gestureTargets.first { $0.domain == original.domain && $0.key == original.key }?.isBool ?? false
+            write(original.value, isBool: isBool, key: original.key, domain: original.domain)
+        }
+        reloadDock()
+    }
+
+    /// `nil` : la préférence n'existait pas, on la retire.
+    private static func write(_ value: Int?, isBool: Bool, key: String, domain: String) {
+        var stored: AnyObject?
+        if let value { stored = isBool ? NSNumber(value: value != 0) : NSNumber(value: value) }
+        CFPreferencesSetAppValue(key as CFString, stored, domain as CFString)
+        CFPreferencesAppSynchronize(domain as CFString)
+    }
+
+    private static func reloadDock() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        process.arguments = ["Dock"]
+        try? process.run()
     }
 }

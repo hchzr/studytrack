@@ -6271,6 +6271,16 @@ do {
     check(StudyLockPlan.restore(StudyLockPlan.Record(shortcuts: [27, 118], createdAt: Date())) == [118], "rétablir : jamais ⌘` ni les captures")
     let back = StudyLockPlan.decode(StudyLockPlan.encode(first.record))
     check(back == first.record, "fiche : relue telle qu'écrite")
+    let g1 = [StudyLockPlan.GestureOriginal(domain: "d", key: "k", value: 2), StudyLockPlan.GestureOriginal(domain: "d", key: "absent", value: nil)]
+    let g2 = [StudyLockPlan.GestureOriginal(domain: "d", key: "k", value: 0)]
+    check(StudyLockPlan.mergeGestures(existing: nil, current: g1) == g1, "gestes : sans fiche, les valeurs lues sont gardées")
+    check(StudyLockPlan.mergeGestures(existing: g1, current: g2) == g1, "gestes : après une relance, la fiche d'origine gagne")
+    var withGestures = first.record
+    withGestures.gestures = g1
+    check(StudyLockPlan.decode(StudyLockPlan.encode(withGestures))?.gestures == g1, "gestes : la fiche garde les valeurs d'origine, y compris « absente »")
+    check(StudyLockPlan.decode(StudyLockPlan.encode(first.record))?.gestures == nil, "gestes : une ancienne fiche se relit sans eux")
+    check(StudyLockPlan.gestureTargets.contains { $0.key == "TrackpadThreeFingerHorizSwipeGesture" && $0.blocked == 0 && !$0.isBool }
+          && StudyLockPlan.gestureTargets.contains { $0.key == "showMissionControlGestureEnabled" && $0.isBool }, "gestes : les balayages à trois doigts et Mission Control sont dans la liste")
     check(StudyLockPlan.decode(Data("pas du json".utf8)) == nil && StudyLockPlan.decode(nil) == nil, "fiche illisible : ignorée")
     check(Set(StudyLockPlan.shortcutIDs).isDisjoint(with: StudyLockPlan.neverTouched), "la liste ne contient aucun raccourci intouchable")
     check(StudyLockPlan.shortcutIDs.contains(64) && StudyLockPlan.shortcutIDs.contains(65) && StudyLockPlan.shortcutIDs.contains(1),

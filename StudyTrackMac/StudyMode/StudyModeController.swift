@@ -312,7 +312,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         StudyGuard.arm()
         // Les raccourcis du système (Spotlight, ⌘Tab, Mission Control…) éteints,
         // la fiche pour les rallumer écrite d'abord.
-        SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true)
+        SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true, blockGestures: settings?.studyBlockGestures ?? true)
         // ⌘Tab et ⌘Espace, éteints dans le système, reviennent en version d'étude.
         if SystemHotKeys.isAvailable { StudyShell.shared.engage() }
         // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
