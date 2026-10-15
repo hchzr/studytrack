@@ -23,6 +23,15 @@ enum StudyLevels {
 /// les barres flottantes répondent au premier clic.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+        // La fenêtre garde sa taille : elle ne se recale pas sur la hauteur du contenu
+        // (65 pt contre 66 de réservés laissaient un trait de bureau entre la barre et le centre).
+        sizingOptions = []
+    }
+
+    @MainActor required dynamic init?(coder: NSCoder) { fatalError("init(coder:) n'est pas utilisé") }
 }
 
 /// Une barre flottante (la barre du haut, la colonne d'outils) : au-dessus des
@@ -60,6 +69,8 @@ struct StudyTopBarHost: View {
                     moment: DeskSchedule.moment(taskType: timer.taskType, inGroup: timer.state?.groupSession != nil, course: course),
                     openMusic: { controller.desk.pane = .music },
                     openResource: { controller.openResource($0, course: course) })
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(StudyPalette.ground)
             .environment(\.colorScheme, .dark)
             .environment(\.deskPanelHost, true)
     }
@@ -73,6 +84,8 @@ struct StudyRailHost: View {
     var body: some View {
         let controller = StudyModeController.shared
         StudyRail(desk: controller.desk, browser: controller.browser, course: courses.first { $0.id == timer.courseID })
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(StudyPalette.ground)
             .environment(\.colorScheme, .dark)
             .environment(\.deskPanelHost, true)
     }
@@ -90,7 +103,8 @@ extension StudyModeController {
         let f = screen.frame
         let bar = NSRect(x: f.minX, y: f.maxY - barHeight, width: f.width, height: barHeight)
         let rail = NSRect(x: f.minX, y: f.minY, width: railWidth, height: f.height - barHeight)
-        let desk = NSRect(x: f.minX + railWidth, y: f.minY, width: f.width - railWidth, height: f.height - barHeight)
+        // Le bureau passe 1 pt sous la barre et la colonne : jamais un trait de vide entre eux.
+        let desk = NSRect(x: f.minX + railWidth - 1, y: f.minY, width: f.width - railWidth + 1, height: f.height - barHeight + 1)
         return (bar, rail, desk)
     }
 
