@@ -29,6 +29,13 @@ final class TimerLink {
     /// pour le réveiller quand un verrou du mode étude commence ou finit ailleurs.
     enum TokenKind: String { case update, start, device }
 
+    /// Un message de musique reçu d'un autre appareil (`MusicLink`).
+    var onMusic: ((MusicLink.Message) -> Void)?
+    /// Une photo, un « je bloque », une question venus de l'iPhone (`DeskDrop`).
+    var onDrop: ((DeskDrop) -> Void)?
+    /// Le lien vient de s'ouvrir (la musique redemande l'état des autres).
+    var onConnect: (() -> Void)?
+
     /// Construit l'état de l'îlot à joindre à une publication (le Mac) :
     /// le relais le pousse aux iPhone verrouillés.
     var livePayload: ((CloudRelay.TimerSnapshot) -> Data?)?
@@ -130,10 +137,31 @@ final class TimerLink {
         // Un verrou qui commence ou finit : le relais réveille l'iPhone et
         // l'iPad endormis (notification silencieuse), qui posent ou lèvent leur
         // bouclier sans attendre qu'on les ouvre.
-        let locked = StudyMode.locks(snapshot.state)
+        let locked = StudyMode.blocks(snapshot.state)
         if Self.shouldWake(previous: lastAnnouncedLock, now: locked) { message["wake"] = true }
         lastAnnouncedLock = locked
         write(message)
+    }
+
+    /// Un message de musique : un état (gardé par le relais, un par appareil)
+    /// ou une commande. `wake` : réveiller l'iPhone endormi (une musique qu'on
+    /// lui passe).
+    func sendMusic(_ message: MusicLink.Message, wake: Bool = false) {
+        guard connected, let key, let sealed = MusicLink.seal(message, key: key) else { return }
+        var payload: [String: Any] = ["t": "music", "d": sealed]
+        if case .state = message { payload["keep"] = true }
+        if wake { payload["wake"] = true }
+        write(payload)
+    }
+
+    var isConnected: Bool { connected }
+
+    /// Envoie au bureau du Mac ; `false` si le lien est fermé ou la pièce trop lourde.
+    @discardableResult
+    func sendDrop(_ drop: DeskDrop) -> Bool {
+        guard connected, let key, let sealed = DeskDrop.seal(drop, key: key) else { return false }
+        write(["t": "drop", "d": sealed])
+        return true
     }
 
     /// Réveiller les autres appareils : quand le verrou change (pas au premier
@@ -215,6 +243,7 @@ final class TimerLink {
         attempts = 0
         log.notice("lien du chrono ouvert")
         for (kind, token) in tokens { writeToken(kind, token ?? nil) }
+        onConnect?()
         if let pending {
             self.pending = nil
             send(pending)
@@ -249,9 +278,24 @@ final class TimerLink {
     private func handle(_ text: String) {
         guard text != "pong", let data = text.data(using: .utf8),
               let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              message["t"] as? String == "timer", let sealed = message["d"] as? String, let key,
-              let snapshot = Self.open(sealed, key: key) else { return }
-        CloudRelay.receivedFromLink(snapshot)
+              let sealed = message["d"] as? String, let key else { return }
+        switch message["t"] as? String {
+        case "timer":
+            if let snapshot = Self.open(sealed, key: key) { CloudRelay.receivedFromLink(snapshot) }
+        case "music":
+            if let music = MusicLink.open(sealed, key: key) { onMusic?(music) }
+        case "drop":
+            if let drop = DeskDrop.open(sealed, key: key) { onDrop?(drop) }
+        default:
+            break
+        }
+    }
+
+    /// Une commande de musique reçue par notification silencieuse (`st.m`).
+    func openMusicWake(_ sealed: String) -> MusicLink.Message? {
+        let identity = UserDefaults.standard.string(forKey: "timerLink.identity")
+        guard let key = key ?? identity.map(Self.key(for:)) else { return nil }
+        return MusicLink.open(sealed, key: key)
     }
 
     private func scheduleReconnect() {

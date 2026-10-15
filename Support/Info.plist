@@ -43,6 +43,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>StudyTrack cherche dans Apple Music et votre bibliothèque pour faire jouer votre musique pendant le mode étude.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>StudyTrack numérise ta copie pour l'envoyer à ton bureau du Mac (et à Claude), pendant une session.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>StudyTrack utilise votre calendrier pour afficher vos cours, vos midterms et vos sessions d'étude, et pour y ajouter vos sessions planifiées.</string>
 	<key>NSCalendarsUsageDescription</key>

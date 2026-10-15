@@ -100,8 +100,9 @@ final class StudyLock {
 
     /// Pose ou lève le bouclier selon l'état du chrono.
     func sync(_ state: FocusTimerState?, now: Date = Date()) {
-        if StudyMode.locks(state, at: now), let until = state?.studyUntil {
-            shield(until: until)
+        if StudyMode.blocks(state, at: now), let until = state?.studyUntil {
+            // Sans fin : une échéance de sûreté, repoussée à chaque changement du chrono.
+            shield(until: StudyMode.isOpenEnded(state) ? now.addingTimeInterval(StudyMode.openEndedShieldSafety) : until)
         } else {
             release()
         }

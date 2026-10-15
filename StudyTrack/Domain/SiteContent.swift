@@ -437,6 +437,10 @@ struct EdXOutline: Equatable {
         /// Vidéo : la meilleure source (HLS, puis mp4), ou YouTube.
         var videoURL: String?
         var youTubeID: String?
+        /// Vidéo : ses transcriptions (la langue préférée d'abord).
+        var transcripts: [String] = []
+        /// Vidéo : sa durée en secondes, quand Courseware la donne.
+        var duration: Double?
     }
 
     var chapters: [Chapter]
@@ -472,12 +476,17 @@ struct EdXOutline: Equatable {
             let kind: Block.Kind = type == "video" ? .video : type == "html" ? .html : type == "problem" ? .problem : .other(type)
             var video: String?
             var youTube: String?
+            var transcripts: [String] = []
+            var duration: Double?
             if let data = raw["student_view_data"] as? [String: Any] {
                 video = bestVideo(data)
+                transcripts = CoursewareTranscripts.transcriptURLs(data)
+                duration = (data["duration"] as? Double).flatMap { $0 > 0 ? $0 : nil }
                 youTube = (data["encoded_videos"] as? [String: Any])?["youtube"].flatMap { ($0 as? [String: Any])?["url"] as? String }
                     .flatMap(URL.init(string:)).flatMap(SiteRouter.youTubeID)
             }
-            return Block(id: id, title: title(id), kind: kind, viewURL: raw["student_view_url"] as? String, videoURL: video, youTubeID: youTube)
+            return Block(id: id, title: title(id), kind: kind, viewURL: raw["student_view_url"] as? String, videoURL: video, youTubeID: youTube,
+                         transcripts: transcripts, duration: duration)
         }
         let chapters = children(root).map { chapterID in
             Chapter(id: chapterID, title: title(chapterID), sequences: children(chapterID).map { sequenceID in
@@ -537,13 +546,21 @@ struct MoodleActivityContent: Codable, Equatable {
     var posts: [Post] = []
     /// Le script est tombé sur la page de connexion.
     var needsLogin: Bool = false
+    /// Moodle refuse de montrer l'activité (pas encore ouverte, cachée) : il
+    /// renvoie vers la page du cours. Sans ce drapeau, on lisait **la page du
+    /// cours** comme si c'était l'activité — le titre du cours, la description
+    /// de la première activité, son lien.
+    var unavailable: Bool = false
+    /// Ce que Moodle en dit (« Disponible à partir du 17 octobre »), s'il le dit.
+    var notice: String?
 
     static func decode(_ json: String) -> MoodleActivityContent? {
         try? JSONDecoder().decode(MoodleActivityContent.self, from: Data(json.utf8))
     }
 
     init(module: String, title: String, html: String = "", files: [File] = [], dates: [String] = [], status: [String] = [],
-         target: String? = nil, discussions: [Discussion] = [], posts: [Post] = [], needsLogin: Bool = false) {
+         target: String? = nil, discussions: [Discussion] = [], posts: [Post] = [], needsLogin: Bool = false,
+         unavailable: Bool = false, notice: String? = nil) {
         self.module = module
         self.title = title
         self.html = html
@@ -554,6 +571,8 @@ struct MoodleActivityContent: Codable, Equatable {
         self.discussions = discussions
         self.posts = posts
         self.needsLogin = needsLogin
+        self.unavailable = unavailable
+        self.notice = notice
     }
 
     init(from decoder: Decoder) throws {
@@ -568,6 +587,8 @@ struct MoodleActivityContent: Codable, Equatable {
         discussions = try c.decodeIfPresent([Discussion].self, forKey: .discussions) ?? []
         posts = try c.decodeIfPresent([Post].self, forKey: .posts) ?? []
         needsLogin = try c.decodeIfPresent(Bool.self, forKey: .needsLogin) ?? false
+        unavailable = try c.decodeIfPresent(Bool.self, forKey: .unavailable) ?? false
+        notice = try c.decodeIfPresent(String.self, forKey: .notice).flatMap { $0.isEmpty ? nil : BotafogoParser.decode($0) }
     }
 }
 

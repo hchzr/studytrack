@@ -26,7 +26,17 @@ enum ClaudeProject {
     }
 
     /// Le contexte que StudyTrack tient à jour dans le `CLAUDE.md`.
-    static func context(courses: [CourseLine], week: Int?, date: String) -> String {
+    /// Un exercice de la file de reprise, pour le `CLAUDE.md`.
+    struct RedoLine: Equatable {
+        var code: String
+        var exercise: String
+        var step: String
+        var due: String?
+        var why: String
+    }
+
+    static func context(courses: [CourseLine], week: Int?, date: String, redo: [RedoLine] = [],
+                        features: SeriesReview.Features? = nil) -> String {
         var lines = [
             "## StudyTrack (mis à jour par l'app, le \(date))",
             "",
@@ -44,6 +54,18 @@ enum ClaudeProject {
                 if let progress = course.progress { line += " · \(progress)" }
                 return line
             }
+        }
+        if !redo.isEmpty {
+            lines += ["", "File de reprise de StudyTrack (à refaire sur papier ; l'amorce reste dans l'app, à montrer seulement après une tentative) :"]
+            lines += redo.map { line in
+                "- \(line.code) \(line.exercise) · \(line.step)\(line.due.map { " · le \($0)" } ?? "") · \(line.why)"
+            }
+        }
+        if let features {
+            lines += ["", "Après une série (post-mortem) ou un indice, StudyTrack lit le bloc de fin de ta réponse :",
+                      SeriesReview.instruction(features: features)]
+            if features.hints { lines += [SeriesReview.hintInstruction] }
+            lines += ["Si ta compétence tient aussi un carnet ailleurs (Notion…), fais-le comme d'habitude : le bloc est en plus."]
         }
         lines += ["", "Ne modifie rien dans StudyTrack toi-même : propose, l'étudiant confirme dans l'app."]
         return lines.joined(separator: "\n")
@@ -155,6 +177,9 @@ enum ClaudeProject {
         /// En plus de la lecture et des compétences (`Read`, `Glob`, `Skill`).
         var allowedTools: [String] = []
         var commands: [Command] = []
+        /// La file de reprise de l'étudiant·e : paliers, plafonds (sinon ceux
+        /// de StudyTrack : J+7, J+21, pré-examen ; 2 par série).
+        var redo: RedoLadder.Config?
 
         init(skills: [String] = [], seriesSkill: String? = nil, models: Models = Models(),
              mcpServers: [String: Server] = [:], allowedTools: [String] = [], commands: [Command] = []) {
@@ -174,6 +199,7 @@ enum ClaudeProject {
             mcpServers = try c.decodeIfPresent([String: Server].self, forKey: .mcpServers) ?? [:]
             allowedTools = try c.decodeIfPresent([String].self, forKey: .allowedTools) ?? []
             commands = try c.decodeIfPresent([Command].self, forKey: .commands) ?? []
+            redo = try? c.decodeIfPresent(RedoLadder.Config.self, forKey: .redo)
         }
 
         static func decode(_ data: Data) -> File? { try? JSONDecoder().decode(File.self, from: data) }

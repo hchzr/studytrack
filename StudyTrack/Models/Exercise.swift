@@ -122,6 +122,35 @@ final class Exercise {
     @Relationship(deleteRule: .nullify, inverse: \LinkedTask.exercise)
     var targetedTasks: [LinkedTask]? = []
 
+    // Carnet d'erreurs, file de reprise, indices (tous facultatifs : chacun
+    // s'allume dans les réglages).
+
+    /// Les erreurs notées sur cet exercice.
+    @Relationship(deleteRule: .cascade, inverse: \Mistake.exercise)
+    var mistakesStore: [Mistake]? = []
+    var mistakes: [Mistake] { (mistakesStore ?? []).sorted { $0.createdAt < $1.createdAt } }
+
+    /// Le palier de la file de reprise (indice dans `RedoLadder.Config.steps`) ;
+    /// `nil` : pas dans la file.
+    var redoPass: Int?
+    /// Quand le refaire (`nil` au palier « pré-examen » sans date d'examen).
+    var redoDueAt: Date?
+    /// Pourquoi il est en file : le type d'erreur et ce qui a coincé.
+    var redoWhy: String = ""
+    /// Le premier geste — montré seulement après une tentative.
+    var redoFirstMove: String = ""
+    /// Les échecs de suite au même palier.
+    var redoFailures: Int = 0
+    /// `RedoLadder.Result.rawValue` de la dernière reprise.
+    var redoLastResultRaw: String?
+    /// Sorti de la file (réussi sans notes, ou après le dernier palier).
+    var redoClearedAt: Date?
+
+    /// Le niveau d'indice le plus haut reçu (0 aucun · 1 orientation · 2 outil · 3 amorce · 4 solution).
+    var hintLevel: Int = 0
+    /// Les indices reçus, une ligne chacun : « date|niveau|texte ».
+    var hintLog: String = ""
+
     init(id: UUID = UUID(),
          series: ExerciseSeries? = nil,
          exerciseNumber: String,
@@ -262,6 +291,27 @@ final class Exercise {
     var correctness: Correctness? {
         get { correctnessRaw.flatMap(Correctness.init(rawValue:)) }
         set { correctnessRaw = newValue?.rawValue }
+    }
+
+    /// Dans la file de reprise ?
+    var isQueuedForRedo: Bool { redoPass != nil }
+
+    /// Les indices reçus, du plus ancien au plus récent.
+    var hints: [(date: Date, level: Int, text: String)] {
+        hintLog.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "|", maxSplits: 2).map(String.init)
+            guard parts.count == 3, let stamp = Double(parts[0]), let level = Int(parts[1]) else { return nil }
+            return (Date(timeIntervalSince1970: stamp), level, parts[2])
+        }
+    }
+
+    /// Note un indice reçu (le journal ne garde que les 20 derniers).
+    func recordHint(level: Int, text: String, at date: Date = Date()) {
+        let clean = text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "|", with: "/")
+        var lines = hintLog.split(separator: "\n").map(String.init)
+        lines.append("\(Int(date.timeIntervalSince1970))|\(level)|\(clean)")
+        hintLog = lines.suffix(20).joined(separator: "\n")
+        hintLevel = max(hintLevel, level)
     }
 
 }

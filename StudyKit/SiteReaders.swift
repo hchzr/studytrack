@@ -171,10 +171,23 @@ struct NativeVideo: View {
     let address: String
     var desk: SiteHub
     var openWeb: (URL, String) -> Void
+    /// Commencer à cette seconde (un passage trouvé dans la transcription).
+    var start: Double? = nil
+    /// Ce que « vu » coche (une unité Courseware) ; l'adresse par défaut.
+    var studiedKey: String? = nil
+    /// Lancer sans attendre un clic (la vidéo suivante d'une liste).
+    var autoplay = false
+    /// La vidéo est finie (la liste passe à la suivante).
+    var onEnd: (() -> Void)? = nil
 
+    @Environment(\.markStudied) private var markStudied
     @State private var player: AVPlayer?
     @State private var failed: String?
     @State private var playing = false
+    @State private var rate: Float = ReadingMemory.videoRate
+    @State private var observer: Any?
+    @State private var endObserver: NSObjectProtocol?
+    @State private var counted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -182,7 +195,25 @@ struct NativeVideo: View {
                 VideoPlayer(player: player)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .onDisappear { player.pause() }
+                    .onDisappear { stop(player) }
+                HStack(spacing: 10) {
+                    Menu {
+                        ForEach([1, 1.25, 1.5, 1.75, 2] as [Float], id: \.self) { value in
+                            Button { setRate(value, on: player) } label: {
+                                if value == rate { Label(Self.rateLabel(value), systemImage: "checkmark") } else { Text(Self.rateLabel(value)) }
+                            }
+                        }
+                    } label: {
+                        Label(Self.rateLabel(rate), systemImage: "gauge.with.dots.needle.67percent")
+                    }
+                    .fixedSize()
+                    .help("Vitesse de lecture (gardée pour toutes les vidéos)")
+                    Spacer()
+                    if counted {
+                        Label("Vue", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Carnet.correct)
+                    }
+                }
+                .font(.callout)
             } else if case .youtube(let id) = SiteRouter.route(address) {
                 Button {
                     if let url = URL(string: "https://www.youtube.com/watch?v=\(id)") { openWeb(url, title) }
@@ -195,7 +226,12 @@ struct NativeVideo: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: playing && failed == nil ? "hourglass" : "play.circle.fill").font(.title2)
-                        Text(title).lineLimit(2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title).lineLimit(2)
+                            if start == nil, let resume = ReadingMemory.video(address) {
+                                Text("Reprendre à \(Self.clock(resume.position))").font(.caption).foregroundStyle(Carnet.inkSecondary)
+                            }
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(14)
@@ -216,6 +252,19 @@ struct NativeVideo: View {
         .onChange(of: desk.signInRevision) { _, _ in
             if failed != nil { failed = nil; Task { await resolve() } }
         }
+        .task(id: address) {
+            if autoplay, player == nil { playing = true; await resolve() }
+        }
+    }
+
+    static func rateLabel(_ value: Float) -> String {
+        value == 1 ? "1×" : String(format: "%g×", value)
+    }
+
+    static func clock(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        return total >= 3600 ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+                             : String(format: "%d:%02d", total / 60, total % 60)
     }
 
     private func resolve() async {
@@ -230,11 +279,53 @@ struct NativeVideo: View {
     private func play(_ url: URL) {
         let player = AVPlayer(url: url)
         self.player = player
-        // Un repère de cours : l'enregistrement s'ouvre à sa minute.
-        if let start = LectureMarks.startOffset(in: address) {
+        // Un repère de cours, un passage cherché, sinon là où l'on s'était arrêté.
+        if let start = start ?? LectureMarks.startOffset(in: address) ?? ReadingMemory.video(address)?.position {
             player.seek(to: CMTime(seconds: start, preferredTimescale: 1))
         }
+        // Toutes les cinq secondes : la place, et « vue » passé 90 %.
+        observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 1), queue: .main) { time in
+            MainActor.assumeIsolated { progress(player, at: time.seconds) }
+        }
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                count()
+                onEnd?()
+            }
+        }
+        player.defaultRate = rate
         player.play()
+        player.rate = rate
+    }
+
+    private func setRate(_ value: Float, on player: AVPlayer) {
+        rate = value
+        ReadingMemory.videoRate = value
+        player.defaultRate = value
+        if player.rate > 0 { player.rate = value }
+    }
+
+    private func progress(_ player: AVPlayer, at seconds: Double) {
+        guard let duration = player.currentItem?.duration.seconds, duration.isFinite, duration > 0 else { return }
+        ReadingMemory.setVideo(address, position: seconds, duration: duration)
+        if seconds / duration >= 0.9 { count() }
+    }
+
+    private func count() {
+        guard !counted else { return }
+        counted = true
+        markStudied?(studiedKey ?? address)
+    }
+
+    private func stop(_ player: AVPlayer) {
+        if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+            ReadingMemory.setVideo(address, position: player.currentTime().seconds, duration: duration)
+        }
+        player.pause()
+        if let observer { player.removeTimeObserver(observer) }
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        observer = nil
+        endObserver = nil
     }
 }
 
@@ -391,8 +482,11 @@ struct MoodleActivityReader: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Kicker(Self.kind(module))
-                Text(content?.title.isEmpty == false ? content!.title : title).font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
-                if let content {
+                // Le titre de la liste fait foi : c'est ce qu'on a choisi.
+                Text(title.isEmpty ? (content?.title ?? "") : title).font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
+                if let content, content.unavailable {
+                    unavailable(content)
+                } else if let content {
                     details(content)
                 } else if needsLogin {
                     VStack(alignment: .leading, spacing: 10) {
@@ -419,7 +513,7 @@ struct MoodleActivityReader: View {
             let loaded = try await desk.moodle.activity(module: module, id: id)
             content = loaded
             // Un lien : on suit sa cible, en natif si on sait la lire.
-            if module == "url", let target = loaded.target, !target.isEmpty, SiteRouter.route(target) != .web {
+            if module == "url", !loaded.unavailable, let target = loaded.target, !target.isEmpty, SiteRouter.route(target) != .web {
                 open(target, loaded.title.isEmpty ? title : loaded.title)
             }
         } catch HiddenSiteSession.SiteError.notSignedIn {
@@ -427,6 +521,20 @@ struct MoodleActivityReader: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Moodle ne montre pas encore l'activité (une solution avant la date, une activité cachée).
+    private func unavailable(_ content: MoodleActivityContent) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(content.notice ?? String(localized: "Moodle ne montre pas encore cette activité."), systemImage: "lock")
+                .foregroundStyle(Carnet.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let url = URL(string: "\(Institution.current.moodleBase)/mod/\(module)/view.php?id=\(id)") {
+                Button("Ouvrir dans Moodle") { openWeb(url, title) }
+                    .buttonStyle(.paper)
+            }
+        }
+        .paperSheet(padding: 14)
     }
 
     @ViewBuilder

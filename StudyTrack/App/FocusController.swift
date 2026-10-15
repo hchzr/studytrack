@@ -168,7 +168,7 @@ final class FocusController: TimerEngineHost {
 
     // MARK: Mode étude
 
-    func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil, locks: Bool = true) {
+    func enterStudy(minutes: Int?, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil, locks: Bool = true) {
         engine.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: locks)
     }
 

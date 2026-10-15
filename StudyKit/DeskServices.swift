@@ -45,6 +45,17 @@ enum DeskSchedule {
         return classes.first { $0.slot == slot }
     }
 
+    /// Le prochain instant où ce qu'affiche le bureau change de lui-même :
+    /// un cours qui approche (`LectureClock.lead` avant), commence ou finit —
+    /// au plus tard dans un quart d'heure (un horaire modifié ailleurs) ou à
+    /// minuit. On se réveille alors, et pas chaque minute.
+    static func nextChange(in classes: [ScheduledClass], after now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
+        let cap = min(now.addingTimeInterval(15 * 60), midnight)
+        let boundaries = classes.flatMap { [$0.slot.start.addingTimeInterval(-LectureClock.lead), $0.slot.start, $0.slot.end] }
+        return boundaries.filter { $0 > now }.min().map { min($0, cap) } ?? cap
+    }
+
     /// Le prochain créneau du jour.
     static func next(in classes: [ScheduledClass], after now: Date = Date()) -> ScheduledClass? {
         let slots = classes.map(\.slot)

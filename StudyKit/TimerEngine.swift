@@ -417,7 +417,7 @@ final class TimerEngine {
 
     /// Entre en mode étude : démarre la session si besoin, sinon la verrouille
     /// sur ce contexte. Publié comme un geste : l'autre appareil suit.
-    func enterStudy(minutes: Int, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil,
+    func enterStudy(minutes: Int?, courseID: UUID?, taskType: TaskType, targetID: UUID? = nil,
                     label: String = "", locks: Bool = true) {
         if !hasSession {
             start(courseID: courseID, taskType: taskType, targetID: targetID, label: label)
@@ -532,7 +532,7 @@ final class TimerEngine {
         var dates: [Date] = []
         if let pause = state.currentBreak { dates.append(pause.endsAt) }
         if let end = state.blockEndDate(settings: cycle) { dates.append(end) }
-        if let until = state.studyUntil { dates.append(until) }
+        if let until = state.studyUntil, !StudyMode.isOpenEnded(state) { dates.append(until) }
         return dates.filter { $0 > now }.min()
     }
 

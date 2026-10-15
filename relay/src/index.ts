@@ -51,6 +51,8 @@ export default {
 /** Ce qu'un appareil envoie. */
 type Inbound =
   | { t: "timer"; d: string; u: number; live?: LivePush; wake?: boolean }
+  | { t: "music"; d: string; keep?: boolean; wake?: boolean }
+  | { t: "drop"; d: string }
   | { t: "apns"; kind: "update" | "start" | "device"; token: string | null; sandbox: boolean };
 
 /** Ce qu'il faut pousser à l'îlot de l'iPhone. */
@@ -67,7 +69,13 @@ interface Tokens {
   /** Le jeton de l'appareil (notifications silencieuses). */
   device?: string;
   sandbox: boolean;
+  /** La session pour laquelle un « start » est déjà parti, et quand. */
+  startedFor?: string;
+  startedAt?: number;
 }
+
+/** Sans session identifiable, pas plus d'un « start » dans ce délai. */
+const START_COOLDOWN_MS = 10 * 60_000;
 
 /** Au-delà, la notification part sans l'état (APNs refuse plus de 4 Ko). */
 const WAKE_STATE_LIMIT = 3_200;
@@ -85,11 +93,18 @@ export class Relay extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [device]);
     const last = await this.ctx.storage.get<string>("last");
     if (last) server.send(last);
+    // L'état de la musique de chaque appareil (un lecteur pour tous).
+    const music = await this.ctx.storage.list<string>({ prefix: "music:" });
+    for (const [key, state] of music) {
+      if (key !== `music:${device}`) server.send(state);
+    }
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
-    if (typeof raw !== "string" || raw.length > 64_000) return;
+    // Une photo de copie (« drop ») peut peser jusqu'à ~900 Ko ; le reste reste petit.
+    if (typeof raw !== "string" || raw.length > 950_000) return;
+    if (raw.length > 64_000 && !raw.includes('"t":"drop"')) return;
     let message: Inbound;
     try {
       message = JSON.parse(raw);
@@ -106,6 +121,43 @@ export class Relay extends DurableObject<Env> {
       else if (message.kind === "device") tokens.device = message.token ?? undefined;
       else tokens.start = message.token ?? undefined;
       await this.ctx.storage.put(key, tokens);
+      return;
+    }
+
+    if (message.t === "drop") {
+      if (typeof message.d !== "string") return;
+      // De l'iPhone au bureau du Mac : rien n'est gardé, ça ne fait que passer.
+      const outbound = JSON.stringify({ t: "drop", d: message.d, from: device });
+      for (const socket of this.ctx.getWebSockets()) {
+        if (socket !== ws) {
+          try {
+            socket.send(outbound);
+          } catch {
+            // fermée
+          }
+        }
+      }
+      return;
+    }
+
+    if (message.t === "music") {
+      if (typeof message.d !== "string" || message.d.length > 16_000) return;
+      const outbound = JSON.stringify({ t: "music", d: message.d, from: device });
+      // L'état d'un appareil est gardé (le dernier) ; une commande ne fait que passer.
+      if (message.keep === true) await this.ctx.storage.put(`music:${device}`, outbound);
+      for (const socket of this.ctx.getWebSockets()) {
+        if (socket !== ws) {
+          try {
+            socket.send(outbound);
+          } catch {
+            // fermée
+          }
+        }
+      }
+      // Une musique passée à un iPhone endormi : on le réveille, la commande jointe.
+      if (message.wake === true && message.d.length <= WAKE_STATE_LIMIT) {
+        this.ctx.waitUntil(this.wakeForMusic(device, message.d));
+      }
       return;
     }
 
@@ -152,6 +204,19 @@ export class Relay extends DurableObject<Env> {
     }
   }
 
+  /** Réveille les autres appareils pour une commande de musique (`st.m`). */
+  private async wakeForMusic(sender: string, sealed: string): Promise<void> {
+    const body = JSON.stringify({ aps: { "content-available": 1 }, st: { m: sealed } });
+    const apns = this.env.APNS.get(this.env.APNS.idFromName("apns"));
+    const entries = await this.ctx.storage.list<Tokens>({ prefix: "tokens:" });
+    for (const [key, tokens] of entries) {
+      const device = key.slice("tokens:".length);
+      if (device === sender || !tokens.device) continue;
+      const status = await apns.push(tokens.device, tokens.sandbox, body, "background");
+      console.log(`musique → ${device.slice(0, 8)} : ${status}`);
+    }
+  }
+
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     try {
       ws.close(code, "bye");
@@ -172,8 +237,20 @@ export class Relay extends DurableObject<Env> {
       let token = tokens.update;
       let event = live.event;
       if (!token && live.event !== "end" && tokens.start && live.attributes) {
+        // Un seul « start » par session : tant que l'iPhone n'a pas renvoyé
+        // le jeton de l'activité démarrée (app endormie), chaque changement
+        // du chrono (pause, reprise, Pomodoro) en démarrait une de plus.
+        const session = JSON.stringify((live.state as { sessionStartedAt?: unknown } | null)?.sessionStartedAt ?? null);
+        const now = Date.now();
+        const already = session === "null"
+          ? now - (tokens.startedAt ?? 0) < START_COOLDOWN_MS
+          : tokens.startedFor === session;
+        if (already) continue;
         token = tokens.start;
         event = "start";
+        tokens.startedFor = session;
+        tokens.startedAt = now;
+        await this.ctx.storage.put(key, tokens);
       }
       if (!token) continue;
       const status = await this.sendAPNs(token, tokens.sandbox, event, live);

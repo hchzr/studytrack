@@ -640,8 +640,17 @@ final class MoodleClient {
     const page = await load('/mod/' + module + '/view.php?id=' + id + force);
     if (login(page)) return JSON.stringify({ module, needsLogin: true });
     const doc = page.doc;
-    out.title = titleOf(doc);
-    const intro = doc.querySelector('.activity-description, #intro, .box.generalbox');
+    // Un lien qui part tout de suite ailleurs : sa cible, c'est l'adresse d'arrivée.
+    if (module === 'url' && new URL(page.url).host !== location.host) return JSON.stringify({ module, title: '', target: page.url });
+    // Moodle renvoie vers la page du cours quand l'activité n'est pas visible
+    // (restreinte jusqu'à une date, cachée) : ce n'est pas l'activité.
+    const noticeOf = (d) => clean((d.querySelector('.alert, .errorbox, #notice, [role="alert"], .availabilityinfo') || {}).textContent);
+    if (!new RegExp('/mod/' + module + '/').test(new URL(page.url).pathname) || doc.querySelector('.errorbox, [data-rel="fatalerror"]')) {
+      return JSON.stringify({ module, title: '', unavailable: true, notice: noticeOf(doc) });
+    }
+    // Le titre de l'activité, pas celui du cours (le bandeau `h1`).
+    out.title = clean((doc.querySelector('[data-region="activity-header"] h2, .activity-header h2, [role="main"] h2') || {}).textContent) || titleOf(doc);
+    const intro = main(doc).querySelector('.activity-description, #intro, .box.generalbox');
     if (module === 'page') {
       out.html = strip(doc.querySelector('#region-main .box.generalbox:not(.activity-description), [role="main"] .generalbox, [role="main"] .no-overflow') || main(doc));
       out.files = files(main(doc));
@@ -825,6 +834,19 @@ extension CoursewareClient {
         return await r.text();
         """#, arguments: ["url": problem.url, "body": EdXProblem.formBody(answers)])
         return EdXProblem.result(json: Data(raw.utf8))
+    }
+
+    /// Une vidéo regardée dans l'app compte aussi sur Courseware (comme son
+    /// lecteur le fait) : l'avancement du cours reste juste des deux côtés.
+    func complete(block: String, course key: String) async {
+        let path = "/courses/" + key + "/xblock/" + block + "/handler/publish_completion"
+        _ = try? await run(#"""
+        const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        const r = await fetch(path, { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ completion: 1.0 }) });
+        return String(r.status);
+        """#, arguments: ["path": path])
     }
 
     /// Le HTML d'un bloc seul (`student_view_url`), dans la session.

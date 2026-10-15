@@ -110,11 +110,19 @@ struct ExerciseStudySheet: View {
     /// Ta copie dans tes notes, si on la trouve : « Vérifier ma copie » l'envoie.
     var copy: NotesLibrary.Document?
     var next: (Exercise) -> Void
+    /// Les paliers de la file de reprise (ceux du projet, sinon les standards).
+    var ladder = RedoLadder.Config()
+    /// « Relire » dans « À savoir » : la section du polycopié.
+    var openPoly: ((String) -> Void)? = nil
 
     private var nextExercise: Exercise? { ExerciseFlow.next(after: exercise, in: series.sortedExercises) }
+    @State private var showsHint = false
+    @State private var showsSolution = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Quand l'énoncé est à côté, il porte déjà le numéro : pas de doublon.
+            if showStatement {
             VStack(alignment: .leading, spacing: 4) {
                 Kicker(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title, color: tint)
                 Text(exercise.displayNumber).font(Carnet.serif(showStatement ? 30 : 24)).foregroundStyle(Carnet.ink)
@@ -122,12 +130,16 @@ struct ExerciseStudySheet: View {
                     MacMathText(exercise.title, size: 14).foregroundStyle(Carnet.inkSecondary)
                 }
             }
+            }
             if showStatement, !exercise.statement.isEmpty {
                 MacMathText(exercise.statement, size: 16).foregroundStyle(Carnet.ink).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !exercise.hint.isEmpty {
-                DisclosureGroup("Indication") {
+                DisclosureGroup("Indication", isExpanded: Binding(get: { showsHint }, set: { open in
+                    showsHint = open
+                    if open, !exercise.isDone { exercise.recordHint(level: 1, text: String(localized: "Indication du cours lue")) }
+                })) {
                     MacMathText(exercise.hint, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 6)
@@ -139,13 +151,58 @@ struct ExerciseStudySheet: View {
                     .padding(14)
                     .background(Carnet.sheetRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            ExerciseKnowHow(exercise: exercise, tint: tint, openPoly: openPoly)
+            if exercise.isQueuedForRedo {
+                RedoPanel(exercise: exercise, ladder: ladder, tint: tint)
+            }
             VStack(alignment: .leading, spacing: 10) {
                 Kicker("Où j'en suis")
                 ExerciseQuickMark(exercise: exercise)
                 Toggle("À refaire", isOn: $exercise.redoRequired).studyCheckbox()
             }
+            if !exercise.mistakes.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Kicker("Erreurs notées")
+                    ForEach(exercise.mistakes) { mistake in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: mistake.kind.icon).font(.caption).foregroundStyle(Carnet.wrong).frame(width: 16)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(mistake.kind.label).font(.caption.weight(.semibold)).foregroundStyle(Carnet.inkSecondary)
+                                MacMathText(mistake.summary, size: 13).foregroundStyle(Carnet.ink)
+                                if !mistake.correction.isEmpty {
+                                    MacMathText("→ " + mistake.correction, size: 12).foregroundStyle(Carnet.inkSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !exercise.hints.isEmpty {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(exercise.hints.enumerated()), id: \.offset) { _, hint in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("\(hint.level)").font(.caption.monospacedDigit().weight(.semibold))
+                                    .frame(width: 18, height: 18)
+                                    .background(Carnet.review.opacity(0.18), in: Circle())
+                                    .foregroundStyle(Carnet.review)
+                                MacMathText(hint.text, size: 12.5).foregroundStyle(Carnet.ink)
+                            }
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    Label("\(exercise.hints.count) indice\(exercise.hints.count > 1 ? "s" : "") de Claude · niveau \(exercise.hintLevel) au plus",
+                          systemImage: "lightbulb")
+                        .font(.callout)
+                }
+                .foregroundStyle(Carnet.inkSecondary)
+            }
             if !exercise.solution.isEmpty, series.solutionsAt.map({ $0 <= Date() }) ?? true {
-                DisclosureGroup("Corrigé") {
+                DisclosureGroup("Corrigé", isExpanded: Binding(get: { showsSolution }, set: { open in
+                    showsSolution = open
+                    if open, !exercise.isDone { exercise.recordHint(level: 4, text: String(localized: "Corrigé lu avant d'avoir fini")) }
+                })) {
                     MacMathText(exercise.solution, size: 14).foregroundStyle(Carnet.ink).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 6)
@@ -158,7 +215,7 @@ struct ExerciseStudySheet: View {
                         .buttonStyle(.ink)
                     Button {
                         let attachment = copy.flatMap { copy in
-                            NotesStore.shared.attachmentData(copy).map { ClaudeTutor.Attachment(kind: .pdf, data: $0, name: copy.title) }
+                            NotesStore.shared.attachmentData(copy).map { ClaudeTutor.Attachment(kind: .pdf, data: $0, name: copy.title, notebookPath: copy.path) }
                         }
                         ask(ClaudeTutor.QuickAction.check.prompt, attachment)
                     } label: { Label("Vérifier ma copie", systemImage: "checkmark.circle") }
@@ -172,6 +229,98 @@ struct ExerciseStudySheet: View {
                     .buttonStyle(.paper)
                 }
             }
+        }
+    }
+}
+
+/// Un anneau de progression, fin.
+struct ThinRing: View {
+    let fraction: Double
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Carnet.rule, lineWidth: 2.5)
+            Circle().trim(from: 0, to: max(0.001, min(1, fraction)))
+                .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+    }
+}
+
+
+
+// MARK: - En reprise
+
+/// Un exercice de la file de reprise : quand le refaire, pourquoi, et —
+/// seulement après une tentative — son premier geste. Le résultat le fait
+/// avancer d'un palier, le sort de la file, ou le garde une semaine de plus.
+struct RedoPanel: View {
+    @Bindable var exercise: Exercise
+    let ladder: RedoLadder.Config
+    let tint: Color
+    @State private var showsFirstMove = false
+    @State private var note: String?
+
+    private var step: String {
+        guard let pass = exercise.redoPass, ladder.steps.indices.contains(pass) else { return "" }
+        return ladder.steps[pass].label
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("En reprise · \(step)", systemImage: "arrow.counterclockwise")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Carnet.review)
+                Spacer()
+                if let due = exercise.redoDueAt {
+                    Text(due <= Date() ? "à faire" : "le \(due.formatted(.dateTime.day().month(.abbreviated)))")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(due <= Date() ? Carnet.review : Carnet.inkSecondary)
+                }
+            }
+            if !exercise.redoWhy.isEmpty {
+                MacMathText(exercise.redoWhy, size: 13).foregroundStyle(Carnet.inkSecondary)
+            }
+            Text("Sur papier, l'énoncé seul, sans tes notes.").font(.caption).foregroundStyle(Carnet.inkTertiary)
+            if !exercise.redoFirstMove.isEmpty {
+                if showsFirstMove {
+                    MacMathText("Premier geste : " + exercise.redoFirstMove, size: 13)
+                        .foregroundStyle(Carnet.ink)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Carnet.marker.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    Button("J'ai essayé, je bloque : le premier geste") { withAnimation(.snappy) { showsFirstMove = true } }
+                        .buttonStyle(.paper)
+                }
+            }
+            HStack(spacing: 6) {
+                ForEach(RedoLadder.Result.allCases, id: \.self) { result in
+                    Button(result.label) { record(result) }
+                        .buttonStyle(.paper)
+                        .controlSize(.small)
+                }
+            }
+            if let note {
+                Text(note).font(.caption).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background(Carnet.review.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Carnet.review.opacity(0.3)))
+    }
+
+    private func record(_ result: RedoLadder.Result) {
+        let outcome = SeriesReview.recordRedo(result, on: exercise, ladder: ladder, examDate: exercise.series?.course?.nextExam?.date)
+        showsFirstMove = false
+        if outcome.pass == nil {
+            note = "Sorti de la file. Bien joué."
+        } else if outcome.gap {
+            note = "Deuxième échec de suite : c'est une lacune de cours, pas un manque d'entraînement. Relis la notion avant de le refaire."
+        } else if let due = outcome.due {
+            note = "Prochaine reprise le \(due.formatted(.dateTime.day().month(.wide)))."
         }
     }
 }

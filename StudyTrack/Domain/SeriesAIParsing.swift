@@ -443,6 +443,7 @@ enum SeriesAIParsing {
                 let known = Set(series.exercises.map(\.number))
                 result[index].exercises.removeAll { !known.contains($0.number) }
             }
+            let selectiveBonus = series.exercises.filter(\.isBonus).count * 2 < series.exercises.count
             for exercise in series.exercises {
                 if let existing = result[index].exercises.firstIndex(where: { $0.number == exercise.number }) {
                     var merged = result[index].exercises[existing]
@@ -452,7 +453,11 @@ enum SeriesAIParsing {
                     if !exercise.title.isEmpty, exercise.isConfident { merged.title = exercise.title }
                     if merged.title.isEmpty { merged.title = exercise.title }
                     if merged.statement.isEmpty { merged.statement = exercise.statement }
-                    merged.isBonus = merged.isBonus || exercise.isBonus
+                    // Le bonus lu localement ne compte que s'il **distingue** :
+                    // une mention sous un ou deux exercices. Quand il en marque
+                    // la plupart, c'est une note de page (« facultatif » à moins
+                    // de douze lignes de chaque titre) : le modèle décide.
+                    if exercise.isBonus, selectiveBonus { merged.isBonus = true }
                     merged.isConfident = true
                     // Les sous-questions ne s'additionnent pas : c'est le même
                     // exercice, décrit deux fois. Un modèle de **texte** se trompe
@@ -496,7 +501,7 @@ enum SeriesAIParsing {
             }
             result[index].exercises.sort { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
         }
-        return result.sorted { $0.number < $1.number }
+        return DetectedSeries.withoutBlanketBonus(result.sorted { $0.number < $1.number })
     }
 
     /// Des exercices numérotés 1…n sans trou, tous sur des repères sûrs.

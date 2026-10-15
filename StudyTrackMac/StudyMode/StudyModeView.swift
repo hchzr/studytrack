@@ -19,8 +19,18 @@ struct StudyModeView: View {
             StudyBackground(tint: tint)
             switch screen.stage {
             case .setup:
-                StudySetupView(screen: screen, courses: tracked)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                // Défilable : la carte grandit (cours à l'horaire, outils
+                // ouverts) et ne doit jamais déborder d'un petit écran.
+                GeometryReader { proxy in
+                    ScrollView {
+                        StudySetupView(screen: screen, courses: tracked)
+                            .padding(.vertical, 40)
+                            .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.never)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             case .session:
                 if timer.studyIsOver, timer.taskType == .lecture {
                     LectureDoneView(course: tracked.first { $0.id == timer.courseID })
@@ -77,6 +87,8 @@ private struct StudySetupView: View {
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
     @State private var minutes = 50
+    /// Sans heure de fin : on termine quand on a fini.
+    @State private var openEnded = false
     @State private var pomodoro = false
     @State private var classes: [ScheduledClass] = []
     @Environment(\.modelContext) private var context
@@ -106,6 +118,7 @@ private struct StudySetupView: View {
                     screen.taskType = .lecture
                     screen.targetID = nil
                     minutes = LectureClock.studyMinutes(for: klass.slot, now: Date())
+                    openEnded = false
                     pomodoro = false
                 } label: {
                     HStack(spacing: 12) {
@@ -156,34 +169,36 @@ private struct StudySetupView: View {
             }
 
             field("Durée") {
-                HStack(spacing: 8) {
-                    ForEach(StudyMode.durations, id: \.self) { value in
-                        Button {
-                            minutes = value
-                        } label: {
-                            Text(value < 60 ? "\(value) min" : (value % 60 == 0 ? "\(value / 60) h" : "\(value / 60) h \(value % 60)"))
-                                .font(.body.weight(minutes == value ? .semibold : .regular))
-                                .foregroundStyle(minutes == value ? StudyPalette.ground : StudyPalette.ink)
-                                .padding(.horizontal, 16)
-                                .frame(height: 36)
-                                .background(minutes == value ? StudyPalette.ink : StudyPalette.raisedMore, in: Capsule())
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        ForEach(StudyMode.durations, id: \.self) { value in
+                            durationChip(value < 60 ? "\(value) min" : (value % 60 == 0 ? "\(value / 60) h" : "\(value / 60) h \(value % 60)"),
+                                         selected: !openEnded && minutes == value) {
+                                minutes = value
+                                openEnded = false
+                            }
                         }
-                        .buttonStyle(.plain)
+                        durationChip("Sans fin", icon: "infinity", selected: openEnded) { openEnded = true }
+                            .help("Pas d'heure de fin : tu termines quand tu as fini.")
                     }
                     // Une durée libre, en minutes, ou une heure de fin.
-                    TextField("min", value: Binding(get: { minutes },
-                                                    set: { minutes = min(max($0, StudyMode.minuteRange.lowerBound), StudyMode.minuteRange.upperBound) }),
-                              format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 56)
-                        .padding(.leading, 6)
-                    Stepper("", value: $minutes, in: StudyMode.minuteRange, step: 5).labelsHidden()
-                    Text("min, jusqu'à").foregroundStyle(StudyPalette.inkSecondary)
-                    DatePicker("Jusqu'à", selection: Binding(get: { Date().addingTimeInterval(Double(minutes) * 60) },
-                                                             set: { minutes = StudyMode.minutes(until: $0) }),
-                               displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .datePickerStyle(.field)
+                    HStack(spacing: 8) {
+                        TextField("min", value: Binding(get: { minutes },
+                                                        set: { minutes = min(max($0, StudyMode.minuteRange.lowerBound), StudyMode.minuteRange.upperBound)
+                                                               openEnded = false }),
+                                  format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 56)
+                        Stepper("", value: Binding(get: { minutes }, set: { minutes = $0; openEnded = false }),
+                                in: StudyMode.minuteRange, step: 5).labelsHidden()
+                        Text("min, jusqu'à").foregroundStyle(StudyPalette.inkSecondary)
+                        DatePicker("Jusqu'à", selection: Binding(get: { Date().addingTimeInterval(Double(minutes) * 60) },
+                                                                 set: { minutes = StudyMode.minutes(until: $0); openEnded = false }),
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                            .datePickerStyle(.field)
+                    }
+                    .opacity(openEnded ? 0.45 : 1)
                 }
             }
 
@@ -225,8 +240,9 @@ private struct StudySetupView: View {
                     .foregroundStyle(StudyPalette.inkSecondary)
                 Button {
                     settings.studyMinutes = minutes
+                    settings.studyOpenEnded = openEnded
                     settings.studyPomodoro = pomodoro
-                    StudyModeController.shared.begin(minutes: minutes, pomodoro: pomodoro)
+                    StudyModeController.shared.begin(minutes: openEnded ? nil : minutes, pomodoro: pomodoro)
                 } label: {
                     Label(timer.phase == .idle ? "Commencer" : "Verrouiller la session", systemImage: "lock.fill")
                         .padding(.horizontal, 10)
@@ -241,6 +257,7 @@ private struct StudySetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(StudyPalette.rule))
         .onAppear {
             minutes = settings.studyMinutes
+            openEnded = settings.studyOpenEnded
             pomodoro = timer.phase == .idle ? settings.studyPomodoro : (timer.state?.pomodoro ?? false)
             classes = DeskSchedule.today(context: context)
             fitLecture()
@@ -255,13 +272,30 @@ private struct StudySetupView: View {
         if classes.isEmpty { classes = DeskSchedule.today(context: context) }
         guard screen.taskType == .lecture else { return }
         pomodoro = false
+        openEnded = false
         if let klass = currentClass, klass.slot.courseID == screen.courseID {
             minutes = LectureClock.studyMinutes(for: klass.slot, now: Date())
         }
     }
 
     private var endLabel: String {
-        "jusqu'à " + DateUtils.time.string(from: Date().addingTimeInterval(TimeInterval(minutes * 60)))
+        if openEnded { return "sans heure de fin" }
+        return "jusqu'à " + DateUtils.time.string(from: Date().addingTimeInterval(TimeInterval(minutes * 60)))
+    }
+
+    private func durationChip(_ title: String, icon: String? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon { Image(systemName: icon) }
+                Text(title)
+            }
+            .font(.body.weight(selected ? .semibold : .regular))
+            .foregroundStyle(selected ? StudyPalette.ground : StudyPalette.ink)
+            .padding(.horizontal, 16)
+            .frame(height: 36)
+            .background(selected ? StudyPalette.ink : StudyPalette.raisedMore, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -279,13 +313,20 @@ private struct StudyToolStrip: View {
 
     var body: some View {
         let tools = StudyTools.tools(for: course, settings: settings)
-        HStack(spacing: 14) {
-            ForEach(tools.prefix(8)) { tool in
+        // En flux, et non en rangée : huit outils de 70 pt dépassaient la
+        // carte et poussaient toute la mise en page hors du cadre.
+        FlowLayout(spacing: 6) {
+            ForEach(tools) { tool in
                 VStack(spacing: 5) {
-                    StudyToolIcon(tool: tool, size: 34)
-                    Text(tool.title).font(.caption2).foregroundStyle(StudyPalette.inkSecondary).lineLimit(1)
+                    StudyToolIcon(tool: tool, size: 32)
+                    Text(tool.title)
+                        .font(.caption2)
+                        .foregroundStyle(StudyPalette.inkSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .frame(width: 70)
+                .frame(width: 64)
+                .help(tool.title)
             }
         }
     }
@@ -300,7 +341,7 @@ struct StudyTimeline<Content: View>: View {
     @ViewBuilder var content: (Date) -> Content
 
     var body: some View {
-        let anchor = (timer.state?.studyUntil ?? Date()).addingTimeInterval(0.05)
+        let anchor = StudyMode.tickAnchor(timer.state)
         TimelineView(TickSchedule(anchor: anchor, interval: interval, active: timer.isStudying)) { context in
             content(context.date)
         }
@@ -320,11 +361,11 @@ struct StudyDial: View {
             }
             VStack(spacing: 8) {
                 TimerTimeline { date in
-                    Kicker(timer.phase == .paused ? "En pause" : (timer.statusLabel(at: date) ?? "Reste"),
+                    Kicker(timer.phase == .paused ? "En pause" : (timer.statusLabel(at: date) ?? (StudyMode.isOpenEnded(timer.state) ? "Sans fin" : "Reste")),
                            color: timer.phase == .onBreak ? MacStyle.breakTint : tint)
                 }
                 StudyTimeline { date in
-                    Text(StudyMode.remaining(timer.state, at: date).rounded(.up).clockLabel)
+                    Text(StudyMode.clock(timer.state, at: date).clockLabel)
                         .font(Carnet.clock(size * 0.24))
                         .foregroundStyle(StudyPalette.ink)
                         .lineLimit(1)
@@ -562,7 +603,8 @@ struct StudyShieldView: View {
                     .font(Carnet.serif(48))
                     .foregroundStyle(StudyPalette.ink)
                 StudyTimeline(interval: 60) { date in
-                    Text("Encore \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true)).")
+                    Text(StudyMode.isOpenEnded(timer.state) ? "Sans heure de fin : termine quand tu as fini."
+                         : "Encore \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true)).")
                         .font(.title3)
                         .foregroundStyle(StudyPalette.inkSecondary)
                 }

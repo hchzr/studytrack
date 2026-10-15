@@ -222,7 +222,7 @@ enum SeriesLayoutParser {
         for (number, title) in seriesTitles where groups[number] == nil && !order.contains(number) {
             result.append(DetectedSeries(number: number, title: title, exercises: []))
         }
-        return result.sorted { $0.number < $1.number }
+        return DetectedSeries.withoutBlanketBonus(result.sorted { $0.number < $1.number })
     }
 
     /// Un repère est-il crédible **à cet endroit** de la mise en page ?

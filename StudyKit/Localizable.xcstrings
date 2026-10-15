@@ -7,6 +7,9 @@
     " " : {
 
     },
+    "–" : {
+
+    },
     "—" : {
       "localizations" : {
         "en" : {
@@ -328,6 +331,16 @@
         }
       }
     },
+    "%@ · %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld"
+          }
+        }
+      }
+    },
     "%@ · %lld admin" : {
       "localizations" : {
         "en" : {
@@ -597,6 +610,9 @@
           }
         }
       }
+    },
+    "%@ de vidéo à regarder" : {
+
     },
     "%@ depuis lundi" : {
       "extractionState" : "stale",
@@ -870,6 +886,16 @@
     "%@%@" : {
 
     },
+    "%@%@ · %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@ · %3$@"
+          }
+        }
+      }
+    },
     "%@%@ · jusqu'à %@" : {
       "localizations" : {
         "fr" : {
@@ -1002,6 +1028,9 @@
           }
         }
       }
+    },
+    "%lld à refaire aujourd'hui · sur papier, sans notes" : {
+
     },
     "%lld activité" : {
       "localizations" : {
@@ -1722,6 +1751,16 @@
         }
       }
     },
+    "%lld indice%@ de Claude · niveau %lld au plus" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld indice%2$@ de Claude · niveau %3$lld au plus"
+          }
+        }
+      }
+    },
     "%lld j" : {
       "localizations" : {
         "en" : {
@@ -1771,6 +1810,12 @@
           }
         }
       }
+    },
+    "%lld lien" : {
+
+    },
+    "%lld liens" : {
+
     },
     "%lld ligne" : {
       "localizations" : {
@@ -1926,6 +1971,9 @@
           }
         }
       }
+    },
+    "%lld morceaux" : {
+
     },
     "%lld nouveauté" : {
       "localizations" : {
@@ -2111,6 +2159,9 @@
           }
         }
       }
+    },
+    "%lld reprises dues" : {
+
     },
     "%lld restant" : {
       "localizations" : {
@@ -2325,6 +2376,46 @@
         }
       }
     },
+    "%lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "%lld sur %lld à faire" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sur %2$lld à faire"
+          }
+        }
+      }
+    },
+    "%lld sur %lld faits" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sur %2$lld faits"
+          }
+        }
+      }
+    },
+    "%lld sur %lld lues" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sur %2$lld lues"
+          }
+        }
+      }
+    },
     "%lld terminé%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2352,6 +2443,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld videos"
+          }
+        }
+      }
+    },
+    "%lld vidéos · %@ encore à voir" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld vidéos · %2$@ encore à voir"
           }
         }
       }
@@ -2423,6 +2524,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld/%2$lld done"
+          }
+        }
+      }
+    },
+    "%lld/%lld juste%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld juste%3$@"
           }
         }
       }
@@ -2599,6 +2710,9 @@
         }
       }
     },
+    "1 morceau" : {
+
+    },
     "1(a-d) 2(a-e) 3 +" : {
       "localizations" : {
         "en" : {
@@ -2628,6 +2742,9 @@
           }
         }
       }
+    },
+    "5 min" : {
+
     },
     "6 caractères au moins." : {
       "localizations" : {
@@ -2720,7 +2837,6 @@
       }
     },
     "À côté" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2780,8 +2896,10 @@
         }
       }
     },
+    "À lire" : {
+
+    },
     "À noter dans StudyTrack" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2843,6 +2961,9 @@
         }
       }
     },
+    "À regarder" : {
+
+    },
     "À rendre" : {
       "localizations" : {
         "en" : {
@@ -2873,6 +2994,9 @@
         }
       }
     },
+    "À retenir" : {
+
+    },
     "À scanner" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2880,6 +3004,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "To scan"
+          }
+        }
+      }
+    },
+    "À suivre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Next"
           }
         }
       }
@@ -2965,7 +3099,11 @@
         }
       }
     },
+    "abonnement %lld %%" : {
+
+    },
     "Abonnement utilisé (5 h)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3243,6 +3381,9 @@
         }
       }
     },
+    "Ajoute son lien depuis la page du cours." : {
+
+    },
     "Ajoute un cours pour obtenir des raccourcis." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3301,6 +3442,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add"
+          }
+        }
+      }
+    },
+    "Ajouter à la file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Queue"
           }
         }
       }
@@ -3437,6 +3588,9 @@
           }
         }
       }
+    },
+    "Ajouter un fichier… (PDF, image)" : {
+
     },
     "Ajouter un point" : {
       "localizations" : {
@@ -3640,6 +3794,26 @@
         }
       }
     },
+    "Albums" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Albums"
+          }
+        }
+      }
+    },
+    "Aléatoire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle"
+          }
+        }
+      }
+    },
     "Aller" : {
       "localizations" : {
         "en" : {
@@ -3698,6 +3872,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Analyze PDFs with AI"
+          }
+        }
+      }
+    },
+    "Ancré à droite" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docked on the right"
+          }
+        }
+      }
+    },
+    "Ancré ici au lieu de flotter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docked here instead of floating"
+          }
+        }
+      }
+    },
+    "Ancrer à droite, dans le volet d'à côté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dock on the right, in the side panel"
           }
         }
       }
@@ -3852,6 +4056,26 @@
         }
       }
     },
+    "Apple Music" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music"
+          }
+        }
+      }
+    },
+    "Apple Music a refusé la demande : vérifie que MusicKit est activé pour l'identifiant de l'app et que l'accès est permis." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music refused the request: make sure MusicKit is enabled for the app's identifier and that access is allowed."
+          }
+        }
+      }
+    },
     "Appliquer" : {
       "localizations" : {
         "en" : {
@@ -3871,6 +4095,9 @@
           }
         }
       }
+    },
+    "Après une série" : {
+
     },
     "Archiver" : {
       "localizations" : {
@@ -3918,6 +4145,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stop the AI"
+          }
+        }
+      }
+    },
+    "Artistes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artists"
           }
         }
       }
@@ -3993,6 +4230,16 @@
         }
       }
     },
+    "Aucun cahier de ce cours dans tes notes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No notebook for this course in your notes."
+          }
+        }
+      }
+    },
     "Aucun cours" : {
       "localizations" : {
         "en" : {
@@ -4064,6 +4311,9 @@
           }
         }
       }
+    },
+    "Aucun document lisible dans ce cours." : {
+
     },
     "Aucun en particulier" : {
       "localizations" : {
@@ -4553,6 +4803,9 @@
         }
       }
     },
+    "Aucune vidéo ne dit « %@ »." : {
+
+    },
     "Aujourd'hui" : {
       "localizations" : {
         "en" : {
@@ -4783,6 +5036,16 @@
         }
       }
     },
+    "Barème, ce que le prof a dit…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grading, what the professor said…"
+          }
+        }
+      }
+    },
     "Base" : {
       "localizations" : {
         "en" : {
@@ -4947,6 +5210,20 @@
         }
       }
     },
+    "brief, semaine, revue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "brief, week, review"
+          }
+        }
+      }
+    },
+    "Bureau complet" : {
+
+    },
     "C'est fait." : {
       "localizations" : {
         "en" : {
@@ -4994,6 +5271,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "It's an exercise session"
+          }
+        }
+      }
+    },
+    "Cahier introuvable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notebook not found"
           }
         }
       }
@@ -5080,6 +5367,9 @@
         }
       }
     },
+    "Carnet d'erreurs" : {
+
+    },
     "Carte Anki" : {
       "localizations" : {
         "en" : {
@@ -5109,6 +5399,9 @@
           }
         }
       }
+    },
+    "Ce %@" : {
+
     },
     "Ce cours a des heures de cours (amphi)" : {
       "localizations" : {
@@ -5140,6 +5433,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This slot, every week"
+          }
+        }
+      }
+    },
+    "Ce morceau n'est pas dans le catalogue Apple Music." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song isn't in the Apple Music catalog."
           }
         }
       }
@@ -5176,6 +5479,16 @@
         }
       }
     },
+    "Ce que Claude sait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What Claude knows"
+          }
+        }
+      }
+    },
     "Ce que je partage" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5193,6 +5506,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What the assistant can do"
+          }
+        }
+      }
+    },
+    "Ce que tu as noté en corrigeant : à relire avant l'examen." : {
+
+    },
+    "Ce que tu veux garder sous les yeux pendant que tu travailles au centre." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you want to keep in view while you work in the center."
           }
         }
       }
@@ -5256,6 +5582,12 @@
           }
         }
       }
+    },
+    "Ces vidéos n'ont pas de transcription." : {
+
+    },
+    "Cet exercice seul" : {
+
     },
     "Cette adresse est un **mot de passe** : qui l'a peut lire tes études et y noter des choses. Ne la colle que dans ton propre assistant." : {
       "localizations" : {
@@ -5382,6 +5714,7 @@
       }
     },
     "Changer d'exercice" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5390,6 +5723,19 @@
           }
         }
       }
+    },
+    "Changer de conversation (une par série)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch conversation (one per series)"
+          }
+        }
+      }
+    },
+    "Changer de série" : {
+
     },
     "Changer l'adresse" : {
       "localizations" : {
@@ -5495,6 +5841,19 @@
         }
       }
     },
+    "Cherche d'abord, en temps limité comme à l'examen." : {
+
+    },
+    "Cherche un morceau, un album, une playlist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search for a song, an album, a playlist."
+          }
+        }
+      }
+    },
     "Chercher" : {
       "localizations" : {
         "en" : {
@@ -5515,6 +5874,9 @@
         }
       }
     },
+    "Chercher dans ce que disent les vidéos" : {
+
+    },
     "Chercher dans les cartes" : {
       "localizations" : {
         "en" : {
@@ -5524,6 +5886,9 @@
           }
         }
       }
+    },
+    "Chercher un théorème, une notion…" : {
+
     },
     "Choisir" : {
       "localizations" : {
@@ -5636,12 +6001,46 @@
         }
       }
     },
+    "Choisis le dossier où GoodNotes sauvegarde tes cahiers : Réglages › Personnaliser › Notes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the folder where GoodNotes backs up your notebooks: Settings › Personalize › Notes."
+          }
+        }
+      }
+    },
     "Choisis ta section." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose your section."
+          }
+        }
+      }
+    },
+    "Choisis un album, une playlist ou un morceau à droite. La musique joue dans Music et continue après la session." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick an album, a playlist or a song on the right. Music plays in the Music app and keeps going after the session."
+          }
+        }
+      }
+    },
+    "Choisis un album, une playlist ou un morceau. La musique joue dans Music et continue après la session." : {
+
+    },
+    "Choisis un cahier à gauche." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a notebook on the left."
           }
         }
       }
@@ -5676,6 +6075,9 @@
           }
         }
       }
+    },
+    "Choisis une page à gauche." : {
+
     },
     "Choisis-en un à gauche." : {
       "localizations" : {
@@ -5718,6 +6120,7 @@
       }
     },
     "Chrono (⌘2)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5814,6 +6217,7 @@
       }
     },
     "Chrono libre" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5888,12 +6292,41 @@
         }
       }
     },
+    "Claude écrit la fiche (%lld documents, ~%lld pages)…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Claude écrit la fiche (%1$lld documents, ~%2$lld pages)…"
+          }
+        }
+      }
+    },
+    "Claude écrit les méthodes des séries…" : {
+
+    },
+    "Claude lit tout le cours — diapositives, notes, séries et corrigés — et en écrit la fiche : définitions, théorèmes, formules, méthodes, pièges." : {
+
+    },
+    "Claude n'a pas rendu de fiche lisible. Réessaie." : {
+
+    },
     "Claude réfléchit…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude is thinking…"
+          }
+        }
+      }
+    },
+    "Claude, à droite (⌘J)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude, on the right (⌘J)"
           }
         }
       }
@@ -5908,6 +6341,16 @@
         }
       }
     },
+    "Claude, par-dessus (⌘J)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude, floating (⌘J)"
+          }
+        }
+      }
+    },
     "Clé d'API" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5918,6 +6361,12 @@
           }
         }
       }
+    },
+    "Clore la série" : {
+
+    },
+    "Clore la série avec Claude quand elle est finie" : {
+
     },
     "Coché : %@." : {
       "localizations" : {
@@ -6118,6 +6567,9 @@
         }
       }
     },
+    "Commencer la lecture" : {
+
+    },
     "Comment configurer ?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6149,6 +6601,9 @@
           }
         }
       }
+    },
+    "Compagnon" : {
+
     },
     "Comparer" : {
       "localizations" : {
@@ -6366,6 +6821,9 @@
         }
       }
     },
+    "Connecte-toi à Moodle, ou vérifie le lien de l'annale." : {
+
+    },
     "Connecte-toi à Moodle." : {
       "localizations" : {
         "en" : {
@@ -6479,6 +6937,7 @@
       }
     },
     "contexte %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6507,6 +6966,9 @@
           }
         }
       }
+    },
+    "Continuer la lecture" : {
+
     },
     "Continuer la session actuelle" : {
       "localizations" : {
@@ -6672,6 +7134,9 @@
     "Corrigé · %@" : {
 
     },
+    "Corrigé (PDF) lu avant d'avoir fini" : {
+
+    },
     "Corrigé de la %@" : {
       "localizations" : {
         "en" : {
@@ -6681,6 +7146,9 @@
           }
         }
       }
+    },
+    "Corrigé introuvable" : {
+
     },
     "Corrigé juste" : {
       "extractionState" : "stale",
@@ -6713,6 +7181,9 @@
           }
         }
       }
+    },
+    "Corrigé lu avant d'avoir fini" : {
+
     },
     "Corrigé publié le %@" : {
       "localizations" : {
@@ -6755,6 +7226,7 @@
       }
     },
     "Côte à côte" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6836,6 +7308,7 @@
       }
     },
     "Cours et série côte à côte (⌘\\)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7186,6 +7659,16 @@
         }
       }
     },
+    "Dans le cours ou tes notes, « À côté » en haut d'un document l'ajoute ici." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the course or your notes, “On the side” at the top of a document adds it here."
+          }
+        }
+      }
+    },
     "Date" : {
       "localizations" : {
         "en" : {
@@ -7266,6 +7749,9 @@
         }
       }
     },
+    "De tes séries" : {
+
+    },
     "de travail" : {
       "localizations" : {
         "en" : {
@@ -7295,6 +7781,9 @@
           }
         }
       }
+    },
+    "Début des cours" : {
+
     },
     "Décoche les matières que tu ne suis pas : tu n'apparaîtras plus dans leur tableau d'avancement, et rien de ces cours ne sera partagé." : {
       "extractionState" : "stale",
@@ -7428,6 +7917,9 @@
           }
         }
       }
+    },
+    "Déjà noté" : {
+
     },
     "déjà présent" : {
       "extractionState" : "stale",
@@ -7624,6 +8116,27 @@
         }
       }
     },
+    "depuis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "since"
+          }
+        }
+      }
+    },
+    "depuis %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "since %@"
+          }
+        }
+      }
+    },
     "Depuis le site du cours" : {
       "localizations" : {
         "en" : {
@@ -7706,6 +8219,19 @@
         }
       }
     },
+    "Désépingler" : {
+
+    },
+    "Détacher : Claude flotte par-dessus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detach: Claude floats on top"
+          }
+        }
+      }
+    },
     "Détail, salle, consigne…" : {
       "localizations" : {
         "en" : {
@@ -7759,6 +8285,9 @@
     "Diapositives et documents" : {
 
     },
+    "Diapositives et notes" : {
+
+    },
     "Document scanné : crée la série à la main, avec le plan « 1(a-d) 2 3 »." : {
       "localizations" : {
         "en" : {
@@ -7788,6 +8317,9 @@
           }
         }
       }
+    },
+    "Documents du cours" : {
+
     },
     "Documents et actions" : {
       "localizations" : {
@@ -7864,6 +8396,9 @@
           }
         }
       }
+    },
+    "Double-clic pour le lire" : {
+
     },
     "Du %@ · %lld semaines" : {
       "localizations" : {
@@ -7946,6 +8481,9 @@
         }
       }
     },
+    "écarté : plafond de la série atteint" : {
+
+    },
     "Échéance" : {
       "localizations" : {
         "en" : {
@@ -7997,6 +8535,29 @@
         }
       }
     },
+    "Écouté récemment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently Played"
+          }
+        }
+      }
+    },
+    "Écoute ta musique sans quitter le mode étude." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listen to your music without leaving study mode."
+          }
+        }
+      }
+    },
+    "Écouter sur" : {
+
+    },
     "Écrire" : {
       "localizations" : {
         "en" : {
@@ -8017,6 +8578,9 @@
         }
       }
     },
+    "écrits par Claude d'après le cours" : {
+
+    },
     "Ed" : {
       "localizations" : {
         "en" : {
@@ -8033,6 +8597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ed Discussion"
+          }
+        }
+      }
+    },
+    "Effacer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
           }
         }
       }
@@ -8099,6 +8673,12 @@
         }
       }
     },
+    "Elle part à Claude, sur ton Mac, avec l'exercice en cours." : {
+
+    },
+    "Elle se fait sur le Mac, puis arrive ici par iCloud." : {
+
+    },
     "Elles apparaissent dans ton agenda. Facultatif." : {
       "localizations" : {
         "en" : {
@@ -8156,6 +8736,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In progress"
+          }
+        }
+      }
+    },
+    "En écoute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now Playing"
           }
         }
       }
@@ -8252,6 +8843,9 @@
         }
       }
     },
+    "En reprise · %@" : {
+
+    },
     "En retard" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8262,6 +8856,9 @@
           }
         }
       }
+    },
+    "En route" : {
+
     },
     "En Wi-Fi seulement" : {
       "localizations" : {
@@ -8358,6 +8955,9 @@
           }
         }
       }
+    },
+    "Énoncés" : {
+
     },
     "Enregistré" : {
       "localizations" : {
@@ -8476,6 +9076,9 @@
     "Ensemble" : {
 
     },
+    "Ensemble · %@" : {
+
+    },
     "Ensuite" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8488,6 +9091,9 @@
       }
     },
     "Ensuite · %@" : {
+
+    },
+    "ensuite %@" : {
 
     },
     "Entraide" : {
@@ -8625,6 +9231,9 @@
         }
       }
     },
+    "Envoyer ma copie au Mac" : {
+
+    },
     "EPFL" : {
       "localizations" : {
         "en" : {
@@ -8644,6 +9253,9 @@
           }
         }
       }
+    },
+    "Épingler en tête" : {
+
     },
     "Essaie f(x) = x^2 - 2" : {
       "localizations" : {
@@ -8889,6 +9501,16 @@
         }
       }
     },
+    "EXERCICE %lld.%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "EXERCICE %1$lld.%2$lld"
+          }
+        }
+      }
+    },
     "Exercice fait" : {
       "localizations" : {
         "en" : {
@@ -8919,6 +9541,9 @@
         }
       }
     },
+    "Exercice précédent (⌥⌘←)" : {
+
+    },
     "Exercice suivant" : {
       "localizations" : {
         "en" : {
@@ -8928,6 +9553,12 @@
           }
         }
       }
+    },
+    "Exercice suivant (⌥⌘→)" : {
+
+    },
+    "Exercice, énoncé, théorie, annale…" : {
+
     },
     "Exercices" : {
       "localizations" : {
@@ -8990,6 +9621,9 @@
         }
       }
     },
+    "Façon de répondre" : {
+
+    },
     "facultatif" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9000,6 +9634,18 @@
           }
         }
       }
+    },
+    "Faire bouger la figure, comme sur le site" : {
+
+    },
+    "Faire la fiche" : {
+
+    },
+    "Faire la fiche du cours : ce qu'il faut savoir pour chaque exercice s'affichera ici" : {
+
+    },
+    "Faire les fiches de révision" : {
+
     },
     "Fais défiler horizontalement pour voir toutes les semaines." : {
       "extractionState" : "stale",
@@ -9052,6 +9698,9 @@
         }
       }
     },
+    "Fait — modifier" : {
+
+    },
     "Fait / prévu à ce jour" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9097,6 +9746,9 @@
         }
       }
     },
+    "Fait, sans le dire" : {
+
+    },
     "faite" : {
       "localizations" : {
         "en" : {
@@ -9126,6 +9778,9 @@
           }
         }
       }
+    },
+    "Fenêtre de 5 h de ton abonnement Claude" : {
+
     },
     "Fermer" : {
       "localizations" : {
@@ -9157,6 +9812,16 @@
         }
       }
     },
+    "Fermer le volet (⌘\\) — les onglets restent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close the panel (⌘\\) — the tabs stay"
+          }
+        }
+      }
+    },
     "Fermer les autres apps" : {
       "localizations" : {
         "en" : {
@@ -9184,6 +9849,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Course summary sheet"
+          }
+        }
+      }
+    },
+    "Fiche" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sheet"
+          }
+        }
+      }
+    },
+    "Fiche de révision" : {
+
+    },
+    "Fiches de révision… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fiches de révision… %1$lld/%2$lld"
           }
         }
       }
@@ -9228,6 +9916,9 @@
         }
       }
     },
+    "File de reprise" : {
+
+    },
     "Fils" : {
       "localizations" : {
         "en" : {
@@ -9265,6 +9956,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estimated end"
+          }
+        }
+      }
+    },
+    "Flottant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Floating"
           }
         }
       }
@@ -9362,6 +10063,19 @@
         }
       }
     },
+    "Gardé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        }
+      }
+    },
+    "Garde ici ta fiche-résumé, un formulaire, un PDF du cours (le signet en haut d'un document) : à un clic, et sur tous tes appareils." : {
+
+    },
     "Garder" : {
       "localizations" : {
         "en" : {
@@ -9371,6 +10085,29 @@
           }
         }
       }
+    },
+    "Garder ce cahier dans le volet d'à côté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this notebook in the side panel"
+          }
+        }
+      }
+    },
+    "Garder ce document dans le volet d'à côté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this document in the side panel"
+          }
+        }
+      }
+    },
+    "Garder éveillé" : {
+
     },
     "Garder l'icône dans le Dock" : {
       "localizations" : {
@@ -9392,6 +10129,12 @@
         }
       }
     },
+    "Garder sous la main (Cours › Gardés, et le menu Ressources du mode étude)" : {
+
+    },
+    "Gardés" : {
+
+    },
     "Général" : {
       "localizations" : {
         "en" : {
@@ -9401,6 +10144,9 @@
           }
         }
       }
+    },
+    "Général : brief, semaine, revue…" : {
+
     },
     "GeoGebra" : {
       "localizations" : {
@@ -9465,6 +10211,19 @@
         }
       }
     },
+    "Glisser pour déplacer Claude" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to move Claude"
+          }
+        }
+      }
+    },
+    "Glisser pour redimensionner" : {
+
+    },
     "Google Tasks" : {
       "localizations" : {
         "en" : {
@@ -9486,6 +10245,7 @@
       }
     },
     "Graphique interactif" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9734,6 +10494,9 @@
         }
       }
     },
+    "Hors série" : {
+
+    },
     "https://…" : {
       "localizations" : {
         "en" : {
@@ -9906,6 +10669,12 @@
           }
         }
       }
+    },
+    "Image" : {
+
+    },
+    "Image indisponible" : {
+
     },
     "Import de séries" : {
       "extractionState" : "stale",
@@ -10223,6 +10992,26 @@
         }
       }
     },
+    "Impossible de charger l'artiste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Load Artist"
+          }
+        }
+      }
+    },
+    "Impossible de charger les morceaux" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Load Songs"
+          }
+        }
+      }
+    },
     "Inclure l'exercice" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10250,6 +11039,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hint"
+          }
+        }
+      }
+    },
+    "Indication du cours lue" : {
+
+    },
+    "Indice %lld · %@ noté" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indice %1$lld · %2$@ noté"
           }
         }
       }
@@ -10283,6 +11085,9 @@
           }
         }
       }
+    },
+    "Infos" : {
+
     },
     "Inspecteur" : {
       "localizations" : {
@@ -10396,6 +11201,7 @@
       }
     },
     "Isolé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10425,6 +11231,18 @@
           }
         }
       }
+    },
+    "J'ai essayé, je bloque : le premier geste" : {
+
+    },
+    "J'ai fini" : {
+
+    },
+    "J'ai fini cet exercice (⇧⌘↩)" : {
+
+    },
+    "J'ai fini l'annale" : {
+
     },
     "J%lld" : {
       "extractionState" : "stale",
@@ -10540,6 +11358,7 @@
       }
     },
     "Joindre ta copie (%@)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10580,6 +11399,7 @@
       }
     },
     "Joins ta copie GoodNotes, ou une photo prise à l'iPhone (clic droit)." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10714,6 +11534,16 @@
         }
       }
     },
+    "L'accès à Apple Music a été refusé. Autorise StudyTrack dans les réglages (Confidentialité › Médias et Apple Music)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access to Apple Music was denied. Allow StudyTrack in Settings (Privacy › Media & Apple Music)."
+          }
+        }
+      }
+    },
     "L'adresse cessera de fonctionner, et la copie de tes données sur le serveur sera effacée. Tes données dans l'app ne changent pas." : {
       "localizations" : {
         "en" : {
@@ -10724,12 +11554,25 @@
         }
       }
     },
+    "l'amorce reste cachée jusqu'à ta tentative" : {
+
+    },
     "L'ancienne adresse cessera de fonctionner : il faudra coller la nouvelle dans ton assistant." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "The old address will stop working: you'll need to paste the new one into your assistant."
+          }
+        }
+      }
+    },
+    "L'énoncé, les exercices, j'ai fini" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sheet, the exercises, I'm done"
           }
         }
       }
@@ -10759,6 +11602,9 @@
         }
       }
     },
+    "L'exercice dont Claude reçoit le contexte (c'est aussi celui du chrono)" : {
+
+    },
     "L'horaire du jour et les prochaines échéances." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10780,6 +11626,19 @@
         }
       }
     },
+    "La calculatrice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The calculator"
+          }
+        }
+      }
+    },
+    "La conversation générale : ton brief, ta semaine, ta revue — les commandes de ton projet." : {
+
+    },
     "La durée entre dans le calcul du temps de théorie à faire cette semaine." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10791,6 +11650,12 @@
         }
       }
     },
+    "La fiche de ce cours se fait sur le Mac (Claude lit ses documents)." : {
+
+    },
+    "La file de Music apparaît ici." : {
+
+    },
     "La forme du bureau" : {
 
     },
@@ -10800,6 +11665,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The note is empty."
+          }
+        }
+      }
+    },
+    "La recherche n'a pas abouti" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Failed"
           }
         }
       }
@@ -10867,6 +11742,9 @@
         }
       }
     },
+    "La semaine prochaine :" : {
+
+    },
     "La semaine sert au calcul « à regarder cette semaine ». Par défaut, la section est le préfixe du numéro (1.4 → section 1)." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10898,6 +11776,19 @@
         }
       }
     },
+    "La série est au centre." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The series is in the center."
+          }
+        }
+      }
+    },
+    "La série est finie : clos-la avec Claude (corrections, erreurs, à refaire)" : {
+
+    },
     "La session en cours, ou le temps du jour." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10919,6 +11810,9 @@
         }
       }
     },
+    "La session est sur ton Mac" : {
+
+    },
     "Lance un chrono ou ajoute une session manuelle : elle apparaîtra ici." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10929,6 +11823,9 @@
           }
         }
       }
+    },
+    "Lancer l'animation" : {
+
     },
     "Lancer une activité d'essai" : {
       "localizations" : {
@@ -10970,6 +11867,9 @@
         }
       }
     },
+    "le %@" : {
+
+    },
     "Le chrono tourne déjà sur autre chose. Que faire du temps en cours ?" : {
       "localizations" : {
         "en" : {
@@ -10998,6 +11898,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The code is in the group's details, with the person who created it (or in the invite link they sent you)."
+          }
+        }
+      }
+    },
+    "Le corrigé" : {
+
+    },
+    "Le corrigé apprend bien plus après un vrai essai, même raté." : {
+
+    },
+    "Le cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The course"
           }
         }
       }
@@ -11052,6 +11968,15 @@
         }
       }
     },
+    "Le Mac" : {
+
+    },
+    "Le Mac et l'écran" : {
+
+    },
+    "Le Mac se met en veille comme d'habitude." : {
+
+    },
     "Le mode étude sur ce cours : la semaine sur Moodle, l'horloge du cours, les repères" : {
 
     },
@@ -11066,6 +11991,9 @@
         }
       }
     },
+    "Le PDF entier, l'exercice surligné" : {
+
+    },
     "Le poids sert à hiérarchiser les échéances. Il n'est jamais inventé : laisse-le vide s'il n'est pas connu." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11076,6 +12004,9 @@
           }
         }
       }
+    },
+    "Le polycopié de ce cours est introuvable." : {
+
     },
     "Le reste" : {
       "localizations" : {
@@ -11119,6 +12050,9 @@
         }
       }
     },
+    "Le signet en haut d'un document, ou Cours › Gardés" : {
+
+    },
     "Le système" : {
       "localizations" : {
         "en" : {
@@ -11156,6 +12090,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Time is computed on the server from the sessions each person publishes (Profile › Privacy › Share my progress). It counts **all** work, not only the group's subjects — but the code of a course outside the group is never sent."
+          }
+        }
+      }
+    },
+    "Le volet d'à côté : un cahier, l'énoncé, un PDF… (⌘\\)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The side panel: a notebook, the problem sheet, a PDF… (⌘\\)"
           }
         }
       }
@@ -11251,6 +12195,29 @@
         }
       }
     },
+    "Lecture des documents du cours…" : {
+
+    },
+    "Lecture des documents… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lecture des documents… %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "Lecture des transcriptions… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lecture des transcriptions… %1$lld/%2$lld"
+          }
+        }
+      }
+    },
     "Lecture du PDF…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11261,6 +12228,22 @@
           }
         }
       }
+    },
+    "Lecture du polycopié…" : {
+
+    },
+    "Lecture du polycopié… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lecture du polycopié… %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "lecture en cours" : {
+
     },
     "Lectures" : {
       "localizations" : {
@@ -11390,7 +12373,16 @@
         }
       }
     },
+    "Les photos et questions passent par ton compte iCloud, chiffrées ; rien n'est gardé en route." : {
+
+    },
     "Les questions du cours" : {
+
+    },
+    "Les quiz de la semaine…" : {
+
+    },
+    "Les quiz ratés reviennent au prochain tour." : {
 
     },
     "Les rappels d'évaluation (J-3, J-1) et de session (15 min avant) sont replanifiés automatiquement à chaque passage en arrière-plan." : {
@@ -11403,6 +12395,9 @@
           }
         }
       }
+    },
+    "Les séances et les sections à lire n'en ont pas." : {
+
     },
     "Les séries s'ouvrent alors sans réseau." : {
       "localizations" : {
@@ -11434,6 +12429,9 @@
           }
         }
       }
+    },
+    "Les vidéos du chapitre, à la suite" : {
+
     },
     "Libellé" : {
       "localizations" : {
@@ -11546,6 +12544,22 @@
         }
       }
     },
+    "Lire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play"
+          }
+        }
+      }
+    },
+    "Lire en aléatoire" : {
+
+    },
+    "Lire ensuite" : {
+
+    },
     "Lire les énoncés avec l'IA" : {
       "localizations" : {
         "en" : {
@@ -11566,6 +12580,9 @@
         }
       }
     },
+    "Lire maintenant" : {
+
+    },
     "locale" : {
       "localizations" : {
         "en" : {
@@ -11575,6 +12592,9 @@
           }
         }
       }
+    },
+    "Lu" : {
+
     },
     "M" : {
       "localizations" : {
@@ -11649,6 +12669,19 @@
         }
       }
     },
+    "Manipuler" : {
+
+    },
+    "Markdown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
+          }
+        }
+      }
+    },
     "Markdown : **gras**, *italique*, - listes, $formules$" : {
       "localizations" : {
         "en" : {
@@ -11658,6 +12691,9 @@
           }
         }
       }
+    },
+    "Marqué lu tout seul quand tu arrives en bas de la page" : {
+
     },
     "Marque ta présence en amphi : ces heures entrent dans le temps réel comparé à la charge EPFL." : {
       "extractionState" : "stale",
@@ -11770,6 +12806,9 @@
           }
         }
       }
+    },
+    "Marquer lu" : {
+
     },
     "Marquer non vu" : {
       "localizations" : {
@@ -12036,6 +13075,12 @@
         }
       }
     },
+    "Méthodes · " : {
+
+    },
+    "Méthodes et pièges" : {
+
+    },
     "Mettre à jour tout seul" : {
       "localizations" : {
         "en" : {
@@ -12056,12 +13101,25 @@
         }
       }
     },
+    "Mettre la session en pause" : {
+
+    },
     "Mettre le chrono en pause" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pause the timer"
+          }
+        }
+      }
+    },
+    "Mettre le cours au centre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Put the course in the center"
           }
         }
       }
@@ -12117,6 +13175,7 @@
       }
     },
     "Mode" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12146,7 +13205,18 @@
         }
       }
     },
+    "Mode étude · sans fin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Study mode · no end"
+          }
+        }
+      }
+    },
     "Mode étude (⇧⌘E)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12379,6 +13449,28 @@
         }
       }
     },
+    "Mon projet Claude (dossier, compétences, connecteurs)" : {
+
+    },
+    "Montrer" : {
+
+    },
+    "Montrer la liste (⌃⌘S)" : {
+
+    },
+    "Montrer le sommaire (⌃⌘S)" : {
+
+    },
+    "Montrer tes cahiers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show your notebooks"
+          }
+        }
+      }
+    },
     "Moodle" : {
       "localizations" : {
         "en" : {
@@ -12399,6 +13491,9 @@
         }
       }
     },
+    "Moodle ne montre pas encore cette activité." : {
+
+    },
     "Moodle, Courseware, MediaSpace et Ed se connectent tout seuls." : {
       "localizations" : {
         "en" : {
@@ -12411,6 +13506,27 @@
     },
     "moodle.epfl.ch" : {
 
+    },
+    "Morceaux" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs"
+          }
+        }
+      }
+    },
+    "Morceaux, albums, artistes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs, albums, artists"
+          }
+        }
+      }
     },
     "Mot de passe" : {
       "localizations" : {
@@ -12536,6 +13652,35 @@
         }
       }
     },
+    "Music n'a pas accepté l'ajout à la file." : {
+
+    },
+    "Music n'a pas pris la modification de la file." : {
+
+    },
+    "Music n'a pas pu lancer ce morceau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music couldn't play this song."
+          }
+        }
+      }
+    },
+    "Music n'a pas pu sauter à ce morceau." : {
+
+    },
+    "Musique" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music"
+          }
+        }
+      }
+    },
     "n°" : {
       "localizations" : {
         "en" : {
@@ -12555,6 +13700,9 @@
           }
         }
       }
+    },
+    "Ne montrer que cet exercice" : {
+
     },
     "Ni l'un ni l'autre" : {
       "localizations" : {
@@ -12626,6 +13774,9 @@
           }
         }
       }
+    },
+    "Non" : {
+
     },
     "non configuré" : {
       "extractionState" : "stale",
@@ -12729,6 +13880,7 @@
       }
     },
     "Noter" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12737,6 +13889,9 @@
           }
         }
       }
+    },
+    "Noter les indices de Claude" : {
+
     },
     "Notes" : {
       "localizations" : {
@@ -12754,6 +13909,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notes · %@"
+          }
+        }
+      }
+    },
+    "Notes du cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Course notes"
           }
         }
       }
@@ -12962,6 +14127,9 @@
         }
       }
     },
+    "Numérisée, jointe à la conversation de Claude" : {
+
+    },
     "Numéro" : {
       "localizations" : {
         "en" : {
@@ -13137,6 +14305,9 @@
         }
       }
     },
+    "On attaque l'%@ ?" : {
+
+    },
     "On fait quoi ?" : {
       "localizations" : {
         "en" : {
@@ -13239,6 +14410,12 @@
         }
       }
     },
+    "Où j'en suis (⌥⌘I)" : {
+
+    },
+    "Où joue la musique — la faire passer d'un appareil à l'autre" : {
+
+    },
     "Ou le PDF d'une série" : {
       "localizations" : {
         "en" : {
@@ -13259,13 +14436,35 @@
         }
       }
     },
+    "Où tu bloques ? (le micro du clavier pour dicter)" : {
+
+    },
     "Outils" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tools"
+          }
+        }
+      }
+    },
+    "Ouvert" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open"
+          }
+        }
+      }
+    },
+    "Ouvert sur la matière de la série" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened on the series' material"
           }
         }
       }
@@ -13299,6 +14498,9 @@
           }
         }
       }
+    },
+    "Ouvre le bureau du cours, jusqu'à la fin du créneau" : {
+
     },
     "Ouvre le chrono de StudyTrack." : {
       "extractionState" : "stale",
@@ -13372,6 +14574,16 @@
         }
       }
     },
+    "Ouvrir autre chose à côté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open something else on the side"
+          }
+        }
+      }
+    },
     "Ouvrir Courseware et choisir la page moi-même" : {
       "localizations" : {
         "en" : {
@@ -13381,6 +14593,9 @@
           }
         }
       }
+    },
+    "Ouvrir dans Moodle" : {
+
     },
     "Ouvrir dans Safari" : {
       "localizations" : {
@@ -13422,6 +14637,9 @@
         }
       }
     },
+    "Ouvrir la musique" : {
+
+    },
     "Ouvrir la page des identifiants" : {
       "localizations" : {
         "en" : {
@@ -13451,6 +14669,9 @@
           }
         }
       }
+    },
+    "Ouvrir le dossier du projet" : {
+
     },
     "Ouvrir le support" : {
       "localizations" : {
@@ -13488,6 +14709,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open StudyTrack at login"
+          }
+        }
+      }
+    },
+    "p. %lld / %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "p. %1$lld / %2$lld"
           }
         }
       }
@@ -13553,6 +14784,9 @@
       }
     },
     "Pages et liens" : {
+
+    },
+    "Paliers" : {
 
     },
     "Panneau" : {
@@ -13801,6 +15035,29 @@
         }
       }
     },
+    "Pas d'heure de fin : tu termines quand tu as fini." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No end time: you finish when you're done."
+          }
+        }
+      }
+    },
+    "Pas de connexion. Vérifie le réseau et réessaie." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're offline. Check your connection and try again."
+          }
+        }
+      }
+    },
+    "Pas de corrigé" : {
+
+    },
     "Pas de cours" : {
       "localizations" : {
         "en" : {
@@ -13834,6 +15091,9 @@
           }
         }
       }
+    },
+    "Pas de quiz cette semaine" : {
+
     },
     "Pas de série" : {
       "localizations" : {
@@ -13990,6 +15250,9 @@
         }
       }
     },
+    "Passer dessus" : {
+
+    },
     "Passer et terminer" : {
       "localizations" : {
         "en" : {
@@ -14035,6 +15298,7 @@
 
     },
     "Pause (⌘T)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14167,6 +15431,7 @@
       }
     },
     "permis : %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14317,6 +15582,26 @@
         }
       }
     },
+    "Playlists" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlists"
+          }
+        }
+      }
+    },
+    "Plus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        }
+      }
+    },
     "Plus d'actions" : {
       "localizations" : {
         "en" : {
@@ -14369,6 +15654,9 @@
         }
       }
     },
+    "Plutôt un indice" : {
+
+    },
     "Poids : %lld %% de la note" : {
       "localizations" : {
         "en" : {
@@ -14405,6 +15693,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Points"
+          }
+        }
+      }
+    },
+    "Polycopié" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture notes"
           }
         }
       }
@@ -14480,7 +15778,11 @@
         }
       }
     },
+    "Position" : {
+
+    },
     "Post-mortem" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14522,6 +15824,16 @@
         }
       }
     },
+    "Pour l'exercice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For the exercise"
+          }
+        }
+      }
+    },
     "Pré-remplir pour Groq" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14532,6 +15844,19 @@
           }
         }
       }
+    },
+    "Précédent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous"
+          }
+        }
+      }
+    },
+    "Précédent dans l'historique (⌘[)" : {
+
     },
     "Précédente" : {
       "localizations" : {
@@ -14669,6 +15994,12 @@
         }
       }
     },
+    "Programme de la semaine" : {
+
+    },
+    "Programme introuvable." : {
+
+    },
     "Progression" : {
       "localizations" : {
         "en" : {
@@ -14700,6 +16031,7 @@
       }
     },
     "Projet EPFL" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14813,6 +16145,12 @@
         }
       }
     },
+    "Quand la série est finie : corrections, erreurs, à refaire" : {
+
+    },
+    "Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
+
+    },
     "Quelle base Notion ?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14925,6 +16263,9 @@
         }
       }
     },
+    "Quiz de la semaine" : {
+
+    },
     "Raccourci global ⌃⌥Espace" : {
       "localizations" : {
         "en" : {
@@ -14981,6 +16322,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Save"
+          }
+        }
+      }
+    },
+    "Ranger Claude (⌘J)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Claude (⌘J)"
           }
         }
       }
@@ -15107,6 +16458,12 @@
         }
       }
     },
+    "Rechercher dans Apple Music" : {
+
+    },
+    "Rechercher dans le cours" : {
+
+    },
     "Rechercher…" : {
       "localizations" : {
         "en" : {
@@ -15166,6 +16523,12 @@
           }
         }
       }
+    },
+    "Refaire" : {
+
+    },
+    "Refaire ceux ratés" : {
+
     },
     "Refresh token" : {
       "localizations" : {
@@ -15357,6 +16720,22 @@
         }
       }
     },
+    "Relire" : {
+
+    },
+    "Relire · %@" : {
+
+    },
+    "Relire le cahier (sauvegardé %@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reload the notebook (saved %@)"
+          }
+        }
+      }
+    },
     "Relire les résumés et refaire ce qui a raté. Rien de nouveau la veille d'un examen." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15364,6 +16743,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reread the summaries and redo what went wrong. Nothing new the day before an exam."
+          }
+        }
+      }
+    },
+    "Relire mes notes" : {
+
+    },
+    "Relire tes notes (GoodNotes sauvegarde de temps en temps)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reload your notes (GoodNotes backs up from time to time)"
           }
         }
       }
@@ -15429,6 +16821,16 @@
         }
       }
     },
+    "Renvoyer toute ma copie" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend my whole copy"
+          }
+        }
+      }
+    },
     "Réparation…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15475,6 +16877,16 @@
     "Repère" : {
 
     },
+    "Répéter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeat"
+          }
+        }
+      }
+    },
     "Replier" : {
       "localizations" : {
         "en" : {
@@ -15485,6 +16897,19 @@
         }
       }
     },
+    "Replier la liste pour lire en grand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide the list to read full size"
+          }
+        }
+      }
+    },
+    "Replier la liste pour lire en grand (⌃⌘S)" : {
+
+    },
     "Replier la série" : {
       "localizations" : {
         "en" : {
@@ -15494,6 +16919,9 @@
           }
         }
       }
+    },
+    "Replier le sommaire (⌃⌘S)" : {
+
     },
     "Répondre" : {
       "localizations" : {
@@ -15536,6 +16964,7 @@
       }
     },
     "Reprendre (⌘T)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15544,6 +16973,15 @@
           }
         }
       }
+    },
+    "reprendre à %@" : {
+
+    },
+    "Reprendre à %@" : {
+
+    },
+    "Reprendre la session" : {
+
     },
     "Reprendre le chrono" : {
       "localizations" : {
@@ -15709,6 +17147,12 @@
         }
       }
     },
+    "Retirer de la file" : {
+
+    },
+    "Retirer des ressources gardées" : {
+
+    },
     "Retirer la correction" : {
       "localizations" : {
         "en" : {
@@ -15749,6 +17193,9 @@
           }
         }
       }
+    },
+    "Revenir à l'image" : {
+
     },
     "Revenir à la lecture locale" : {
       "extractionState" : "stale",
@@ -15882,6 +17329,16 @@
         }
       }
     },
+    "Rien à jouer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing to play."
+          }
+        }
+      }
+    },
     "Rien à l'horaire" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15903,6 +17360,9 @@
         }
       }
     },
+    "Rien à mettre sur la fiche." : {
+
+    },
     "Rien à revoir" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15913,6 +17373,9 @@
           }
         }
       }
+    },
+    "Rien après ce morceau." : {
+
     },
     "Rien d'importé pour ce cours." : {
       "localizations" : {
@@ -15933,6 +17396,15 @@
           }
         }
       }
+    },
+    "Rien dans cette partie." : {
+
+    },
+    "rien de dû aujourd'hui" : {
+
+    },
+    "Rien de gardé pour l'instant" : {
+
     },
     "Rien de planifié" : {
       "localizations" : {
@@ -16047,6 +17519,33 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nothing is filed under this week."
+          }
+        }
+      }
+    },
+    "Rien ne correspond à « %@ »." : {
+
+    },
+    "Rien ne correspond." : {
+
+    },
+    "Rien ne joue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing playing"
+          }
+        }
+      }
+    },
+    "Rien ne joue." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing playing."
           }
         }
       }
@@ -16175,6 +17674,47 @@
         }
       }
     },
+    "Sans fin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No end"
+          }
+        }
+      }
+    },
+    "sans fin · depuis %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no end · since %@"
+          }
+        }
+      }
+    },
+    "sans heure de fin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no end time"
+          }
+        }
+      }
+    },
+    "Sans heure de fin : termine quand tu as fini." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No end time: finish when you're done."
+          }
+        }
+      }
+    },
     "Sans les secondes, ça use moins la batterie." : {
       "localizations" : {
         "en" : {
@@ -16186,7 +17726,6 @@
       }
     },
     "Sans semaine" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16329,6 +17868,9 @@
         }
       }
     },
+    "Séances" : {
+
+    },
     "Séances et cours" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16410,6 +17952,12 @@
           }
         }
       }
+    },
+    "Section précédente" : {
+
+    },
+    "Section suivante" : {
+
     },
     "Semaine" : {
       "localizations" : {
@@ -16571,6 +18119,9 @@
           }
         }
       }
+    },
+    "Semaines" : {
+
     },
     "Semestre" : {
       "localizations" : {
@@ -16816,6 +18367,9 @@
         }
       }
     },
+    "Session verrouillée" : {
+
+    },
     "Sessions" : {
       "localizations" : {
         "en" : {
@@ -16878,6 +18432,22 @@
           }
         }
       }
+    },
+    "Seulement les pages %@ : Claude a déjà les autres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only pages %@: Claude already has the rest"
+          }
+        }
+      }
+    },
+    "Seulement pendant que le chrono tourne : la musique continue, l'écran s'éteint comme d'habitude. En pause, le Mac dort." : {
+
+    },
+    "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le Mac." : {
+
     },
     "Seulement si la synchronisation le demande." : {
       "localizations" : {
@@ -17015,6 +18585,9 @@
       }
     },
     "Sortie d'urgence" : {
+
+    },
+    "Sortie d'urgence · maintiens %lld s" : {
 
     },
     "Sortie…" : {
@@ -17185,6 +18758,19 @@
         }
       }
     },
+    "Suivant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        }
+      }
+    },
+    "Suivant dans l'historique (⌘])" : {
+
+    },
     "Suivante" : {
       "localizations" : {
         "en" : {
@@ -17235,6 +18821,9 @@
         }
       }
     },
+    "Suivre le cours" : {
+
+    },
     "Suivre le cours · %@" : {
 
     },
@@ -17247,6 +18836,12 @@
           }
         }
       }
+    },
+    "Sujet entier" : {
+
+    },
+    "Sujet introuvable" : {
+
     },
     "Support" : {
       "localizations" : {
@@ -17614,6 +19209,9 @@
         }
       }
     },
+    "Sur ce %@" : {
+
+    },
     "Sur cet exercice" : {
       "localizations" : {
         "en" : {
@@ -17623,6 +19221,9 @@
           }
         }
       }
+    },
+    "Sur cette page" : {
+
     },
     "Sur l'appareil" : {
       "extractionState" : "stale",
@@ -17635,6 +19236,9 @@
         }
       }
     },
+    "Sur l'exercice" : {
+
+    },
     "Sur l'iPhone" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -17645,6 +19249,15 @@
           }
         }
       }
+    },
+    "Sur la série" : {
+
+    },
+    "Sur papier, l'énoncé seul, sans tes notes — 15 min chacune" : {
+
+    },
+    "Sur papier, l'énoncé seul, sans tes notes." : {
+
     },
     "Sur quoi" : {
       "localizations" : {
@@ -17665,6 +19278,9 @@
           }
         }
       }
+    },
+    "Sur ton %@" : {
+
     },
     "Sûr·e" : {
       "localizations" : {
@@ -17822,6 +19438,27 @@
         }
       }
     },
+    "Ta copie · Série %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your copy · Series %lld"
+          }
+        }
+      }
+    },
+    "Ta copie n'a pas changé depuis ton dernier envoi : Claude l'a déjà" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your copy hasn't changed since you last sent it: Claude already has it"
+          }
+        }
+      }
+    },
     "Ta demande" : {
       "localizations" : {
         "en" : {
@@ -17838,6 +19475,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your way of working is in studytrack.json."
+          }
+        }
+      }
+    },
+    "Ta fiche de révision" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your revision sheet"
           }
         }
       }
@@ -17935,6 +19582,7 @@
       }
     },
     "Tape `claude` puis `/mcp` dans le Terminal, dans le dossier du projet" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18225,7 +19873,14 @@
       }
     },
     "Tes notes" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your notes"
+          }
+        }
+      }
     },
     "Tes outils" : {
       "localizations" : {
@@ -18236,6 +19891,19 @@
           }
         }
       }
+    },
+    "Tes playlists" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Playlists"
+          }
+        }
+      }
+    },
+    "Tes ressources gardées (elles s'ouvrent à côté)" : {
+
     },
     "Tes tâches" : {
       "extractionState" : "stale",
@@ -18442,6 +20110,9 @@
         }
       }
     },
+    "tirés du polycopié" : {
+
+    },
     "Titre" : {
       "localizations" : {
         "en" : {
@@ -18494,6 +20165,16 @@
         }
       }
     },
+    "Titres phares" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top Songs"
+          }
+        }
+      }
+    },
     "Todoist" : {
       "localizations" : {
         "en" : {
@@ -18514,6 +20195,9 @@
           }
         }
       }
+    },
+    "Ton %@" : {
+
     },
     "Ton adresse de l'école" : {
       "localizations" : {
@@ -18726,6 +20410,9 @@
         }
       }
     },
+    "Tous les énoncés du polycopié — définitions, théorèmes, propositions — chapitre par chapitre, sans les preuves." : {
+
+    },
     "Tout" : {
       "localizations" : {
         "en" : {
@@ -18808,6 +20495,9 @@
         }
       }
     },
+    "Tout est lu pour cette semaine." : {
+
+    },
     "Tout est modifiable : section, cours suivis, heures d'amphi et dates du semestre." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18840,6 +20530,12 @@
         }
       }
     },
+    "Tout est vu" : {
+
+    },
+    "Tout juste. La semaine est acquise." : {
+
+    },
     "Tout l'historique" : {
       "localizations" : {
         "en" : {
@@ -18859,6 +20555,12 @@
           }
         }
       }
+    },
+    "Tout le cours sur une page — à faire une fois" : {
+
+    },
+    "Tout le PDF" : {
+
     },
     "Tout le semestre" : {
       "localizations" : {
@@ -18893,6 +20595,9 @@
     "Toute la section" : {
 
     },
+    "Toute la série est corrigée." : {
+
+    },
     "Toutes" : {
       "localizations" : {
         "en" : {
@@ -18912,6 +20617,9 @@
           }
         }
       }
+    },
+    "Toutes les commandes (les tiennes viennent de studytrack.json)" : {
+
     },
     "Toutes les séries" : {
       "localizations" : {
@@ -19026,6 +20734,9 @@
           }
         }
       }
+    },
+    "Tu as cherché %@ ?" : {
+
     },
     "Tu n'as pas encore de cours suivis : ajoute un code à la main ci-dessous." : {
       "extractionState" : "stale",
@@ -19331,6 +21042,12 @@
         }
       }
     },
+    "Une reprise due : %@" : {
+
+    },
+    "Une seule conversation pour toute la série : Claude suit l'exercice du chrono, garde les indices donnés et, à la fin, propose de noter tes erreurs et ce qu'il faut refaire." : {
+
+    },
     "URL de base (…/v1)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19490,6 +21207,9 @@
     "Verrouillé" : {
 
     },
+    "Verrouillé : les réglages reviennent à la fin de la session." : {
+
+    },
     "Verrouillé jusqu'à %@. Les réglages du mode étude reviennent à la fin." : {
 
     },
@@ -19604,6 +21324,9 @@
         }
       }
     },
+    "Vider « À suivre »" : {
+
+    },
     "Vider le journal" : {
       "localizations" : {
         "en" : {
@@ -19645,6 +21368,9 @@
         }
       }
     },
+    "Vitesse de lecture (gardée pour toutes les vidéos)" : {
+
+    },
     "Voir dans le PDF" : {
       "localizations" : {
         "en" : {
@@ -19675,6 +21401,9 @@
           }
         }
       }
+    },
+    "Voir le score" : {
+
     },
     "Voir les %lld échéances suivantes" : {
       "localizations" : {
@@ -19716,6 +21445,9 @@
         }
       }
     },
+    "Volume" : {
+
+    },
     "Voter" : {
       "localizations" : {
         "en" : {
@@ -19747,6 +21479,12 @@
       }
     },
     "Vu en cours" : {
+
+    },
+    "Vue" : {
+
+    },
+    "Vue d'ensemble de la série" : {
 
     },
     "Webhook" : {

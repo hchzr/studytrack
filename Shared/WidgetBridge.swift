@@ -20,6 +20,31 @@ struct WidgetSnapshot: Codable, Equatable {
     var deadlines: [WidgetDeadline]? = nil
 }
 
+extension WidgetSnapshot {
+    /// Les instants où ce que montre un widget change de lui-même : la fin
+    /// d'un cours ou son début, une échéance, la fin d'une pause, minuit — et
+    /// un quart d'heure sur deux heures tant que le chrono tourne (les heures
+    /// du jour avancent). Le système affiche ces entrées **sans réveiller
+    /// l'extension** : plus juste qu'un rafraîchissement toutes les 30 min, et
+    /// moins coûteux.
+    func timelineDates(from now: Date, calendar: Calendar = .current) -> (dates: [Date], reloadAfter: Date) {
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+            ?? now.addingTimeInterval(86_400)
+        var dates: [Date] = [midnight]
+        for event in schedule ?? [] {
+            dates.append(event.start)
+            if let end = event.end { dates.append(end) }
+        }
+        dates += (deadlines ?? []).map(\.date)
+        if let breakEnd = timer?.breakEndsAt { dates.append(breakEnd) }
+        if timer?.isRunning == true {
+            dates += (1...8).map { now.addingTimeInterval(Double($0) * 900) }
+        }
+        let upcoming = Set(dates.filter { $0 > now && $0 <= midnight }).sorted()
+        return ([now] + upcoming, midnight)
+    }
+}
+
 struct WidgetCourse: Codable, Equatable, Identifiable {
     var id: String
     var code: String

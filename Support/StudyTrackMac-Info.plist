@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>StudyTrack pilote Music pour faire jouer ta musique pendant le mode étude.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>StudyTrack cherche dans Apple Music et ta bibliothèque pour faire jouer ta musique pendant le mode étude.</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>TimerRelayHost</key>

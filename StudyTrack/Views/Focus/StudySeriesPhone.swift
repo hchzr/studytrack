@@ -108,18 +108,26 @@ struct StudyExercisePhone: View {
 
     enum Panel: String, CaseIterable { case statement, sheet, copy }
     @State private var panel: Panel = .sheet
+    @State private var choseStatement = false
     @Environment(\.openURL) private var openURL
     private var sites: SiteHub { .shared }
 
     private var copy: NotesLibrary.Document? { NotesStore.shared.copy(for: series, course: course, among: courses) }
+    /// Le site Botafogo du cours : l'exercice se lit tel que le site le montre.
+    private var botafogoSite: URL? {
+        guard BotafogoLinks.isPage(series.urlString) || BotafogoLinks.isPage(exercise.statementURLString) else { return nil }
+        return course.contentSources.compactMap(URL.init(string:)).first { ContentSource.detect(host: $0.host) == .botafogo }
+    }
+    /// Le PDF de l'énoncé ; vide pour une série Botafogo, lue en natif.
     private var address: String {
-        exercise.statementURLString.isEmpty ? series.urlString : exercise.statementURLString
+        let address = exercise.statementURLString.isEmpty ? series.urlString : exercise.statementURLString
+        return BotafogoLinks.isPage(address) ? "" : address
     }
 
     var body: some View {
         VStack(spacing: 0) {
             Picker("Afficher", selection: $panel) {
-                if !address.isEmpty || !exercise.statement.isEmpty { Text("Énoncé").tag(Panel.statement) }
+                if !address.isEmpty || !exercise.statement.isEmpty || botafogoSite != nil { Text("Énoncé").tag(Panel.statement) }
                 Text("Exercice").tag(Panel.sheet)
                 if copy != nil { Text("Ma copie").tag(Panel.copy) }
             }
@@ -139,13 +147,23 @@ struct StudyExercisePhone: View {
             }
         }
         .background(Carnet.ground)
+        // Une série Botafogo s'ouvre sur l'énoncé du site : c'est lui qu'on lit d'abord.
+        .onAppear { if botafogoSite != nil, !choseStatement { panel = .statement; choseStatement = true } }
         .navigationTitle(exercise.displayNumber)
         .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder
     private var statement: some View {
-        if address.isEmpty {
+        if let site = botafogoSite {
+            BotafogoExerciseStatement(book: sites.botafogo(site), site: site,
+                                      exercisePath: BotafogoLinks.coursPath(exercise.statementURLString),
+                                      seriesPath: BotafogoLinks.coursPath(series.urlString),
+                                      position: series.sortedExercises.firstIndex { $0.id == exercise.id } ?? 0,
+                                      heading: nil, desk: sites,
+                                      openPoly: { path in sites.request = .init(courseID: course.id, source: .botafogo, reading: .botafogo(title: path, url: path)) },
+                                      openWeb: { url, _ in openURL(url) }, tint: Carnet.tint(course.colorHex))
+        } else if address.isEmpty {
             ScrollView {
                 MacMathText(exercise.statement, size: 17).foregroundStyle(Carnet.ink).padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,7 +171,8 @@ struct StudyExercisePhone: View {
         } else {
             switch sites.document(address) {
             case .ready(let file)?:
-                PDFPane(url: file, search: ["Exercice \(exercise.exerciseNumber)", exercise.displayNumber])
+                ExercisePDFView(file: file, exercise: exercise,
+                                next: series.sortedExercises.drop { $0.id != exercise.id }.dropFirst().first, memory: address)
             case .needsLogin?:
                 VStack(spacing: 12) {
                     Text("Connecte-toi à l'école.").foregroundStyle(Carnet.inkSecondary)

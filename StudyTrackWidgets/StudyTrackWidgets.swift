@@ -46,27 +46,12 @@ struct StudyTrackProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StudyTrackEntry>) -> Void) {
-        let now = Date()
         let snapshot = WidgetBridge.read()
-        var entries = [StudyTrackEntry(date: now, snapshot: snapshot)]
-        // Une seconde entrée à minuit : « Demain » devient « Aujourd'hui », « J-3 »
-        // devient « J-2 » à l'heure juste, sans attendre un rechargement que le
-        // système peut repousser.
-        let calendar = Calendar.current
-        if let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
-            entries.append(StudyTrackEntry(date: midnight, snapshot: snapshot))
-        }
-        // Une pause Pomodoro qui finit : le widget quitte le compte à rebours à
-        // l'instant exact, au lieu de rester sur « 0:00 ».
-        if let breakEnd = snapshot?.timer?.breakEndsAt, breakEnd > now {
-            entries.append(StudyTrackEntry(date: breakEnd, snapshot: snapshot))
-            entries.sort { $0.date < $1.date }
-        }
-        // L'app recharge explicitement les timelines ; ce rafraîchissement périodique
-        // n'est qu'un filet de sécurité.
-        let next = calendar.date(byAdding: .minute, value: 30, to: now)
-            ?? now.addingTimeInterval(1800)
-        completion(Timeline(entries: entries, policy: .after(next)))
+        // Une entrée à chaque instant où le widget change de lui-même (fin d'un
+        // cours, échéance, fin de pause, minuit) ; l'app recharge le reste.
+        let plan = (snapshot ?? WidgetSnapshot(updatedAt: .distantPast)).timelineDates(from: Date())
+        let entries = plan.dates.map { StudyTrackEntry(date: $0, snapshot: snapshot) }
+        completion(Timeline(entries: entries, policy: .after(plan.reloadAfter)))
     }
 }
 

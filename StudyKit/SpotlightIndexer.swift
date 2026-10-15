@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 /// le bon cours, sans passer par l'app.
 @MainActor
 enum SpotlightIndexer {
-    private static let domain = "com.hczr.studytrack.content"
+    private nonisolated static let domain = "com.hczr.studytrack.content"
     private static var pending: Task<Void, Never>?
     /// L'empreinte du dernier index : rien n'est réécrit si rien n'a changé.
     private static var lastFingerprint: Int?
@@ -21,13 +21,26 @@ enum SpotlightIndexer {
         pending?.cancel()
         pending = Task { @MainActor in
             try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            reindex(context: ModelContext(container))
+            guard !Task.isCancelled, CSSearchableIndex.isIndexingAvailable() else { return }
+            // Lire tous les cours, séries et exercices prend un moment : hors du
+            // fil principal (un contexte à lui), pour ne pas figer l'interface.
+            let built = await Task.detached(priority: .background) { collect(context: ModelContext(container)) }.value
+            guard !Task.isCancelled, built.fingerprint != lastFingerprint else { return }
+            lastFingerprint = built.fingerprint
+            let index = CSSearchableIndex.default()
+            let items = built.items
+            index.deleteSearchableItems(withDomainIdentifiers: [domain]) { _ in
+                index.indexSearchableItems(items) { _ in }
+            }
         }
     }
 
-    static func reindex(context: ModelContext) {
-        guard CSSearchableIndex.isIndexingAvailable() else { return }
+    private struct Built: @unchecked Sendable {
+        let items: [CSSearchableItem]
+        let fingerprint: Int
+    }
+
+    private nonisolated static func collect(context: ModelContext) -> Built {
         let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
         var items: [CSSearchableItem] = []
         for course in courses {
@@ -60,16 +73,10 @@ enum SpotlightIndexer {
             hasher.combine(entry.attributeSet.title)
             hasher.combine(entry.attributeSet.contentDescription)
         }
-        let fingerprint = hasher.finalize()
-        guard fingerprint != lastFingerprint else { return }
-        lastFingerprint = fingerprint
-        let index = CSSearchableIndex.default()
-        index.deleteSearchableItems(withDomainIdentifiers: [domain]) { _ in
-            index.indexSearchableItems(items) { _ in }
-        }
+        return Built(items: items, fingerprint: hasher.finalize())
     }
 
-    private static func item(id: String, title: String, detail: String, keywords: [String]) -> CSSearchableItem {
+    private nonisolated static func item(id: String, title: String, detail: String, keywords: [String]) -> CSSearchableItem {
         let attributes = CSSearchableItemAttributeSet(contentType: .text)
         attributes.title = title
         attributes.contentDescription = detail

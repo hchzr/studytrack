@@ -315,10 +315,28 @@ enum BotafogoClient {
             for url in lectureURLs { if let data = documents[url] { lectures[url] = BotafogoDocument.lecture(fromNodeJSON: data) } }
             var series: [String: [BotafogoExercise]] = [:]
             for url in seriesURLs { if let data = documents[url] { series[url] = BotafogoDocument.exercises(fromNodeJSON: data) } }
+            // Le programme cite parfois plus d'exercices que la série n'en
+            // montre : des pages en brouillon (« exercices corrigés 2022 »,
+            // vides, jamais publiées). On ne lit les exercices un par un que
+            // quand les comptes divergent.
+            var unpublished = Set<String>()
+            var listedByURL: [String: [String]] = [:]
+            for week in program where week.type == "week" {
+                for child in week.children ?? [] where child.type == "series" {
+                    guard let url = child.url else { continue }
+                    listedByURL[url] = (child.children ?? []).filter { $0.type == "exercise" }.compactMap(\.url)
+                }
+            }
+            let suspicious = listedByURL.filter { url, listed in series[url].map { !$0.isEmpty && listed.count > $0.count } ?? false }
+                .flatMap(\.value)
+            if !suspicious.isEmpty {
+                let pages = await nodes(suspicious, root: root, session: session)
+                unpublished = Set(suspicious.filter { pages[$0].map(BotafogoDocument.isUnpublished(nodeJSON:)) ?? false })
+            }
             let pageTitle = BotafogoParser.parseNuxt(html: html, pageURL: address)?.title
             return BotafogoProgramBuilder.draft(title: pageTitle ?? fallbackTitle ?? "Botafogo",
                                                 program: program, root: root, handout: handout,
-                                                lectures: lectures, series: series)
+                                                lectures: lectures, series: series, unpublished: unpublished)
         }
         var page = try await course(at: url, session: session)
         if page.title == "Botafogo" || page.title.isEmpty, let fallbackTitle { page.title = fallbackTitle }

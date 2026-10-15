@@ -57,7 +57,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         await MainActor.run {
-            if let wake = userInfo["st"] as? [String: Any], let sealed = wake["d"] as? String,
+            if let wake = userInfo["st"] as? [String: Any], let sealed = wake["m"] as? String,
+               let music = TimerLink.shared.openMusicWake(sealed) {
+                // La musique passée depuis le Mac : elle reprend ici, même app fermée.
+                StudyMusic.shared.receive(music)
+            } else if let wake = userInfo["st"] as? [String: Any], let sealed = wake["d"] as? String,
                let snapshot = TimerLink.shared.openWake(sealed) {
                 CloudRelay.receivedFromLink(snapshot)
             } else {

@@ -141,7 +141,7 @@ struct MacFocusView: View {
         HStack(spacing: 14) {
             Image(systemName: "lock.fill").foregroundStyle(Carnet.ink)
             TimerTimeline(interval: 60) { date in
-                Text("Mode étude · reste \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true))")
+                Text((StudyMode.isOpenEnded(timer.state) ? "Mode étude · sans fin" : "Mode étude · reste \(StudyMode.remaining(timer.state, at: date).minuteLabel(roundingUp: true))"))
                     .foregroundStyle(Carnet.ink)
             }
             Spacer()

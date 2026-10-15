@@ -80,6 +80,19 @@ struct DetectedSeries: Equatable, Identifiable {
     var exercises: [DetectedExercise]
 
     var id: Int { number }
+
+    /// Toute une série « bonus », ce n'est pas une série : c'est une note de
+    /// page (« les exercices étoilés sont facultatifs ») lue sous chaque titre,
+    /// ou un modèle qui a généralisé. Les 20 exercices de la série 6 d'algèbre
+    /// linéaire arrivaient tous en bonus — rien n'était plus à faire.
+    static func withoutBlanketBonus(_ series: [DetectedSeries]) -> [DetectedSeries] {
+        series.map { item in
+            guard item.exercises.count >= 3, item.exercises.allSatisfy(\.isBonus) else { return item }
+            var copy = item
+            for index in copy.exercises.indices { copy.exercises[index].isBonus = false }
+            return copy
+        }
+    }
 }
 
 /// Repère les séries et les exercices dans le texte d'un PDF EPFL.

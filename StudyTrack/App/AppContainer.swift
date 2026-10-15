@@ -121,7 +121,13 @@ final class AppContainer {
         groupSessions.app = self
         focus.startRelay()
         // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
-        if isCloudSynced { TimerLink.shared.startFromBundle(containerID: Self.cloudContainerID) }
+        if isCloudSynced {
+            // Un seul lecteur pour l'iPhone et le Mac, par le même lien.
+            TimerLink.shared.onMusic = { StudyMusic.shared.receive($0) }
+            TimerLink.shared.onConnect = { StudyMusic.shared.linkConnected() }
+            TimerLink.shared.startFromBundle(containerID: Self.cloudContainerID)
+            if StudyMusic.sharingEnabled { StudyMusic.shared.attach() }
+        }
         // Les jetons APNs de l'îlot vont au relais : le Mac peut alors le
         // mettre à jour sur l'écran verrouillé.
         StudyActivityController.observePushTokens()

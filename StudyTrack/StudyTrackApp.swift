@@ -106,6 +106,26 @@ enum PreviewLaunch {
     static let studyMomentFlag = "-studyMoment"
 
     static func apply(to container: AppContainer) {
+        // `-seedBotafogo` : le premier cours lit le site Botafogo d'Analyse I, et un
+        // exercice attend sa reprise (captures de « En route »).
+        if isSet("-seedBotafogo") {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                let context = container.modelContainer.mainContext
+                let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
+                if let course = courses.first(where: { !$0.sortedSeries.isEmpty }) {
+                    course.contentSources.append("https://botafogo.epfl.ch/analyse-1-flipped/")
+                    if let exercise = course.sortedSeries.first?.sortedExercises.dropFirst().first {
+                        exercise.redoPass = 0
+                        exercise.redoDueAt = Calendar.current.startOfDay(for: Date())
+                        exercise.redoWhy = "méthode : le signe du dénominateur oublié"
+                        exercise.redoFirstMove = "Écris la différence comme une seule fraction"
+                        exercise.redoRequired = true
+                    }
+                    try? context.save()
+                }
+            }
+        }
         if isSet(studyModeFlag) {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(1200))

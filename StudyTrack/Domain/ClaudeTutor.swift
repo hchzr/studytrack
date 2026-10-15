@@ -140,6 +140,9 @@ enum ClaudeTutor {
         var kind: Kind
         var data: Data
         var name: String
+        /// Un cahier de tes notes (ta copie) : n'en partent que les pages que
+        /// la conversation n'a pas encore vues.
+        var notebookPath: String? = nil
     }
 
     /// La ligne JSON d'un message de l'étudiant·e (`--input-format stream-json`).
@@ -329,7 +332,11 @@ enum ClaudeTutor {
     }
 
     /// Le tuteur : socratique d'abord, la solution seulement si on la demande.
-    static func systemPrompt(mode: Mode) -> String {
+    static func systemPrompt(mode: Mode, features: SeriesReview.Features = .init()) -> String {
+        systemPromptBody(mode: mode) + (features.hints ? "\n\n" + SeriesReview.hintInstruction : "")
+    }
+
+    private static func systemPromptBody(mode: Mode) -> String {
         let common = """
         Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app StudyTrack, en mode étude. \
         Réponds en français, tutoie, sois bref et précis. Écris les mathématiques en LaTeX léger entre dollars \
@@ -455,11 +462,11 @@ enum ClaudeTutor {
     """
 
     /// « Post-mortem de la série » (quand la série est finie).
-    static func postMortemPrompt(useSkill: Bool) -> String {
+    static func postMortemPrompt(useSkill: Bool, features: SeriesReview.Features = .init()) -> String {
         (useSkill
             ? "Post-mortem de la série, comme le prévoit epfl-serie : compare ce que j'ai fait à la correction, exercice par exercice, et remplis le carnet d'erreurs. "
-            : "Post-mortem de la série : reprends exercice par exercice ce que j'ai fait et où je me suis trompé, avec le type de chaque erreur (calcul, méthode, compréhension, étourderie, lacune de cours). ")
-            + verdictInstruction
+            : "Post-mortem de la série : compare ce que j'ai fait au corrigé, exercice par exercice, et dis où je me suis trompé, avec le type de chaque erreur et la bonne démarche. ")
+            + SeriesReview.instruction(features: features)
     }
 
     /// « Rapport » : les erreurs et ce qu'il faut revoir.
@@ -752,7 +759,8 @@ enum RichMarkup {
             // [titre](https://…) : un lien, comme en Markdown.
             if c == "[", let close = closing("](", from: i + 1), close > i + 1, let end = closing(")", from: close + 2), end > close + 2 {
                 let url = String(chars[close + 2..<end])
-                if url.hasPrefix("http") || url.hasPrefix("/") || url.hasPrefix("mailto:"), !url.contains(" ") {
+                // Toute adresse à schéma (`https:`, `mailto:`, `studytrack-poly:`) ou chemin.
+                if url.hasPrefix("/") || url.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*:"#, options: .regularExpression) != nil, !url.contains(" ") {
                     flush(); result.append(.link(String(chars[i + 1..<close]), url: url)); i = end + 1; continue
                 }
             }

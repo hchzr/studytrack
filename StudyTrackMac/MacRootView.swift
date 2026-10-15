@@ -26,11 +26,13 @@ struct MacRootView: View {
 
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
+    static let selection = Color.paper(light: "#6B5F4E", dark: "#463E31")
+
     var body: some View {
         NavigationSplitView {
             List(selection: $page) {
                 Section {
-                    Label("Aujourd'hui", systemImage: "sun.max").tag(Page.today)
+                    SidebarLabel(title: "Aujourd'hui", icon: "sun.max").tag(Page.today)
                     Label {
                         HStack {
                             Text("Chrono")
@@ -40,15 +42,15 @@ struct MacRootView: View {
                             }
                         }
                     } icon: {
-                        Image(systemName: "timer")
+                        Image(systemName: "timer").foregroundStyle(Carnet.inkSecondary)
                     }
                     .tag(Page.focus)
-                    Label("Agenda", systemImage: "calendar").tag(Page.agenda)
-                    Label("Bilan", systemImage: "chart.bar.xaxis").tag(Page.stats)
+                    SidebarLabel(title: "Agenda", icon: "calendar").tag(Page.agenda)
+                    SidebarLabel(title: "Bilan", icon: "chart.bar.xaxis").tag(Page.stats)
                     // La conversation « EPFL » (brief, semaine, revue…), quand le
                     // projet Claude a des commandes pour le système.
                     if settings.claudeProject {
-                        Label("Claude", systemImage: "sparkle").tag(Page.claude)
+                        SidebarLabel(title: "Claude", icon: "sparkle").tag(Page.claude)
                     }
                 }
                 Section {
@@ -88,14 +90,17 @@ struct MacRootView: View {
         } detail: {
             Group {
                 switch page ?? .today {
+                // Les tableaux de bord se recalculent à chaque enregistrement (et à
+                // chaque synchronisation iCloud) : rien tant que la fenêtre est
+                // cachée — derrière le mode étude, réduite, sur un autre bureau.
                 case .today:
-                    MacTodayView(open: open, goFocus: { page = .focus })
+                    MacTodayView(open: open, goFocus: { page = .focus }).pausedWhenHidden()
                 case .focus:
                     MacFocusView()
                 case .agenda:
-                    MacAgendaView(open: open)
+                    MacAgendaView(open: open).pausedWhenHidden()
                 case .stats:
-                    MacStatsView()
+                    MacStatsView().pausedWhenHidden()
                 case .claude:
                     ClaudePane(course: nil, courses: courses, desk: StudyModeController.shared.desk, onlySystem: true)
                         .background(Carnet.ground)
@@ -109,6 +114,8 @@ struct MacRootView: View {
                 }
             }
             .paperPage()
+            // L'encre pour la page ; la barre latérale garde la teinte de sélection.
+            .tint(Carnet.ink)
             // Sans cours, seule la page change : la barre latérale (chrono,
             // agenda, bilan, réglages) reste utilisable.
             .overlay {
@@ -121,18 +128,9 @@ struct MacRootView: View {
                     .background(Carnet.ground)
                 }
             }
+            // Le chrono et le mode étude sont déjà dans la barre latérale : la
+            // barre d'outils ne garde que la recherche.
             .toolbar {
-                if page != .focus {
-                    ToolbarItem(placement: .primaryAction) {
-                        ToolbarTimer { page = .focus }
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { StudyModeController.shared.presentSetup() } label: {
-                        Label("Mode étude", systemImage: "moon.stars")
-                    }
-                    .help("Mode étude (⇧⌘E)")
-                }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingPalette = true } label: {
                         Label("Rechercher", systemImage: "magnifyingglass")
@@ -140,8 +138,14 @@ struct MacRootView: View {
                     .help("Chercher (⌘K)")
                 }
             }
+            // Pas de bande propre à la barre d'outils : chaque colonne monte
+            // jusqu'en haut avec son fond (une bande grise, puis noire, coupait
+            // la fenêtre en deux couleurs).
+            .toolbarBackground(.hidden, for: .windowToolbar)
         }
-        .tint(Carnet.ink)
+        // La sélection de la barre latérale prend cette teinte, avec un texte
+        // blanc : un brun sombre, et non la crème de l'encre (illisible).
+        .tint(Self.selection)
         .overlay {
             if showingPalette {
                 ZStack(alignment: .top) {
@@ -149,6 +153,7 @@ struct MacRootView: View {
                         .ignoresSafeArea()
                         .onTapGesture { showingPalette = false }
                     CommandPalette(navigate: navigate, dismiss: { showingPalette = false })
+                        .tint(Carnet.ink)
                         .padding(.top, 70)
                         .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
                 }
@@ -156,7 +161,7 @@ struct MacRootView: View {
         }
         .animation(.spring(duration: 0.22, bounce: 0.1), value: showingPalette)
         .sheet(isPresented: $quickNote) {
-            QuickNoteSheet(preferredCourseID: currentCourseID)
+            QuickNoteSheet(preferredCourseID: currentCourseID).tint(Carnet.ink)
         }
         .onReceive(NotificationCenter.default.publisher(for: .macQuickNote)) { _ in quickNote = true }
         // Un résultat Spotlight : le cours, et l'exercice ou la théorie visés.
@@ -166,7 +171,7 @@ struct MacRootView: View {
             open(destination.courseID, destination.targetID)
         }
         .sheet(isPresented: $addingCourse) {
-            CourseFormView(course: nil, defaultSectionCode: settings.shared.sectionCode)
+            CourseFormView(course: nil, defaultSectionCode: settings.shared.sectionCode).tint(Carnet.ink)
         }
         .onReceive(NotificationCenter.default.publisher(for: .macFocusSearch)) { _ in showingPalette = true }
         .onReceive(NotificationCenter.default.publisher(for: .macGoTo)) { note in
@@ -238,6 +243,21 @@ struct MacRootView: View {
     }
 }
 
+/// Une ligne de la barre latérale : l'icône dans l'encre du carnet — sans
+/// couleur explicite, macOS la peint du bleu du système.
+private struct SidebarLabel: View {
+    let title: LocalizedStringKey
+    let icon: String
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(Carnet.inkSecondary)
+        }
+    }
+}
+
 /// Au pied de la barre latérale : entrer en mode étude (ou y revenir).
 private struct StudyModeSidebarButton: View {
     @Environment(MacTimer.self) private var timer
@@ -256,46 +276,6 @@ private struct StudyModeSidebarButton: View {
         }
         .buttonStyle(InkButtonStyle())
         .help("Mode étude")
-    }
-}
-
-/// Dans la barre d'outils : le chrono qui tourne (un clic ouvre la page
-/// Chrono), ou « Chrono ».
-private struct ToolbarTimer: View {
-    @Environment(MacTimer.self) private var timer
-    @Query(sort: \Course.code) private var courses: [Course]
-    var open: () -> Void
-
-    var body: some View {
-        let course = courses.first { $0.id == timer.courseID }
-        let tint = MacTargets.tint(course)
-        if timer.phase == .idle {
-            Button { open() } label: {
-                Label("Chrono", systemImage: "timer")
-            }
-            .help("Chrono (⌘2)")
-        } else {
-            HStack(spacing: 6) {
-                Button { open() } label: {
-                    HStack(spacing: 6) {
-                        LiveTimerRing(tint: tint, lineWidth: 2.5)
-                            .frame(width: 16, height: 16)
-                        TimerClockText(font: .body.monospacedDigit())
-                        Text(course?.displayCode ?? "Libre")
-                            .font(.caption)
-                            .foregroundStyle(Carnet.inkSecondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .help("Chrono")
-                Button { timer.phase == .onBreak ? timer.skipBreak() : timer.toggle() } label: {
-                    Image(systemName: timer.phase == .running ? "pause.fill" : "play.fill")
-                }
-                .buttonStyle(.plain)
-                .help(timer.phase == .running ? "Pause (⌘T)" : "Reprendre (⌘T)")
-            }
-            .padding(.horizontal, 8)
-        }
     }
 }
 
@@ -393,5 +373,64 @@ struct SyncFooter: View {
             formatter.locale = Locale(identifier: "fr_CH")
             return "Synchronisé " + formatter.localizedString(for: date, relativeTo: now)
         }
+    }
+}
+
+// MARK: - Fenêtre cachée
+
+extension View {
+    /// Rien n'est dessiné ni recalculé tant que la fenêtre n'est pas à l'écran ;
+    /// la vue revient telle quelle quand elle y revient.
+    func pausedWhenHidden() -> some View { modifier(PausedWhenHidden()) }
+}
+
+private struct PausedWhenHidden: ViewModifier {
+    @State private var visible = true
+
+    func body(content: Content) -> some View {
+        Group {
+            if visible { content } else { Color.clear }
+        }
+        .background(WindowVisibilityReader(visible: $visible))
+    }
+}
+
+/// L'état d'occultation de la fenêtre qui l'accueille (AppKit le tient à jour).
+private struct WindowVisibilityReader: NSViewRepresentable {
+    @Binding var visible: Bool
+
+    func makeNSView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.changed = { visible = $0 }
+        return view
+    }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+        view.changed = { visible = $0 }
+    }
+
+    final class ReaderView: NSView {
+        var changed: ((Bool) -> Void)?
+        private var observer: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+            guard let window else { return }
+            observer = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                                                              object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.report() }
+            }
+            report()
+        }
+
+        private func report() {
+            guard let window else { return }
+            let visible = window.occlusionState.contains(.visible)
+            DispatchQueue.main.async { [changed] in changed?(visible) }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }

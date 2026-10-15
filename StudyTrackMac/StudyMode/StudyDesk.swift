@@ -11,8 +11,9 @@ import SwiftUI
 @MainActor
 @Observable
 final class StudyDesk {
+    /// Les outils du centre. Claude n'en est pas : il flotte, ou s'ancre à côté.
     enum Pane: String, CaseIterable, Identifiable {
-        case desk, exercise, course, claude, calc, web
+        case desk, exercise, course, notes, calc, web, music
         var id: String { rawValue }
 
         var title: String {
@@ -20,9 +21,10 @@ final class StudyDesk {
             case .desk: return "Bureau"
             case .exercise: return "Série"
             case .course: return "Cours"
-            case .claude: return "Claude"
+            case .notes: return "Notes"
             case .calc: return "Calcul"
             case .web: return "Web"
+            case .music: return "Musique"
             }
         }
 
@@ -31,33 +33,147 @@ final class StudyDesk {
             case .desk: return "moon.stars"
             case .exercise: return "doc.text"
             case .course: return "books.vertical"
-            case .claude: return "sparkle"
+            case .notes: return "pencil.and.scribble"
             case .calc: return "function"
             case .web: return "globe"
+            case .music: return "music.note"
             }
         }
 
         var shortcut: KeyEquivalent {
-            switch self {
-            case .desk: return "1"
-            case .exercise: return "2"
-            case .course: return "3"
-            case .claude: return "4"
-            case .calc: return "5"
-            case .web: return "6"
-            }
+            KeyEquivalent(Character("\((Self.allCases.firstIndex(of: self) ?? 0) + 1)"))
         }
     }
 
-    /// Le cours et la série côte à côte (⌘\\).
-    var sideBySide = false
+    // MARK: Le centre
 
+    /// L'outil au centre. Un outil ouvert une fois reste vivant, caché : on le
+    /// retrouve tel qu'on l'a laissé (le document lu, la page, le cahier).
     var pane: Pane = .desk {
-        didSet {
-            #if DEBUG
-            if CommandLine.arguments.contains("-tracePane") { FileHandle.standardError.write(Data("PANE \(oldValue) → \(pane)\n\(Thread.callStackSymbols.prefix(12).joined(separator: "\n"))\n".utf8)) }
-            #endif
+        didSet { opened.insert(pane) }
+    }
+    private(set) var opened: Set<Pane> = [.desk]
+
+    // MARK: À côté
+
+    /// Ce qu'on garde à côté du centre, en onglets : l'énoncé, un cahier, un
+    /// PDF du cours, le corrigé, la fiche, Claude ancré…
+    struct SideItem: Identifiable {
+        enum Kind: Equatable {
+            case series, claude, calc, courseNotes, sheet, poly
+            case notebook(path: String)
+            case reading(CoursePane.Reading)
         }
+        let id = UUID()
+        var kind: Kind
+        var title: String
+        var icon: String
+        /// Le cours du document (`nil` : de tous les cours, comme Claude).
+        var courseID: UUID?
+
+        func same(_ other: SideItem) -> Bool { kind == other.kind && courseID == other.courseID }
+    }
+
+    private(set) var sideItems: [SideItem] = []
+    var sideSelection: SideItem.ID?
+    var sideOpen = UserDefaults.standard.bool(forKey: "desk.sideOpen") {
+        didSet { UserDefaults.standard.set(sideOpen, forKey: "desk.sideOpen") }
+    }
+    var sideWidth: CGFloat = {
+        let saved = UserDefaults.standard.double(forKey: "desk.sideWidth")
+        return saved > 0 ? saved : 460
+    }() {
+        didSet { UserDefaults.standard.set(Double(sideWidth), forKey: "desk.sideWidth") }
+    }
+
+    static let sideMinimum: CGFloat = 320
+    /// Ce que le centre garde au moins quand on élargit le volet.
+    static let centerMinimum: CGFloat = 520
+
+    var selectedSide: SideItem? { sideItems.first { $0.id == sideSelection } }
+
+    /// Ouvrir à côté (déjà là : on y va).
+    func openSide(_ item: SideItem) {
+        if let existing = sideItems.first(where: { $0.same(item) }) {
+            sideSelection = existing.id
+        } else {
+            sideItems.append(item)
+            sideSelection = item.id
+        }
+        sideOpen = true
+    }
+
+    func closeSide(_ id: SideItem.ID) {
+        guard let index = sideItems.firstIndex(where: { $0.id == id }) else { return }
+        let item = sideItems.remove(at: index)
+        if item.kind == .claude { claudePlacement = .floating }
+        if sideSelection == id {
+            sideSelection = sideItems.indices.contains(index) ? sideItems[index].id : sideItems.last?.id
+        }
+    }
+
+    /// Passer à l'onglet d'à côté suivant (⌃⇥).
+    func cycleSide(by offset: Int, among items: [SideItem]) {
+        guard !items.isEmpty else { return }
+        let current = items.firstIndex { $0.id == sideSelection } ?? 0
+        sideSelection = items[(current + offset + items.count) % items.count].id
+        sideOpen = true
+    }
+
+    // MARK: Claude, flottant ou ancré
+
+    enum ClaudePlacement: String { case floating, docked }
+
+    var claudePlacement: ClaudePlacement = ClaudePlacement(rawValue: UserDefaults.standard.string(forKey: "desk.claude") ?? "") ?? .floating {
+        didSet { UserDefaults.standard.set(claudePlacement.rawValue, forKey: "desk.claude") }
+    }
+    /// La fenêtre flottante, montrée ou rangée.
+    var claudeShown = false {
+        didSet { if claudeShown { claudeOpened = true } }
+    }
+    /// Ouverte une fois : elle reste vivante (le brouillon, les pièces jointes).
+    private(set) var claudeOpened = false
+
+    /// Où flotte Claude, dans le bureau (`nil` : en bas à droite).
+    var claudeFrame: CGRect? = {
+        let parts = (UserDefaults.standard.string(forKey: "desk.claudeFrame") ?? "").split(separator: ",").compactMap { Double($0) }
+        return parts.count == 4 ? CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]) : nil
+    }() {
+        didSet {
+            let value = claudeFrame.map { "\($0.minX),\($0.minY),\($0.width),\($0.height)" }
+            UserDefaults.standard.set(value, forKey: "desk.claudeFrame")
+        }
+    }
+
+    private var claudeItem: SideItem { SideItem(kind: .claude, title: "Claude", icon: "sparkle", courseID: nil) }
+
+    var claudeVisible: Bool {
+        claudePlacement == .floating ? claudeShown : (sideOpen && selectedSide?.kind == .claude)
+    }
+
+    func showClaude() {
+        if claudePlacement == .docked { openSide(claudeItem) } else { claudeShown = true }
+    }
+
+    /// ⌘J, le rail : montrer ou ranger Claude, où qu'il soit.
+    func toggleClaude() {
+        if claudeVisible {
+            if claudePlacement == .floating { claudeShown = false } else { sideOpen = false }
+        } else {
+            showClaude()
+        }
+    }
+
+    func dockClaude() {
+        claudeShown = false
+        claudePlacement = .docked
+        openSide(claudeItem)
+    }
+
+    func floatClaude() {
+        if let item = sideItems.first(where: { $0.kind == .claude }) { closeSide(item.id) }
+        claudePlacement = .floating
+        claudeShown = true
     }
 
     // MARK: Claude
@@ -66,6 +182,25 @@ final class StudyDesk {
     /// Claude Code la garde d'un lancement de l'app à l'autre. Une conversation
     /// libre (`nil`) quand la session ne vise pas d'exercice.
     private(set) var chats: [UUID?: ClaudeChat] = [:]
+
+    /// La configuration de Claude (projet, CLAUDE.md, connecteurs), prête
+    /// d'avance : chaque fenêtre de Claude la reprend au lieu de la refaire.
+    private var claudeSetup: (key: String, config: ClaudeChat.Config)?
+
+    func claudeConfig(for key: String) -> ClaudeChat.Config? {
+        claudeSetup?.key == key ? claudeSetup?.config : nil
+    }
+
+    func storeClaudeConfig(_ config: ClaudeChat.Config, for key: String) {
+        claudeSetup = (key, config)
+    }
+
+    /// À l'entrée en mode étude, sans rien afficher.
+    func prepareClaude(settings: MacSettings, courses: [Course]) async {
+        let key = ClaudePane.configKey(settings: settings)
+        guard claudeConfig(for: key) == nil else { return }
+        storeClaudeConfig(await ClaudeProjectSetup.config(settings: settings, courses: courses), for: key)
+    }
 
     func chat(series seriesID: UUID?, config: ClaudeChat.Config) -> ClaudeChat {
         // Le réglage « projet EPFL » a changé : une autre conversation.
@@ -90,10 +225,46 @@ final class StudyDesk {
         ask(question, attachSeries: attachment == nil)
     }
 
+    /// Claude s'ouvre par-dessus ou à côté : l'énoncé reste là.
     func ask(_ question: String, attachSeries: Bool = true) {
         pendingQuestion = question
         pendingAttachSeries = attachSeries
-        pane = .claude
+        showClaude()
+    }
+
+    // MARK: Depuis l'iPhone
+
+    /// Une copie arrivée de l'iPhone, à joindre au prochain message (sans l'envoyer).
+    var pendingDraftAttachment: ClaudeTutor.Attachment?
+    /// Ce que l'iPhone vient d'envoyer, dit en haut de l'écran un instant.
+    var dropNotice: String?
+
+    /// Une photo, un « je bloque », une question venus de l'iPhone.
+    func receive(_ drop: DeskDrop) {
+        let attachment = drop.document.map {
+            ClaudeTutor.Attachment(kind: drop.isPDF ? .pdf : .image(mime: "image/jpeg"), data: $0,
+                                   name: drop.isPDF ? "Copie (iPhone).pdf" : "Photo (iPhone).jpg")
+        }
+        switch drop.intent {
+        case .copy:
+            pendingDraftAttachment = attachment
+            showClaude()
+            dropNotice = "Ta copie, depuis l'iPhone : jointe à la conversation"
+        case .stuck:
+            ask(drop.question ?? "Je bloque. Voici ma tentative (photo prise à l'iPhone) : dis-moi où ça décroche et donne-moi l'indice du niveau minimal suffisant, sans la solution.",
+                attachment: attachment)
+            dropNotice = "« Je bloque », depuis l'iPhone"
+        case .ask:
+            if let question = drop.question, !question.isEmpty {
+                if let attachment { ask(question, attachment: attachment) } else { ask(question) }
+                dropNotice = "Ta question, depuis l'iPhone"
+            }
+        }
+        let notice = dropNotice
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            if self.dropNotice == notice { self.dropNotice = nil }
+        }
     }
 
     // MARK: Calcul

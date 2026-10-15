@@ -41,6 +41,18 @@ struct StudyTrackMacApp: App {
         StudyModeController.shared.timer = timer
         StudyModeController.shared.settings = settings
         StudyModeController.shared.container = store.container
+        // La fiche de révision des cours sans polycopié : Claude, par l'abonnement.
+        RevisionSheetMaker.shared.writer = { try await RevisionSheetClaude.write(instructions: $0, prompt: $1) }
+        // Une fiche par cours : celles qui manquent se font seules, au calme
+        // après le lancement (le menu Fichier › Faire les fiches les refait).
+        if !HeadlessCapture.active {
+            let container = store.container
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(25))
+                let courses = (try? container.mainContext.fetch(FetchDescriptor<Course>())) ?? []
+                await RevisionSheetMaker.shared.makeMissing(courses, hub: .shared)
+            }
+        }
         // Les widgets du bureau, le chrono flottant, la barre des menus et le
         // mode étude suivent le chrono.
         let refreshWidgets = {
@@ -72,7 +84,14 @@ struct StudyTrackMacApp: App {
             TimerLink.shared.livePayload = { [container = store.container] snapshot in
                 MacLivePayload.make(snapshot, container: container, settings: settings.pomodoro)
             }
+            // Un seul lecteur pour le Mac et l'iPhone, par le même lien.
+            TimerLink.shared.onMusic = { StudyMusic.shared.receive($0) }
+            TimerLink.shared.onConnect = { StudyMusic.shared.linkConnected() }
+            // L'iPhone, compagnon du bureau : photo de la copie, « je bloque », question dictée.
+            TimerLink.shared.onDrop = { StudyModeController.shared.desk.receive($0) }
             TimerLink.shared.startFromBundle(containerID: MacStore.cloudContainerID)
+            // Music annonce ses changements : suivre ne coûte rien au repos.
+            if StudyMusic.sharingEnabled { StudyMusic.shared.attach() }
         }
         MacAppDelegate.settings = settings
         MacAppDelegate.store = store
@@ -111,7 +130,7 @@ struct StudyTrackMacApp: App {
             ImportFromDevicesCommands()
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: .constant(!HeadlessCapture.active)) {
             MenuBarTimerView()
                 .environment(timer)
                 .environment(settings)
@@ -190,6 +209,14 @@ struct MacCommands: Commands {
         CommandGroup(after: .newItem) {
             Button("Note rapide…") { NotificationCenter.default.post(name: .macQuickNote, object: nil) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+            Divider()
+            // Une fiche par cours : le polycopié, ou Claude qui lit tout le cours.
+            Button(RevisionSheetMaker.shared.batch.map { "Fiches de révision… \($0.done)/\($0.total)" } ?? "Faire les fiches de révision") {
+                guard let context = StudyModeController.shared.container?.mainContext,
+                      let courses = try? context.fetch(FetchDescriptor<Course>(sortBy: [SortDescriptor(\.code)])) else { return }
+                Task { await RevisionSheetMaker.shared.makeAll(courses, hub: .shared) }
+            }
+            .disabled(RevisionSheetMaker.shared.batch != nil)
         }
         CommandMenu("Aller") {
             Button("Aujourd'hui") { go("today") }.keyboardShortcut("1", modifiers: [.command])
@@ -257,7 +284,15 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        HeadlessCapture.begin()
+    }
+
+    @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Une capture : rien d'autre que la vue à capturer (pas de connexion,
+        // pas de raccourci global volé à la session en cours).
+        if HeadlessCapture.active { StudyModeController.shared.update(); return }
         // Les sites de l'EPFL, sans rien afficher : la session Microsoft garde
         // la connexion, mais celle de chaque site s'efface à la fermeture.
         if !CommandLine.arguments.contains("-epflConnect") {

@@ -57,17 +57,12 @@ enum StudyActivityController {
 
         // Une seule activité à la fois : on reprend celle qui existe, même si elle
         // a été créée par une exécution précédente de l'app.
-        if let existing = live.first {
+        if let existing = dedupe() {
             if LiveActivityBuilder.isNewer(existing.content.state, than: state.sessionStartedAt) {
                 activityTrace.notice("activité d'une session plus récente (poussée par un autre appareil) : laissée telle quelle")
                 return
             }
             Task { await existing.update(content(state)) }
-            // Une activité en double a pu s'installer avant cette correction :
-            // on nettoie les suivantes.
-            for extra in live.dropFirst() {
-                Task { await extra.end(nil, dismissalPolicy: .immediate) }
-            }
             lastError = nil
             return
         }
@@ -110,6 +105,29 @@ enum StudyActivityController {
         lastError = nil
     }
 
+    /// Ne garde qu'une activité : la plus récente, celle dont le relais
+    /// détient le jeton.
+    ///
+    /// Deux chemins en créent : l'app (`Activity.request`) et le relais
+    /// (démarrage par APNs quand le Mac lance le chrono). Ils se croisent —
+    /// la notification silencieuse réveille l'app pendant que l'activité
+    /// poussée s'installe — et l'îlot s'affichait en double.
+    @discardableResult
+    private static func dedupe() -> Activity<StudyActivityAttributes>? {
+        let all = live
+        guard let kept = all.last else { return nil }
+        guard all.count > 1 else { return kept }
+        activityTrace.notice("\(all.count, privacy: .public) activités vivantes : on n'en garde qu'une")
+        for extra in all.dropLast() {
+            Task { await extra.end(nil, dismissalPolicy: .immediate) }
+        }
+        // Le jeton d'une activité terminée a pu passer en dernier au relais.
+        if let token = kept.pushToken {
+            TimerLink.shared.registerAPNs(kind: .update, token: token.hexString)
+        }
+        return kept
+    }
+
     // MARK: Jetons APNs
 
     private static var observed: Set<String> = []
@@ -119,8 +137,12 @@ enum StudyActivityController {
     /// démarrage à distance (iOS 17.2+), et les donne au relais.
     static func observePushTokens() {
         for activity in live { observe(activity) }
+        dedupe()
         Task { @MainActor in
-            for await activity in Activity<StudyActivityAttributes>.activityUpdates { observe(activity) }
+            for await activity in Activity<StudyActivityAttributes>.activityUpdates {
+                observe(activity)
+                dedupe()
+            }
         }
         if #available(iOS 17.2, *) {
             Task { @MainActor in

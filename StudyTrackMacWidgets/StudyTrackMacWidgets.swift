@@ -30,11 +30,12 @@ struct SnapshotProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        // L'app recharge les widgets à chaque changement ; ce rappel ne sert
-        // qu'à passer minuit (« aujourd'hui » repart à zéro).
-        let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        // L'app recharge les widgets à chaque changement ; ici, les instants où
+        // ils changent d'eux-mêmes (fin d'un cours, échéance, minuit).
         let snapshot = WidgetBridge.read() ?? WidgetSnapshot(updatedAt: .distantPast)
-        completion(Timeline(entries: [SnapshotEntry(date: Date(), snapshot: snapshot)], policy: .after(next)))
+        let plan = snapshot.timelineDates(from: Date())
+        completion(Timeline(entries: plan.dates.map { SnapshotEntry(date: $0, snapshot: snapshot) },
+                            policy: .after(plan.reloadAfter)))
     }
 }
 

@@ -146,13 +146,13 @@ final class MacTimer: TimerEngineHost {
     var isStudying: Bool { engine.isStudying }
     var studyIsOver: Bool { engine.studyIsOver }
     /// Le mode étude bloque-t-il le reste (apps fermées, sites filtrés) ?
-    var studyLocks: Bool { StudyMode.locks(state) }
+    var studyLocks: Bool { StudyMode.blocks(state) }
     /// Sous verrou : rien ne termine la session, sauf la sortie d'urgence.
     var isLocked: Bool { engine.isLocked }
 
     /// Entre en mode étude pour `minutes` : démarre le chrono s'il dort, sinon
     /// verrouille la session en cours sur ce contexte.
-    func enterStudy(minutes: Int, courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "",
+    func enterStudy(minutes: Int?, courseID: UUID? = nil, taskType: TaskType? = nil, targetID: UUID? = nil, label: String = "",
                     locks: Bool = true) {
         recap = nil
         engine.enterStudy(minutes: minutes, courseID: courseID ?? self.courseID, taskType: taskType ?? self.taskType,
@@ -244,7 +244,7 @@ final class MacTimer: TimerEngineHost {
         cancelNotifications()
         guard let state, !engine.isolated else { return }
         let center = UNUserNotificationCenter.current()
-        if let until = state.studyUntil, until.timeIntervalSinceNow > 1 {
+        if let until = state.studyUntil, !StudyMode.isOpenEnded(state), until.timeIntervalSinceNow > 1 {
             let content = UNMutableNotificationContent()
             content.title = "Mode étude terminé"
             content.body = "Termine ta session, ou prolonge."

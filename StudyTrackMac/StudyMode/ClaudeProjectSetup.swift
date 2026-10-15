@@ -23,12 +23,16 @@ enum ClaudeProjectSetup {
     /// La configuration à utiliser : le projet si le réglage est allumé, sinon
     /// le mode isolé.
     static func config(settings: MacSettings, courses: [Course]) async -> ClaudeChat.Config {
-        guard settings.claudeProject else { return .isolated }
+        guard settings.claudeProject else {
+            var isolated = ClaudeChat.Config.isolated
+            isolated.review = settings.reviewFeatures(nil)
+            return isolated
+        }
         let servers = await accountServers()
         let folder = folder(settings)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = file(settings: settings) ?? ClaudeProject.File()
-        writeClaudeMD(in: folder, courses: courses)
+        writeClaudeMD(in: folder, courses: courses, settings: settings)
         linkSkills(file.skills, into: folder)
         let studyTrack = settings.claudeStudyTrackMCP.hasPrefix("https://") ? settings.claudeStudyTrackMCP : nil
         let mcpFile = supportFolder.appendingPathComponent("claude-mcp.json")
@@ -40,7 +44,7 @@ enum ClaudeProjectSetup {
                                  deniedServers: servers.local.filter { file.mcpServers[$0] == nil },
                                  permissions: ClaudeProject.permissionSummary(file: file, studyTrack: studyTrack != nil,
                                                                               connectors: servers.connectors),
-                                 file: file)
+                                 file: file, review: settings.reviewFeatures(file))
     }
 
     // MARK: Connecteurs du compte
@@ -54,9 +58,19 @@ enum ClaudeProjectSetup {
     /// secondes). Changer de compte Claude est ainsi suivi sans réglage.
     static func accountServers() async -> (connectors: [String], local: [String]) {
         let cached = UserDefaults.standard.string(forKey: serversKey).map(ClaudeProject.servers(mcpList:))
-        if let cached, refreshedThisLaunch { return cached }
+        if let cached {
+            // Déjà connus : tout de suite, et relus en arrière-plan pour la
+            // prochaine fois (la commande prend quelques secondes).
+            if !refreshedThisLaunch {
+                refreshedThisLaunch = true
+                Task.detached(priority: .utility) {
+                    if let output = await runClaude(["mcp", "list"]) { UserDefaults.standard.set(output, forKey: serversKey) }
+                }
+            }
+            return cached
+        }
         refreshedThisLaunch = true
-        guard let output = await runClaude(["mcp", "list"]) else { return cached ?? ([], []) }
+        guard let output = await runClaude(["mcp", "list"]) else { return ([], []) }
         UserDefaults.standard.set(output, forKey: serversKey)
         return ClaudeProject.servers(mcpList: output)
     }
@@ -93,7 +107,7 @@ enum ClaudeProjectSetup {
         return folder
     }
 
-    private static func writeClaudeMD(in folder: URL, courses: [Course]) {
+    private static func writeClaudeMD(in folder: URL, courses: [Course], settings: MacSettings) {
         let file = folder.appendingPathComponent("CLAUDE.md")
         let lines = courses.filter(\.isTracked).map { course -> ClaudeProject.CourseLine in
             let series = course.sortedSeries.first { $0.plannedWeek >= course.currentWeek && !$0.isComplete }
@@ -101,7 +115,16 @@ enum ClaudeProjectSetup {
             return .init(code: course.displayCode, name: course.name, week: course.currentWeek > 0 ? course.currentWeek : nil, progress: progress)
         }
         let date = Date().formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "fr_CH")))
-        let context = ClaudeProject.context(courses: lines, week: courses.first(where: \.isTracked)?.currentWeek, date: date)
+        let project = Self.file(settings: settings)
+        let ladder = project?.redo ?? RedoLadder.Config()
+        let redo = SeriesReview.redoQueue(courses.filter(\.isTracked)).prefix(15).map { exercise in
+            ClaudeProject.RedoLine(code: exercise.series?.course?.displayCode ?? "", exercise: exercise.displayNumber,
+                                   step: (exercise.redoPass).flatMap { ladder.steps.indices.contains($0) ? ladder.steps[$0].label : nil } ?? "",
+                                   due: exercise.redoDueAt?.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "fr_CH"))),
+                                   why: exercise.redoWhy)
+        }
+        let context = ClaudeProject.context(courses: lines, week: courses.first(where: \.isTracked)?.currentWeek, date: date,
+                                            redo: Array(redo), features: settings.reviewFeatures(project))
         let existing = try? String(contentsOf: file, encoding: .utf8)
         let updated = ClaudeProject.claudeMD(existing: existing, context: context)
         if updated != existing { try? updated.write(to: file, atomically: true, encoding: .utf8) }

@@ -56,7 +56,7 @@ enum ContentDraftWriter {
 
     @discardableResult
     private static func writeDetails(of item: ContentDraftItem, into series: ExerciseSeries,
-                                     course: Course, context: ModelContext) -> Int {
+                                     course: Course, context: ModelContext, complete: Bool = false) -> Int {
         let topic = item.title.trimmingCharacters(in: .whitespaces)
         if !topic.isEmpty, topic != "Série \(series.seriesNumber)",
            ContentDraftBuilder.seriesNumber(in: topic) == nil || topic.count > 12 {
@@ -81,6 +81,19 @@ enum ContentDraftWriter {
             if !spec.hint.isEmpty { exercise.hint = spec.hint }
             if !spec.solution.isEmpty { exercise.solution = spec.solution }
             if !spec.url.isEmpty { exercise.statementURLString = spec.url }
+        }
+        // Une source qui liste **toute** la série (le programme Botafogo) fait
+        // foi : un exercice qu'elle ne cite plus, jamais commencé, s'en va —
+        // les brouillons du site (6.11, 6.12 d'Analyse I) restaient sinon
+        // sous la forme d'onglets à l'énoncé introuvable.
+        if complete {
+            let cited = Set(item.exercises.map(\.number))
+            for exercise in series.exercises where !cited.contains(exercise.exerciseNumber)
+                && !exercise.isDone && exercise.subQuestionDoneCount == 0 && exercise.score == nil
+                && (exercise.correctionNote ?? "").isEmpty && exercise.hintLog.isEmpty && exercise.redoDueAt == nil {
+                series.exercises.removeAll { $0.id == exercise.id }
+                context.delete(exercise)
+            }
         }
         return max(0, series.exercises.count - before)
     }
@@ -255,7 +268,8 @@ enum ContentDraftWriter {
                         context.insert(series)
                         result.seriesAdded += 1
                     }
-                    result.exercisesAdded += writeDetails(of: item, into: series, course: course, context: context)
+                    result.exercisesAdded += writeDetails(of: item, into: series, course: course, context: context,
+                                                          complete: BotafogoLinks.isPage(item.url) && !item.exercises.isEmpty)
                 }
             }
         }

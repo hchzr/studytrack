@@ -101,6 +101,15 @@ final class Course {
         }
     }
 
+    /// La fiche de révision (JSON de `RevisionSheet`) : vide tant qu'elle
+    /// n'est pas faite. Dans la base, pour suivre sur tous les appareils.
+    var revisionSheetRaw: String = ""
+
+    var revisionSheet: RevisionSheet? {
+        get { RevisionSheet.decode(revisionSheetRaw) }
+        set { revisionSheetRaw = newValue?.encoded() ?? "" }
+    }
+
     @Relationship(deleteRule: .cascade, originalName: "theoryItems", inverse: \TheoryItem.course)
     var theoryItemsStore: [TheoryItem]? = []
     var theoryItems: [TheoryItem] {
@@ -134,6 +143,19 @@ final class Course {
     var pastExams: [PastExam] {
         get { pastExamsStore ?? [] }
         set { pastExamsStore = newValue }
+    }
+
+    /// Les ressources gardées sous la main (fiches-résumés, formulaires, liens).
+    @Relationship(deleteRule: .cascade, inverse: \SavedResource.course)
+    var savedResourcesStore: [SavedResource]? = []
+    var savedResources: [SavedResource] {
+        get { savedResourcesStore ?? [] }
+        set { savedResourcesStore = newValue }
+    }
+
+    /// Épinglées d'abord, puis les plus récentes.
+    var sortedResources: [SavedResource] {
+        savedResources.sorted { ($0.isPinned ? 0 : 1, $1.addedAt) < ($1.isPinned ? 0 : 1, $0.addedAt) }
     }
 
     @Relationship(deleteRule: .cascade, originalName: "linkedTasks", inverse: \LinkedTask.course)

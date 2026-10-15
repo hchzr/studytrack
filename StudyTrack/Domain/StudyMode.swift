@@ -36,6 +36,37 @@ enum StudyMode {
         return now < until
     }
 
+    // MARK: Sans fin
+
+    /// L'échéance d'un mode étude **sans fin** : on s'arrête quand on veut.
+    /// Une date lointaine plutôt qu'un champ de plus : un appareil plus ancien
+    /// y voit une très longue session, et le reste (actif, blocage) suit.
+    static let openEnd = Date.distantFuture
+
+    /// Le mode étude n'a pas d'heure de fin.
+    static func isOpenEnded(_ state: FocusTimerState?) -> Bool {
+        guard let until = state?.studyUntil else { return false }
+        return until.timeIntervalSinceReferenceDate > openEnd.timeIntervalSinceReferenceDate - 86_400 * 365
+    }
+
+    /// Le temps passé en mode étude (depuis `studySince`).
+    static func elapsed(_ state: FocusTimerState?, at now: Date = Date()) -> TimeInterval {
+        guard state?.studyUntil != nil else { return 0 }
+        return max(0, now.timeIntervalSince(state?.studySince ?? state?.sessionStartedAt ?? now))
+    }
+
+    /// Ce que montre l'horloge : ce qui reste, ou, sans fin, le temps passé.
+    static func clock(_ state: FocusTimerState?, at now: Date = Date()) -> TimeInterval {
+        isOpenEnded(state) ? elapsed(state, at: now).rounded(.down) : remaining(state, at: now).rounded(.up)
+    }
+
+    /// L'origine des secondes de l'horloge (les vues s'y calent pour battre
+    /// juste) : l'échéance, ou le début pour une session sans fin.
+    static func tickAnchor(_ state: FocusTimerState?) -> Date {
+        let anchor = isOpenEnded(state) ? (state?.studySince ?? Date()) : (state?.studyUntil ?? Date())
+        return anchor.addingTimeInterval(0.05)
+    }
+
     /// Ce qui reste, en secondes (zéro une fois passé).
     static func remaining(_ state: FocusTimerState?, at now: Date = Date()) -> TimeInterval {
         guard let until = state?.studyUntil else { return 0 }
@@ -49,6 +80,8 @@ enum StudyMode {
 
     static func progress(_ state: FocusTimerState?, since start: Date, at now: Date = Date()) -> Double {
         guard let until = state?.studyUntil else { return 0 }
+        // Sans fin : l'anneau fait le tour en une heure, puis recommence.
+        if isOpenEnded(state) { return now.timeIntervalSince(start).truncatingRemainder(dividingBy: 3600) / 3600 }
         let total = until.timeIntervalSince(start)
         guard total > 0 else { return 1 }
         return min(1, max(0, now.timeIntervalSince(start) / total))
@@ -65,22 +98,34 @@ enum StudyMode {
     /// maintenant — prolonger après coup ne doit pas rendre des minutes déjà
     /// écoulées.
     static func extended(_ until: Date?, by minutes: Int, now: Date = Date()) -> Date {
+        if let until, until >= openEnd.addingTimeInterval(-86_400 * 365) { return until }
         let base = max(until ?? now, now)
         return base.addingTimeInterval(TimeInterval(minutes * 60))
     }
 
-    /// Entre en mode étude pour `minutes` à partir de `now`.
-    static func enter(_ state: inout FocusTimerState, minutes: Int, locks: Bool = true, now: Date = Date()) {
+    /// Entre en mode étude pour `minutes` à partir de `now` ; `nil` : sans fin.
+    static func enter(_ state: inout FocusTimerState, minutes: Int?, locks: Bool = true, now: Date = Date()) {
         state.studySince = now
-        state.studyUntil = now.addingTimeInterval(TimeInterval(minutes * 60))
+        state.studyUntil = minutes.map { now.addingTimeInterval(TimeInterval($0 * 60)) } ?? openEnd
         state.studyLocks = locks ? nil : false
     }
 
     /// Le mode étude est actif **et** bloque le reste. Sans blocage, c'est un
     /// écran de travail : aucune app fermée, aucun site refusé, l'iPhone libre.
-    static func locks(_ state: FocusTimerState?, at now: Date = Date()) -> Bool {
+    static func blocks(_ state: FocusTimerState?, at now: Date = Date()) -> Bool {
         isActive(state, at: now) && state?.studyLocks != false
     }
+
+    /// Le **verrou** : le reste est bloqué et on ne sort pas avant l'heure
+    /// (sauf par la sortie d'urgence). Une session sans fin bloque, mais ne
+    /// verrouille pas — sans heure, on la termine quand on a fini.
+    static func locks(_ state: FocusTimerState?, at now: Date = Date()) -> Bool {
+        blocks(state, at: now) && !isOpenEnded(state)
+    }
+
+    /// Le bouclier de l'iPhone d'une session sans fin se lève de lui-même au
+    /// bout de ce temps, si l'app ne s'est pas réveillée pour le lever.
+    static let openEndedShieldSafety: TimeInterval = 12 * 3600
 
     // MARK: Verrou
 
@@ -195,6 +240,11 @@ enum StudyMode {
         "com.apple.screencaptureui", "com.apple.PIPAgent", "com.apple.UserNotificationCenter",
         "com.apple.universalcontrol", "com.apple.WindowManager", "com.apple.accessibility.AXVisualSupportAgent",
     ]
+
+    /// Les apps qui travaillent pour le mode étude **en arrière-plan** : Music
+    /// joue la musique choisie dans l'écran d'étude. Bloquées, elles ne sont
+    /// jamais fermées — seulement masquées si elles passent au premier plan.
+    static let backgroundApps: Set<String> = ["com.apple.Music"]
 
     /// Une app qui passe au premier plan doit-elle être arrêtée ?
     ///

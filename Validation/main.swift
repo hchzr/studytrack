@@ -979,6 +979,15 @@ do {
     check(seriesItem?.title == "Nombres ℝ" && seriesItem?.seriesNumber == 3, "la série de la semaine (\(seriesItem?.title ?? ""))")
     check(seriesItem?.exercises.count == 2 && seriesItem?.exercises.first?.questions.count == 2, "ses exercices et leurs questions")
     check(seriesItem?.exercises.first?.url == "https://botafogo.epfl.ch/analyse-1-GM/?cours=exercices/a", "le lien de chaque exercice")
+    // Un exercice du programme resté brouillon sur le site n'est pas importé.
+    let withoutDraft = BotafogoProgramBuilder.draft(title: "Analyse I / GM", program: program ?? [], root: root, handout: handout,
+                                                    lectures: [:], series: ["series/AN_serie_03": parsed],
+                                                    unpublished: ["exercices/b"])
+    let keptSeries = withoutDraft.sections.first?.items.first { $0.kind == .series }
+    check(keptSeries?.exercises.map(\.number) == ["3.1"], "l'exercice en brouillon sur le site est écarté — \(keptSeries?.exercises.map(\.number) ?? [])")
+    check(BotafogoDocument.isUnpublished(nodeJSON: Data(#"{"body":null,"meta":{"_draft":true}}"#.utf8))
+          && !BotafogoDocument.isUnpublished(nodeJSON: Data(#"{"body":{"type":"root","children":[]},"meta":{}}"#.utf8)),
+          "une page Botafogo en brouillon se reconnaît")
     // Les adresses que le site lit vraiment (vérifiées dans le navigateur de
     // l'app) : un onglet par paramètre, sans préfixe `/handout/`.
     let bfRoot = URL(string: "https://botafogo.epfl.ch/analyse-1-flipped/")!
@@ -990,6 +999,15 @@ do {
     check(BotafogoLinks.normalize(URL(string: "https://botafogo.epfl.ch/analyse-1-flipped?cours=series/AN_serie_03&polycopie=")!).absoluteString
           == "https://botafogo.epfl.ch/analyse-1-flipped/?cours=series/AN_serie_03",
           "…et la barre finale, sans laquelle la requête est perdue")
+    check(BotafogoLinks.isPage("https://botafogo.epfl.ch/analyse-1-flipped/?cours=series/AN_serie_06")
+          && !BotafogoLinks.isPage("https://botafogo.epfl.ch/analyse-1-flipped/files/serie06.pdf")
+          && !BotafogoLinks.isPage("https://moodle.epfl.ch/mod/resource/view.php?id=1")
+          && !BotafogoLinks.isPage(""),
+          "Botafogo : une série est une page lue en natif, pas un PDF à télécharger")
+    check(BotafogoLinks.coursPath("https://botafogo.epfl.ch/analyse-1-flipped/?cours=series/AN_serie_06") == "series/AN_serie_06"
+          && BotafogoLinks.coursPath("https://botafogo.epfl.ch/analyse-1-flipped/?cours=") == nil,
+          "Botafogo : la page d'une série se retrouve depuis son adresse")
+    check(MathMarkup.plain("z^2=-3+4\\mathsf{i}") == MathMarkup.plain("z^2=-3+4i"), "Math : \\mathsf{i} → i")
     check(BotafogoLinks.normalize(URL(string: "https://moodle.epfl.ch/course/view.php?id=1&x=")!).absoluteString == "https://moodle.epfl.ch/course/view.php?id=1&x=",
           "les autres sites ne sont pas touchés")
     check(SiteLinks.normalize(URL(string: "https://moodle.epfl.ch/mod/resource/view.php?id=42")!).absoluteString
@@ -3487,6 +3505,17 @@ do {
     check(reconciled.first?.exercises.map(\.number) == ["4.1", "4.2", "4.3"],
           "le « 1.5 » douteux est écarté, rien n'est dupliqué — \(reconciled.first?.exercises.map(\.number) ?? [])")
     check(reconciled.first?.exercises.first { $0.number == "4.2" }?.isBonus == true, "le bonus lu par les motifs est gardé")
+    // Une note de page lue sous chaque titre : le modèle décide.
+    let blanketHeuristic = [DetectedSeries(number: 6, title: "", exercises: (1...4).map {
+        DetectedExercise(number: "6.\($0)", title: "", isBonus: true) })]
+    let plainAI = [DetectedSeries(number: 6, title: "", exercises: (1...4).map {
+        DetectedExercise(number: "6.\($0)", title: "T\($0)", isBonus: $0 == 4) })]
+    check(SeriesAIParsing.merge(heuristic: blanketHeuristic, ai: plainAI).first?.exercises.map(\.isBonus) == [false, false, false, true],
+          "un « facultatif » lu sous tous les titres ne fait pas toute la série bonus")
+    let allBonusAI = [DetectedSeries(number: 6, title: "", exercises: (1...4).map {
+        DetectedExercise(number: "6.\($0)", title: "T\($0)", isBonus: true) })]
+    check(SeriesAIParsing.merge(heuristic: [], ai: allBonusAI).first?.exercises.contains(where: \.isBonus) == false,
+          "une série entière en bonus est une lecture ratée : remise au programme")
     check(SeriesAIParsing.merge(heuristic: heuristicOne, ai: aiFour).first?.number == 4,
           "sans indice du document, le numéro du modèle l'emporte sur le défaut « 1 »")
 
@@ -5644,6 +5673,192 @@ do {
           "TeX : moins en tête de case rapproché")
     check(TeXNormalizer.normalize("a - b") == "a - b", "TeX : soustraction intacte")
     check(TeXNormalizer.normalize("\\operatorname{rg}(A)") == "\\mathrm{rg}(A)", "TeX : \\operatorname → \\mathrm")
+    // Le polycopié de Botafogo, formule par formule (audit de 11 590 formules).
+    check(TeXNormalizer.normalize("\\overline{S}_{\\sigma^{(N)}}") == "\\overline{S}{}_{\\sigma^{(N)}}", "TeX : trait au-dessus indicé posé sur un groupe vide (plantage SwiftMath)")
+    check(TeXNormalizer.normalize("\\begin{aligned}x\\mapsto f(x)\\end{aligned}") == "\\begin{gather}x\\mapsto f(x)\\end{gather}", "TeX : aligned sans & → gather")
+    check(TeXNormalizer.normalize("\\begin{aligned}a&=b&c&=d\\end{aligned}") == "\\begin{matrix}a&=b&c&=d\\end{matrix}", "TeX : aligned à 4 colonnes → matrix")
+    check(TeXNormalizer.normalize("\\begin{cases}\\text{a}\\\\ \\text{b}\\end{cases}") == "\\begin{cases}\\text{a}&\\\\ \\text{b}&\\end{cases}", "TeX : cases à une colonne complété")
+    check(TeXNormalizer.normalize("\\begin{aligned}a&=b\\\\&=\\begin{cases}1&x\\\\2&y\\end{cases}\\end{aligned}")?.contains("\\begin{aligned}") == true, "TeX : aligned emboîtant cases intact")
+    check(TeXNormalizer.normalize("x\\not\\in A") == "x\\notin A" && TeXNormalizer.normalize("x\\not=y") == "x\\neq y", "TeX : \\not\\in, \\not=")
+    check(TeXNormalizer.normalize("a\\stackrel{BH}{=}b") == "a{=}^{BH}b", "TeX : \\stackrel → exposant")
+    check(TeXNormalizer.normalize("{\\small a+b}") == "{ a+b}", "TeX : \\small retiré")
+    check(TeXNormalizer.normalize("\\cancel{x}") == "\\textcolor{gray}{x}", "TeX : \\cancel grisé")
+    check(TeXNormalizer.normalize("\\sum_{\\substack{n\\geq1\\\\n}}") == "\\sum_{{\\begin{matrix}n\\geq1\\\\n\\end{matrix}}}", "TeX : \\substack → matrix")
+    check(TeXNormalizer.normalize("a\\:b") == "a\\;b", "TeX : \\: → \\;")
+    check(TeXNormalizer.normalize("\\underbrace{a+2}_{=0}") == "\\underline{a+2}_{=0}", "TeX : \\underbrace → trait dessous, l'annotation reste dessous")
+    let lifted = BotafogoPage.liftingDisplayMath("Par exemple, $\\begin{align*}1+\\tfrac12&=\\tfrac32\\end{align*}$ et voilà la suite.")
+    check(lifted == [.paragraph("Par exemple,"), .math("\\begin{align*}1+\\tfrac12&=\\tfrac32\\end{align*}"), .paragraph("et voilà la suite.")],
+          "Botafogo : un calcul aligné entre $…$ devient une formule isolée")
+    check(BotafogoPage.liftingDisplayMath("$f(x)=\\begin{cases}1&x\\end{cases}$ ok") == [.paragraph("$f(x)=\\begin{cases}1&x\\end{cases}$ ok")], "Botafogo : cases en ligne reste en ligne")
+    // Le rapport d'une série (bloc ```studytrack) et la file de reprise.
+    let reviewText = """
+    Voilà le post-mortem.
+    ```studytrack
+    1 : juste
+    2 : faux
+    erreur 2 | Méthode | oubli de vérifier la continuité en 0 | vérifier f continue en 0 avant le TAF | continuité
+    erreur Ex. 3 | étourderie | signe perdu ligne 4 | recopier la ligne
+    erreur 4 | n'importe quoi | ignoré
+    reprise 2 | méthode : n'a pas vu le critère | Pose M_n = sup |f_n(x)|
+    ```
+    Et un indice :
+    ```studytrack
+    indice 3 | 2 | Le critère de Weierstrass s'applique
+    ```
+    """
+    let review = SeriesReview.parse(reviewText)
+    check(review.verdicts.map(\.result) == [.correct, .wrong], "Rapport : verdicts lus")
+    check(review.mistakes.count == 2 && review.mistakes[0].kind == .method && review.mistakes[0].notion == "continuité"
+          && review.mistakes[1].exercise == "3" && review.mistakes[1].kind == .slip, "Rapport : erreurs lues (type inconnu ignoré, « Ex. 3 » → 3)")
+    check(review.admissions == [.init(exercise: "2", why: "méthode : n'a pas vu le critère", firstMove: "Pose M_n = sup |f_n(x)|")],
+          "Rapport : admission en reprise, avec la barre dans l'amorce")
+    check(review.hints == [.init(exercise: "3", level: 2, text: "Le critère de Weierstrass s'applique")], "Rapport : indice lu dans un second bloc")
+    check(SeriesReview.withoutBlocks(reviewText) == "Voilà le post-mortem.\n\nEt un indice :", "Rapport : la réponse sans ses blocs")
+    check(SeriesReview.MistakeKind.parse("Lacune de cours") == .gap && SeriesReview.MistakeKind.parse("Lecture de l'énoncé") == .reading,
+          "Rapport : types d'erreur en toutes lettres")
+    check(!SeriesReview.instruction(features: .init(mistakes: false, redo: false)).contains("erreur numéro"),
+          "Rapport : carnet éteint, la consigne ne le demande pas")
+    var ladderCalendar = Calendar(identifier: .gregorian)
+    ladderCalendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let ladderNow = ladderCalendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 18))!
+    let ladderExam = ladderCalendar.date(from: DateComponents(year: 2027, month: 1, day: 20))!
+    let ladder = RedoLadder.Config()
+    let first = RedoLadder.due(step: ladder.steps[0], from: ladderNow, examDate: nil, calendar: ladderCalendar)
+    check(first.map { ladderCalendar.dateComponents([.month, .day], from: $0) } == DateComponents(month: 10, day: 21), "Reprise : J+7")
+    let passed = RedoLadder.after(.passed, pass: 0, failures: 0, config: ladder, now: ladderNow, examDate: ladderExam, calendar: ladderCalendar)
+    check(passed.pass == 1 && passed.due.map { ladderCalendar.dateComponents([.month, .day], from: $0) } == DateComponents(month: 11, day: 4),
+          "Reprise : réussi avec aide → J+21")
+    let last = RedoLadder.after(.passed, pass: 1, failures: 0, config: ladder, now: ladderNow, examDate: ladderExam, calendar: ladderCalendar)
+    check(last.pass == 2 && last.due.map { ladderCalendar.dateComponents([.month, .day], from: $0) } == DateComponents(month: 1, day: 15),
+          "Reprise : palier pré-examen, 5 jours avant l'examen")
+    check(RedoLadder.after(.passed, pass: 2, failures: 0, config: ladder, now: ladderNow, examDate: nil).pass == nil, "Reprise : après le dernier palier, sorti")
+    check(RedoLadder.after(.cleared, pass: 0, failures: 1, config: ladder, now: ladderNow, examDate: nil).pass == nil, "Reprise : sans notes, sorti d'emblée")
+    let failedOnce = RedoLadder.after(.failed, pass: 1, failures: 0, config: ladder, now: ladderNow, examDate: nil)
+    let failedTwice = RedoLadder.after(.failed, pass: 1, failures: 1, config: ladder, now: ladderNow, examDate: nil)
+    check(failedOnce.pass == 1 && !failedOnce.gap && failedTwice.gap, "Reprise : raté → même palier ; deux fois → lacune de cours")
+    check(RedoLadder.admissible(review.admissions + [.init(exercise: "5", why: "", firstMove: ""), .init(exercise: "6", why: "", firstMove: "")],
+                                alreadyQueued: 1, config: ladder).count == 1, "Reprise : plafond par série (2), moins ce qui y est déjà")
+    let customLadder = try? JSONDecoder().decode(RedoLadder.Config.self, from: Data(#"{"steps":[3,10,"exam"],"maxPerSeries":1}"#.utf8))
+    check(customLadder?.steps == [.days(3), .days(10), .exam] && customLadder?.maxPerSeries == 1 && customLadder?.perSession == 3,
+          "Reprise : paliers du projet (studytrack.json)")
+    let hinted = Exercise(exerciseNumber: "3")
+    hinted.recordHint(level: 2, text: "Weierstrass | majoration\nvérifie", at: ladderNow)
+    hinted.recordHint(level: 1, text: "Chapitre 6", at: ladderNow)
+    check(hinted.hintLevel == 2 && hinted.hints.count == 2 && hinted.hints[0].text == "Weierstrass / majoration vérifie",
+          "Indices : journal et niveau le plus haut")
+
+    // Noter un rapport confirmé, dans une vraie base.
+    do {
+        let reviewContainer = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let reviewContext = ModelContext(reviewContainer)
+        let reviewCourse = Course(code: "MATH-101", name: "Analyse I")
+        reviewContext.insert(reviewCourse)
+        let reviewSeries = ExerciseSeries(course: reviewCourse, seriesNumber: 6, title: "Série 6")
+        reviewContext.insert(reviewSeries)
+        for n in 1...4 {
+            reviewContext.insert(Exercise(series: reviewSeries, exerciseNumber: "6.\(n)", sortOrder: n))
+        }
+        let report = SeriesReview.parse("""
+        ```studytrack
+        6.1 : juste
+        2 : faux
+        erreur 2 | méthode | oubli de la continuité en 0 | vérifier la continuité | continuité
+        reprise 2 | méthode | Pose g = f - id
+        reprise 3 | lacune de cours | Relis 5.2
+        reprise 4 | méthode | Trace le graphe
+        ```
+        """)
+        let features = SeriesReview.Features(mistakes: true, redo: true, hints: true, redoPerSeries: 2)
+        let applied = SeriesReview.apply(report, to: reviewSeries, features: features, ladder: RedoLadder.Config(), examDate: nil, context: reviewContext)
+        let again = SeriesReview.apply(report, to: reviewSeries, features: features, ladder: RedoLadder.Config(), examDate: nil, context: reviewContext)
+        let second = reviewSeries.sortedExercises[1]
+        check(applied.corrected == 2 && applied.mistakes == 1 && applied.queued == ["6.2", "6.3"] && applied.overCap == ["6.4"],
+              "Rapport noté : corrections, carnet, reprise plafonnée à 2 (\(applied.summary))")
+        check(again.mistakes == 0 && again.corrected == 0 && again.queued.isEmpty, "Rapport noté deux fois : rien en double")
+        check(second.isQueuedForRedo && second.redoRequired && second.redoFirstMove == "Pose g = f - id" && second.redoDueAt != nil
+              && second.mistakes.first?.kind == .method, "Rapport noté : l'exercice 6.2 en reprise, son amorce et son erreur")
+        let outcome = SeriesReview.recordRedo(.cleared, on: second, ladder: RedoLadder.Config(), examDate: nil)
+        check(outcome.pass == nil && !second.isQueuedForRedo && !second.redoRequired && second.redoClearedAt != nil,
+              "Reprise réussie sans notes : sort de la file")
+        check(SeriesReview.recordHints([.init(exercise: "6.4", level: 3, text: "Trace le graphe")], in: reviewSeries) == 1
+              && SeriesReview.recordHints([.init(exercise: "6.4", level: 3, text: "Trace le graphe")], in: reviewSeries) == 0,
+              "Indices : notés une fois")
+        try reviewContext.save()
+        check(true, "Rapport noté : la base enregistre (Mistake dans le schéma)")
+    } catch {
+        check(false, "Rapport noté : \(error)")
+    }
+
+    let exerciseText = BotafogoPage.text([.paragraph("Résoudre dans $\\mathbb{C}$ :"),
+                                          .list([[.paragraph("$z^2=1$")], [.paragraph("$z^3=i$")]], ordered: true, columns: 2),
+                                          .folded(.solution, title: "Solution", [.math("z=\\pm 1")])])
+    check(exerciseText.contains("1. $z^2=1$") && exerciseText.contains("2. $z^3=i$") && exerciseText.contains("<Solution officielle (ne pas révéler en mode tuteur)>")
+          && exerciseText.contains("$$z=\\pm 1$$"), "Botafogo : l'énoncé en texte pour Claude, solution marquée")
+    // Un seul lecteur pour le Mac et l'iPhone.
+    do {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let mac = MusicLink.State(device: "MAC", platform: .mac, title: "Wait for Me", artist: "Reeve Carney", duration: 240, elapsed: 30,
+                                  readAt: t0, isPlaying: true, updatedAt: t0)
+        let linkKey = TimerLink.key(for: "_identity")
+        let sealed = MusicLink.seal(.state(mac), key: linkKey)
+        check(sealed.flatMap { MusicLink.open($0, key: linkKey) } == .state(mac), "Musique : état chiffré, relu à l'identique")
+        check(sealed.flatMap { MusicLink.open($0, key: TimerLink.key(for: "autre")) } == nil, "Musique : illisible sans la clé du compte")
+        let command = MusicLink.Command(from: "PHONE", to: "MAC", action: .handoff(.init(title: "Wait for Me", artist: "Reeve Carney", duration: 240), elapsed: 95, playing: true), sentAt: t0)
+        check(MusicLink.seal(.command(command), key: linkKey).flatMap { MusicLink.open($0, key: linkKey) } == .command(command), "Musique : commande de passage chiffrée")
+        check(MusicLink.route(localPlaying: false, localHasTrack: true, remotes: [mac], pinned: nil, now: t0.addingTimeInterval(60)) == .remote("MAC"),
+              "Musique : le lecteur montre l'appareil qui joue")
+        check(MusicLink.route(localPlaying: true, localHasTrack: true, remotes: [mac], pinned: "MAC", now: t0) == .local, "Musique : ici joue, ici d'abord")
+        check(MusicLink.route(localPlaying: false, localHasTrack: true, remotes: [mac], pinned: nil, now: t0.addingTimeInterval(3 * 3600)) == .local,
+              "Musique : un état « en lecture » périmé (appareil éteint) ne compte plus")
+        var paused = mac
+        paused.isPlaying = false
+        check(MusicLink.route(localPlaying: false, localHasTrack: true, remotes: [paused], pinned: "MAC", now: t0) == .remote("MAC"),
+              "Musique : rien ne joue, le choix fait à la main")
+        var drifted = mac
+        drifted.readAt = t0.addingTimeInterval(10)
+        drifted.elapsed = 40
+        check(!MusicLink.changed(mac, drifted), "Musique : la position qui avance ne republie pas")
+        drifted.elapsed = 120
+        check(MusicLink.changed(mac, drifted), "Musique : un saut republie")
+        check(MusicLink.changed(mac, paused), "Musique : une pause republie")
+        check(abs(mac.elapsed(at: t0.addingTimeInterval(20)) - 50) < 0.01, "Musique : la position se déduit de l'instant de lecture")
+    }
+
+    do {
+        let dropKey = TimerLink.key(for: "_identity")
+        let drop = DeskDrop(from: "PHONE", intent: .stuck, document: Data(repeating: 7, count: 300_000), isPDF: true,
+                            question: "bloqué sur le 6.2", exerciseID: UUID(), sentAt: Date(timeIntervalSince1970: 1_800_000_000))
+        let sealedDrop = DeskDrop.seal(drop, key: dropKey)
+        check(sealedDrop.flatMap { DeskDrop.open($0, key: dropKey) } == drop && (sealedDrop?.count ?? .max) < 950_000,
+              "Bureau : une numérisation de 300 Ko passe le relais, chiffrée")
+        var heavy = drop
+        heavy.document = Data(count: DeskDrop.maxDocumentBytes + 1)
+        check(DeskDrop.seal(heavy, key: dropKey) == nil, "Bureau : trop lourde, refusée avant l'envoi")
+    }
+
+    check(BotafogoPage.quizzes([.exercise(label: "Exercice 1", [.quiz(title: "Quiz 0.9", prompt: [], choices: [.init(text: "VRAI", correct: true)], columns: 2)]),
+                                .quiz(title: "vide", prompt: [], choices: [], columns: 1),
+                                .theorem(kind: .remark, title: "", [.quiz(title: "Quiz 0.10", prompt: [], choices: [.init(text: "a", correct: false)], columns: 1)])])
+          .map(\.title) == ["Quiz 0.9", "Quiz 0.10"], "Botafogo : les quiz d'une page, même dans un exercice ou un encadré")
+    // Naviguer dans un cours Botafogo.
+    let navBlocks: [BotafogoBlock] = [.paragraph("intro"), .theorem(kind: .definition, title: "Définition 5.1", []),
+                                      .theorem(kind: .example, title: "Exemple 5.1", []), .heading("5.1.1 Divergence", level: 3),
+                                      .quiz(title: "Quiz 5.1.1", prompt: [], choices: [], columns: 1), .theorem(kind: .remark, title: "", [])]
+    let navOutline = BotafogoNavigation.outline(navBlocks)
+    check(navOutline.map(\.index) == [1, 2, 3, 4] && navOutline.map(\.kind) == [.statement, .example, .heading, .quiz],
+          "Botafogo : « Sur cette page » liste énoncés, exemples, titres et quiz (pas les encadrés sans titre)")
+    check(BotafogoNavigation.current(navOutline, tops: [1: -300, 2: 40, 3: 400, 4: 900]) == 2, "Botafogo : le repère courant est le dernier passé sous la ligne de lecture")
+    check(BotafogoNavigation.current(navOutline, tops: [1: 300, 2: 600]) == 1, "Botafogo : en haut de page, le premier repère")
+    let navChapters = [BotafogoSite.Chapter(title: "1", sections: [.init(title: "1.1", path: "/a"), .init(title: "1.2", path: "/b")]),
+                       BotafogoSite.Chapter(title: "2", sections: [.init(title: "2.1", path: "/c")])]
+    let navAround = BotafogoNavigation.neighbours(of: "/b", in: navChapters)
+    check(navAround.previous?.path == "/a" && navAround.next?.path == "/c", "Botafogo : précédent / suivant franchissent les chapitres")
+    check(BotafogoNavigation.neighbours(of: "/a", in: navChapters).previous == nil, "Botafogo : pas de précédent en tête du polycopié")
+    check(BotafogoNavigation.nextUnread(in: navChapters[0].sections, read: ["/a"])?.path == "/b", "Botafogo : reprendre à la première section non lue")
+    check(BotafogoNavigation.progress(navChapters[0], read: ["/a", "/c"]) == (1, 2), "Botafogo : progression d'un chapitre")
+    check(BotafogoNavigation.plainTitle("2 Nombres: $\\mathbb{C}$").contains("ℂ"), "Botafogo : titre de chapitre sans TeX (fil d'Ariane)")
+    check(RichMarkup.inlines("on [peut](studytrack-poly:///handout/matiere/m_x) calculer").contains(.link("peut", url: "studytrack-poly:///handout/matiere/m_x")),
+          "Texte : lien à schéma studytrack-poly reconnu")
     check(TeXNormalizer.normalize("\\mathscr{B}=(v_1,\\ldots,v_n)") == "\\mathcal{B}=(v_1,\\ldots,v_n)", "TeX : \\mathscr")
     check(TeXNormalizer.normalize("\\left[\\begin{array}{cc|c} 1 & 2 & 3 \\end{array}\\right]") == "\\left[\\begin{matrix} 1 & 2 & 3 \\end{matrix}\\right]",
           "TeX : array → matrix")
@@ -5747,6 +5962,10 @@ do {
     check(moodle?.title == "Devoir 1 & 2" && moodle?.dates == ["À rendre : lundi"] && moodle?.files.count == 1
           && moodle?.status.first == "Statut : Aucune remise" && moodle?.posts == [], "Moodle : un devoir lu")
     check(MoodleActivityContent.decode(#"{"module":"page","needsLogin":true}"#)?.needsLogin == true, "Moodle : page de connexion reconnue")
+    let hidden = MoodleActivityContent.decode(#"{"module":"url","title":"","unavailable":true,"notice":"Pas disponible avant le 17 octobre"}"#)
+    check(hidden?.unavailable == true && hidden?.notice == "Pas disponible avant le 17 octobre" && hidden?.target == nil,
+          "Moodle : activité pas encore ouverte, pas la page du cours")
+    check(MoodleActivityContent.decode(#"{"module":"url","title":"x","notice":""}"#)?.notice == nil, "Moodle : avis vide ignoré")
     check(BotafogoFigure.imagePath(script: "/media/jsxgraph/jsx_suite_divergente.js") == "/media/jsxgraph/jsx_suite_divergente.png",
           "Botafogo : l'image fixe d'une figure interactive")
 }
@@ -5990,6 +6209,28 @@ do {
     check(StudyMode.defaultSites(for: .epfl).contains("speakup.info"), "sondages en amphi permis")
 }
 
+// MARK: Mode étude sans fin
+do {
+    let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    var state = FocusTimerState()
+    StudyMode.enter(&state, minutes: nil, now: t0)
+    let later = t0.addingTimeInterval(5 * 3600)
+    check(StudyMode.isOpenEnded(state) && StudyMode.isActive(state, at: later), "sans fin : actif des heures après")
+    check(!StudyMode.isOver(state, at: later), "sans fin : jamais « terminé » de lui-même")
+    check(StudyMode.blocks(state, at: later) && !StudyMode.locks(state, at: later), "sans fin : bloque le reste, sans verrou")
+    check(StudyMode.canLeave(state, at: t0), "sans fin : on termine quand on a fini")
+    check(StudyMode.clock(state, at: t0.addingTimeInterval(90.6)) == 90, "sans fin : l'horloge compte le temps passé")
+    check(abs(StudyMode.progress(state, at: t0.addingTimeInterval(5400)) - 0.5) < 0.001, "sans fin : l'anneau fait le tour en une heure")
+    check(StudyMode.extended(state.studyUntil, by: 25, now: later) == state.studyUntil, "sans fin : prolonger ne donne pas d'heure")
+    check(StudyMode.tickAnchor(state) == t0.addingTimeInterval(0.05), "sans fin : l'horloge bat depuis le début")
+    let back = try? JSONDecoder().decode(FocusTimerState.self, from: JSONEncoder().encode(state))
+    check(StudyMode.isOpenEnded(back), "sans fin : passe d'un appareil à l'autre")
+    StudyMode.enter(&state, minutes: 30, now: t0)
+    check(!StudyMode.isOpenEnded(state) && StudyMode.locks(state, at: t0), "une durée : verrou comme avant")
+    check(StudyMode.clock(state, at: t0.addingTimeInterval(60.2)) == 29 * 60, "une durée : l'horloge compte ce qui reste")
+    check(StudyMode.backgroundApps.contains("com.apple.Music"), "Music joue en arrière-plan pendant le mode étude")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")
@@ -6053,6 +6294,217 @@ do {
     check(BotafogoNode(type: "session", name: "seance-HY-03").displayName == "Séance 3", "séance : nom lisible")
     check(BotafogoNode(type: "weekContent", name: "week-HY-02").displayName == "La semaine", "contenu de semaine : nom lisible")
     check(BotafogoNode(type: "series", name: "Suites réelles").displayName == "Suites réelles", "une série garde son nom")
+}
+
+// MARK: Widgets : les instants où ils changent d'eux-mêmes
+do {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
+    let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 10))!
+    let midnight = calendar.date(from: DateComponents(year: 2026, month: 10, day: 15))!
+    let at = { (h: Int, m: Int) in calendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: h, minute: m))! }
+    var snapshot = WidgetSnapshot(updatedAt: now)
+    snapshot.schedule = [
+        WidgetEvent(id: "a", start: at(8, 15), end: at(10, 0), title: "Analyse", subtitle: "", colorHex: "#000000"),
+        WidgetEvent(id: "b", start: at(10, 15), end: at(12, 0), title: "Physique", subtitle: "", colorHex: "#000000"),
+    ]
+    snapshot.deadlines = [
+        WidgetDeadline(id: "d", title: "Série 3", courseCode: "MATH-101", date: at(18, 0), colorHex: "#000000"),
+        WidgetDeadline(id: "e", title: "Plus tard", courseCode: "CS-101", date: midnight.addingTimeInterval(86_400), colorHex: "#000000"),
+    ]
+    let idle = snapshot.timelineDates(from: now, calendar: calendar)
+    check(idle.dates == [now, at(10, 15), at(12, 0), at(18, 0), midnight], "widget : une entrée par changement du jour, jusqu'à minuit")
+    check(idle.reloadAfter == midnight, "widget : rechargé à minuit, pas toutes les 30 min")
+    snapshot.timer = WidgetTimer(label: "", colorHex: "#000000", effectiveStart: now, isRunning: true, elapsedWhenPaused: 0)
+    let running = snapshot.timelineDates(from: now, calendar: calendar)
+    // 10 h 15 et 12 h 00 tombent déjà sur un cours : 6 entrées en plus, pas 8.
+    check(running.dates.contains(at(10, 30)) && running.dates.contains(at(11, 45)) && running.dates.count == idle.dates.count + 6,
+          "widget : chrono en marche, un quart d'heure sur deux heures")
+    check(running.dates == running.dates.sorted() && Set(running.dates).count == running.dates.count, "widget : entrées triées, sans doublon")
+}
+
+// MARK: Mode étude : garder le Mac éveillé
+do {
+    let plugged = KeepAwakePolicy.Power.plugged
+    let hold = { (mode: KeepAwakePolicy.Mode, running: Bool, onBreak: Bool, power: KeepAwakePolicy.Power) in
+        KeepAwakePolicy.hold(mode: mode, studying: true, running: running, onBreak: onBreak, power: power)
+    }
+    check(hold(.off, true, false, plugged) == nil, "veille : réglage « Non », rien n'est tenu")
+    check(KeepAwakePolicy.hold(mode: .display, studying: false, running: true, onBreak: false, power: plugged) == nil,
+          "veille : hors mode étude, rien n'est tenu")
+    check(hold(.display, false, false, plugged) == nil, "veille : chrono en pause, le Mac dort")
+    check(hold(.system, true, false, plugged) == .system, "veille : « Le Mac », l'écran s'éteint comme d'habitude")
+    check(hold(.display, true, false, plugged) == .display, "veille : « Le Mac et l'écran », sur secteur")
+    check(hold(.display, false, true, plugged) == .system, "veille : pause Pomodoro, l'écran peut s'éteindre")
+    check(hold(.display, true, false, .init(lowPowerMode: true)) == .system, "veille : économie d'énergie, l'écran n'est plus tenu")
+    check(hold(.display, true, false, .init(onBattery: true, batteryLevel: 0.15)) == .system, "veille : batterie sous 20 %, l'écran n'est plus tenu")
+    check(hold(.display, true, false, .init(onBattery: true, batteryLevel: 0.6)) == .display, "veille : batterie suffisante, l'écran reste allumé")
+    let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    check(KeepAwakePolicy.expiry(until: now.addingTimeInterval(3000), now: now) == now.addingTimeInterval(3000 + KeepAwakePolicy.endMargin),
+          "veille : l'assertion expire avec la session (plus une marge)")
+    check(KeepAwakePolicy.expiry(until: nil, now: now) == now.addingTimeInterval(KeepAwakePolicy.openEndedLease),
+          "veille : session sans fin, un bail de deux heures renouvelé")
+}
+
+// MARK: Botafogo : les quatre parties (polycopié, séances, exercices, infos)
+do {
+    // Extrait réel de `analyse-1-flipped/api/content/nav?collection=handout`.
+    let nav = ##"[{"title":"I Préface","path":"/handout/analyse-1","children":[{"title":"I Préface","path":"#i-préface","children":[{"title":"I.1 Un cours d'Analyse 1","path":"/handout/matiere/m_intro_objectifs"}]},{"title":"1 Nombres: $\\mathbb{R}$","path":"#_1-nombres-mathbbr","children":[{"title":"1.1 Introduction","path":"/handout/matiere/m_reels_intro"},{"title":"1.2 Règles de calcul","path":"/handout/matiere/m_reels_r_est_un_corps"}]},{"title":"Vide","path":"#vide","children":[]}]}]"##
+    let chapters = BotafogoSite.chapters(fromNavJSON: Data(nav.utf8))
+    check(chapters.map(\.title) == ["I Préface", "1 Nombres: $\\mathbb{R}$"], "Botafogo : chapitres du polycopié (vides écartés)")
+    check(chapters.last?.sections.map(\.path) == ["/handout/matiere/m_reels_intro", "/handout/matiere/m_reels_r_est_un_corps"], "Botafogo : sections d'un chapitre")
+    check(BotafogoSite.handoutCollection(html: #"latex:{collections:{handout:{url:"/handout/analyse-1",author:""}}}"#) == "/handout/analyse-1",
+          "Botafogo : collection du polycopié lue dans la page")
+    check(BotafogoSite.isHandout("/handout/matiere/m_reels_intro") && !BotafogoSite.isHandout("series/AN_serie_01"), "Botafogo : polycopié ou cours")
+
+    let week = { (name: String, date: String) in
+        BotafogoNode(type: "week", name: name, children: [
+            BotafogoNode(type: "session", name: "seance-HY-01", url: "seances/seance-HY-01", metadata: ["date": date]),
+            BotafogoNode(type: "series", name: "Fonctions", url: "series/AN_serie_01"),
+        ])
+    }
+    let weeks = [week("Nombres réels", "2026-09-07T12:00:00.000Z"), week("Suites réelles", "2026-09-14T12:00:00.000Z"), week("Séries", "2026-09-21T12:00:00.000Z")]
+    let mid = BotafogoProgram.date("2026-09-16T08:00:00.000Z")!
+    check(BotafogoSite.currentWeek(weeks, now: mid) == 1, "Botafogo : la semaine en cours d'après la séance")
+    check(BotafogoSite.currentWeek(weeks, now: BotafogoProgram.date("2026-09-19T20:00:00.000Z")!) == 2, "Botafogo : le week-end montre la semaine qui vient")
+    check(BotafogoSite.currentWeek(weeks, now: BotafogoProgram.date("2026-08-01T08:00:00.000Z")!) == nil, "Botafogo : avant la rentrée, pas de semaine")
+    check(BotafogoSite.seriesTitle(BotafogoNode(type: "series", name: "Fonctions", url: "series/AN_serie_01")) == "Série 1", "Botafogo : « Série 1 »")
+    check(BotafogoSite.isSessionPart(BotafogoNode(type: "weekContent")) && !BotafogoSite.isSessionPart(BotafogoNode(type: "series")),
+          "Botafogo : séance et exercices séparés")
+}
+
+// MARK: Botafogo : les documents lus comme le site les montre
+do {
+    func page(_ json: String) -> [BotafogoBlock] {
+        guard let node = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return [] }
+        return BotafogoPage.blocks(node)
+    }
+
+    // Un quiz VRAI/FAUX : l'énoncé (avec ses formules) et les deux choix — pas seulement son titre.
+    if case .quiz(let title, let prompt, let choices, _)? = page(BotafogoFixtures.quiz_vf).first {
+        check(title == "Quiz 0.9", "quiz : son titre")
+        check(choices.map(\.text) == ["VRAI", "FAUX"] && choices.map(\.correct) == [true, false], "quiz : VRAI juste, FAUX faux")
+        check(prompt.contains { if case .paragraph(let text) = $0 { return text.contains("$z\\neq 0$") }; return false }, "quiz : l'énoncé et ses formules")
+    } else { check(false, "quiz : lu comme un quiz") }
+
+    // Un QCM du polycopié : les choix lus dans leur emplacement `#text`, l'explication attachée.
+    if case .quiz(_, _, let choices, _)? = page(BotafogoFixtures.quiz_expl).first {
+        check(choices.count >= 3 && choices.filter(\.correct).count >= 1, "QCM : plusieurs choix, au moins un juste")
+        check(choices.contains { $0.text.contains("$a_{n}\\leqslant x_{n}\\leqslant b_{n}$") }, "QCM : le texte du choix, pas l'attribut aux espaces mangés")
+        check(choices.contains { $0.explanation?.isEmpty == false }, "QCM : l'explication suit son choix")
+    } else { check(false, "QCM : lu comme un quiz") }
+
+    // Un exercice de série : étiquette, énoncé, formule isolée, indication et solution repliées.
+    if case .exercise(let label, let content)? = page(BotafogoFixtures.ex).first {
+        check(label.hasPrefix("Ex-"), "exercice : son étiquette « Ex-… » à part")
+        check(content.contains { if case .math = $0 { return true }; return false }, "exercice : la formule isolée (displayMode vide = oui)")
+        check(content.contains { if case .folded(.hint, _, let inner) = $0 { return !inner.isEmpty }; return false }, "exercice : l'indication, avec son contenu")
+        check(content.contains { if case .folded(.solution, _, let inner) = $0 { return !inner.isEmpty }; return false }, "exercice : la solution, avec son contenu")
+    } else { check(false, "exercice : lu comme un exercice") }
+
+    // Un théorème encadré du polycopié.
+    let theorem = page(BotafogoFixtures.theo)
+    if case .theorem(let kind, let title, let content)? = theorem.first {
+        check(kind == .theorem && title.contains("Théorème"), "théorème : son genre et son titre (\(title))")
+        check(!content.isEmpty, "théorème : son énoncé")
+    } else { check(false, "théorème : lu comme un encadré (\(theorem.prefix(1)))") }
+
+    // Des sous-questions en colonnes, comme sur le site.
+    check(page(BotafogoFixtures.mc).contains { if case .list(let items, true, 3) = $0 { return items.count >= 3 }; return false },
+          "multicols : une liste numérotée en trois colonnes")
+
+    // Une séance : « **Exercice.** (3) … » et ce qui suit forment une carte.
+    let grouped = BotafogoPage.groupingExercises([.heading("Aujourd'hui", level: 4), .paragraph("**Exercice.** (3) Expliquer pourquoi."),
+                                                  .math("P(z)"), .folded(.solution, title: "Solution", [.paragraph("Car.")]),
+                                                  .paragraph("**Exercice.** (4)"), .heading("Extras", level: 4)])
+    check(grouped.count == 4, "séance : deux cartes d'exercice entre les titres")
+    if case .exercise(let label, let content) = grouped[1] {
+        check(label == "Exercice 3" && content.count == 3, "séance : l'exercice 3 garde son texte, sa formule, sa solution")
+    } else { check(false, "séance : une carte d'exercice") }
+
+    // Un renvoi au polycopié : un lien qui s'ouvre dans l'app.
+    if case .paragraph(let text)? = page(BotafogoFixtures.ref).first {
+        check(text == "[Suites de Cauchy](studytrack-poly:///handout/matiere/m_suites_cauchy)", "renvoi : lien vers la section du polycopié (\(text))")
+    } else { check(false, "renvoi : lu comme un lien") }
+    check(BotafogoPage.handoutPath(link: URL(string: "studytrack-poly:///handout/matiere/m_suites_cauchy")!) == "/handout/matiere/m_suites_cauchy",
+          "renvoi : l'adresse du lien redonne le chemin")
+}
+
+// MARK: Fiche de révision
+do {
+    print("\n— Fiche de révision —")
+    let blocks: [BotafogoBlock] = [
+        .paragraph("Introduction."),
+        .theorem(kind: .definition, title: "Définition 5.1", [.paragraph("Une suite $(a_n)$ est de **Cauchy** si…")]),
+        .theorem(kind: .theorem, title: "Théorème 5.4 (critère de d'Alembert)", [
+            .paragraph("Si $\\lim |a_{n+1}/a_n| < 1$, la série converge."),
+            .folded(.proof, title: "Preuve", [.paragraph("On compare à une série géométrique.")])
+        ]),
+        .theorem(kind: .example, title: "Exemple 5.2", [.paragraph("La série harmonique.")]),
+        .aside(title: "Informel", [.theorem(kind: .proposition, title: "Proposition 5.3", [.paragraph("Le terme général tend vers $0$.")])])
+    ]
+    let found = RevisionSheetBuilder.entries(fromHandout: blocks, section: "5.1 Séries", path: "/handout/matiere/m_series")
+    check(found.map(\.title) == ["Définition 5.1", "Théorème 5.4 (critère de d'Alembert)", "Proposition 5.3"],
+          "polycopié : définitions, théorèmes, propositions (même dans un encadré), sans les exemples — \(found.map(\.title))")
+    check(found.dropFirst().first.map { !$0.body.contains("géométrique") && $0.body.contains("converge") } == true,
+          "polycopié : l'énoncé sans sa preuve")
+    check(found.first?.link == "/handout/matiere/m_series" && found.first?.source == "5.1 Séries", "polycopié : la section où le relire")
+
+    let sheet = RevisionSheetBuilder.sheet(chapters: [.init(title: "5 Séries", sections: [.init(title: "5.1 Séries", path: "/handout/matiere/m_series")])],
+                                          pages: ["/handout/matiere/m_series": blocks])
+    check(sheet.chapters.count == 1 && sheet.entries.count == 3, "polycopié : un chapitre, trois énoncés")
+    check(RevisionSheet.decode(sheet.encoded()) == sheet, "la fiche se garde et se relit telle quelle")
+    check(sheet.filtered("alembert").flatMap(\.entries).count == 1, "l'index retrouve « d'Alembert » sans accent ni casse")
+    check(sheet.filtered("").count == 1, "sans recherche, toute la fiche")
+
+    let relevant = sheet.relevant(to: "Étudier la convergence de la série $\\sum n!/n^n$ avec le critère de d'Alembert.")
+    check(relevant.first?.title.contains("Alembert") == true, "à savoir : le critère cité par l'exercice vient d'abord — \(relevant.map(\.title))")
+    check(sheet.relevant(to: "Dessiner un triangle équilatéral.").isEmpty, "à savoir : rien plutôt qu'un hasard")
+    check(sheet.relevant(to: "Appliquer le théorème 5.4.").first?.title.hasPrefix("Théorème 5.4") == true, "à savoir : un numéro cité suffit")
+
+    let answer = """
+    Voici la fiche :
+    ```json
+    {"chapters":[{"title":"Applications linéaires","entries":[
+      {"kind":"définition","title":"Noyau","body":"$\\\\ker T$","source":"Cours 5"},
+      {"kind":"Méthode","title":"Famille libre","body":"Poser une combinaison nulle…"},
+      {"kind":"bizarre","title":"","body":"Toujours vérifier les hypothèses."},
+      {"kind":"theorem","title":"","body":""}]},
+      {"title":"Vide","entries":[]}]}
+    ```
+    """
+    let ai = RevisionSheetAI.sheet(fromAnswer: answer)
+    check(ai?.chapters.count == 1 && ai?.entries.map(\.kind) == [.definition, .method, .remark],
+          "réponse du modèle : genres reconnus, entrées vides et chapitres vides écartés — \(ai?.entries.map(\.kind.rawValue) ?? [])")
+    check(ai?.entries.last?.title == "Remarque", "réponse du modèle : un titre manquant prend le nom du genre")
+    check(RevisionSheetAI.sheet(fromAnswer: "Désolé, je ne peux pas.") == nil, "réponse du modèle sans JSON : pas de fiche")
+    let long = RevisionSheetAI.prompt(course: "X", documents: [("A", String(repeating: "a", count: 300_000)), ("B", String(repeating: "b", count: 300_000)), ("C", "court")],
+                                      budget: 100_000)
+    check(long.count < 110_000 && long.contains("=== C ===\ncourt"), "consigne : le matériel tient dans le budget, les petits documents restent entiers")
+}
+
+// MARK: Lire, c'est cocher ; chercher dans les vidéos
+do {
+    print("\n— Liens du cours et transcriptions —")
+    let a = StudyLinkKey.key("https://botafogo.epfl.ch/analyse-1-flipped/?cours=&polycopie=/handout/matiere/m_Suites_Cauchy")
+    let b = StudyLinkKey.key("https://botafogo.epfl.ch/analyse-1-flipped/?polycopie=matiere/m_suites_cauchy")
+    check(a == b && a == StudyLinkKey.key("/handout/matiere/m_suites_cauchy"), "polycopié : trois formes du même lien, une seule section — \(a)")
+    let unit = "block-v1:EPFL+Algebre123+2025+type@video+block@635aa0b7"
+    check(StudyLinkKey.key("https://courseware.epfl.ch/xblock/" + unit) == StudyLinkKey.key(unit), "Courseware : le bloc, avec ou sans adresse")
+    check(StudyLinkKey.key("https://moodle.epfl.ch/pluginfile.php/1/x.pdf#page=2") == StudyLinkKey.key("https://moodle.epfl.ch/pluginfile.php/1/x.pdf/"),
+          "document : sans fragment ni barre finale")
+
+    let srt = "1\n00:00:01,000 --> 00:00:04,000\nBonjour, aujourd'hui\n\n2\n00:01:02,500 --> 00:01:05,000\nla <i>convergence</i> absolue\n\n3\n00:01:06,000 --> 00:01:09,000\nd'une série.\n"
+    let cues = CoursewareTranscripts.cues(from: srt)
+    check(cues.count == 3 && cues[1].start == 62.5 && cues[1].text == "la convergence absolue", "SRT : instants et texte sans balises — \(cues.map(\.text))")
+    let json = #"{"start":[0,61500],"end":[3000,64000],"text":["Intro","Le d\u00e9terminant"]}"#
+    check(CoursewareTranscripts.cues(from: json).map(\.start) == [0, 61.5], "transcription edX en JSON : millisecondes en secondes")
+    let videos = [CoursewareTranscripts.Video(block: "v1", unit: "u1", title: "Séries", cues: cues)]
+    let hits = CoursewareTranscripts.search("Convergence Serie", in: videos)
+    check(hits.count == 1 && hits.first?.start == 62.5, "recherche : tous les mots, sans accents, même sur deux phrases — \(hits.map(\.start))")
+    check(CoursewareTranscripts.search("matrice", in: videos).isEmpty, "recherche : rien quand la vidéo ne le dit pas")
+    check(CoursewareTranscripts.transcriptURLs(["transcripts": ["en": "/e", "de": "/d", "fr": "/f"]]) == ["/f", "/e", "/d"],
+          "transcriptions : le français d'abord, puis l'anglais")
 }
 
 if CommandLine.arguments.contains("--bench") {

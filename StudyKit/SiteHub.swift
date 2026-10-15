@@ -13,6 +13,20 @@ import PDFKit
 final class SiteHub {
     static let shared = SiteHub()
 
+    // MARK: Botafogo
+
+    /// Un livre par site Botafogo, partagé par le cours, la série et le côte à
+    /// côte : le programme, le sommaire et chaque document ne se chargent qu'une fois.
+    @ObservationIgnored private var botafogoBooks: [String: BotafogoBook] = [:]
+
+    func botafogo(_ site: URL) -> BotafogoBook {
+        let key = BotafogoParser.courseRoot(of: site).absoluteString
+        if let book = botafogoBooks[key] { return book }
+        let book = BotafogoBook()
+        botafogoBooks[key] = book
+        return book
+    }
+
     // MARK: Documents
 
     /// Les PDF ouverts (séries, documents du cours), par adresse.
@@ -73,6 +87,21 @@ final class SiteHub {
                 documents[address] = Institution.current.owns(host: url.host) ? .needsLogin : .failed("Document introuvable.")
             }
         }
+    }
+
+    /// Le fichier d'un PDF, attendu (la fiche lit tout le cours d'un trait) :
+    /// le cache, sinon un téléchargement dans la session. `nil` : illisible.
+    func pdfFile(_ address: String) async -> URL? {
+        if let url = URL(string: address), url.isFileURL { return PDFDocument(url: url) != nil ? url : nil }
+        if case .ready(let file)? = documents[address] { return file }
+        let cached = Self.cacheURL(for: address)
+        if FileManager.default.fileExists(atPath: cached.path), PDFDocument(url: cached) != nil { return cached }
+        guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true,
+              let file = try? await AuthenticatedDownloader.download(url), PDFDocument(url: file) != nil else { return nil }
+        try? FileManager.default.removeItem(at: cached)
+        guard (try? FileManager.default.copyItem(at: file, to: cached)) != nil else { return file }
+        documents[address] = .ready(cached)
+        return cached
     }
 
     func retry(_ address: String) {

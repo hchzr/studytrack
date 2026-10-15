@@ -19,24 +19,42 @@ enum MacDebugLaunch {
                 if action == "study" {
                     let context = ModelContext(store.container)
                     let course = (try? context.fetch(FetchDescriptor<Course>()))?.first
-                    let exercise = course?.sortedSeries.first?.sortedExercises.dropFirst().first
+                    // `-seedBotafogoSeries` : un exercice de la série Botafogo (la dernière).
+                    let seriesChoice = CommandLine.arguments.contains("-seedBotafogoSeries") ? course?.sortedSeries.last : course?.sortedSeries.first
+                    let exercise = seriesChoice?.sortedExercises.dropFirst().first
                     // `-studyMoment lecture|revision` : le bureau sous cette forme. Jamais
                     // de verrou en essai.
                     let moment = CommandLine.arguments.firstIndex(of: "-studyMoment").flatMap {
                         $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil
                     }
                     let type: TaskType = moment == "lecture" ? .lecture : (moment == "revision" ? .theory : .exercise)
-                    timer.enterStudy(minutes: 25, courseID: course?.id, taskType: type,
-                                     targetID: type == .exercise ? exercise?.id : nil, label: "Test du mode étude", locks: false)
+                    // `-studyOpen` : une session sans fin.
+                    timer.enterStudy(minutes: CommandLine.arguments.contains("-studyOpen") ? nil : 25, courseID: course?.id, taskType: type,
+                                     targetID: type == .exercise && !CommandLine.arguments.contains("-noTarget") ? exercise?.id : nil, label: "Test du mode étude", locks: false)
                     if let index = CommandLine.arguments.firstIndex(of: "-studyPane"), index + 1 < CommandLine.arguments.count,
                        let pane = StudyDesk.Pane(rawValue: CommandLine.arguments[index + 1]) {
                         StudyModeController.shared.desk.pane = pane
                     }
-                    if CommandLine.arguments.contains("-sideBySide") { StudyModeController.shared.desk.sideBySide = true }
+                    // `-studyPane claude` : Claude, flottant ; `-sideBySide` : le volet d'à côté ouvert.
+                    if CommandLine.arguments.contains("claude") { StudyModeController.shared.desk.showClaude() }
+                    if CommandLine.arguments.contains("-sideBySide") { StudyModeController.shared.desk.sideOpen = true }
                 }
             }
         }
         // `-epflConnect` : la connexion silencieuse à chaque site, avec le résultat.
+        // `-musicRemoteDemo` : un iPhone qui joue (captures du lecteur partagé).
+        if CommandLine.arguments.contains("-musicRemoteDemo") {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                let now = Date()
+                StudyMusic.shared.receive(.state(MusicLink.State(
+                    device: "00000000-0000-0000-0000-0000000000AB", platform: .iphone, title: "Wait for Me", artist: "Reeve Carney",
+                    album: "Hadestown (Original Broadway Cast Recording)", duration: 242, elapsed: 64, readAt: now, isPlaying: true,
+                    artworkURL: "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/7a/a5/4c/7aa54c1a-0b0d-d3a2-7fd0-1f3b1a6a1d34/19UMGIM43231.rgb.jpg/600x600bb.jpg",
+                    upNext: [.init(title: "Livin' It Up on Top", artist: "Hadestown"), .init(title: "All I've Ever Known", artist: "Eva Noblezada")],
+                    updatedAt: now)))
+            }
+        }
         if CommandLine.arguments.contains("-epflConnect") {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))

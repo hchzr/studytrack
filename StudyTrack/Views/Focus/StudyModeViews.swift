@@ -36,6 +36,7 @@ struct StudyModeEntry: View {
                             enter(minutes)
                         }
                     }
+                    Button("Sans fin", systemImage: "infinity") { enter(nil) }
                     Button("Autre durée…", systemImage: "clock") { showingCustom = true }
                 }
                 Toggle("Bloquer le reste", isOn: $blocking)
@@ -60,7 +61,7 @@ struct StudyModeEntry: View {
         }
     }
 
-    private func enter(_ minutes: Int) {
+    private func enter(_ minutes: Int?) {
         app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: blocking)
         // L'autorisation et les apps permises se demandent dans l'écran du mode
         // étude, quel que soit le chemin par lequel on y entre.
@@ -89,6 +90,11 @@ struct StudyModeMenu: View {
                     app.router.showingStudyMode = true
                 }
             }
+            Button("Sans fin", systemImage: "infinity") {
+                app.focus.enterStudy(minutes: nil, courseID: courseID, taskType: .exercise,
+                                     targetID: targetID, locks: blocking)
+                app.router.showingStudyMode = true
+            }
         } label: {
             Label("Mode étude", systemImage: "moon.stars")
         }
@@ -110,14 +116,17 @@ struct StudyModeScreen: View {
     /// L'horaire du jour, relu chaque minute.
     @State private var classes: [ScheduledClass] = []
     @State private var lock = StudyLock.shared
+    @State private var music = StudyMusic.shared
     /// Premier verrou sans réglage : autoriser le Temps d'écran, ou choisir les
     /// apps permises — avant de se retrouver sans GoodNotes.
     @State private var showingLockSetup = false
+    /// Le bureau complet même quand la session est sur le Mac.
+    @AppStorage("study.fullDeskWithMac") private var fullDeskWithMac = false
     @State private var showingAllowedApps = false
 
     /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
     enum StudyTab: String, CaseIterable, Identifiable {
-        case desk, series, course, calc
+        case desk, series, course, calc, music
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -125,6 +134,7 @@ struct StudyModeScreen: View {
             case .series: return "Série"
             case .course: return "Cours"
             case .calc: return "Calcul"
+            case .music: return "Musique"
             }
         }
         var icon: String {
@@ -133,6 +143,7 @@ struct StudyModeScreen: View {
             case .series: return "doc.text"
             case .course: return "books.vertical"
             case .calc: return "function"
+            case .music: return "music.note"
             }
         }
     }
@@ -178,7 +189,11 @@ struct StudyModeScreen: View {
                                 holdToFinish.padding(.horizontal, 20).padding(.vertical, 8)
                             }
                         default:
-                            session
+                            if sessionOnMac, !fullDeskWithMac {
+                                CompanionDesk { fullDeskWithMac = true }
+                            } else {
+                                session
+                            }
                         }
                     case .series: StudySeriesPhone(course: course, courses: courses)
                     case .course:
@@ -188,9 +203,22 @@ struct StudyModeScreen: View {
                     case .calc:
                         CalcPane(desk: calc, compact: true,
                                  openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") })
+                    case .music:
+                        MusicPane(compact: true)
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 6) {
+                        // Ce qui joue, au-dessus des onglets (sauf dans l'onglet Musique).
+                        if tab != .music, music.nowPlaying.hasTrack {
+                            MusicMiniPlayer(wide: true) { tab = .music }
+                                .padding(.horizontal, 12)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        tabBar
+                    }
+                    .animation(.smooth(duration: 0.25), value: music.nowPlaying.hasTrack)
+                }
             }
         }
         .environment(\.colorScheme, .dark)
@@ -202,10 +230,12 @@ struct StudyModeScreen: View {
         .task {
             while !Task.isCancelled {
                 classes = DeskSchedule.today(context: context)
-                try? await Task.sleep(for: .seconds(60))
+                let wake = DeskSchedule.nextChange(in: classes)
+                try? await Task.sleep(for: .seconds(max(1, wake.timeIntervalSinceNow + 0.5)))
             }
         }
         .sheet(item: $browsing) { InAppBrowser(link: $0) }
+        .musicAttached()
         // Sous verrou, l'écran ne se referme pas d'un geste.
         .interactiveDismissDisabled(focus.isLocked)
         .onAppear { checkLockSetup() }
@@ -214,6 +244,18 @@ struct StudyModeScreen: View {
         #if canImport(FamilyControls)
         .familyActivityPicker(isPresented: $showingAllowedApps, selection: $lock.selection)
         #endif
+    }
+
+    /// La même session tourne sur le Mac (il l'a publiée par le lien) : l'iPhone
+    /// devient son compagnon plutôt qu'un second bureau.
+    private var sessionOnMac: Bool {
+        #if DEBUG
+        // `-companionPreview` : l'écran compagnon sans Mac (captures).
+        if PreviewLaunch.isSet("-companionPreview") { return true }
+        #endif
+        guard let remote = CloudRelay.remoteTimer(), let state = remote.state, let mine = focus.state,
+              abs(state.sessionStartedAt.timeIntervalSince(mine.sessionStartedAt)) < 2 else { return false }
+        return music.remotes[remote.device]?.platform == .mac
     }
 
     private func checkLockSetup() {
@@ -241,8 +283,8 @@ struct StudyModeScreen: View {
                     .accessibilityLabel("Verrouillé")
             }
             Spacer(minLength: 0)
-            TimelineView(.periodic(from: (focus.state?.studyUntil ?? .now).addingTimeInterval(0.05), by: 1)) { context in
-                Text(TimerText.clock(StudyMode.remaining(focus.state, at: context.date).rounded(.up)))
+            TimelineView(.periodic(from: StudyMode.tickAnchor(focus.state), by: 1)) { context in
+                Text(TimerText.clock(StudyMode.clock(focus.state, at: context.date)))
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(Carnet.ink)
             }
@@ -312,6 +354,11 @@ struct StudyModeScreen: View {
                         .tracking(1.1)
                         .foregroundStyle(Carnet.inkSecondary)
                     Spacer()
+                    if sessionOnMac, fullDeskWithMac {
+                        Button { fullDeskWithMac = false } label: { Label("Compagnon", systemImage: "laptopcomputer") }
+                            .font(.caption)
+                            .foregroundStyle(Carnet.inkSecondary)
+                    }
                     if course != nil { momentMenu }
                     if !focus.isLocked {
                         Button { app.router.showingStudyMode = false } label: {
@@ -326,8 +373,8 @@ struct StudyModeScreen: View {
                         .font(.subheadline)
                         .foregroundStyle(Carnet.inkSecondary)
                 }
-                TimelineView(.periodic(from: (focus.state?.studyUntil ?? .now).addingTimeInterval(0.05), by: 1)) { context in
-                    let remaining = StudyMode.remaining(focus.state, at: context.date)
+                TimelineView(.periodic(from: StudyMode.tickAnchor(focus.state), by: 1)) { context in
+                    let open = StudyMode.isOpenEnded(focus.state)
                     ZStack {
                         Circle().stroke(Carnet.rule, lineWidth: 5)
                         Circle()
@@ -335,14 +382,15 @@ struct StudyModeScreen: View {
                             .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                         VStack(spacing: 6) {
-                            Text("reste")
+                            Text(open ? "depuis" : "reste")
                                 .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.1)
                                 .foregroundStyle(tint)
-                            Text(TimerText.clock(remaining.rounded(.up)))
+                            Text(TimerText.clock(StudyMode.clock(focus.state, at: context.date)))
                                 .font(.system(size: 64, weight: .regular, design: .serif))
                                 .monospacedDigit()
                                 .foregroundStyle(Carnet.ink)
-                            Text("jusqu'à \(DateUtils.time.string(from: focus.state?.studyUntil ?? context.date))")
+                            Text(open ? "sans fin · depuis \(DateUtils.time.string(from: focus.state?.studySince ?? context.date))"
+                                 : "jusqu'à \(DateUtils.time.string(from: focus.state?.studyUntil ?? context.date))")
                                 .font(.footnote)
                                 .foregroundStyle(Carnet.inkSecondary)
                         }
@@ -371,10 +419,12 @@ struct StudyModeScreen: View {
                             .foregroundStyle(Carnet.ground)
                     }
                     .accessibilityLabel(focus.isRunning ? "Pause" : "Reprendre")
-                    Button { focus.extendStudy(minutes: 25) } label: {
-                        Label("25 min", systemImage: "plus")
+                    if !StudyMode.isOpenEnded(focus.state) {
+                        Button { focus.extendStudy(minutes: 25) } label: {
+                            Label("25 min", systemImage: "plus")
+                        }
+                        .buttonStyle(.carnetSecondary)
                     }
-                    .buttonStyle(.carnetSecondary)
                 }
 
                 sessionSteps

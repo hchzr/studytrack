@@ -2,6 +2,7 @@ import Foundation
 import CoreData
 import Observation
 import OSLog
+import Security
 import SwiftData
 
 /// La base du Mac : le même schéma et le même conteneur iCloud que l'iPhone.
@@ -58,6 +59,19 @@ final class MacStore {
             return
         }
         #endif
+        // Une copie sans signature (une compilation de contrôle, `CODE_SIGNING_ALLOWED=NO`)
+        // n'a pas le droit iCloud : CloudKit **arrête l'app** au lieu de lever une
+        // erreur. Elle ouvre alors une base à part, locale — jamais la vraie.
+        guard Self.hasICloudEntitlement else {
+            let url = MacSandboxMigration.storeURL.deletingLastPathComponent().appendingPathComponent("unsigned.store")
+            container = (try? ModelContainer(for: schema, configurations: [
+                ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)]))
+                ?? (try! ModelContainer(for: schema, configurations: [
+                    ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)]))
+            isCloudSynced = false
+            storeError = "Copie non signée : base d'essai séparée, sans iCloud. Lance l'app depuis Xcode."
+            return
+        }
         // Hors du bac à sable, la base a son dossier (voir `MacSandboxMigration`).
         let cloud = MacSandboxMigration.isSandboxed
             ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
@@ -182,6 +196,33 @@ final class MacStore {
                 }
             }
             if n == 1 { exercise.setDone(true); exercise.correct(.correct) }
+            // `-seedReview` : un exercice en reprise, une erreur notée, deux indices (captures).
+            if n == 2, CommandLine.arguments.contains("-seedReview") {
+                exercise.redoPass = 0
+                exercise.redoDueAt = Calendar.current.startOfDay(for: Date())
+                exercise.redoWhy = "méthode : le signe du dénominateur oublié"
+                exercise.redoFirstMove = "Écris $x_{n+1} - x_n$ comme une seule fraction"
+                exercise.redoRequired = true
+                let mistake = Mistake(exercise: exercise, kind: .method, summary: "conclu sur le signe sans vérifier que $cn + d > 0$",
+                                      correction: "vérifier le signe du dénominateur avant de conclure", notion: "suites monotones", source: "claude")
+                context.insert(mistake)
+                exercise.recordHint(level: 1, text: "C'est une question de monotonie : regarde la différence de deux termes")
+                exercise.recordHint(level: 2, text: "Étudie le signe de $x_{n+1} - x_n$ sur un dénominateur commun")
+            }
+        }
+        // `-seedBotafogoSeries` : la vraie Série 6 du site (ses pages d'exercices), en cours.
+        if CommandLine.arguments.contains("-seedBotafogoSeries") {
+            let site = "https://botafogo.epfl.ch/analyse-1-flipped/"
+            let botafogo = ExerciseSeries(course: course, seriesNumber: 6, title: "Série 6", plannedWeek: course.currentWeek,
+                                          dueDate: Date().addingTimeInterval(2 * 86400), urlString: site + "?cours=series/AN_serie_06")
+            context.insert(botafogo)
+            let slugs = ["complexes_racines_1", "complexes_equations_diverses", "complexes_equation_polynomiale_2", "complexes_factorisation_polynome",
+                         "complexes_factorisation_polynome_degre_3", "complexes_VF", "suites_monotone_sous_suite_diverge"]
+            for (n, slug) in slugs.enumerated() {
+                let exercise = Exercise(series: botafogo, exerciseNumber: "6.\(n + 1)", sortOrder: n + 1)
+                exercise.statementURLString = site + "?cours=exercices/" + slug
+                context.insert(exercise)
+            }
         }
         for (i, title) in ["Suites réelles : définitions", "Suites monotones et bornées", "Limites et opérations"].enumerated() {
             context.insert(TheoryItem(course: course, sectionNumber: 3, number: "3.\(i + 1)", title: title, kind: .video,
@@ -190,4 +231,11 @@ final class MacStore {
         try? context.save()
     }
     #endif
+
+    /// Le binaire a-t-il le droit iCloud (signé avec l'équipe et son profil) ?
+    static var hasICloudEntitlement: Bool {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-services" as CFString, nil) else { return false }
+        return (value as? [String])?.contains("CloudKit") == true
+    }
 }

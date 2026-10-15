@@ -295,6 +295,10 @@ struct TodayView: View {
                     app.router.showingStats = true
                 }
                 todaySchedule(state)
+                // Le téléphone loin du bureau : reprises dues, quiz de la semaine.
+                OnTheGoCard(courses: state.tracked) { exercise in
+                    if let course = exercise.series?.course { app.router.openCourse(course.id, section: .exercises, targetID: exercise.id) }
+                }
                 deadlines(state)
             } trailing: {
                 weekCourses(state)

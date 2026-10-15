@@ -119,6 +119,17 @@ private struct StudySettingsPane: View {
     @State private var siteError = false
     @State private var editingButtons = false
 
+    private var keepAwakeFooter: String {
+        switch settings.studyKeepAwake {
+        case .off:
+            return String(localized: "Le Mac se met en veille comme d'habitude.")
+        case .system:
+            return String(localized: "Seulement pendant que le chrono tourne : la musique continue, l'écran s'éteint comme d'habitude. En pause, le Mac dort.")
+        case .display:
+            return String(localized: "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le Mac.")
+        }
+    }
+
     var body: some View {
         @Bindable var settings = settings
         Form {
@@ -142,6 +153,17 @@ private struct StudySettingsPane: View {
             }
 
             Section {
+                Picker("Garder éveillé", selection: $settings.studyKeepAwake) {
+                    Text("Non").tag(KeepAwakePolicy.Mode.off)
+                    Text("Le Mac").tag(KeepAwakePolicy.Mode.system)
+                    Text("Le Mac et l'écran").tag(KeepAwakePolicy.Mode.display)
+                }
+                .onChange(of: settings.studyKeepAwake) { _, _ in StudyModeController.shared.update() }
+            } footer: {
+                Text(keepAwakeFooter)
+            }
+
+            Section {
                 LabeledContent("Claude Code") {
                     if let path = ClaudeChat.executable?.path {
                         Text(path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
@@ -150,7 +172,7 @@ private struct StudySettingsPane: View {
                         Text("introuvable").foregroundStyle(Carnet.wrong)
                     }
                 }
-                Toggle("Projet EPFL", isOn: $settings.claudeProject)
+                Toggle("Mon projet Claude (dossier, compétences, connecteurs)", isOn: $settings.claudeProject)
                 if settings.claudeProject {
                     LabeledContent("Dossier") {
                         HStack {
@@ -195,6 +217,23 @@ private struct StudySettingsPane: View {
                 Text("Claude")
             } footer: {
                 Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json." : "Passe par ton abonnement, sans outils.")
+            }
+
+            Section {
+                Toggle("Carnet d'erreurs", isOn: $settings.reviewMistakes)
+                Toggle("File de reprise", isOn: $settings.reviewRedo)
+                Toggle("Noter les indices de Claude", isOn: $settings.reviewHints)
+                if settings.reviewRedo {
+                    let ladder = ClaudeProjectSetup.file(settings: settings)?.redo ?? RedoLadder.Config()
+                    LabeledContent("Paliers") {
+                        Text(ladder.steps.map(\.label).joined(separator: " → ") + " · \(ladder.maxPerSeries) par série au plus")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Après une série")
+            } footer: {
+                Text("Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans studytrack.json (« redo »).")
             }
 
             Section {

@@ -8,10 +8,44 @@ struct CoursewareList: View {
     let tint: Color
     var selected: String?
     var open: (EdXOutline.Unit) -> Void
+    /// Les passages des vidéos qui disent ce qu'on cherche.
+    var search: ((String) -> AnyView)? = nil
+    /// Lire toutes les vidéos d'un chapitre à la suite.
+    var playChapter: ((EdXOutline.Chapter) -> Void)? = nil
 
     @State private var expanded: Set<String> = []
+    @State private var query = ""
+
+    private var searching: Bool { query.trimmingCharacters(in: .whitespaces).count >= 2 }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if search != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "text.magnifyingglass").foregroundStyle(Carnet.inkTertiary)
+                    TextField("Chercher dans ce que disent les vidéos", text: $query)
+                        .textFieldStyle(.plain)
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain).foregroundStyle(Carnet.inkTertiary)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(Carnet.sheetRaised.opacity(0.7), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+            }
+            if searching, let search {
+                search(query.trimmingCharacters(in: .whitespaces))
+            } else {
+                outlineList
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var outlineList: some View {
         VStack(spacing: 0) {
             if let resume = outline.resumeUnit {
                 Button { open(resume) } label: {
@@ -44,6 +78,12 @@ struct CoursewareList: View {
                             HStack {
                                 Text(chapter.title).font(Carnet.serif(.headline)).foregroundStyle(Carnet.ink).lineLimit(2)
                                 Spacer()
+                                if let playChapter, chapter.sequences.contains(where: { $0.units.contains { $0.blocks.contains { $0.kind == .video } } }) {
+                                    Button { playChapter(chapter) } label: { Image(systemName: "play.circle") }
+                                        .buttonStyle(.plain)
+                                        .foregroundStyle(tint)
+                                        .help("Les vidéos du chapitre, à la suite")
+                                }
                                 let units = chapter.sequences.flatMap(\.units)
                                 Text("\(units.filter(\.completed).count)/\(units.count)").font(.caption2.monospacedDigit()).foregroundStyle(Carnet.inkTertiary)
                             }
@@ -112,13 +152,18 @@ struct CoursewareList: View {
 struct CoursewareUnitPage: View {
     let outline: EdXOutline
     let unit: EdXOutline.Unit
+    /// Le cours Courseware (pour noter une vidéo vue là-bas aussi).
+    let key: String
     let tint: Color
     var desk: SiteHub
+    /// Une vidéo à lancer à un instant (un passage trouvé).
+    var start: (block: String, at: Double)? = nil
     var go: (EdXOutline.Unit) -> Void
     var open: (String, String) -> Void
     var openWeb: (URL, String) -> Void
 
     @State private var texts: [String: [SiteBlock]] = [:]
+    @Environment(\.markStudied) private var markStudied
 
     private var neighbours: (previous: EdXOutline.Unit?, next: EdXOutline.Unit?) {
         let units = outline.units
@@ -137,7 +182,9 @@ struct CoursewareUnitPage: View {
                     switch block.kind {
                     case .video:
                         if let url = block.videoURL ?? block.youTubeID.map({ "https://www.youtube.com/watch?v=\($0)" }) {
-                            NativeVideo(title: block.title.isEmpty ? "Vidéo" : block.title, address: url, desk: desk, openWeb: openWeb)
+                            NativeVideo(title: block.title.isEmpty ? "Vidéo" : block.title, address: url, desk: desk, openWeb: openWeb,
+                                        start: start?.block == block.id ? start?.at : nil, studiedKey: block.id,
+                                        autoplay: start?.block == block.id)
                         }
                     case .problem:
                         if let address = block.viewURL { EdXProblemCard(address: address, desk: desk, open: open, openWeb: openWeb) }
@@ -170,6 +217,11 @@ struct CoursewareUnitPage: View {
             .padding(32)
             .frame(maxWidth: 820, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+        // Vue ici : cochée dans le cours, et achevée sur Courseware.
+        .environment(\.markStudied) { block in
+            markStudied?(block)
+            Task { await desk.courseware.complete(block: block, course: key) }
         }
     }
 

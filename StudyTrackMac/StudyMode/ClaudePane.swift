@@ -15,6 +15,8 @@ struct ClaudePane: View {
     var desk: StudyDesk
     /// La fenêtre principale n'a que la conversation « EPFL » (le système).
     var onlySystem = false
+    /// Les gestes de la fenêtre qui l'accueille (ranger, ancrer, détacher), au bout de l'en-tête.
+    var accessory: AnyView? = nil
 
     /// La conversation de la série, ou celle du système entier (brief, plan,
     /// revue, synchronisation), quand le fichier du projet a des boutons pour lui.
@@ -33,6 +35,18 @@ struct ClaudePane: View {
     /// Le modèle d'une commande préparée (capture, fichier), pour l'envoi.
     @State private var pendingModel: String?
     @FocusState private var focused: Bool
+    @State private var showsContext = false
+    /// Une autre série que celle du chrono, choisie dans le menu.
+    @State private var seriesChoice: UUID?
+    /// L'énoncé d'un exercice Botafogo, lu sur le site (Claude ne recevait rien).
+    @State private var siteStatements: [UUID: String] = [:]
+    /// Les pages de copie jointes (par nom de pièce jointe) : leurs empreintes,
+    /// retenues pour cette conversation quand le message part.
+    @State private var copyPrints: [String: CopyPrints] = [:]
+    /// « Ta copie n'a pas changé » : dit un instant au-dessus de la saisie.
+    @State private var copyNotice: String?
+
+    private struct CopyPrints { let key: String; let prints: [String] }
 
     private var file: ClaudeProject.File? { config?.file }
     private var hasSystem: Bool { !(file?.commands(.system).isEmpty ?? true) }
@@ -44,6 +58,7 @@ struct ClaudePane: View {
     /// La série de la conversation : celle de l'exercice en cours, sinon la
     /// série de la semaine.
     private var series: ExerciseSeries? {
+        if let seriesChoice, let chosen = course?.sortedSeries.first(where: { $0.id == seriesChoice }) { return chosen }
         if let series = exercise?.series { return series }
         let all = course?.sortedSeries.filter { !$0.exercises.isEmpty } ?? []
         let week = course?.currentWeek ?? 0
@@ -77,11 +92,28 @@ struct ClaudePane: View {
         }
         .task(id: settingsKey) {
             // Le dossier du projet, son CLAUDE.md, ses compétences : une fois par
-            // réglage, pas à chaque rendu.
-            config = await ClaudeProjectSetup.config(settings: settings, courses: courses)
+            // réglage, gardés dans le bureau (préparés dès l'entrée en mode
+            // étude) — Claude s'ouvre sans attendre.
+            let key = settingsKey
+            if let cached = desk.claudeConfig(for: key) { config = cached; return }
+            let fresh = await ClaudeProjectSetup.config(settings: settings, courses: courses)
+            desk.storeClaudeConfig(fresh, for: key)
+            config = fresh
         }
         .onChange(of: config) { _, _ in
             takePending()
+            #if DEBUG
+            if CommandLine.arguments.contains("-claudeDemo"), let chat, let series {
+                let numbers = series.sortedExercises.map(\.exerciseNumber)
+                let a = numbers.first ?? "1", b = numbers.dropFirst().first ?? "2", c = numbers.dropFirst(2).first ?? "3"
+                chat.debugInject([
+                    (true, "Je bloque sur le \(b), je ne vois pas comment montrer que la suite est croissante."),
+                    (false, "Regarde le signe de $x_{n+1} - x_n$ : que vaut-il, écrit sur un dénominateur commun ?\n\n```studytrack\nindice \(b) | 2 | Étudier le signe de x_{n+1} - x_n sur un dénominateur commun\n```"),
+                    (true, "Clore la série"),
+                    (false, "Bilan : le \(a) est juste ; au \(b) tu as conclu sans vérifier que $cn + d > 0$.\n\n```studytrack\n\(a) : juste\n\(b) : faux\nerreur \(b) | méthode | conclu sur le signe sans vérifier que cn + d > 0 | vérifier le signe du dénominateur avant de conclure | suites monotones\nerreur \(c) | étourderie | signe perdu en développant | recopier la ligne avant de développer\nreprise \(b) | méthode : le signe du dénominateur oublié | Écris x_{n+1} - x_n comme une seule fraction\n```")
+                ])
+            }
+            #endif
             #if DEBUG
             // `-claudeAsk "…"` : une vraie question, pour vérifier la chaîne entière.
             if let index = CommandLine.arguments.firstIndex(of: "-claudeAsk"), index + 1 < CommandLine.arguments.count,
@@ -91,10 +123,34 @@ struct ClaudePane: View {
             #endif
         }
         .onChange(of: desk.pendingQuestion) { _, _ in takePending() }
+        .onChange(of: desk.pendingDraftAttachment?.name) { _, _ in takePending() }
+        .task(id: exercise?.id) { await loadSiteStatement() }
     }
 
-    private var settingsKey: String {
-        // Le fichier du projet relu quand il change (sa date).
+    /// Un exercice Botafogo n'a pas d'énoncé importé : on le lit sur le site,
+    /// tel que la page le montre, pour que Claude sache de quoi on parle.
+    private func loadSiteStatement() async {
+        guard let exercise, exercise.statement.isEmpty, siteStatements[exercise.id] == nil, let course,
+              let site = course.contentSources.compactMap(URL.init(string:)).first(where: { ContentSource.detect(host: $0.host) == .botafogo })
+        else { return }
+        let book = desk.sites.botafogo(site)
+        await book.load(site)
+        var blocks: [BotafogoBlock]?
+        if let path = BotafogoLinks.coursPath(exercise.statementURLString), let page = await book.page(path), !page.isEmpty {
+            blocks = page
+        } else if let seriesPath = exercise.series.flatMap({ BotafogoLinks.coursPath($0.urlString) }), let page = await book.page(seriesPath) {
+            let exercises = BotafogoPage.exercises(page)
+            let position = exercise.series?.sortedExercises.firstIndex { $0.id == exercise.id } ?? 0
+            if exercises.indices.contains(position) { blocks = exercises[position].blocks }
+        }
+        if let blocks, !blocks.isEmpty { siteStatements[exercise.id] = BotafogoPage.text(blocks) }
+    }
+
+    private var settingsKey: String { Self.configKey(settings: settings) }
+
+    /// Ce dont dépend la configuration : les réglages, et le fichier du projet
+    /// relu quand il change (sa date).
+    static func configKey(settings: MacSettings) -> String {
         let modified = (try? FileManager.default.attributesOfItem(atPath: ClaudeProjectSetup.fileURL(settings: settings).path))?[.modificationDate] as? Date
         return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeStudyTrackMCP)|\(modified?.timeIntervalSince1970 ?? 0)"
     }
@@ -105,103 +161,187 @@ struct ClaudePane: View {
 
     // MARK: En-tête
 
+    private var tint: Color { Carnet.tint(course?.colorHex ?? "") }
+
     private func header(_ chat: ClaudeChat) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkle").foregroundStyle(Carnet.ink)
-                if hasSystem, !onlySystem {
-                    Picker("Conversation", selection: $scopeChoice) {
-                        Text("Série").tag(Scope.series)
-                        Text("EPFL").tag(Scope.system)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(scope == .system ? "EPFL" : (series.map(name) ?? "Claude")).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
-                    if scope == .series, let course { Text(course.displayCode).font(.caption).foregroundStyle(Carnet.inkSecondary) }
-                }
-                if scope == .series, let series {
-                    Menu {
-                        ForEach(series.sortedExercises) { item in
-                            Button {
-                                if let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: item.id) }
-                            } label: {
-                                if item.id == timer.targetID { Label(item.displayNumber, systemImage: "checkmark") } else { Text(item.displayNumber) }
-                            }
+        HStack(spacing: 10) {
+            conversationMenu
+            if scope == .series, let series { exerciseMenu(series) }
+            Spacer(minLength: 8)
+            if let usage = chat.usage, usage >= 0.5 {
+                Text("abonnement \(Int(usage * 100)) %")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(usage > 0.8 ? Carnet.wrong : Carnet.inkTertiary)
+                    .help("Fenêtre de 5 h de ton abonnement Claude")
+            }
+            Button { showsContext.toggle() } label: {
+                Image(systemName: "brain.head.profile")
+                    .overlay(alignment: .topTrailing) {
+                        if contextRows(chat).contains(where: { $0.state == .warning }) {
+                            Circle().fill(Carnet.review).frame(width: 7, height: 7).offset(x: 4, y: -3)
                         }
-                    } label: {
-                        Text(exercise?.displayNumber ?? "Exercice")
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .help("Changer d'exercice")
-                }
-                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Carnet.inkSecondary)
+            .help("Ce que Claude sait")
+            .popover(isPresented: $showsContext, arrowEdge: .bottom) {
+                ClaudeContextPanel(rows: contextRows(chat), refreshCopy: scope == .series ? {
+                    Task { await NotesStore.shared.refresh(force: true) }
+                } : nil)
+            }
+            Menu {
+                Button("Nouvelle conversation", systemImage: "square.and.pencil") { chat.startOver() }
                 if scope == .series {
-                    Picker("Mode", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
+                    Picker("Façon de répondre", selection: Binding(get: { chat.mode }, set: { chat.mode = $0 })) {
                         ForEach(ClaudeTutor.Mode.allCases) { Text($0.label).tag($0) }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 200)
                 }
-                if let usage = chat.usage {
-                    Text("\(Int(usage * 100)) %")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(usage > 0.8 ? Carnet.wrong : Carnet.inkTertiary)
-                        .help("Abonnement utilisé (5 h)")
+                if chat.config.profile == .project {
+                    Divider()
+                    Button("Ouvrir le dossier du projet", systemImage: "folder") { NSWorkspace.shared.open(chat.config.folder) }
                 }
-                Menu {
-                    Button("Nouvelle conversation", systemImage: "square.and.pencil") { chat.startOver() }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .foregroundStyle(Carnet.inkSecondary)
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-            status(chat)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(Carnet.inkSecondary)
+            if let accessory { accessory }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(height: 52)
     }
 
-    /// Comment tourne Claude : isolé ou projet, ce qu'il peut faire, et ce que
-    /// coûte le contexte.
-    private func status(_ chat: ClaudeChat) -> some View {
-        HStack(spacing: 10) {
-            Label(chat.config.profile == .project ? "Projet EPFL" : "Isolé",
-                  systemImage: chat.config.profile == .project ? "folder" : "lock")
-            Text("·")
-            Text("permis : \(chat.config.permissions)")
-            if let models = file?.models, let model = scope == .series ? models.tutor : models.system {
-                Text("·")
-                Text(model)
-            }
-            if let info = chat.info {
-                if scope == .series, let skill = file?.seriesSkill {
-                    Text("·")
-                    Text(info.hasSkill(skill) ? skill : "sans \(skill)")
-                        .foregroundStyle(info.hasSkill(skill) ? Carnet.inkTertiary : Carnet.wrong)
-                }
-                ForEach(info.mcpServers, id: \.name) { server in
-                    Text("·")
-                    Text("\(ClaudeTutor.toolLabel("mcp__" + server.name)) \(server.status == "connected" ? "connecté" : "à connecter")")
-                        .foregroundStyle(server.status == "connected" ? Carnet.inkTertiary : Carnet.wrong)
-                        .help(server.status == "connected" ? "" : "Tape `claude` puis `/mcp` dans le Terminal, dans le dossier du projet")
+    /// La conversation : la série (une par série), ou la conversation
+    /// générale (brief, semaine, revue — les commandes du projet).
+    private var conversationMenu: some View {
+        Menu {
+            if !onlySystem, let course {
+                Section(course.displayCode) {
+                    ForEach(course.sortedSeries.filter { !$0.exercises.isEmpty }) { item in
+                        Button {
+                            seriesChoice = item.id
+                            scopeChoice = .series
+                        } label: {
+                            if scope == .series, item.id == series?.id { Label(name(item), systemImage: "checkmark") } else { Text(name(item)) }
+                        }
+                    }
                 }
             }
-            if let tokens = chat.contextTokens {
-                Text("·")
-                Text("contexte \(tokens >= 1000 ? "\(tokens / 1000) k" : "\(tokens)")")
+            if hasSystem {
+                Section("Hors série") {
+                    Button { scopeChoice = .system } label: {
+                        if scope == .system { Label("Général : brief, semaine, revue…", systemImage: "checkmark") }
+                        else { Text("Général : brief, semaine, revue…") }
+                    }
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(scope == .system ? "Général" : (series.map(name) ?? "Claude"))
+                    .font(Carnet.serif(17, weight: .medium))
+                    .foregroundStyle(Carnet.ink)
+                    .lineLimit(1)
+                Text(scope == .system ? "brief, semaine, revue" : (course?.displayCode ?? ""))
+                    .font(.caption)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .lineLimit(1)
             }
         }
-        .font(.caption2)
-        .foregroundStyle(Carnet.inkTertiary)
-        .lineLimit(1)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
+        .help("Changer de conversation (une par série)")
+    }
+
+    private func exerciseMenu(_ series: ExerciseSeries) -> some View {
+        Menu {
+            ForEach(series.sortedExercises) { item in
+                Button {
+                    if let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: item.id) }
+                } label: {
+                    if item.id == timer.targetID { Label(item.displayNumber, systemImage: "checkmark") } else { Text(item.displayNumber) }
+                }
+            }
+        } label: {
+            Text(exercise?.displayNumber ?? "Aucun exercice")
+                .font(.callout)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(tint.opacity(exercise == nil ? 0.06 : 0.16), in: Capsule())
+                .foregroundStyle(exercise == nil ? Carnet.inkSecondary : Carnet.ink)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("L'exercice dont Claude reçoit le contexte (c'est aussi celui du chrono)")
+    }
+
+    /// Ce que Claude a sous les yeux, ligne par ligne.
+    private func contextRows(_ chat: ClaudeChat) -> [ClaudeContextPanel.Row] {
+        var rows: [ClaudeContextPanel.Row] = []
+        if chat.config.profile == .project {
+            let skill = file?.seriesSkill
+            let loaded = skill.map { chat.info?.hasSkill($0) ?? ClaudeProjectSetup.linkedSkills(settings: settings).contains($0) } ?? false
+            rows.append(.init(icon: "folder", title: "Ton projet : " + chat.config.folder.lastPathComponent,
+                              detail: skill.map { loaded ? "compétence \($0) chargée" : "compétence \($0) introuvable" } ?? "CLAUDE.md, ta mémoire, tes compétences",
+                              state: skill == nil || loaded ? .ok : .warning))
+        } else {
+            rows.append(.init(icon: "lock", title: "Claude seul", detail: "sans outils ni projet — allume « Mon projet Claude » dans les réglages",
+                              state: .info))
+        }
+        guard scope == .series else {
+            for server in chat.info?.mcpServers ?? [] {
+                rows.append(.init(icon: "point.3.connected.trianglepath.dotted", title: ClaudeTutor.toolLabel("mcp__" + server.name),
+                                  detail: server.status == "connected" ? "connecté" : "à connecter (claude puis /mcp dans le Terminal)",
+                                  state: server.status == "connected" ? .ok : .warning))
+            }
+            return rows
+        }
+        if let series {
+            let address = seriesAddress
+            let pdf = address.map { if case .ready? = desk.document($0) { return true }; return false } ?? false
+            let site = exercise.flatMap { siteStatements[$0.id] } != nil
+            rows.append(.init(icon: "doc.text", title: name(series),
+                              detail: pdf ? (chat.opened ? "énoncé envoyé au début" : "l'énoncé (PDF) part avec le premier message")
+                                  : (site ? "énoncé lu sur le site du cours" : "Claude n'a que les numéros et les titres"),
+                              state: pdf || site ? .ok : .warning))
+        }
+        if let exercise {
+            let questions = exercise.leafSubQuestions.count
+            rows.append(.init(icon: "pencil", title: exercise.displayNumber,
+                              detail: questions > 0 ? "\(exercise.subQuestionDoneCount)/\(questions) questions cochées" : nil, state: .ok))
+            if settings.reviewHints {
+                let hints = exercise.hints
+                rows.append(.init(icon: "lightbulb", title: hints.isEmpty ? "Aucun indice encore" : "\(hints.count) indice\(hints.count > 1 ? "s" : "") sur cet exercice",
+                                  detail: hints.last.map { "dernier : niveau \($0.level) — \($0.text)" }, state: hints.isEmpty ? .missing : .info))
+            }
+        } else {
+            rows.append(.init(icon: "pencil", title: "Pas d'exercice en cours", detail: "choisis-en un : Claude saura où tu en es", state: .missing))
+        }
+        if let copy = currentCopy {
+            let age = Date().timeIntervalSince(copy.modified)
+            rows.append(.init(icon: "pencil.and.scribble", title: "Ta copie : " + copy.title,
+                              detail: "sauvegardée \(copy.modified.formatted(.relative(presentation: .named)))"
+                                + (age > 3 * 3600 ? " — GoodNotes n'envoie tes dernières pages qu'app ouverte : ouvre-la sur l'iPad, ou « Sauvegarder maintenant »" : ""),
+                              state: age > 3 * 3600 ? .warning : .ok,
+                              help: "\(copy.notebook) · seules les pages que Claude n'a pas encore vues partent (nouvelles ou modifiées)"))
+        } else {
+            rows.append(.init(icon: "pencil.and.scribble", title: "Copie introuvable dans tes notes",
+                              detail: "range ta série dans un cahier du cours (« Série \(series?.seriesNumber ?? 0) »), ou joins une photo", state: .missing))
+        }
+        for server in chat.info?.mcpServers ?? [] {
+            rows.append(.init(icon: "point.3.connected.trianglepath.dotted", title: ClaudeTutor.toolLabel("mcp__" + server.name),
+                              detail: server.status == "connected" ? "connecté" : "à connecter (claude puis /mcp dans le Terminal)",
+                              state: server.status == "connected" ? .ok : .warning))
+        }
+        if let tokens = chat.contextTokens {
+            rows.append(.init(icon: "gauge.with.dots.needle.33percent", title: "Contexte : \(tokens >= 1000 ? "\(tokens / 1000) k" : "\(tokens)") jetons",
+                              detail: file?.model(for: nil, scope: .series).map { "modèle \($0)" }, state: .info))
+        }
+        return rows
     }
 
     private func name(_ series: ExerciseSeries) -> String {
@@ -220,13 +360,22 @@ struct ClaudePane: View {
                                     tool: message.isStreaming ? chat.activeTool : nil)
                             .id(message.id)
                         if message.role == .claude, !message.isStreaming, let series {
-                            let verdicts = ClaudeTutor.verdicts(in: message.text)
-                            if !verdicts.isEmpty { VerdictCard(verdicts: verdicts, series: series) }
+                            let report = SeriesReview.parse(message.text)
+                            if report.needsConfirmation {
+                                ReviewCard(report: report, series: series, features: chat.config.review,
+                                           ladder: file?.redo ?? RedoLadder.Config())
+                            }
+                            if chat.config.review.hints {
+                                ForEach(Array(report.hints.enumerated()), id: \.offset) { _, hint in
+                                    HintChip(hint: hint, series: series)
+                                }
+                                .task(id: message.id) { SeriesReview.recordHints(report.hints, in: series) }
+                            }
                         }
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(22)
+                .padding(18)
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
@@ -240,64 +389,116 @@ struct ClaudePane: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(scope == .system ? "On fait quoi ?" : (series == nil ? "Une question ?" : "On attaque ?"))
-                .font(Carnet.serif(28)).foregroundStyle(Carnet.ink)
-            if scope == .series {
-                Text("Joins ta copie GoodNotes, ou une photo prise à l'iPhone (clic droit).")
-                    .foregroundStyle(Carnet.inkSecondary)
-            }
-            FlowLayout(spacing: 8) { actionButtons(disabled: false, includeGeneric: true) }
+            Text(scope == .system ? "On fait quoi ?" : (exercise.map { "On attaque l'\($0.displayNumber.lowercased()) ?" } ?? (series == nil ? "Une question ?" : "On attaque ?")))
+                .font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
+            Text(scope == .system
+                 ? "La conversation générale : ton brief, ta semaine, ta revue — les commandes de ton projet."
+                 : "Une seule conversation pour toute la série : Claude suit l'exercice du chrono, garde les indices donnés et, à la fin, propose de noter tes erreurs et ce qu'il faut refaire.")
+                .foregroundStyle(Carnet.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 560, alignment: .leading)
         }
-        .padding(.top, 20)
+        .padding(.top, 24)
     }
 
-    /// Les boutons : en série, les gestes du tuteur puis ceux du fichier du
-    /// projet (ou « Post-mortem » / « Rapport » sans fichier) ; dans la
-    /// conversation EPFL, les commandes du système (brief, semaine…).
-    @ViewBuilder
-    private func actionButtons(disabled: Bool, includeGeneric: Bool) -> some View {
-        if scope == .series {
-            if includeGeneric {
-                ForEach(ClaudeTutor.QuickAction.allCases) { action in
-                    Button {
-                        // Vérifier une copie, rédiger une solution : il faut de la
-                        // rigueur → le modèle « système » ; les indices restent légers.
-                        if action == .check || action == .solution {
-                            send(action.prompt, model: .some(file?.model(for: nil, scope: .system)))
-                        } else {
-                            send(action.prompt)
-                        }
-                    } label: { Label(action.label, systemImage: action.icon) }
-                        .buttonStyle(.paper)
-                        .disabled(disabled)
-                }
-            }
-            if let commands = file?.commands(.series), !commands.isEmpty {
-                ForEach(commands) { command in
-                    Button { run(command) } label: { Label(command.label, systemImage: command.icon) }
-                        .buttonStyle(.paper)
-                        .disabled(disabled)
-                }
-            } else if let series {
-                Button {
-                    send(ClaudeTutor.postMortemPrompt(useSkill: usesSkill), label: "Post-mortem",
-                         model: file?.model(for: nil, scope: .system))
-                } label: { Label("Post-mortem", systemImage: "checklist") }
-                    .buttonStyle(.paper)
-                    .disabled(disabled || series.doneCount == 0)
-                Button { send(ClaudeTutor.reportPrompt, label: "Rapport", model: file?.model(for: nil, scope: .system)) } label: {
-                    Label("Rapport", systemImage: "doc.text.magnifyingglass")
-                }
-                .buttonStyle(.paper)
-                .disabled(disabled)
-            }
+    // MARK: Suggestions et commandes
+
+    /// La série est finie et pas encore close (des exercices faits sans correction).
+    private var readyToClose: Bool {
+        guard let series, !series.requiredExercises.isEmpty else { return false }
+        return series.requiredExercises.allSatisfy { ExerciseStage($0).isDone } && series.exercises.contains { $0.isDone && !$0.isCorrected }
+    }
+
+    private func postMortem() {
+        if let command = file?.commands(.series).first(where: { $0.verdicts == true }) {
+            run(command)
         } else {
-            ForEach(file?.commands(.system) ?? []) { command in
-                Button { run(command) } label: { Label(command.label, systemImage: command.icon) }
-                    .buttonStyle(.paper)
-                    .disabled(disabled)
+            send(ClaudeTutor.postMortemPrompt(useSkill: usesSkill, features: settings.reviewFeatures(file)), label: "Clore la série",
+                 model: file?.model(for: nil, scope: .system))
+        }
+    }
+
+    /// Trois gestes au plus, selon le moment : clore une série finie, un
+    /// indice et une vérification sur l'exercice en cours, sinon la notion.
+    private var suggestions: [ClaudeSuggestion] {
+        guard scope == .series else {
+            return (file?.commands(.system) ?? []).prefix(3).map { command in
+                ClaudeSuggestion(id: command.id, label: command.label, icon: command.icon) { run(command) }
             }
         }
+        var list: [ClaudeSuggestion] = []
+        if readyToClose {
+            list.append(ClaudeSuggestion(id: "close", label: "Clore la série", icon: "checkmark.seal", primary: true,
+                                         help: "Comparer ta copie au corrigé : corrections, carnet d'erreurs, exercices à refaire",
+                                         action: postMortem))
+        }
+        if exercise != nil {
+            list.append(ClaudeSuggestion(id: "hint", label: "Un indice", icon: "lightbulb") { send(ClaudeTutor.QuickAction.hint.prompt) })
+            list.append(ClaudeSuggestion(id: "check", label: currentCopy == nil ? "Vérifie-moi" : "Vérifie ma copie", icon: "checkmark.circle",
+                                         help: currentCopy.map { "Envoie « \($0.title) » (sauvegardée \($0.modified.formatted(.relative(presentation: .named))))" }) {
+                let copy = currentCopy
+                Task {
+                    let attached = await copy.asyncMap { await attachCopy($0) } ?? nil
+                    send(ClaudeTutor.QuickAction.check.prompt + (attached == false ? "\n\n(Ma copie n'a pas changé depuis mon dernier envoi : relis les pages que tu as déjà.)" : ""),
+                         model: .some(file?.model(for: nil, scope: .system)))
+                }
+            })
+            if list.count < 3 {
+                list.append(ClaudeSuggestion(id: "next", label: "Étape suivante", icon: "arrow.right.circle") { send(ClaudeTutor.QuickAction.nextStep.prompt) })
+            }
+        } else {
+            list.append(ClaudeSuggestion(id: "explain", label: "La notion de la série", icon: "book") {
+                send("Quelles notions cette série fait-elle travailler ? Où les revoir dans le cours ?")
+            })
+        }
+        return Array(list.prefix(3))
+    }
+
+    /// Toutes les commandes, rangées : les gestes du tuteur, celles de la
+    /// série (le fichier du projet), puis la conversation générale.
+    private var commandsMenu: some View {
+        Menu {
+            if scope == .series {
+                Section("Sur l'exercice") {
+                    ForEach(ClaudeTutor.QuickAction.allCases) { action in
+                        Button(action.label, systemImage: action.icon) {
+                            if action == .check || action == .solution {
+                                send(action.prompt, model: .some(file?.model(for: nil, scope: .system)))
+                            } else {
+                                send(action.prompt)
+                            }
+                        }
+                    }
+                }
+                Section("Sur la série") {
+                    if let commands = file?.commands(.series), !commands.isEmpty {
+                        ForEach(commands) { command in Button(command.label, systemImage: command.icon) { run(command) } }
+                    } else {
+                        Button("Clore la série", systemImage: "checkmark.seal", action: postMortem).disabled(series?.doneCount == 0)
+                        Button("Rapport", systemImage: "doc.text.magnifyingglass") {
+                            send(ClaudeTutor.reportPrompt, label: "Rapport", model: file?.model(for: nil, scope: .system))
+                        }
+                    }
+                }
+            }
+            if let commands = file?.commands(.system), !commands.isEmpty {
+                Section("Général") {
+                    ForEach(commands) { command in
+                        Button(command.label, systemImage: command.icon) {
+                            scopeChoice = .system
+                            run(command)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "command")
+                .font(.callout)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .foregroundStyle(Carnet.inkSecondary)
+        .help("Toutes les commandes (les tiennes viennent de studytrack.json)")
     }
 
     /// Les valeurs d'une commande du fichier : le cours, la série, l'exercice.
@@ -309,7 +510,7 @@ struct ClaudePane: View {
 
     private func run(_ command: ClaudeProject.File.Command) {
         var prompt = ClaudeProject.expand(command.prompt, placeholders)
-        if command.verdicts == true { prompt += "\n\n" + ClaudeTutor.verdictInstruction }
+        if command.verdicts == true { prompt += "\n\n" + SeriesReview.instruction(features: settings.reviewFeatures(file)) }
         let model = file?.model(for: command, scope: command.scope)
         if command.capture == true || command.attach == true {
             // D'abord la copie ou le fichier ; l'envoi reste à l'étudiant·e.
@@ -337,10 +538,18 @@ struct ClaudePane: View {
 
     private func composer(_ chat: ClaudeChat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !chat.messages.isEmpty {
+            HStack(spacing: 8) {
+                // Sur une ligne, qui défile quand la fenêtre est étroite.
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) { actionButtons(disabled: chat.isAnswering, includeGeneric: true) }
+                    SuggestionRow(suggestions: suggestions, tint: tint, disabled: chat.isAnswering)
                 }
+                commandsMenu
+            }
+            if let copyNotice {
+                Label(copyNotice, systemImage: "pencil.and.scribble")
+                    .font(.caption)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .transition(.opacity)
             }
             if !attachments.isEmpty {
                 HStack(spacing: 8) {
@@ -354,6 +563,7 @@ struct ClaudePane: View {
                             }
                             Text(attachment.name).font(.caption).lineLimit(1)
                             Button {
+                                copyPrints[attachments[index].name] = nil
                                 attachments.remove(at: index)
                                 if index < previews.count { previews.remove(at: index) }
                             } label: { Image(systemName: "xmark").font(.caption2) }
@@ -367,7 +577,8 @@ struct ClaudePane: View {
             HStack(alignment: .bottom, spacing: 10) {
                 Menu {
                     if let copy = currentCopy {
-                        Button("Ma copie : \(copy.title)", systemImage: "pencil.and.scribble") { attach(copy) }
+                        Button("Ma copie : \(copy.title)", systemImage: "pencil.and.scribble") { Task { await attachCopy(copy) } }
+                        Button("Renvoyer toute ma copie", systemImage: "arrow.clockwise") { Task { await attachCopy(copy, everything: true) } }
                     }
                     Button("Joindre un fichier…", systemImage: "paperclip", action: pick)
                     Divider()
@@ -380,10 +591,18 @@ struct ClaudePane: View {
                 .fixedSize()
                 .foregroundStyle(Carnet.inkSecondary)
                 if let copy = currentCopy {
-                    Button { attach(copy) } label: { Image(systemName: "pencil.and.scribble").font(.title3) }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Carnet.inkSecondary)
-                        .help("Joindre ta copie (\(copy.title))")
+                    let stale = Date().timeIntervalSince(copy.modified) > 3 * 3600
+                    Button { Task { await attachCopy(copy) } } label: {
+                        VStack(spacing: 1) {
+                            Image(systemName: "pencil.and.scribble").font(.title3)
+                            Text(copy.modified.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
+                                .font(.system(size: 9))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(stale ? Carnet.review : Carnet.inkSecondary)
+                    .help("Joindre ta copie « \(copy.title) », sauvegardée \(copy.modified.formatted(.relative(presentation: .named)))"
+                          + (stale ? " — ouvre GoodNotes sur l'iPad pour envoyer tes dernières pages" : ""))
                 }
                 TextField(scope == .system ? "Ta demande" : (chat.mode == .tutor ? "Où tu bloques ?" : "Ta question"), text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -408,7 +627,7 @@ struct ClaudePane: View {
                 }
             }
         }
-        .padding(14)
+        .padding(12)
         .background(Carnet.ground)
         .onDrop(of: [.image, .pdf, .fileURL], isTargeted: nil) { providers in
             drop(providers)
@@ -427,14 +646,28 @@ struct ClaudePane: View {
     // MARK: Gestes
 
     private func takePending() {
+        if let draft = desk.pendingDraftAttachment {
+            desk.pendingDraftAttachment = nil
+            attachments.append(draft)
+            if case .image = draft.kind, let image = NSImage(data: draft.data) { previews.append(image) }
+            focused = true
+        }
         guard config != nil, let question = desk.pendingQuestion else { return }
         attachSeries = desk.pendingAttachSeries
         desk.pendingQuestion = nil
         if let attachment = desk.pendingAttachment {
-            // « Vérifier ma copie » : ta copie GoodNotes part avec la question.
+            // « Vérifier ma copie » : ta copie GoodNotes part avec la question —
+            // seulement ses pages que la conversation n'a pas encore vues.
             desk.pendingAttachment = nil
-            attachments.append(attachment)
-            send(question)
+            if let path = attachment.notebookPath, let copy = NotesStore.shared.documents.first(where: { $0.path == path }) {
+                Task {
+                    let attached = await attachCopy(copy)
+                    send(question + (attached == false ? "\n\n(Ma copie n'a pas changé depuis mon dernier envoi : relis les pages que tu as déjà.)" : ""))
+                }
+            } else {
+                attachments.append(attachment)
+                send(question)
+            }
         } else if question == ClaudeTutor.QuickAction.check.prompt {
             // Pas de copie trouvée dans tes notes : on te laisse la joindre.
             draft = question
@@ -470,6 +703,13 @@ struct ClaudePane: View {
             : ClaudeChat.Situation(series: nil, exerciseID: nil, exercise: ClaudeTutor.Context(), skill: nil)
         let chosen: String? = model ?? pendingModel ?? file?.model(for: nil, scope: scope == .series ? .series : .system)
         chat.send(text, label: label, attachments: files, images: previews, model: chosen, situation: situation)
+        // Les pages de copie parties : la conversation les a, on ne les renverra plus.
+        for file in files {
+            guard let entry = copyPrints[file.name] else { continue }
+            let known = UserDefaults.standard.stringArray(forKey: entry.key) ?? []
+            UserDefaults.standard.set(Array(Set(known + entry.prints)), forKey: entry.key)
+        }
+        copyPrints = [:]
         draft = ""
         attachments = []
         previews = []
@@ -492,7 +732,7 @@ struct ClaudePane: View {
         let questions = exercise?.leafSubQuestions.map { "\($0.path) \($0.text)\($0.isDone ? " (fait)" : "")" } ?? []
         return ClaudeTutor.Context(courseCode: course?.displayCode, courseName: course?.name,
                                    exercise: exercise.map { "\($0.series.map { "Série \($0.seriesNumber) · " } ?? "")\($0.displayNumber)" },
-                                   statement: exercise?.statement, questions: questions,
+                                   statement: exercise.map { $0.statement.isEmpty ? (siteStatements[$0.id] ?? "") : $0.statement }, questions: questions,
                                    doneQuestions: exercise?.subQuestionDoneCount ?? 0,
                                    correction: exercise?.correctness?.label, hint: exercise?.hint.isEmpty == false ? exercise?.hint : nil)
     }
@@ -503,10 +743,40 @@ struct ClaudePane: View {
         return NotesStore.shared.copy(for: series, course: course, among: courses)
     }
 
-    private func attach(_ copy: NotesLibrary.Document) {
-        guard let data = NotesStore.shared.attachmentData(copy) else { return }
-        attachments.append(.init(kind: .pdf, data: data, name: copy.title))
+    /// Joindre ta copie : seulement les pages que cette conversation n'a pas
+    /// encore reçues (nouvelles ou modifiées depuis le dernier envoi), au lieu
+    /// du cahier entier à chaque fois. `true` : jointe ; `false` : rien de neuf
+    /// (Claude a déjà tout) ; `nil` : illisible.
+    @discardableResult
+    private func attachCopy(_ copy: NotesLibrary.Document, everything: Bool = false) async -> Bool? {
+        guard let chat, let url = NotesStore.shared.url(copy) else { return nil }
+        let key = "claude.sentPages.\(chat.sessionID.uuidString).\(copy.path)"
+        let sent: Set<String> = everything ? [] : Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        guard let delta = await Task.detached(priority: .userInitiated, operation: {
+            NotesStore.copyDelta(url: url, alreadySent: sent)
+        }).value else { return nil }
+        if delta.isEmpty {
+            flashCopyNotice(String(localized: "Ta copie n'a pas changé depuis ton dernier envoi : Claude l'a déjà"))
+            return false
+        }
+        // Une seule version de la copie dans le message.
+        attachments.removeAll { $0.notebookPath == copy.path }
+        let name = delta.title(copy.title, firstTime: sent.isEmpty)
+        attachments.append(.init(kind: .pdf, data: delta.data, name: name, notebookPath: copy.path))
+        copyPrints[name] = CopyPrints(key: key, prints: delta.fingerprints)
+        if !sent.isEmpty {
+            flashCopyNotice(String(localized: "Seulement les pages \(NotesStore.CopyDelta.ranges(delta.pages)) : Claude a déjà les autres"))
+        }
         focused = true
+        return true
+    }
+
+    private func flashCopyNotice(_ text: String) {
+        copyNotice = text
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            if copyNotice == text { copyNotice = nil }
+        }
     }
 
     /// La capture interactive du système (un viseur, comme ⇧⌘4).
@@ -620,7 +890,7 @@ private struct MessageView: View {
                             Text(tool.map { "\($0)…" } ?? (thinking ? "Claude réfléchit…" : "…")).foregroundStyle(Carnet.inkSecondary)
                         }
                     } else {
-                        RichTextView(text: ClaudeTutor.withoutVerdicts(message.text), size: 14.5)
+                        RichTextView(text: SeriesReview.withoutBlocks(message.text), size: 14.5)
                         if let tool, message.isStreaming {
                             Label("\(tool)…", systemImage: "wrench.and.screwdriver").font(.caption).foregroundStyle(Carnet.inkTertiary)
                         }
@@ -632,67 +902,16 @@ private struct MessageView: View {
     }
 }
 
-/// Les verdicts d'un post-mortem : rien n'est noté sans un clic.
-private struct VerdictCard: View {
-    let verdicts: [ClaudeTutor.Verdict]
-    let series: ExerciseSeries
-    @State private var applied: Set<String> = []
-
-    private var rows: [(verdict: ClaudeTutor.Verdict, exercise: Exercise?)] {
-        let exercises = series.sortedExercises
-        let numbers = exercises.map(\.exerciseNumber)
-        return verdicts.map { verdict in
-            (verdict, ClaudeTutor.matchExercise(verdict.exercise, numbers: numbers).map { exercises[$0] })
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Kicker("À noter dans StudyTrack")
-                Spacer()
-                let pending = rows.filter { $0.exercise != nil && !applied.contains($0.verdict.exercise) }
-                if pending.count > 1 {
-                    Button("Tout noter") { for row in pending { apply(row.verdict, to: row.exercise!) } }
-                        .buttonStyle(.ink)
-                }
-            }
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 10) {
-                    Text(row.exercise?.displayNumber ?? "Exercice \(row.verdict.exercise)")
-                        .foregroundStyle(row.exercise == nil ? Carnet.inkTertiary : Carnet.ink)
-                    Spacer()
-                    Text(row.verdict.result.shortLabel)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Carnet.color(for: row.verdict.result).opacity(0.14)))
-                        .foregroundStyle(Carnet.color(for: row.verdict.result))
-                    if let exercise = row.exercise {
-                        if applied.contains(row.verdict.exercise) || exercise.correctness == row.verdict.result {
-                            Image(systemName: "checkmark").foregroundStyle(Carnet.inkSecondary)
-                        } else {
-                            Button("Noter") { apply(row.verdict, to: exercise) }.buttonStyle(.paper)
-                        }
-                    } else {
-                        Text("introuvable").font(.caption).foregroundStyle(Carnet.inkTertiary)
-                    }
-                }
-            }
-        }
-        .paperSheet(padding: 14)
-        .padding(.leading, 38)
-    }
-
-    private func apply(_ verdict: ClaudeTutor.Verdict, to exercise: Exercise) {
-        exercise.correct(verdict.result)
-        applied.insert(verdict.exercise)
-    }
-}
-
 extension NSImage {
     var pngData: Data? {
         guard let tiff = tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
         return bitmap.representation(using: .png, properties: [:])
+    }
+}
+
+private extension Optional {
+    func asyncMap<T>(_ transform: (Wrapped) async -> T) async -> T? {
+        guard let self else { return nil }
+        return await transform(self)
     }
 }

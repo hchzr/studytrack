@@ -224,6 +224,83 @@ enum BotafogoProgram {
     }
 }
 
+// MARK: - Les quatre parties du site
+
+/// Le site Botafogo se lit en parties, comme sur le web : le **polycopié**
+/// (chapitres et sections numérotés), les **séances** (une par thème de la
+/// semaine), les **exercices** (les séries) et les **infos** générales. Le
+/// programme mêle les trois dernières (`week` et `sect`) ; le polycopié a son
+/// propre sommaire (`/api/content/nav?collection=handout`).
+enum BotafogoSite {
+    /// Un chapitre du polycopié : « 3 Suites réelles », ses sections.
+    struct Chapter: Equatable {
+        struct Section: Equatable {
+            var title: String
+            /// `/handout/matiere/m_suites_gendarmes` — lu par `api/content/node?collection=handout`.
+            var path: String
+        }
+        var title: String
+        var sections: [Section]
+    }
+
+    /// Une adresse de document du polycopié (et non du cours).
+    static func isHandout(_ path: String) -> Bool { path.hasPrefix("/handout/") }
+
+    /// La collection du polycopié, annoncée par la page : `collections:{handout:{url:"/handout/analyse-1"`.
+    static func handoutCollection(html: String) -> String? {
+        guard let range = html.range(of: #"handout:\{url:"([^"]+)""#, options: .regularExpression) else { return nil }
+        let match = html[range]
+        guard let start = match.range(of: "url:\""), let end = match.lastIndex(of: "\"") , start.upperBound < end else { return nil }
+        return String(match[start.upperBound..<end])
+    }
+
+    /// Le sommaire du polycopié : chapitres → sections. Un niveau sans
+    /// enfants est une section du chapitre courant.
+    static func chapters(fromNavJSON data: Data) -> [Chapter] {
+        struct Node: Decodable { var title: String?; var path: String?; var children: [Node]? }
+        guard let roots = try? JSONDecoder().decode([Node].self, from: data) else { return [] }
+        var chapters: [Chapter] = []
+        func sections(_ node: Node) -> [Chapter.Section] {
+            var found: [Chapter.Section] = []
+            if let path = node.path, isHandout(path), (node.children ?? []).isEmpty {
+                found.append(.init(title: node.title ?? path, path: path))
+            }
+            for child in node.children ?? [] { found += sections(child) }
+            return found
+        }
+        for root in roots {
+            for chapter in root.children ?? [] {
+                let found = sections(chapter)
+                guard !found.isEmpty else { continue }
+                chapters.append(Chapter(title: chapter.title ?? "", sections: found))
+            }
+        }
+        return chapters
+    }
+
+    /// La semaine en cours : la dernière dont la séance a commencé (à deux jours
+    /// près : le week-end d'avant montre déjà la semaine qui vient).
+    static func currentWeek(_ weeks: [BotafogoNode], now: Date = Date()) -> Int? {
+        let horizon = now.addingTimeInterval(2 * 86_400)
+        var current: Int?
+        for (index, week) in weeks.enumerated() {
+            let dates = (week.children ?? []).compactMap { BotafogoProgram.date($0.meta("date")) }
+            if let first = dates.min(), first <= horizon { current = index }
+        }
+        return current
+    }
+
+    /// Ce qu'on fait en séance (et non en exercice) : séance, contenu de la semaine, cours, examen.
+    static func isSessionPart(_ node: BotafogoNode) -> Bool {
+        ["session", "weekContent", "lecture", "exam"].contains(node.type)
+    }
+
+    /// « Série 3 » (le nom de la série devient le sous-titre).
+    static func seriesTitle(_ node: BotafogoNode) -> String {
+        BotafogoProgram.seriesNumber(url: node.url ?? "").map { "Série \($0)" } ?? node.displayName
+    }
+}
+
 // MARK: - Les documents du site
 
 /// Ce qu'une page de cours (ou de semaine) annonce : les sections du
@@ -280,6 +357,13 @@ enum BotafogoDocument {
     }
 
     // MARK: Séries
+
+    /// Une page jamais publiée : marquée brouillon, ou sans contenu.
+    static func isUnpublished(nodeJSON data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        if let meta = object["meta"] as? [String: Any], meta["_draft"] as? Bool == true { return true }
+        return object["body"] == nil || object["body"] is NSNull
+    }
 
     /// Les exercices d'une série, dans l'ordre : énoncé, questions, indication,
     /// solution.
@@ -452,12 +536,15 @@ enum BotafogoProgramBuilder {
     ///   - handout: le sommaire du polycopié (chapitres → sections).
     ///   - lectures: le contenu de chaque page de cours ou de semaine, par `url`.
     ///   - series: les exercices de chaque série, par `url`.
+    ///   - unpublished: les exercices du programme restés en brouillon sur le
+    ///     site (cités, jamais montrés) : écartés.
     static func draft(title: String,
                       program: [BotafogoNode],
                       root: URL,
                       handout: [NuxtPayload.NavNode],
                       lectures: [String: BotafogoLectureContent],
                       series: [String: [BotafogoExercise]],
+                      unpublished: Set<String> = [],
                       calendar: Calendar = .current) -> ContentDraft {
         // Titre complet de chaque section du polycopié, par identifiant `m_…`.
         var sectionTitles: [String: String] = [:]
@@ -515,7 +602,7 @@ enum BotafogoProgramBuilder {
                 case "series":
                     guard let url = child.url, let seriesNumber = BotafogoProgram.seriesNumber(url: url) else { continue }
                     let read = series[url] ?? []
-                    let listed = (child.children ?? []).filter { $0.type == "exercise" }
+                    let listed = (child.children ?? []).filter { $0.type == "exercise" && !unpublished.contains($0.url ?? "") }
                     var exercises: [ContentExerciseDraft] = []
                     for (index, node) in listed.enumerated() {
                         let fallback = "\(seriesNumber).\(index + 1)"
@@ -700,6 +787,21 @@ enum BotafogoLinks {
 
     private static func base(_ root: URL) -> String {
         root.absoluteString.hasSuffix("/") ? root.absoluteString : root.absoluteString + "/"
+    }
+
+    /// Une page du site (série, section), pas un fichier : l'énoncé est déjà
+    /// lu en natif. Téléchargée comme un PDF, elle échouait — et, le site
+    /// étant à l'école, l'échec s'affichait « Connecte-toi à Moodle ».
+    static func isPage(_ address: String) -> Bool {
+        guard let url = URL(string: address), url.host?.contains("botafogo") == true else { return false }
+        return url.pathExtension.lowercased() != "pdf"
+    }
+
+    /// `…/?cours=series/AN_serie_03` → `series/AN_serie_03`, la page que lit
+    /// le lecteur natif.
+    static func coursPath(_ address: String) -> String? {
+        guard isPage(address), let components = URLComponents(string: address) else { return nil }
+        return components.queryItems?.first { $0.name == "cours" }?.value.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// Répare une adresse enregistrée par une version précédente de l'app.

@@ -1,0 +1,458 @@
+import SwiftUI
+
+/// La fiche de révision d'un cours : chaque chapitre, ses définitions,
+/// théorèmes, formules, méthodes et pièges ; une recherche qui en fait
+/// l'index ; et, à la fin, ce que tes séries ont appris (erreurs notées,
+/// exercices à refaire). « Relire » ouvre la section du polycopié.
+struct RevisionSheetView: View {
+    @Bindable var course: Course
+    var desk: SiteHub
+    /// Ouvrir une section du polycopié (son chemin `/handout/…`).
+    var openPoly: (String) -> Void
+    var compact = false
+
+    enum Filter: String, CaseIterable, Identifiable {
+        case all, statements, methods
+        var id: String { rawValue }
+        var title: LocalizedStringKey {
+            switch self {
+            case .all: return "Tout"
+            case .statements: return "Énoncés"
+            case .methods: return "Méthodes et pièges"
+            }
+        }
+
+        func keeps(_ kind: RevisionSheet.Entry.Kind) -> Bool {
+            switch self {
+            case .all: return true
+            case .statements: return [.definition, .theorem, .proposition, .lemma, .corollary, .formula].contains(kind)
+            case .methods: return [.method, .pitfall, .example].contains(kind)
+            }
+        }
+    }
+
+    @State private var query = ""
+    @State private var filter: Filter = .all
+    @State private var jump: String?
+    @State private var openChapters: Set<String> = []
+    private var maker: RevisionSheetMaker { .shared }
+    private var tint: Color { Carnet.tint(course.colorHex) }
+
+    private var sheet: RevisionSheet? { course.revisionSheet }
+
+    private var chapters: [RevisionSheet.Chapter] {
+        (sheet?.filtered(query) ?? []).compactMap { chapter in
+            let kept = chapter.entries.filter { filter.keeps($0.kind) }
+            return kept.isEmpty ? nil : RevisionSheet.Chapter(id: chapter.id, title: chapter.title, entries: kept)
+        }
+    }
+
+    /// Ce que tes séries ont laissé : les erreurs notées, les exercices à refaire.
+    private var mistakes: [(exercise: Exercise, mistake: Mistake)] {
+        course.sortedSeries.flatMap { series in
+            series.sortedExercises.flatMap { exercise in exercise.mistakes.map { (exercise, $0) } }
+        }
+    }
+
+    private var redo: [Exercise] {
+        course.sortedSeries.flatMap(\.sortedExercises).filter { $0.redoRequired || $0.isQueuedForRedo }
+    }
+
+    private var hasPersonal: Bool { query.isEmpty && filter != .statements && (!mistakes.isEmpty || !redo.isEmpty) }
+
+    var body: some View {
+        if compact {
+            VStack(spacing: 0) {
+                controls.padding(12)
+                document
+            }
+        } else {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    controls.padding(12)
+                    index
+                }
+                .frame(width: 280)
+                .background(Carnet.sheet.opacity(0.35))
+                Rectangle().fill(Carnet.rule).frame(width: 1)
+                document
+            }
+        }
+    }
+
+    // MARK: Recherche et filtre
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Carnet.inkTertiary)
+                TextField("Chercher un théorème, une notion…", text: $query)
+                    .textFieldStyle(.plain)
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Carnet.inkTertiary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Carnet.sheetRaised.opacity(0.7), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Picker("Montrer", selection: $filter) {
+                ForEach(Filter.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    /// Le sommaire : chaque chapitre, et dedans chaque énoncé — survolé, il
+    /// montre son énoncé ; cliqué, la fiche y va.
+    private var index: some View {
+        List {
+            ForEach(chapters) { chapter in
+                DisclosureGroup(isExpanded: Binding(get: { openChapters.contains(chapter.id) || !query.isEmpty },
+                                                    set: { open in
+                                                        if open { openChapters.insert(chapter.id) } else { openChapters.remove(chapter.id) }
+                                                    })) {
+                    ForEach(chapter.entries) { entry in
+                        Button { jump = entry.id } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: entry.kind.icon).font(.caption2).foregroundStyle(color(entry.kind)).frame(width: 14)
+                                MacMathText(entry.title, size: 12).foregroundStyle(Carnet.ink).lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(MathMarkup.plain(entry.body))
+                    }
+                } label: {
+                    Button { jump = chapter.id } label: {
+                        HStack {
+                            MacMathText(chapter.title, size: 13).foregroundStyle(Carnet.ink).lineLimit(2)
+                            Spacer(minLength: 4)
+                            Text("\(chapter.entries.count)").font(.caption.monospacedDigit()).foregroundStyle(Carnet.inkTertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if hasPersonal {
+                Button { jump = "personal" } label: {
+                    Label("De tes séries", systemImage: "person.crop.circle.badge.exclamationmark")
+                        .foregroundStyle(Carnet.ink)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: La fiche
+
+    private var document: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    header
+                    if sheet == nil {
+                        empty
+                    } else if chapters.isEmpty && !hasPersonal {
+                        Text(query.isEmpty ? "Rien dans cette partie." : "Rien ne correspond à « \(query) ».")
+                            .foregroundStyle(Carnet.inkSecondary)
+                            .padding(.top, 20)
+                    }
+                    ForEach(chapters) { chapter in
+                        VStack(alignment: .leading, spacing: 10) {
+                            MacMathText(chapter.title, size: 22, design: .serif)
+                                .foregroundStyle(Carnet.ink)
+                                .padding(.top, 14)
+                            ForEach(chapter.entries) { entry in card(entry).id(entry.id) }
+                        }
+                        .id(chapter.id)
+                    }
+                    if hasPersonal { personal.id("personal") }
+                }
+                .padding(.horizontal, compact ? 16 : 40)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 820, alignment: .leading)
+                .frame(maxWidth: .infinity)
+            }
+            .onChange(of: jump) { _, target in
+                guard let target else { return }
+                jump = nil
+                // Un énoncé d'un chapitre pas encore dessiné : son chapitre d'abord.
+                if let chapter = chapters.first(where: { $0.entries.contains { $0.id == target } }) {
+                    proxy.scrollTo(chapter.id, anchor: .top)
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(60))
+                        withAnimation(.snappy) { proxy.scrollTo(target, anchor: .top) }
+                    }
+                } else {
+                    withAnimation(.snappy) { proxy.scrollTo(target, anchor: .top) }
+                }
+            }
+        }
+        .background(Carnet.ground)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Kicker("Fiche de révision · \(course.displayCode)", color: tint)
+            Text(course.name).font(Carnet.serif(compact ? 26 : 34)).foregroundStyle(Carnet.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let sheet {
+                HStack(spacing: 10) {
+                    Text(summary(sheet)).font(.callout).foregroundStyle(Carnet.inkSecondary)
+                    Spacer(minLength: 8)
+                    remake(title: "Refaire")
+                }
+            }
+            if let state = maker.state(course) { status(state) }
+        }
+    }
+
+    private func summary(_ sheet: RevisionSheet) -> String {
+        let count = sheet.entries.count
+        let origin = sheet.origin == .handout ? String(localized: "tirés du polycopié") : String(localized: "écrits par Claude d'après le cours")
+        return "\(count) entrées, \(origin) · \(sheet.generatedAt.formatted(.dateTime.day().month(.abbreviated)))"
+    }
+
+    @ViewBuilder
+    private func remake(title: LocalizedStringKey) -> some View {
+        if maker.canMake(course) {
+            Button { Task { await maker.make(course, hub: desk) } } label: {
+                Label(title, systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.paper)
+            .disabled(isWorking)
+        }
+    }
+
+    private var isWorking: Bool {
+        if case .working? = maker.state(course) { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private func status(_ state: RevisionSheetMaker.State) -> some View {
+        switch state {
+        case .working(let message):
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(message).font(.callout).foregroundStyle(Carnet.inkSecondary)
+            }
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(Carnet.wrong)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var empty: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(RevisionSheetMaker.botafogoSite(of: course) != nil
+                 ? "Tous les énoncés du polycopié — définitions, théorèmes, propositions — chapitre par chapitre, sans les preuves."
+                 : "Claude lit tout le cours — diapositives, notes, séries et corrigés — et en écrit la fiche : définitions, théorèmes, formules, méthodes, pièges.")
+                .font(.title3)
+                .foregroundStyle(Carnet.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if maker.canMake(course) {
+                Button { Task { await maker.make(course, hub: desk) } } label: {
+                    Label("Faire la fiche", systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.ink)
+                .disabled(isWorking)
+            } else {
+                Label("Elle se fait sur le Mac, puis arrive ici par iCloud.", systemImage: "desktopcomputer")
+                    .foregroundStyle(Carnet.inkSecondary)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: Une entrée
+
+    private func color(_ kind: RevisionSheet.Entry.Kind) -> Color {
+        switch kind {
+        case .definition: return Carnet.review
+        case .theorem, .proposition, .lemma, .corollary, .formula: return tint
+        case .method: return Carnet.correct
+        case .pitfall: return Carnet.wrong
+        case .example, .remark: return Carnet.inkTertiary
+        }
+    }
+
+    private func card(_ entry: RevisionSheet.Entry) -> some View {
+        let accent = color(entry.kind)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: entry.kind.icon).font(.caption)
+                Text(entry.kind.label.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8)
+                Spacer(minLength: 6)
+                if !entry.link.isEmpty {
+                    Button { openPoly(entry.link) } label: {
+                        Label("Relire", systemImage: "book")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .help(entry.source)
+                }
+            }
+            .foregroundStyle(accent)
+            if entry.title != entry.kind.label {
+                MacMathText(entry.title, size: 16, design: .serif).foregroundStyle(Carnet.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            RichTextView(text: entry.body, size: 14)
+                .textSelection(.enabled)
+            if !entry.source.isEmpty, entry.link.isEmpty || compact {
+                Text(entry.source).font(.caption).foregroundStyle(Carnet.inkTertiary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(alignment: .leading) {
+            UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12, style: .continuous)
+                .fill(accent.opacity(0.8))
+                .frame(width: 3)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Carnet.rule))
+    }
+
+    // MARK: De tes séries
+
+    private var personal: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("De tes séries").font(Carnet.serif(22)).foregroundStyle(Carnet.ink).padding(.top, 14)
+            Text("Ce que tu as noté en corrigeant : à relire avant l'examen.")
+                .font(.callout).foregroundStyle(Carnet.inkSecondary)
+            ForEach(Array(mistakes.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: item.mistake.kind.icon).font(.caption)
+                        Text("\(item.exercise.displayNumber) · \(item.mistake.kind.label)").font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(Carnet.wrong)
+                    MacMathText(item.mistake.summary, size: 14).foregroundStyle(Carnet.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !item.mistake.correction.isEmpty {
+                        MacMathText("→ " + item.mistake.correction, size: 13).foregroundStyle(Carnet.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Carnet.wrong.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            if !redo.isEmpty {
+                Kicker("À refaire").padding(.top, 6)
+                ForEach(redo) { exercise in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise").foregroundStyle(Carnet.review)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(exercise.displayNumber + (exercise.title.isEmpty ? "" : " · " + exercise.title))
+                                .foregroundStyle(Carnet.ink)
+                            if !exercise.redoWhy.isEmpty {
+                                MacMathText(exercise.redoWhy, size: 13).foregroundStyle(Carnet.inkSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - À savoir, pour un exercice
+
+/// Sous un exercice : les définitions, théorèmes et méthodes de la fiche qui
+/// lui servent — l'énoncé seul, jamais la solution. Ce qu'on cherchait dans
+/// le cours quand on bloquait.
+struct ExerciseKnowHow: View {
+    let exercise: Exercise
+    let tint: Color
+    /// « Relire » : la section du polycopié.
+    var openPoly: ((String) -> Void)? = nil
+
+    @State private var expanded: Set<String> = []
+
+    private var text: String {
+        ([exercise.title, exercise.statement, exercise.hint, exercise.solution]
+            + exercise.detectedSubQuestions.map(\.text)).joined(separator: "\n")
+    }
+
+    /// Les sections lues la semaine de la série : celles que l'exercice met en pratique.
+    private func preferred(_ course: Course) -> Set<String> {
+        let week = exercise.series?.plannedWeek ?? -1
+        return Set(course.theoryItems.filter { $0.plannedWeek == week || $0.plannedWeek == week - 1 }
+            .compactMap { TheoryTracking.handoutPath($0.urlString) })
+    }
+
+    var body: some View {
+        if let course = exercise.series?.course {
+            if let sheet = course.revisionSheet {
+                let entries = sheet.relevant(to: text, preferred: preferred(course))
+                if !entries.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Kicker("À savoir", color: tint)
+                        ForEach(entries) { entry in row(entry) }
+                    }
+                }
+            } else if RevisionSheetMaker.shared.canMake(course) {
+                Button {
+                    Task { await RevisionSheetMaker.shared.make(course, hub: .shared) }
+                } label: {
+                    Label("Faire la fiche du cours : ce qu'il faut savoir pour chaque exercice s'affichera ici",
+                          systemImage: "doc.text.magnifyingglass")
+                        .font(.caption)
+                        .multilineTextAlignment(.leading)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Carnet.inkSecondary)
+                .disabled(RevisionSheetMaker.shared.state(course) != nil)
+            }
+        }
+    }
+
+    private func row(_ entry: RevisionSheet.Entry) -> some View {
+        let open = expanded.contains(entry.id)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if open { expanded.remove(entry.id) } else { expanded.insert(entry.id) }
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: entry.kind.icon).font(.caption).foregroundStyle(tint).frame(width: 14)
+                    MacMathText(entry.title == entry.kind.label ? entry.kind.label : entry.title, size: 13)
+                        .foregroundStyle(Carnet.ink)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(Carnet.inkTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open {
+                RichTextView(text: entry.body, size: 13)
+                    .textSelection(.enabled)
+                    .padding(.leading, 21)
+                if !entry.link.isEmpty, let openPoly {
+                    Button { openPoly(entry.link) } label: { Label("Relire · \(entry.source)", systemImage: "book") }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .padding(.leading, 21)
+                }
+            }
+        }
+        .padding(10)
+        .background(Carnet.sheetRaised.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}

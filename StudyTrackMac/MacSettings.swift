@@ -83,8 +83,12 @@ final class MacSettings {
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
     var studyBlocking: Bool { didSet { defaults.set(studyBlocking, forKey: "mac.studyBlocking") } }
+    /// Garder le Mac éveillé pendant que le chrono du mode étude tourne.
+    var studyKeepAwake: KeepAwakePolicy.Mode { didSet { defaults.set(studyKeepAwake.rawValue, forKey: "mac.studyKeepAwake") } }
     /// Pomodoro pendant le mode étude.
     var studyPomodoro: Bool { didSet { defaults.set(studyPomodoro, forKey: "mac.studyPomodoro") } }
+    /// Le dernier mode étude était sans fin : le choix le repropose.
+    var studyOpenEnded: Bool { didSet { defaults.set(studyOpenEnded, forKey: "mac.studyOpenEnded") } }
 
     // MARK: Claude
 
@@ -96,6 +100,21 @@ final class MacSettings {
     var claudeProjectFolder: String { didSet { defaults.set(claudeProjectFolder, forKey: "mac.claudeProjectFolder") } }
     /// L'adresse du serveur MCP de StudyTrack (iPhone › Réglages › Assistant IA).
     var claudeStudyTrackMCP: String { didSet { defaults.set(claudeStudyTrackMCP, forKey: "mac.claudeStudyTrackMCP") } }
+
+    // MARK: Après une série (chacun s'éteint : l'app reste simple pour qui n'en veut pas)
+
+    /// Le carnet d'erreurs : chaque écart d'un post-mortem devient une ligne.
+    var reviewMistakes: Bool { didSet { defaults.set(reviewMistakes, forKey: "mac.reviewMistakes") } }
+    /// La file de reprise : refaire sur papier les exercices qui ont coincé.
+    var reviewRedo: Bool { didSet { defaults.set(reviewRedo, forKey: "mac.reviewRedo") } }
+    /// Les indices de Claude notés exercice par exercice.
+    var reviewHints: Bool { didSet { defaults.set(reviewHints, forKey: "mac.reviewHints") } }
+
+    /// Ce qui est allumé, tel que Claude le reçoit (plafond du projet compris).
+    func reviewFeatures(_ file: ClaudeProject.File?) -> SeriesReview.Features {
+        SeriesReview.Features(mistakes: reviewMistakes, redo: reviewRedo, hints: reviewHints,
+                              redoPerSeries: file?.redo?.maxPerSeries ?? RedoLadder.Config().maxPerSeries)
+    }
 
     init() {
         showTimeInMenuBar = defaults.object(forKey: "mac.showTimeInMenuBar") as? Bool ?? true
@@ -111,12 +130,17 @@ final class MacSettings {
         studyMinutes = defaults.object(forKey: "mac.studyMinutes") as? Int ?? 50
         studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
+        studyOpenEnded = defaults.bool(forKey: "mac.studyOpenEnded")
         studyCloseApps = defaults.object(forKey: "mac.studyCloseApps") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
+        studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off
         claudeProject = defaults.bool(forKey: "mac.claudeProject")
         claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("EPFL").path
         claudeStudyTrackMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
+        reviewMistakes = defaults.object(forKey: "mac.reviewMistakes") as? Bool ?? true
+        reviewRedo = defaults.object(forKey: "mac.reviewRedo") as? Bool ?? true
+        reviewHints = defaults.object(forKey: "mac.reviewHints") as? Bool ?? true
         migrateLegacyPreferences()
     }
 

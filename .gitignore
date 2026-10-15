@@ -24,3 +24,6 @@ build-mac/
 
 # Clés privées (APNs, etc.) : jamais dans git
 *.p8
+
+# Build artefacts (simulateur)
+build-sim/

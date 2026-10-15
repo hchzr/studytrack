@@ -91,19 +91,20 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     }
 
     /// Lancer : le chrono démarre (ou se verrouille), l'iPhone suit.
-    func begin(minutes: Int, pomodoro: Bool) {
+    /// `minutes` : `nil`, sans fin (on termine quand on a fini).
+    func begin(minutes: Int?, pomodoro: Bool) {
         guard let timer else { return }
         // Le vrai blocage : ce qui n'est pas permis se ferme (proprement — une
         // app avec un document non enregistré le demande d'abord).
         let locks = screen.locks
         if locks, settings?.studyCloseApps ?? true {
-            for app in runningBlockedApps() { ask(app, toQuit: true, force: false) }
+            for app in runningBlockedApps() where !Self.playsInBackground(app) { ask(app, toQuit: true, force: false) }
         }
         if timer.phase == .idle { timer.pomodoro = pomodoro }
         timer.enterStudy(minutes: minutes, courseID: screen.courseID, taskType: screen.taskType,
                          targetID: screen.targetID, label: screen.label, locks: locks)
         screen.stage = .session
-        log.notice("mode étude : \(minutes) min")
+        log.notice("mode étude : \(minutes.map { "\($0) min" } ?? "sans fin", privacy: .public)")
     }
 
     func cancelSetup() {
@@ -117,6 +118,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// frontière de temps).
     func update() {
         guard let timer else { return }
+        MacKeepAwake.shared.update(mode: settings?.studyKeepAwake ?? .off, studying: timer.isStudying,
+                                   running: timer.phase == .running, onBreak: timer.phase == .onBreak,
+                                   // Sans fin : pas d'échéance (une date sentinelle lointaine) — un bail renouvelé.
+                                   until: StudyMode.isOpenEnded(timer.state) ? nil : timer.state?.studyUntil)
         if timer.isStudying {
             if screen.stage != .session || window?.isVisible != true {
                 // Lancé ailleurs (l'iPhone) : l'écran s'ouvre ici aussi.
@@ -138,12 +143,44 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     // MARK: Fenêtre
 
+    #if DEBUG
+    /// `-snapshot <fichier.png>` (avec `-studyPreview`) : l'écran du mode étude
+    /// rendu dans une image, puis l'app quitte. Pour vérifier une vue sans
+    /// toucher à l'écran de personne.
+    static let snapshotPath: String? = CommandLine.arguments.firstIndex(of: "-snapshot").flatMap {
+        $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil
+    }
+    private static let snapshotDelay = CommandLine.arguments.firstIndex(of: "-snapshotDelay").flatMap {
+        $0 + 1 < CommandLine.arguments.count ? Double(CommandLine.arguments[$0 + 1]) : nil
+    } ?? 8
+
+    private func scheduleSnapshot(to path: String) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.snapshotDelay))
+            guard let view = self?.window?.contentView,
+                  let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { exit(1) }
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            exit(0)
+        }
+    }
+    #endif
+
     private func showWindow() {
         guard let timer, let settings else { return }
-        NSApp.setActivationPolicy(.regular)
+        if !HeadlessCapture.active { NSApp.setActivationPolicy(.regular) }
         if window == nil {
             let screenFrame = (NSScreen.main ?? NSScreen.screens.first)?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-            let frame = previewOnly ? NSRect(x: 80, y: 80, width: 1440, height: 900) : screenFrame
+            var frame = previewOnly ? NSRect(x: 80, y: 80, width: 1440, height: 900) : screenFrame
+            #if DEBUG
+            // `-snapshot` : hors de l'écran, rien ne passe devant ce qu'on fait.
+            if Self.snapshotPath != nil {
+                frame.origin = NSPoint(x: -6000, y: 0)
+                // `-snapshotHeight 2600` : une page entière, sans défiler.
+                if let index = CommandLine.arguments.firstIndex(of: "-snapshotHeight"), index + 1 < CommandLine.arguments.count,
+                   let height = Double(CommandLine.arguments[index + 1]) { frame.size.height = height }
+            }
+            #endif
             let window = StudyWindow(contentRect: frame,
                                      styleMask: previewOnly ? [.titled, .closable, .resizable] : [.borderless, .fullSizeContentView],
                                      backing: .buffered, defer: false)
@@ -163,6 +200,16 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             window.setFrame(frame, display: true)
             self.window = window
         }
+        #if DEBUG
+        if let path = Self.snapshotPath {
+            // Transparente et hors de l'écran : dessinée, jamais vue.
+            window?.alphaValue = 0
+            window?.ignoresMouseEvents = true
+            window?.orderFrontRegardless()
+            scheduleSnapshot(to: path)
+            return
+        }
+        #endif
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         applyPresentation()
@@ -170,6 +217,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     private func closeWindow() {
         window?.orderOut(nil)
+        // Le bureau parti, la pilule reprend sa place si la session continue.
+        defer { MiniTimerPanel.shared.update() }
         NSApp.presentationOptions = []
         browser.closeAll()
         desk.closeAll()
@@ -191,9 +240,20 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
 
-    func windowDidBecomeKey(_ notification: Notification) { applyPresentation() }
+    func windowDidBecomeKey(_ notification: Notification) {
+        applyPresentation()
+        MiniTimerPanel.shared.update()
+    }
+
+    /// Le bureau d'étude est devant : son bandeau montre déjà le chrono, la
+    /// pilule flottante n'a rien à y faire.
+    var deskIsFrontmost: Bool {
+        guard let window, window.isVisible, !previewOnly else { return false }
+        return NSApp.isActive && window.isKeyWindow
+    }
 
     func windowDidResignKey(_ notification: Notification) {
+        MiniTimerPanel.shared.update()
         // Une autre fenêtre de StudyTrack (le cours, les réglages) : sous
         // verrou, rien ne se relâche.
         guard timer?.isLocked != true else { return }
@@ -265,7 +325,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     }
 
     private func launched(_ app: NSRunningApplication?) {
-        guard blocking, let app, isBlocked(app) else { return }
+        // Music lancé pour jouer la musique du mode étude : il reste.
+        guard blocking, let app, isBlocked(app), !Self.playsInBackground(app) else { return }
         screen.blockedName = app.localizedName
         screen.blockedAt = Date()
         log.notice("mode étude : \(app.bundleIdentifier ?? "?", privacy: .public) lancée, fermée")
@@ -279,6 +340,19 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard blocking, let app else { return }
         guard isBlocked(app) else {
             hideShields()
+            return
+        }
+        // Music au premier plan : il joue pour le mode étude, on ne le ferme
+        // pas — on le masque, et la musique se choisit dans l'onglet Musique.
+        if Self.playsInBackground(app) {
+            if app.hide() {
+                desk.pane = .music
+                present()
+            } else {
+                screen.blockedName = app.localizedName
+                screen.blockedAt = Date()
+                showShields()
+            }
             return
         }
         // On vient de lui demander de quitter : elle demande peut-être
@@ -298,6 +372,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if app.hide() {
             present()
         }
+    }
+
+    private static func playsInBackground(_ app: NSRunningApplication) -> Bool {
+        app.bundleIdentifier.map(StudyMode.backgroundApps.contains) ?? false
     }
 
     private func showShields() {

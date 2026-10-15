@@ -45,6 +45,8 @@ final class ClaudeChat: Identifiable {
         var permissions: String
         /// Le fichier du projet (`studytrack.json`) : boutons, modèles, compétences.
         var file: ClaudeProject.File?
+        /// Ce qui est noté après une série (carnet, reprise, indices).
+        var review = SeriesReview.Features()
 
         static var isolated: Config {
             let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -98,6 +100,15 @@ final class ClaudeChat: Identifiable {
                                           generation: Self.generation(seriesID, config.profile))
         restore()
     }
+
+    #if DEBUG
+    /// `-claudeDemo` : une conversation d'exemple (captures), sans appeler Claude.
+    func debugInject(_ demo: [(student: Bool, text: String)]) {
+        guard messages.isEmpty else { return }
+        messages = demo.map { Message(role: $0.student ? .student : .claude, text: $0.text) }
+        opened = true
+    }
+    #endif
 
     /// La « série » d'une conversation libre.
     private static let freeSeries = UUID(uuidString: "00000000-0000-0000-0000-00000000F4EE")!
@@ -264,7 +275,7 @@ final class ClaudeChat: Identifiable {
         let resume = forceResume ?? hasSession
         forceResume = nil
         process.arguments = ClaudeTutor.arguments(.init(profile: config.profile, sessionID: sessionID.uuidString.lowercased(),
-                                                        resume: resume, systemPrompt: ClaudeTutor.systemPrompt(mode: mode),
+                                                        resume: resume, systemPrompt: ClaudeTutor.systemPrompt(mode: mode, features: config.review),
                                                         mcpConfigPath: config.mcpConfigPath, allowedTools: config.allowedTools,
                                                         tools: config.tools, deniedServers: config.deniedServers,
                                                         model: Self.debugModel ?? requestedModel))

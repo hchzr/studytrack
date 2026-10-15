@@ -278,7 +278,13 @@ enum TeXNormalizer {
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "\u{00A0}", with: " ")
         text = environments(text)
+        text = fittingColumns(text)
         text = commands(text)
+        // `\:` (espace moyenne) : le moteur ne connaît que `\;`.
+        text = text.replacingOccurrences(of: "\\:", with: "\\;")
+        // `\overline{S}_{a^{b}}` fait tomber le moteur ; posé sur un groupe
+        // vide (`\overline{S}{}_{…}`), l'indice se dessine pareil.
+        text = text.replacingOccurrences(of: #"(\\overline\{(?:[^{}]|\{[^{}]*\})*\})(\s*[_^])"#, with: "$1{}$2", options: .regularExpression)
         text = unicode(text)
         // Un moins en tête de case (`& -1`) : le moteur l'espace comme une
         // soustraction (« − 1 ») ; rapproché, il se lit comme en LaTeX.
@@ -313,6 +319,92 @@ enum TeXNormalizer {
         return text
     }
 
+    /// Le moteur veut exactement deux colonnes dans `aligned` et `cases` :
+    /// `aligned` sans `&` devient `gather`, avec plus de deux colonnes une
+    /// matrice ; une ligne de `cases` sans `&` reçoit une seconde case vide.
+    static func fittingColumns(_ source: String) -> String {
+        var text = source
+        for name in ["aligned", "cases"] {
+            let open = "\\begin{\(name)}", close = "\\end{\(name)}"
+            var searchStart = text.startIndex
+            while let begin = text.range(of: open, range: searchStart..<text.endIndex) {
+                // La fin qui lui correspond (les environnements s'emboîtent).
+                var depth = 1
+                var cursor = begin.upperBound
+                var end: Range<String.Index>?
+                while depth > 0 {
+                    let nextOpen = text.range(of: open, range: cursor..<text.endIndex)
+                    guard let nextClose = text.range(of: close, range: cursor..<text.endIndex) else { break }
+                    if let nextOpen, nextOpen.lowerBound < nextClose.lowerBound {
+                        depth += 1; cursor = nextOpen.upperBound
+                    } else {
+                        depth -= 1; cursor = nextClose.upperBound
+                        if depth == 0 { end = nextClose }
+                    }
+                }
+                guard let end else { break }
+                let body = String(text[begin.upperBound..<end.lowerBound])
+                let rows = topLevelRows(body)
+                let columns = rows.map { topLevelAmpersands($0) }
+                var replacement: String?
+                if name == "aligned" {
+                    let widest = columns.max() ?? 0
+                    if widest == 0 { replacement = "\\begin{gather}" + body + "\\end{gather}" }
+                    else if widest > 1 { replacement = "\\begin{matrix}" + body + "\\end{matrix}" }
+                    else if columns.contains(0) {
+                        let fixed = rows.enumerated().map { columns[$0.offset] == 0 && !$0.element.trimmingCharacters(in: .whitespaces).isEmpty ? "&" + $0.element : $0.element }
+                        replacement = open + fixed.joined(separator: "\\\\") + close
+                    }
+                } else if columns.contains(0) {
+                    let fixed = rows.enumerated().map { columns[$0.offset] == 0 && !$0.element.trimmingCharacters(in: .whitespaces).isEmpty ? $0.element + "&" : $0.element }
+                    replacement = open + fixed.joined(separator: "\\\\") + close
+                }
+                if let replacement {
+                    text.replaceSubrange(begin.lowerBound..<end.upperBound, with: replacement)
+                    searchStart = text.index(begin.lowerBound, offsetBy: replacement.count, limitedBy: text.endIndex) ?? text.endIndex
+                } else {
+                    searchStart = end.upperBound
+                }
+            }
+        }
+        return text
+    }
+
+    /// Les lignes d'un environnement (`\\`), sans couper dans un groupe ni un environnement emboîté.
+    private static func topLevelRows(_ body: String) -> [String] {
+        var rows: [String] = [], current = "", depth = 0
+        let chars = Array(body)
+        var i = 0
+        while i < chars.count {
+            let rest = String(chars[i..<min(chars.count, i + 7)])
+            if rest.hasPrefix("\\begin") { depth += 1 }
+            if rest.hasPrefix("\\end") { depth -= 1 }
+            if chars[i] == "{" { depth += 1 } else if chars[i] == "}" { depth -= 1 }
+            if chars[i] == "\\", i + 1 < chars.count {
+                if chars[i + 1] == "\\", depth == 0 { rows.append(current); current = ""; i += 2; continue }
+                current.append(chars[i]); current.append(chars[i + 1]); i += 2; continue
+            }
+            current.append(chars[i]); i += 1
+        }
+        rows.append(current)
+        return rows
+    }
+
+    private static func topLevelAmpersands(_ row: String) -> Int {
+        var count = 0, depth = 0
+        let chars = Array(row)
+        var i = 0
+        while i < chars.count {
+            let rest = String(chars[i..<min(chars.count, i + 7)])
+            if rest.hasPrefix("\\begin") { depth += 1 } else if rest.hasPrefix("\\end") { depth -= 1 }
+            if chars[i] == "\\" { i += 2; continue }
+            if chars[i] == "{" { depth += 1 } else if chars[i] == "}" { depth -= 1 }
+            else if chars[i] == "&", depth == 0 { count += 1 }
+            i += 1
+        }
+        return count
+    }
+
     // MARK: Commandes
 
     /// Commande → son équivalent (sans la barre oblique de tête, sauf mention).
@@ -336,7 +428,16 @@ enum TeXNormalizer {
         "bigl": "", "bigr": "", "Bigl": "", "Bigr": "", "biggl": "", "biggr": "", "Biggl": "", "Biggr": "",
         "big": "", "Big": "", "bigg": "", "Bigg": "", "bigm": "", "Bigm": "",
         "nonumber": "", "notag": "", "nolimits": "", "ensuremath": "", "boxed": "",
-        "overbrace": "", "underbrace": "", "displaylimits": "", "middle": ""
+        "overbrace": "\\overline", "underbrace": "\\underline", "displaylimits": "", "middle": "",
+        // Tailles de texte et classes d'atomes : le moteur choisit seul.
+        "small": "", "footnotesize": "", "scriptsize": "", "tiny": "", "normalsize": "", "large": "", "Large": "",
+        "mathopen": "", "mathclose": "", "mathrel": "", "mathbin": "", "mathord": "", "mathpunct": "", "mathinner": "",
+        // Un terme barré (simplification) : grisé, faute de trait.
+        "cancel": "\\textcolor{gray}", "bcancel": "\\textcolor{gray}", "xcancel": "\\textcolor{gray}", "sout": "\\textcolor{gray}",
+        // Des symboles absents de la fonte : d'autres, distincts entre eux.
+        "bigstar": "\\star", "clubsuit": "\\bullet", "spadesuit": "\\triangle", "blacklozenge": "\\square",
+        "heartsuit": "\\circ", "diamondsuit": "\\ast", "diamond": "\\ast", "blacksquare": "\\square",
+        "LaTeX": "\\text{LaTeX}", "TeX": "\\text{TeX}"
     ]
 
     /// Commandes dont l'argument n'a pas d'équivalent affichable : retirées avec lui.
@@ -381,6 +482,19 @@ enum TeXNormalizer {
             } else if name == "dfrac", let top = readGroup(), let bottom = readGroup() {
                 // La fraction « de display » au milieu d'une phrase reste grande.
                 out += "{\\displaystyle\\frac{" + commands(top) + "}{" + commands(bottom) + "}}"
+            } else if ["stackrel", "overset", "underset"].contains(name), let top = readGroup(), let base = readGroup() {
+                // `\stackrel{BH}{=}` : pas d'empilement dans le moteur, la marque en exposant.
+                out += "{" + commands(base) + "}" + (name == "underset" ? "_{" : "^{") + commands(top) + "}"
+            } else if name == "substack", let rows = readGroup() {
+                out += "{\\begin{matrix}" + commands(rows) + "\\end{matrix}}"
+            } else if name == "not" {
+                // `\not\in`, `\not=` : les relations barrées que le moteur connaît.
+                skipSpaces()
+                let rest = String(chars[i...])
+                if rest.hasPrefix("\\in"), !(rest.dropFirst(3).first?.isLetter ?? false) { out += "\\notin"; i += 3 }
+                else if rest.hasPrefix("=") { out += "\\neq"; i += 1 }
+                else { out += "\\not" }
+                if i < chars.count, chars[i].isLetter { out += " " }
             } else if name == "pmod" {
                 out += "\\quad(\\mathrm{mod}\\ " + commands(readGroup() ?? "") + ")"
             } else if let replacement = renamed[name] {

@@ -42,7 +42,9 @@ enum SchemaV1: VersionedSchema {
             AcademicMilestone.self,
             PastExam.self,
             SubQuestion.self,
-            RelayBeacon.self
+            RelayBeacon.self,
+            Mistake.self,
+            SavedResource.self
         ]
     }
 }
@@ -84,6 +86,7 @@ enum DataRepair {
     struct Outcome {
         var coursesAttached = 0
         var milestonesInstalled = 0
+        var bonusCleared = 0
 
         var summary: String {
             var parts: [String] = []
@@ -92,6 +95,9 @@ enum DataRepair {
             }
             if milestonesInstalled > 0 {
                 parts.append("\(milestonesInstalled) échéances de l'EPFL installées")
+            }
+            if bonusCleared > 0 {
+                parts.append("\(bonusCleared) exercices remis au programme")
             }
             return parts.joined(separator: " · ")
         }
@@ -102,7 +108,7 @@ enum DataRepair {
     /// Idempotent par construction : chaque étape ne touche que ce qui est cassé.
     /// Le marqueur évite simplement de relire toute la base à chaque lancement.
     /// Augmente quand une réparation s'ajoute : elle est alors jouée une fois.
-    static let repairVersion = 2
+    static let repairVersion = 3
     static let repairKey = "dataRepair.version"
 
     @discardableResult
@@ -119,9 +125,24 @@ enum DataRepair {
         // Le calendrier académique doit être là hors ligne, dès l'installation.
         outcome.milestonesInstalled = AcademicMilestone.installSnapshotIfNeeded(in: context)
 
+        // Une série lue tout en « bonus » (une note de page prise pour une
+        // mention) : la même règle que l'import d'aujourd'hui
+        // (`DetectedSeries.withoutBlanketBonus`).
+        outcome.bonusCleared = clearBlanketBonus(in: context)
+
         defaults.set(StudyTrackSchema.currentVersion, forKey: StudyTrackSchema.versionKey)
         defaults.set(repairVersion, forKey: repairKey)
         try? context.save()
         return outcome
+    }
+
+    static func clearBlanketBonus(in context: ModelContext) -> Int {
+        let all = (try? context.fetch(FetchDescriptor<ExerciseSeries>())) ?? []
+        var cleared = 0
+        for series in all where series.exercises.count >= 3 && series.exercises.allSatisfy(\.isBonus) {
+            for exercise in series.exercises { exercise.isBonus = false }
+            cleared += series.exercises.count
+        }
+        return cleared
     }
 }
