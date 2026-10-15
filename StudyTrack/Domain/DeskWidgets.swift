@@ -32,6 +32,10 @@ enum DeskWidgets {
         case courses
         /// L'état des comptes de l'école.
         case accounts
+        /// Les échéances de la semaine (évaluations, séries à rendre, corrigés).
+        case deadlines
+        /// Les membres du groupe, quand la session est commune.
+        case group
         // En cours : les sections de l'accueil du cours, une carte chacune.
         case lectureClock, lectureMarks, lectureTools, lectureWeek, lectureTheory
         // Avant un examen : les sections de l'accueil de révision.
@@ -73,6 +77,8 @@ enum DeskWidgets {
         var moment: DeskMoment
         var hasCourse: Bool
         var hasSeries = false
+        /// La session est commune à un groupe.
+        var inGroup = false
         /// Un exercice est visé (sa carte montre déjà la suite de la série).
         var hasTarget = false
         var redosDue = 0
@@ -96,7 +102,7 @@ enum DeskWidgets {
         }
         guard c.hasCourse else {
             // Session libre : choisir, puis ce que la journée réserve.
-            return [p(.courses, .medium), p(.session, .small), p(.today, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]
+            return [p(.courses, .medium), p(.session, .small), p(.today, .small), p(.deadlines, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]
         }
         // L'exercice visé montre déjà ce qui vient ensuite : pas de seconde liste.
         var list: [Placement] = [p(.session, .small)]
@@ -105,7 +111,8 @@ enum DeskWidgets {
         if c.moment == .revision || (c.daysToExam.map { $0 >= 0 && $0 <= examHorizonDays } ?? false) { list.append(p(.exam, .small)) }
         list.append(p(.steps, .small))
         if c.hasSeries && !c.hasTarget { list.append(p(.upNext, .small)) }
-        list.append(contentsOf: [p(.music, .small), p(.claude, .small), p(.today, .small), p(.accounts, .small)])
+        if c.inGroup { list.append(p(.group, .small)) }
+        list.append(contentsOf: [p(.music, .small), p(.claude, .small), p(.today, .small), p(.deadlines, .small), p(.accounts, .small)])
         return list
     }
 

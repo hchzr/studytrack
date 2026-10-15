@@ -6451,6 +6451,9 @@ do {
     let lectureCards = kinds(W.defaults(W.Context(moment: .lecture, hasCourse: true)))
     check(lectureCards.first == .lectureClock && lectureCards.contains(.lectureMarks) && lectureCards.contains(.lectureWeek) && !lectureCards.contains(.target),
           "cartes : en cours, l'horloge, les repères, la semaine — pas d'exercice")
+    check(kinds(course).contains(.deadlines) && kinds(free).contains(.deadlines), "cartes : les échéances de la semaine sont là")
+    check(!kinds(course).contains(.group) && kinds(W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true, inGroup: true, hasTarget: true))).contains(.group),
+          "cartes : les membres du groupe seulement en session commune")
     check(!kinds(W.defaults(W.Context(moment: .lecture, hasCourse: false))).contains(.lectureClock), "cartes : un cours sans cours choisi reste une session libre")
     // Rangement de l'étudiant·e
     var mine = course

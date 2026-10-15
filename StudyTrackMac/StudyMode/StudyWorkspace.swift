@@ -243,10 +243,40 @@ struct StudyWorkspace: View {
         default:
             title = String(localized: "Plus que \(minutes) min"); detail = String(localized: "Note où tu t'arrêtes, ou prolonge."); icon = "hourglass"
         }
+        let exercise = course?.allExercises.first { $0.id == timer.targetID }
         return VStack(spacing: 14) {
             Image(systemName: icon).font(.largeTitle).foregroundStyle(StudyPalette.inkSecondary)
             Text(title).font(Carnet.serif(.title)).foregroundStyle(StudyPalette.ink)
             Text(detail).font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+            if kind == .onBreak {
+                // La pause qui s'écoule, et ce qui vient après.
+                HStack(spacing: 8) {
+                    Image(systemName: "cup.and.saucer")
+                    TimerClockText(font: .title2.monospacedDigit())
+                }
+                .foregroundStyle(StudyPalette.ink)
+                if let status = timer.pomodoroStatus() {
+                    Text("Ensuite : bloc \(status.completedBlocks + 1)").font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+                }
+            }
+            if kind == .wrapUp, let exercise {
+                // Où tu en es sur l'exercice en cours : un geste, avant que la session finisse.
+                VStack(spacing: 6) {
+                    Text(exercise.displayNumber + " : sûr·e ?").font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                    HStack(spacing: 8) {
+                        ForEach(ConfidenceLevel.allCases) { level in
+                            Button { exercise.confidence = level } label: {
+                                Label(level.label, systemImage: level.icon)
+                                    .font(.callout.weight(.medium))
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                    .foregroundStyle(exercise.confidence == level ? Carnet.ground : level.color)
+                                    .background(exercise.confidence == level ? level.color : level.color.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
             HStack(spacing: 10) {
                 switch kind {
                 case .onBreak:
@@ -1486,6 +1516,7 @@ private struct StudyDeskHome: View {
     @Environment(MacTimer.self) private var timer
     @Environment(\.modelContext) private var context
     @Query(sort: \Course.code) private var allCourses: [Course]
+    @Query private var groups: [StudyGroup]
     @State private var classes: [ScheduledClass] = []
 
     var moment: DeskMoment = .series
@@ -1504,6 +1535,7 @@ private struct StudyDeskHome: View {
 
     private var widgetContext: DeskWidgets.Context {
         DeskWidgets.Context(moment: moment, hasCourse: course != nil, hasSeries: series != nil,
+                            inGroup: timer.state?.groupSession != nil,
                             hasTarget: course?.allExercises.contains { $0.id == timer.targetID } ?? false,
                             redosDue: due.count, daysToExam: course?.nextSitting?.daysUntil)
     }
@@ -1563,11 +1595,61 @@ private struct StudyDeskHome: View {
         placements = DeskWidgets.decode(UserDefaults.standard.data(forKey: DeskWidgets.storageKey(moment))) ?? []
     }
 
+    /// L'outil du centre où une carte mène (« zoomer » dessus).
+    private func centerPane(for kind: DeskWidgets.Kind) -> StudyDesk.Pane? {
+        switch kind {
+        case .target, .upNext, .redo, .steps: return .exercise
+        case .music: return .music
+        case .lectureWeek, .lectureTheory, .revisionSheet, .revisionPast, .revisionTheory: return .course
+        default: return nil
+        }
+    }
+
+    /// Ce qu'une carte met dans le volet d'à côté.
+    private func sideItem(for kind: DeskWidgets.Kind) -> StudyDesk.SideItem? {
+        let id = course?.id
+        switch kind {
+        case .target, .upNext, .redo: return .init(kind: .series, title: String(localized: "Série"), icon: "doc.text", courseID: id)
+        case .revisionSheet, .revisionExam: return .init(kind: .sheet, title: String(localized: "Fiche"), icon: "list.bullet.rectangle", courseID: id)
+        case .steps, .lectureTheory: return .init(kind: .courseNotes, title: String(localized: "Notes du cours"), icon: "text.alignleft", courseID: id)
+        default: return nil
+        }
+    }
+
     /// Une carte, avec ses réglages quand on organise.
     @ViewBuilder
     private func card(_ placement: DeskWidgets.Placement, in list: [DeskWidgets.Placement]) -> some View {
         content(placement.kind, size: placement.size)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .contextMenu {
+                if let pane = centerPane(for: placement.kind) {
+                    Button { desk.pane = pane } label: { Label("Ouvrir au centre", systemImage: "arrow.up.left.and.arrow.down.right") }
+                }
+                if let item = sideItem(for: placement.kind) {
+                    Button { desk.openSide(item) } label: { Label("Mettre à côté", systemImage: "sidebar.right") }
+                }
+                if placement.kind == .claude {
+                    Button { desk.dockClaude() } label: { Label("Ancrer à côté", systemImage: "sidebar.right") }
+                }
+                Divider()
+                Button { save(DeskWidgets.resized(placement.kind, in: list)) } label: { Label("Changer la taille", systemImage: "square.resize") }
+                Button { save(DeskWidgets.toggled(placement.kind, in: list)) } label: { Label("Masquer", systemImage: "eye.slash") }
+            }
+            .overlay(alignment: .topTrailing) {
+                // Zoomer : la carte mène à son outil, au centre.
+                if !editing, let pane = centerPane(for: placement.kind) {
+                    Button { desk.pane = pane } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(StudyPalette.inkTertiary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Ouvrir au centre")
+                    .padding(6)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if editing {
                     HStack(spacing: 2) {
@@ -1605,6 +1687,8 @@ private struct StudyDeskHome: View {
         case .claude: return "Claude"
         case .courses: return String(localized: "Sur quoi ?")
         case .accounts: return String(localized: "Comptes")
+        case .deadlines: return String(localized: "Échéances")
+        case .group: return String(localized: "Groupe")
         case .lectureClock: return String(localized: "Le cours")
         case .lectureMarks: return String(localized: "Repères")
         case .lectureTools: return String(localized: "Outils du cours")
@@ -1715,6 +1799,8 @@ private struct StudyDeskHome: View {
             }
         case .accounts:
             glassCard { accounts }
+        case .deadlines: deadlinesCard
+        case .group: groupCard
         case .lectureClock: glassCard { lecturePart?(.clock) }
         case .lectureMarks: glassCard { lecturePart?(.marks) }
         case .lectureTools: glassCard { lecturePart?(.tools) }
@@ -1775,6 +1861,48 @@ private struct StudyDeskHome: View {
                 }
             } else {
                 Label("Pas d'examen à venir", systemImage: "calendar").foregroundStyle(StudyPalette.inkSecondary)
+            }
+        }
+    }
+
+    /// Les échéances de la semaine (tous les cours suivis) : évaluations, séries à rendre, corrigés.
+    private var deadlinesCard: some View {
+        let list = Deadline.upcoming(in: allCourses.filter(\.isTracked), days: 7).prefix(5)
+        return glassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Échéances").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink)
+                if list.isEmpty {
+                    Text("Rien cette semaine.").font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+                }
+                ForEach(Array(list)) { deadline in
+                    HStack(spacing: 10) {
+                        Image(systemName: deadline.icon).foregroundStyle(Carnet.tint(deadline.colorHex)).frame(width: 20)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(deadline.title).font(.callout.weight(.medium)).foregroundStyle(StudyPalette.ink).lineLimit(1)
+                            Text("\(deadline.courseCode) · " + deadline.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                .font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Le groupe de la session commune : qui est là, et leur temps cette semaine.
+    private var groupCard: some View {
+        glassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(timer.state?.groupSession?.groupName ?? "Groupe", systemImage: "person.2.fill")
+                    .font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink)
+                let members = groups.first { $0.remoteID == timer.state?.groupSession?.groupID }?.members.sorted { $0.weeklySeconds > $1.weeklySeconds } ?? []
+                ForEach(Array(members.prefix(5))) { member in
+                    HStack {
+                        Text(member.isMe ? "Toi" : (member.displayName.isEmpty ? "—" : member.displayName)).font(.callout).foregroundStyle(StudyPalette.ink)
+                        Spacer()
+                        Text(DateUtils.durationLabel(seconds: member.weeklySeconds)).font(.caption.monospacedDigit()).foregroundStyle(StudyPalette.inkSecondary)
+                    }
+                }
+                if members.isEmpty { Text("Chrono commun en cours.").font(.callout).foregroundStyle(StudyPalette.inkSecondary) }
             }
         }
     }
