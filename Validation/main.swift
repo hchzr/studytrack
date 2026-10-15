@@ -6402,6 +6402,7 @@ do {
     check(N.visible(queue, at: t0.addingTimeInterval(15)).map(\.kind) == [.claude], "notifications : chacune part à son heure")
     check(N.visible(queue, at: t0.addingTimeInterval(30)).isEmpty, "notifications : puis plus rien")
     check(N.duration(.claude) > N.duration(.blockedApp), "notifications : la réponse de Claude reste plus longtemps")
+    check([N.Kind.classSoon, .solution, .breakSoon, .info].allSatisfy { N.duration($0) > 0 }, "notifications : chaque genre a une durée")
 }
 
 // MARK: Réveil des autres appareils (verrou)

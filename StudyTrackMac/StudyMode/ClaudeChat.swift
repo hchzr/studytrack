@@ -359,6 +359,7 @@ final class ClaudeChat: Identifiable {
         // Claude répond pendant qu'on lit autre chose : on le dit.
         if error == nil, !StudyModeController.shared.desk.claudeVisible {
             DeskNotifications.shared.post(.claude, "Claude a répondu", icon: "sparkle")
+            StudyModeController.shared.desk.claudeUnread = true
         }
         if let error {
             messages[index].error = error.lowercased().contains("login") || error.lowercased().contains("auth")

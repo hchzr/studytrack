@@ -522,7 +522,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     /// Un écran calme sur chaque écran qui n'est pas celui du bureau d'étude.
     private func showCalmWindows() {
-        guard let timer, let settings, !previewOnly, calmWindows.isEmpty else { return }
+        guard let timer, let settings, !previewOnly, settings.studyCalmDisplays, calmWindows.isEmpty else { return }
         for screenInfo in NSScreen.screens.dropFirst() {
             let calm = StudyWindow(contentRect: screenInfo.frame, styleMask: [.borderless, .fullSizeContentView],
                                    backing: .buffered, defer: false)

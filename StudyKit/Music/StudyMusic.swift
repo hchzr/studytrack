@@ -509,6 +509,9 @@ final class StudyMusic {
 
     /// Saute à ce morceau de la file.
     func playQueued(_ item: QueueItem) {
+        // Seulement la file de cet appareil : sur celle d'un autre (miroir), la
+        // commande serait fausse, et deux échecs coupent l'édition de la file.
+        guard canEditQueue, !isRemote else { return }
         lastError = nil
         Task { await report(backend.playQueued(item)) }
     }

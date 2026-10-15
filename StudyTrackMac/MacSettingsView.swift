@@ -151,6 +151,8 @@ private struct StudySettingsPane: View {
                     Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
                     Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
                 }
+                Toggle("Autres écrans au calme", isOn: $settings.studyCalmDisplays)
+                    .disabled(!settings.studyBlocking)
                 Toggle("Bloquer les gestes du trackpad", isOn: $settings.studyBlockGestures)
                     .disabled(!settings.studyBlocking)
                     .help("Mission Control, changer de bureau, Launchpad : les gestes à trois ou quatre doigts. Le Dock se relance au début et à la fin.")

@@ -38,6 +38,34 @@ final class DeskGround {
     }
 }
 
+// MARK: - Apps ouvertes
+
+/// Les apps permises qui tournent : un point sous leur icône dans la colonne
+/// d'outils, comme dans le Dock qu'un blocage cache.
+@MainActor
+@Observable
+final class RunningApps {
+    static let shared = RunningApps()
+
+    private(set) var running: Set<String> = []
+    private var observers: [NSObjectProtocol] = []
+
+    func start() {
+        guard observers.isEmpty else { return }
+        refresh()
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { RunningApps.shared.refresh() }
+            })
+        }
+    }
+
+    private func refresh() {
+        running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+    }
+}
+
 // MARK: - Barre d'état
 
 /// L'heure, la batterie et le réseau : ce que la barre des menus de macOS

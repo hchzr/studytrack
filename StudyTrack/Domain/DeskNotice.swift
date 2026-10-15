@@ -9,7 +9,7 @@ import Foundation
 enum DeskNotice {
 
     enum Kind: String, Codable {
-        case blockedApp, iPhone, claude, info
+        case blockedApp, iPhone, claude, classSoon, solution, breakSoon, info
     }
 
     struct Item: Identifiable, Equatable {
@@ -32,6 +32,9 @@ enum DeskNotice {
         case .blockedApp: return 4
         case .iPhone: return 4
         case .claude: return 6
+        case .classSoon: return 10
+        case .solution: return 6
+        case .breakSoon: return 6
         case .info: return 5
         }
     }

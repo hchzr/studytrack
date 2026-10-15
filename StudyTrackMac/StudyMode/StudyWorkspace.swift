@@ -55,6 +55,12 @@ struct StudyWorkspace: View {
         .onChange(of: layout.takeover) { _, _ in dismissedTakeover = nil }
         .onChange(of: arrangementKey) { _, _ in arrange(force: false) }
         .onReceive(NotificationCenter.default.publisher(for: .studyTidyDesk)) { _ in arrange(force: true) }
+        .onChange(of: arrangementContext.solutionAvailable) { old, new in
+            if !old, new, arrangementContext.hasTarget {
+                DeskNotifications.shared.post(.solution, "Le corrigé de cette série est publié", icon: "checkmark.seal")
+            }
+        }
+        .task { await watchNotices() }
         .task {
             arrange(force: false)
             while !Task.isCancelled {
@@ -85,6 +91,32 @@ struct StudyWorkspace: View {
                 classes = DeskSchedule.today(context: context)
                 let wake = DeskSchedule.nextChange(in: classes)
                 try? await Task.sleep(for: .seconds(max(1, wake.timeIntervalSinceNow + 0.5)))
+            }
+        }
+    }
+
+    // MARK: Ce qui mérite une notification
+
+    /// Un cours qui commence, une pause qui arrive : dits en haut du bureau, puisque
+    /// le Centre de notifications est fermé pendant un blocage.
+    private func watchNotices() async {
+        var told: Set<UUID> = []
+        var warnedBlock = 0
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(10))
+            let date = Date()
+            if let next = DeskSchedule.next(in: classes, after: date), !told.contains(next.id),
+               next.slot.start.timeIntervalSince(date) <= LectureClock.lead {
+                told.insert(next.id)
+                let minutes = max(1, Int((next.slot.start.timeIntervalSince(date) / 60).rounded(.up)))
+                DeskNotifications.shared.post(.classSoon,
+                                              "\(next.slot.courseCode) commence dans \(minutes) min" + (next.location.isEmpty ? "" : " · \(next.location)"),
+                                              icon: "person.wave.2")
+            }
+            if timer.phase == .running, let status = timer.pomodoroStatus(at: date),
+               status.remaining > 0, status.remaining <= 60, warnedBlock != status.blockNumber {
+                warnedBlock = status.blockNumber
+                DeskNotifications.shared.post(.breakSoon, "Pause dans une minute", icon: "cup.and.saucer")
             }
         }
     }
@@ -816,6 +848,7 @@ private struct StudyTopBar: View {
 // MARK: - Colonne d'outils
 
 private struct StudyRail: View {
+    @State private var running = RunningApps.shared
     var desk: StudyDesk
     var browser: StudyBrowserModel
     let course: Course?
@@ -832,7 +865,8 @@ private struct StudyRail: View {
             }
             Rectangle().fill(StudyPalette.rule).frame(width: 34, height: 1).padding(.vertical, 4)
             // Par-dessus ou à côté de l'outil du centre, sans le remplacer.
-            RailButton(title: "Claude", icon: "sparkle", selected: desk.claudeVisible) { desk.toggleClaude() }
+            RailButton(title: "Claude", icon: "sparkle", selected: desk.claudeVisible,
+                       badge: desk.claudeUnread ? "•" : (desk.chats.values.contains { $0.isAnswering } ? "…" : nil)) { desk.toggleClaude() }
                 .help(desk.claudePlacement == .floating ? "Claude, par-dessus (⌘J)" : "Claude, à droite (⌘J)")
                 .contextMenu {
                     Button { desk.floatClaude() } label: { Label("Flottant", systemImage: "macwindow") }
@@ -849,6 +883,12 @@ private struct StudyRail: View {
                     VStack(spacing: 3) {
                         if let icon = StudyModeController.icon(for: bundleID) {
                             Image(nsImage: icon).resizable().frame(width: 30, height: 30)
+                                .overlay(alignment: .bottom) {
+                                    // Ouverte : un point, comme dans le Dock.
+                                    if running.running.contains(bundleID) {
+                                        Circle().fill(StudyPalette.ink).frame(width: 4, height: 4).offset(y: 6)
+                                    }
+                                }
                         }
                         Text(StudyModeController.name(for: bundleID)).font(.caption2).foregroundStyle(StudyPalette.inkTertiary)
                             .lineLimit(1)
@@ -859,6 +899,7 @@ private struct StudyRail: View {
                 .help(StudyModeController.name(for: bundleID))
             }
         }
+        .onAppear { running.start() }
         .padding(.vertical, 14)
         .frame(width: 76)
         .deskGlass(in: Rectangle())

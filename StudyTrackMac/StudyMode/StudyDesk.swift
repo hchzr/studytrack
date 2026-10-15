@@ -144,6 +144,8 @@ final class StudyDesk {
     var claudePlacement: ClaudePlacement = ClaudePlacement(rawValue: UserDefaults.standard.string(forKey: "desk.claude") ?? "") ?? .floating {
         didSet { UserDefaults.standard.set(claudePlacement.rawValue, forKey: "desk.claude") }
     }
+    /// Claude a répondu pendant qu'on ne le regardait pas (un point sur la colonne d'outils).
+    var claudeUnread = false
     /// La fenêtre flottante, montrée ou rangée.
     var claudeShown = false {
         didSet { if claudeShown { claudeOpened = true } }
@@ -169,6 +171,7 @@ final class StudyDesk {
     }
 
     func showClaude() {
+        claudeUnread = false
         if !applying { pins.claude = true }
         if claudePlacement == .docked { openSide(claudeItem) } else { claudeShown = true }
     }
