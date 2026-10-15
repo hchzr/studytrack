@@ -103,6 +103,28 @@ struct RevisionSheet: Codable, Equatable {
         return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? ""
     }
 
+    // MARK: Relier à la semaine
+
+    /// Les chapitres dont une entrée renvoie à cette section du polycopié (ou à l'une de ses
+    /// sous-sections, ou à la section qui la contient) : « Fiche · chapitre » depuis la semaine.
+    func chapters(forPath path: String) -> [Chapter] {
+        let wanted = Self.normalizedPath(path)
+        guard !wanted.isEmpty else { return [] }
+        return chapters.filter { chapter in
+            chapter.entries.contains { entry in
+                let other = Self.normalizedPath(entry.link)
+                return !other.isEmpty && (other == wanted || other.hasPrefix(wanted + "/") || wanted.hasPrefix(other + "/"))
+            }
+        }
+    }
+
+    /// Le chemin d'une section, qu'on l'ait écrit en chemin du site ou en lien de l'app.
+    static func normalizedPath(_ link: String) -> String {
+        guard !link.isEmpty else { return "" }
+        if let url = URL(string: link), let path = BotafogoPage.handoutPath(link: url) { return path.lowercased() }
+        return StudyLinkKey.handoutPath(link) ?? link.lowercased()
+    }
+
     // MARK: Chercher
 
     /// La fiche réduite à ce qui contient tous les mots de la recherche (titre,

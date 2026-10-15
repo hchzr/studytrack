@@ -364,7 +364,16 @@ struct StudyWorkspace: View {
             ExercisePane(course: course, desk: desk, openWeb: openWeb)
         case .course:
             CoursePane(course: course, desk: desk.sites, openWeb: openWeb, ask: { desk.ask($0, attachSeries: false) },
-                       sendBeside: { reading, title in openBeside(reading, title: title) }, hasNotesTool: true)
+                       sendBeside: { reading, title in openBeside(reading, title: title) }, hasNotesTool: true,
+                       go: { destination in
+                           switch destination {
+                           case .exercise(let exercise):
+                               timer.retarget(courseID: course?.id, taskType: .exercise, targetID: exercise.id)
+                               desk.pane = .exercise
+                           case .notes:
+                               desk.pane = .notes
+                           }
+                       })
         case .notes:
             NotesPane(course: course, sendBeside: { path, title in
                 desk.openSide(.init(kind: .notebook(path: path), title: title, icon: "pencil.and.scribble", courseID: course?.id))

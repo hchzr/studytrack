@@ -10,6 +10,8 @@ struct RevisionSheetView: View {
     /// Ouvrir une section du polycopié (son chemin `/handout/…`).
     var openPoly: (String) -> Void
     var compact = false
+    /// Un chapitre à ouvrir d'emblée (depuis la semaine : « Fiche · chapitre »).
+    var openChapter: String? = nil
 
     enum Filter: String, CaseIterable, Identifiable {
         case all, statements, methods
@@ -113,6 +115,7 @@ struct RevisionSheetView: View {
             if let index = CommandLine.arguments.firstIndex(of: "-ficheChapter"), index + 1 < CommandLine.arguments.count { chapterScope = CommandLine.arguments[index + 1] }
             if CommandLine.arguments.contains("-ficheConcept") { concept = sheet?.keyed.dropFirst(2).first?.key }
             #endif
+            if let openChapter, sheet?.chapter(openChapter) != nil { chapterScope = openChapter; tab = .fiche }
         }
     }
 

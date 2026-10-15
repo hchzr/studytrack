@@ -5454,6 +5454,20 @@ do {
     check(MathEngine.format(6.02e23).contains("10^23"), "affichage : notation scientifique")
 }
 
+// MARK: La semaine relie la fiche (RevisionSheet.chapters(forPath:))
+do {
+    func entry(_ id: String, _ link: String) -> RevisionSheet.Entry { .init(id: id, kind: .theorem, title: id, body: "b", source: "", link: link) }
+    let sheet = RevisionSheet(origin: .handout, generatedAt: Date(), chapters: [
+        .init(id: "c0", title: "Suites", entries: [entry("a", "/handout/matiere/m_suites"), entry("b", "/handout/matiere/m_suites/cauchy")]),
+        .init(id: "c1", title: "Limites", entries: [entry("c", "studytrack-poly:///handout/matiere/m_limites")]),
+        .init(id: "c2", title: "Sans lien", entries: [entry("d", "")]),
+    ])
+    check(sheet.chapters(forPath: "/handout/matiere/m_suites").map(\.id) == ["c0"], "semaine : une section → son chapitre")
+    check(sheet.chapters(forPath: "/handout/matiere/m_suites/cauchy/detail").map(\.id) == ["c0"], "semaine : une sous-section d'un renvoi → le chapitre")
+    check(sheet.chapters(forPath: "/handout/matiere/m_limites").map(\.id) == ["c1"], "semaine : un lien de l'app est reconnu")
+    check(sheet.chapters(forPath: "/handout/matiere/autre").isEmpty && sheet.chapters(forPath: "").isEmpty, "semaine : rien à relier")
+}
+
 // MARK: Le cadre du tuteur (TutorFramework)
 do {
     typealias T = TutorFramework

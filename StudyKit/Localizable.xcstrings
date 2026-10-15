@@ -4466,6 +4466,9 @@
         }
       }
     },
+    "Aucun indice donné sur cet exercice" : {
+
+    },
     "Aucun membre" : {
       "localizations" : {
         "en" : {
@@ -7208,6 +7211,9 @@
         }
       }
     },
+    "copie pas envoyée" : {
+
+    },
     "Copiée" : {
       "localizations" : {
         "en" : {
@@ -9814,6 +9820,9 @@
         }
       }
     },
+    "Explications : tout expliquer, solutions comprises" : {
+
+    },
     "Exporter en CSV" : {
       "localizations" : {
         "en" : {
@@ -11347,6 +11356,16 @@
         }
       }
     },
+    "Indices donnés : niveau %lld sur 4 (%@)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indices donnés : niveau %1$lld sur 4 (%2$@)"
+          }
+        }
+      }
+    },
     "Infos" : {
 
     },
@@ -12691,6 +12710,9 @@
           }
         }
       }
+    },
+    "Les pages de ta copie que Claude a reçues dans cette conversation" : {
+
     },
     "Les photos et questions passent par ton compte iCloud, chiffrées ; rien n'est gardé en route." : {
 
@@ -15116,6 +15138,9 @@
         }
       }
     },
+    "p. %@ vues" : {
+
+    },
     "p. %lld / %lld" : {
       "localizations" : {
         "fr" : {
@@ -15931,6 +15956,9 @@
         }
       }
     },
+    "Photo" : {
+
+    },
     "Place maximale" : {
       "localizations" : {
         "en" : {
@@ -16677,6 +16705,9 @@
           }
         }
       }
+    },
+    "Questions cochées" : {
+
     },
     "Qui découle de quoi" : {
 
@@ -20036,6 +20067,16 @@
         }
       }
     },
+    "Ta copie a %lld pages : pas de page %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ta copie a %1$lld pages : pas de page %2$@"
+          }
+        }
+      }
+    },
     "Ta copie n'a pas changé depuis ton dernier envoi : Claude l'a déjà" : {
       "localizations" : {
         "en" : {
@@ -21442,6 +21483,9 @@
           }
         }
       }
+    },
+    "Tuteur : des indices, pas la solution" : {
+
     },
     "Type" : {
       "localizations" : {

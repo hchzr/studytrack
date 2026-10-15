@@ -271,7 +271,13 @@ struct StudyModeScreen: View {
                     case .course:
                         CoursePane(course: course, desk: SiteHub.shared,
                                    openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") },
-                                   ask: askClaude, compact: true)
+                                   ask: askClaude, compact: true,
+                                   go: { destination in
+                                       if case .exercise(let exercise) = destination {
+                                           focus.updateContext(courseID: .some(course?.id), taskType: .exercise, targetID: .some(exercise.id))
+                                           tab = .series
+                                       }
+                                   })
                     case .calc:
                         CalcPane(desk: calc, compact: true,
                                  openWeb: { url, title in browsing = BrowsedLink(title: title, url: url, icon: "globe") })

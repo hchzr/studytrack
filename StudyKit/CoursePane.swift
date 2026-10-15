@@ -28,6 +28,14 @@ struct CoursePane: View {
     var document: Reading? = nil
     /// Tes notes ont leur propre outil (le Mac) : elles ne sont pas redites ici.
     var hasNotesTool = false
+    /// Aller ailleurs dans le bureau (la série, tes notes) : la semaine y mène directement.
+    var go: ((Destination) -> Void)? = nil
+
+    enum Destination {
+        /// Travailler cet exercice (l'onglet Série, sur lui).
+        case exercise(Exercise)
+        case notes
+    }
 
     /// La liste de gauche, repliée pour lire en grand (une par disposition).
     @AppStorage("course.listHidden") private var listHiddenAlone = false
@@ -69,6 +77,8 @@ struct CoursePane: View {
     }
 
     @State private var source: Source = .studytrack
+    /// Le chapitre de la fiche demandé depuis la semaine.
+    @State private var sheetChapter: String?
     @Query private var allCourses: [Course]
     @State private var coursewareFailed = false
     @State private var composingEd = false
@@ -155,6 +165,7 @@ struct CoursePane: View {
                 guard let course else { return }
                 TheoryTracking.mark(address, in: course)
             }
+            .onChange(of: source) { _, new in if new != .sheet { sheetChapter = nil } }
     }
 
     @ViewBuilder
@@ -184,7 +195,7 @@ struct CoursePane: View {
                     sourcePicker.padding(.horizontal, 12).padding(.vertical, 10)
                     Rectangle().fill(Carnet.rule).frame(height: 1)
                 }
-                RevisionSheetView(course: course, desk: desk, openPoly: openSheetLink)
+                RevisionSheetView(course: course, desk: desk, openPoly: openSheetLink, openChapter: sheetChapter)
             }
             .onAppear { consumeRequest() }
             .onChange(of: desk.request) { _, _ in consumeRequest() }
@@ -284,7 +295,7 @@ struct CoursePane: View {
             case .moodle: moodleList(course)
             case .courseware: coursewareList
             case .botafogo: botafogoList
-            case .sheet: RevisionSheetView(course: course, desk: desk, openPoly: openSheetLink, compact: true)
+            case .sheet: RevisionSheetView(course: course, desk: desk, openPoly: openSheetLink, compact: true, openChapter: sheetChapter)
             case .saved:
                 SavedResourcesList(course: course, selected: openResourceID, open: { openResource($0, course: course) })
             case .ed: edList
@@ -312,28 +323,52 @@ struct CoursePane: View {
     /// est étroite à côté de la série) — un contrôle segmenté du Mac ne
     /// rétrécit pas et débordait sur la barre latérale.
     private var sourcePicker: some View {
-        Menu {
-            ForEach(sources) { item in
-                Button { source = item } label: {
-                    Label(item.label, systemImage: item.icon)
+        HStack(spacing: 8) {
+            Menu {
+                ForEach(sources.filter { $0 != .saved }) { item in
+                    Button { source = item } label: {
+                        Label(item.label, systemImage: item.icon)
+                    }
                 }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: source.icon).foregroundStyle(Carnet.inkSecondary)
+                    Text(source.label).font(.body.weight(.medium))
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Carnet.inkSecondary)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
             }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: source.icon).foregroundStyle(Carnet.inkSecondary)
-                Text(source.label).font(.body.weight(.medium))
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Carnet.inkSecondary)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .foregroundStyle(Carnet.ink)
+            .accessibilityLabel("Source")
+            savedButton
+        }
+    }
+
+    /// Les gardés ne sont pas une source parmi d'autres : ce sont **tes** documents, d'où ce signet à
+    /// côté du menu, toujours sous la main, avec leur nombre.
+    @ViewBuilder
+    private var savedButton: some View {
+        let count = course?.savedResources.count ?? 0
+        let active = source == .saved
+        Button { source = active ? (sources.first { $0 != .saved } ?? .studytrack) : .saved } label: {
+            HStack(spacing: 5) {
+                Image(systemName: active || count > 0 ? "bookmark.fill" : "bookmark")
+                if count > 0 { Text("\(count)").font(.caption.weight(.semibold).monospacedDigit()) }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .background(Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 11).padding(.vertical, 8)
+            .background(active ? Carnet.ink : Carnet.sheetRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .foregroundStyle(active ? Carnet.ground : Carnet.ink)
             .contentShape(Rectangle())
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .foregroundStyle(Carnet.ink)
-        .accessibilityLabel("Source")
+        .help(active ? "Revenir au cours" : "Tes documents gardés (le signet en haut d'un document)")
+        .accessibilityLabel("Gardés")
     }
 
     // MARK: StudyTrack
@@ -354,9 +389,9 @@ struct CoursePane: View {
         return weeks.first { $0 >= current && $0 > 0 } ?? weeks.last ?? current
     }
 
-    /// La semaine : ce qu'elle demande (la consigne du cours, le temps qu'il
-    /// reste), puis à regarder, à lire, les documents et la série — chacun
-    /// s'ouvre ici, et se coche quand on arrive au bout.
+    /// La semaine : où reprendre, puis à regarder, à lire, les documents et la série — chacun
+    /// s'ouvre ici, se coche quand on arrive au bout, et mène à la fiche (le chapitre qu'il couvre),
+    /// à la série (l'exercice) et à tes notes.
     private func studyTrackList(_ course: Course) -> some View {
         let tint = Carnet.tint(course.colorHex)
         let all = weeks(course)
@@ -368,35 +403,57 @@ struct CoursePane: View {
         let series = course.sortedSeries.filter { $0.plannedWeek == shown && !$0.exercises.isEmpty }
         return VStack(spacing: 0) {
             weekStrip(course, weeks: all, shown: shown, tint: tint)
-            List {
-                Section { weekSummary(course, week: shown, items: items, videos: videos, tint: tint) }
-                if !videos.isEmpty {
-                    Section("À regarder") { ForEach(videos) { theoryRow($0, course: course, tint: tint) } }
-                }
-                if !readings.isEmpty {
-                    Section("À lire") { ForEach(readings) { theoryRow($0, course: course, tint: tint) } }
-                }
-                if !slides.isEmpty {
-                    Section("Diapositives et notes") { ForEach(slides) { theoryRow($0, course: course, tint: tint) } }
-                }
-                if !series.isEmpty {
-                    Section("Série") {
-                        ForEach(series) { item in seriesRow(item, tint: tint) }
-                    }
-                }
-                if shown == all.last, !course.documents.isEmpty {
-                    Section("Documents du cours") {
-                        ForEach(course.documents) { document in
-                            Button { openLink(document.url, title: document.title, kind: document.kind) } label: {
-                                Label(document.title, systemImage: document.kind.icon).foregroundStyle(Carnet.ink)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    weekSummary(course, week: shown, items: items, videos: videos, series: series, tint: tint)
+                    if !videos.isEmpty { weekCard("À regarder", icon: "play.rectangle", videos, course: course, tint: tint) }
+                    if !readings.isEmpty { weekCard("À lire", icon: "book", readings, course: course, tint: tint) }
+                    if !slides.isEmpty { weekCard("Diapositives et notes", icon: "rectangle.on.rectangle", slides, course: course, tint: tint) }
+                    ForEach(series) { seriesCard($0, course: course, tint: tint) }
+                    if shown == all.last, !course.documents.isEmpty {
+                        card("Documents du cours", icon: "folder") {
+                            ForEach(course.documents) { document in
+                                Button { openLink(document.url, title: document.title, kind: document.kind) } label: {
+                                    Label(document.title, systemImage: document.kind.icon)
+                                        .foregroundStyle(Carnet.ink)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 12).padding(.vertical, 9)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+        }
+    }
+
+    /// Une carte de la semaine : un titre discret, ses lignes séparées d'un trait fin.
+    private func card<Content: View>(_ title: String, icon: String, detail: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.caption)
+                Text(title).font(.caption.weight(.semibold)).textCase(.uppercase).tracking(0.6)
+                Spacer(minLength: 0)
+                if let detail { Text(detail).font(.caption.monospacedDigit()) }
+            }
+            .foregroundStyle(Carnet.inkSecondary)
+            .padding(.horizontal, 4)
+            VStack(spacing: 0, content: content)
+                .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Carnet.rule))
+        }
+    }
+
+    private func weekCard(_ title: String, icon: String, _ items: [TheoryItem], course: Course, tint: Color) -> some View {
+        card(title, icon: icon, detail: "\(items.filter(\.isWatched).count)/\(items.count)") {
+            ForEach(items) { item in
+                if item.id != items.first?.id { Rectangle().fill(Carnet.rule).frame(height: 1).padding(.leading, 12) }
+                theoryRow(item, course: course, tint: tint)
+            }
         }
     }
 
@@ -435,16 +492,16 @@ struct CoursePane: View {
         }
     }
 
-    /// En tête de la semaine : son nom, la consigne du cours, ce qu'il reste.
-    private func weekSummary(_ course: Course, week: Int, items: [TheoryItem], videos: [TheoryItem], tint: Color) -> some View {
+    /// En tête de la semaine : son nom, la consigne du cours, ce qu'il reste — et **où reprendre**.
+    private func weekSummary(_ course: Course, week: Int, items: [TheoryItem], videos: [TheoryItem], series: [ExerciseSeries], tint: Color) -> some View {
         let left = items.filter { !$0.isWatched }
         let seconds = videos.filter { !$0.isWatched }.reduce(0) { total, item in
             let resume = ReadingMemory.video(item.urlString)
             return total + max(0, item.durationSeconds - Int(resume?.position ?? 0))
         }
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(week > 0 ? "Semaine \(week)" : "Sans semaine").font(Carnet.serif(20)).foregroundStyle(Carnet.ink)
+                Text(week > 0 ? "Semaine \(week)" : "Sans semaine").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
                 if week == course.currentWeek { Kicker("en cours", color: tint) }
                 Spacer()
                 if week != course.currentWeek, weeks(course).contains(course.currentWeek) {
@@ -466,8 +523,46 @@ struct CoursePane: View {
                         .font(.caption).foregroundStyle(Carnet.inkSecondary)
                 }
             }
+            if let next = nextUp(course, items: items, series: series) {
+                Button(action: next.action) {
+                    HStack(spacing: 8) {
+                        Image(systemName: next.icon)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(next.verb).font(.caption.weight(.semibold)).opacity(0.75)
+                            Text(next.title).font(.callout.weight(.semibold)).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(Carnet.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(Carnet.ground)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(Carnet.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Carnet.rule))
+    }
+
+    /// Le prochain geste de la semaine : reprendre ce qui est commencé, sinon le premier élément pas
+    /// encore vu, sinon la série — sur son premier exercice à faire.
+    private func nextUp(_ course: Course, items: [TheoryItem], series: [ExerciseSeries]) -> (verb: String, title: String, icon: String, action: () -> Void)? {
+        let todo = items.filter { !$0.isWatched }
+        let started = todo.first { ReadingMemory.video($0.urlString) != nil || ReadingMemory.page($0.urlString) != nil }
+        if let item = started ?? todo.first {
+            let title = item.title.isEmpty ? item.kind.label : item.title
+            return (started != nil ? String(localized: "Reprendre") : String(localized: "Commencer"), title, item.kind.icon,
+                    { openTheory(item, course: course) })
+        }
+        if let go, let pending = series.first(where: { !$0.isComplete }), let exercise = pending.sortedExercises.first(where: { !$0.isDone }) {
+            let name = pending.title.isEmpty ? "Série \(pending.seriesNumber)" : pending.title
+            return (String(localized: "Faire la série"), "\(name) · \(exercise.displayNumber)", "list.number", { go(.exercise(exercise)) })
+        }
+        return nil
     }
 
     private static func isDocumentLink(_ address: String) -> Bool {
@@ -479,19 +574,20 @@ struct CoursePane: View {
     /// autres liens, et où l'on en était.
     private func theoryRow(_ item: TheoryItem, course: Course, tint: Color) -> some View {
         let selected = isOpen(item)
+        let chapter = item.urlString.isEmpty ? nil : TheoryTracking.handoutPath(item.urlString).flatMap { course.revisionSheet?.chapters(forPath: $0).first }
         return HStack(spacing: 8) {
             Button {
                 item.watchedAt = item.isWatched ? nil : Date()
             } label: {
                 Image(systemName: item.isWatched ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
                     .foregroundStyle(item.isWatched ? tint : Carnet.inkTertiary)
             }
             .buttonStyle(.plain)
             .help(item.isWatched ? "Marquer non vu" : "Marquer vu")
             Button { openTheory(item, course: course) } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: item.kind.icon).foregroundStyle(tint).frame(width: 16)
-                    VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
                         MacMathText(item.title.isEmpty ? item.kind.label : item.title, size: 13)
                             .foregroundStyle(item.isWatched ? Carnet.inkSecondary : Carnet.ink)
                             .lineLimit(2)
@@ -504,6 +600,17 @@ struct CoursePane: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // La fiche : le chapitre que cette section couvre.
+            if let chapter {
+                Button { sheetChapter = chapter.id; source = .sheet } label: {
+                    Image(systemName: "rectangle.stack").font(.caption)
+                        .padding(6)
+                        .background(tint.opacity(0.14), in: Circle())
+                        .foregroundStyle(tint)
+                }
+                .buttonStyle(.plain)
+                .help("Fiche · \(chapter.title)")
+            }
             // Les autres liens (l'enregistrement, les notes annotées) en icônes.
             ForEach(Array(item.links.filter { $0.url != item.urlString }.prefix(3).enumerated()), id: \.offset) { _, link in
                 Button { openLink(link.url, title: link.title, kind: link.kind) } label: {
@@ -514,8 +621,9 @@ struct CoursePane: View {
                 .help(link.title)
             }
         }
-        .padding(.vertical, 2)
-        .listRowBackground(selected ? tint.opacity(0.12) : Color.clear)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(selected ? tint.opacity(0.12) : Color.clear)
     }
 
     /// « Reprendre à 12:40 », « p. 5 / 30 », « 25 min » — ce qu'il faut savoir avant d'ouvrir.
@@ -579,27 +687,79 @@ struct CoursePane: View {
         if let unit { reading = .edx(unit) } else { source = .courseware }
     }
 
-    private func seriesRow(_ series: ExerciseSeries, tint: Color) -> some View {
-        Button {
-            let title = series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title
-            if let path = BotafogoLinks.coursPath(series.urlString), let site = botafogoURL {
-                Task {
-                    await book.load(site)
-                    reading = .botafogo(title: title, url: path)
+    /// Une série : où tu en es exercice par exercice (un clic ouvre l'exercice dans l'onglet Série), son
+    /// énoncé, et ta copie.
+    private func seriesCard(_ series: ExerciseSeries, course: Course, tint: Color) -> some View {
+        let name = series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title
+        let exercises = series.sortedExercises
+        let firstOpen = exercises.first { !$0.isDone }
+        let copy = hasNotesTool ? NotesStore.shared.copy(for: series, course: course, among: allCourses) : nil
+        return card(name, icon: "list.number", detail: "\(series.doneCount)/\(series.requiredExercises.count)") {
+            VStack(alignment: .leading, spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 30, maximum: 38), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(exercises) { exercise in
+                        Button { go?(.exercise(exercise)) } label: {
+                            Text(exercise.exerciseNumber.split(separator: ".").last.map(String.init) ?? exercise.exerciseNumber)
+                                .font(.caption.weight(.semibold).monospacedDigit())
+                                .frame(minWidth: 28, minHeight: 28)
+                                .background(exerciseColor(exercise, tint: tint), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                .foregroundStyle(exercise.isDone || exercise.correctness != nil ? Carnet.ink : Carnet.inkSecondary)
+                                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(exercise.id == firstOpen?.id ? tint : .clear, lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(go == nil)
+                        .help("\(exercise.displayNumber)\(exercise.isBonus ? " (bonus)" : "")")
+                    }
                 }
-            } else if !series.urlString.isEmpty, !BotafogoLinks.isPage(series.urlString) {
-                reading = .pdf(title: title, address: series.urlString)
+                ViewThatFits(in: .horizontal) {
+                    seriesActions(series, name: name, firstOpen: firstOpen, copy: copy, tint: tint)
+                    seriesActions(series, name: name, firstOpen: firstOpen, copy: copy, tint: tint, short: true)
+                }
             }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "list.number").foregroundStyle(tint).frame(width: 18)
-                Text(series.title.isEmpty ? "Série \(series.seriesNumber)" : series.title).foregroundStyle(Carnet.ink)
-                Spacer()
-                Text("\(series.doneCount)/\(series.requiredExercises.count)").font(.caption.monospacedDigit())
-                    .foregroundStyle(Carnet.inkSecondary)
-            }
+            .padding(12)
         }
-        .buttonStyle(.plain)
+    }
+
+    private func exerciseColor(_ exercise: Exercise, tint: Color) -> Color {
+        switch exercise.correctness {
+        case .correct?: return Carnet.correct.opacity(0.35)
+        case .partial?: return Carnet.review.opacity(0.35)
+        case .wrong?: return Carnet.wrong.opacity(0.35)
+        case nil: return exercise.isDone ? tint.opacity(0.25) : Carnet.sheetRaised
+        }
+    }
+
+    private func seriesActions(_ series: ExerciseSeries, name: String, firstOpen: Exercise?, copy: NotesLibrary.Document?, tint: Color, short: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            if let go, let target = firstOpen ?? series.sortedExercises.first {
+                Button { go(.exercise(target)) } label: {
+                    Label(short ? "Faire" : (firstOpen == nil ? "Revoir la série" : "Faire la série"), systemImage: "pencil.and.list.clipboard")
+                }
+                .buttonStyle(.ink)
+            }
+            if !series.urlString.isEmpty {
+                Button { openSeriesStatement(series, title: name) } label: { Label(short ? "Énoncé" : "L'énoncé", systemImage: "doc.text") }
+                    .buttonStyle(.paper)
+            }
+            if copy != nil, let go {
+                Button { go(.notes) } label: { Label(short ? "Copie" : "Ma copie", systemImage: "pencil.and.scribble") }
+                    .buttonStyle(.paper)
+            }
+            Spacer(minLength: 0)
+        }
+        .labelStyle(.titleAndIcon)
+    }
+
+    private func openSeriesStatement(_ series: ExerciseSeries, title: String) {
+        if let path = BotafogoLinks.coursPath(series.urlString), let site = botafogoURL {
+            Task {
+                await book.load(site)
+                reading = .botafogo(title: title, url: path)
+            }
+        } else if !series.urlString.isEmpty, !BotafogoLinks.isPage(series.urlString) {
+            reading = .pdf(title: title, address: series.urlString)
+        }
     }
 
     private func open(_ item: TheoryItem) {
