@@ -6405,6 +6405,43 @@ do {
     check([N.Kind.classSoon, .solution, .breakSoon, .info].allSatisfy { N.duration($0) > 0 }, "notifications : chaque genre a une durée")
 }
 
+// MARK: Cartes du bureau
+do {
+    typealias W = DeskWidgets
+    func kinds(_ list: [W.Placement]) -> [W.Kind] { list.map(\.kind) }
+    let free = W.defaults(W.Context(moment: .series, hasCourse: false))
+    check(kinds(free).first == .courses && kinds(free).contains(.today) && !kinds(free).contains(.target) && !kinds(free).contains(.steps), "cartes : session libre → choisir sur quoi, l'horaire, rien sur une cible")
+    let course = W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true))
+    check(Array(kinds(course).prefix(2)) == [.session, .target] && kinds(course).contains(.upNext) && kinds(course).contains(.steps), "cartes : un cours → la session, l'exercice, la suite")
+    check(!kinds(W.defaults(W.Context(moment: .series, hasCourse: true))).contains(.upNext), "cartes : sans série, pas de « suite »")
+    check(!kinds(course).contains(.redo) && kinds(W.defaults(W.Context(moment: .series, hasCourse: true, redosDue: 2))).contains(.redo), "cartes : les reprises seulement quand il y en a")
+    check(kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 10))).contains(.exam) && !kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 60))).contains(.exam), "cartes : l'examen à moins de trois semaines")
+    check(kinds(W.defaults(W.Context(moment: .revision, hasCourse: true))).contains(.exam), "cartes : en révision, l'examen est là")
+    // Rangement de l'étudiant·e
+    var mine = course
+    mine = W.toggled(.claude, in: mine)
+    mine = W.resized(.music, in: mine)
+    check(mine.first { $0.kind == .claude }?.hidden == true && mine.first { $0.kind == .music }?.size == .medium, "cartes : masquer, agrandir")
+    check(W.resized(.music, in: W.resized(.music, in: mine)).first { $0.kind == .music }?.size == .small, "cartes : la taille tourne (petite, moyenne, grande, petite)")
+    let merged = W.merged(defaults: course, stored: mine)
+    check(merged == mine, "cartes : ce qui est rangé est gardé tel quel")
+    let withRedo = W.merged(defaults: W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true, redosDue: 1)), stored: mine)
+    check(withRedo.contains { $0.kind == .redo } && withRedo.first { $0.kind == .claude }?.hidden == true, "cartes : une carte du moment jamais vue s'ajoute, le reste est gardé")
+    check(W.merged(defaults: course, stored: nil) == course, "cartes : sans rangement, les cartes du moment")
+    let stale = W.merged(defaults: free, stored: course)
+    check(!stale.contains { $0.kind == .target }, "cartes : une carte que le moment n'offre pas ne reste pas")
+    let moved = W.moved(.target, by: 1, in: course)
+    check(moved[1].kind == .steps || moved.firstIndex { $0.kind == .target }! > course.firstIndex { $0.kind == .target }!, "cartes : déplacer d'un cran")
+    check(W.moved(.session, by: -1, in: course) == course, "cartes : la première ne remonte pas")
+    var hiddenMid = course
+    hiddenMid = W.toggled(.target, in: hiddenMid)
+    let skip = W.moved(.session, by: 1, in: hiddenMid)
+    check(skip.firstIndex { $0.kind == .session }! > skip.firstIndex { $0.kind == .target }!, "cartes : déplacer saute les cartes masquées")
+    check(W.decode(W.encode(mine)) == mine && W.decode(nil) == nil && W.decode(Data("x".utf8)) == nil, "cartes : le rangement voyage en JSON")
+    check(W.storageKey(.lecture) != W.storageKey(.series), "cartes : un bureau par moment")
+    check(W.Size.small.width < W.Size.medium.width && W.Size.medium.width < W.Size.large.width, "cartes : trois tailles")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

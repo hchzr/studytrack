@@ -320,7 +320,7 @@ struct StudyWorkspace: View {
                 desk.pane = .exercise
             }
         default:
-            StudyDeskHome(course: course, tint: tint, desk: desk, open: open)
+            StudyDeskHome(course: course, tint: tint, desk: desk, open: open, moment: moment)
         }
     }
 
@@ -1447,51 +1447,154 @@ private struct StudyDeskHome: View {
     @Query(sort: \Course.code) private var allCourses: [Course]
     @State private var classes: [ScheduledClass] = []
 
+    var moment: DeskMoment = .series
+    @State private var placements: [DeskWidgets.Placement] = []
+    @State private var editing = false
+
+    // MARK: Le plan de travail
+
+    /// Les reprises dues du cours.
+    private var due: [Exercise] {
+        course.map { SeriesReview.redoQueue([$0]).filter { ($0.redoDueAt ?? .distantFuture) <= Date() } } ?? []
+    }
+
+    private var widgetContext: DeskWidgets.Context {
+        DeskWidgets.Context(moment: moment, hasCourse: course != nil, hasSeries: series != nil,
+                            redosDue: due.count, daysToExam: course?.nextExam?.daysUntil)
+    }
+
+    private var shown: [DeskWidgets.Placement] {
+        DeskWidgets.merged(defaults: DeskWidgets.defaults(widgetContext), stored: placements.isEmpty ? nil : placements)
+    }
+
+    private func save(_ list: [DeskWidgets.Placement]) {
+        placements = list
+        UserDefaults.standard.set(DeskWidgets.encode(list), forKey: DeskWidgets.storageKey(moment))
+    }
+
     var body: some View {
+        let list = shown
         ScrollView {
-            HStack(alignment: .top, spacing: 40) {
-                VStack(spacing: 26) {
-                    StudyDial(tint: tint, size: 360)
-                    // Une session libre n'a pas de cible : pas de carte vide.
-                    if course != nil {
-                        StudyTargetCard(course: course, tint: tint)
-                            .frame(maxWidth: 520)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text(course.map { $0.name } ?? String(localized: "Ta session"))
+                        .font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink).lineLimit(1)
+                    Spacer()
+                    Button(editing ? "Terminé" : "Organiser") { editing.toggle() }
+                        .buttonStyle(.paper)
+                        .help("Masquer, agrandir ou déplacer les cartes : retenu pour ce moment")
+                }
+                FlowLayout(spacing: 16) {
+                    ForEach(list.filter { !$0.hidden }) { placement in
+                        card(placement, in: list)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                if course == nil {
-                    freeColumn
-                        .frame(width: 420)
-                } else {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Ta session").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
-                    // La file de reprise passe avant le reste quand quelque chose est dû.
-                    let due = course.map { SeriesReview.redoQueue([$0]).filter { ($0.redoDueAt ?? .distantFuture) <= Date() } } ?? []
-                    if let first = due.first {
-                        Button {
-                            if let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: first.id) }
-                            desk.pane = .exercise
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "arrow.counterclockwise.circle.fill").font(.title2).foregroundStyle(Carnet.review)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(due.count == 1 ? "Une reprise due : \(first.displayNumber)" : "\(due.count) reprises dues")
-                                        .font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink)
-                                    Text("Sur papier, l'énoncé seul, sans tes notes — 15 min chacune").font(.caption).foregroundStyle(StudyPalette.inkSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+                if editing, list.contains(where: \.hidden) {
+                    Text("Masquées").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink).padding(.top, 8)
+                    FlowLayout(spacing: 8) {
+                        ForEach(list.filter(\.hidden)) { placement in
+                            Button { save(DeskWidgets.toggled(placement.kind, in: list)) } label: {
+                                Label(title(placement.kind), systemImage: "plus.circle")
                             }
-                            .padding(14)
-                            .background(Carnet.review.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Carnet.review.opacity(0.35)))
-                            .contentShape(Rectangle())
+                            .buttonStyle(.paper)
                         }
-                        .buttonStyle(.plain)
                     }
+                }
+            }
+            .padding(40)
+        }
+        .onAppear { load() }
+        .onChange(of: moment) { _, _ in load() }
+        .task {
+            while !Task.isCancelled {
+                classes = DeskSchedule.today(context: context)
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
+    }
+
+    private func load() {
+        placements = DeskWidgets.decode(UserDefaults.standard.data(forKey: DeskWidgets.storageKey(moment))) ?? []
+    }
+
+    /// Une carte, avec ses réglages quand on organise.
+    @ViewBuilder
+    private func card(_ placement: DeskWidgets.Placement, in list: [DeskWidgets.Placement]) -> some View {
+        content(placement.kind, size: placement.size)
+            .frame(width: placement.size.width, alignment: .topLeading)
+            .overlay(alignment: .topTrailing) {
+                if editing {
+                    HStack(spacing: 2) {
+                        editButton("chevron.left", "Avant") { save(DeskWidgets.moved(placement.kind, by: -1, in: list)) }
+                        editButton("chevron.right", "Après") { save(DeskWidgets.moved(placement.kind, by: 1, in: list)) }
+                        editButton("arrow.up.left.and.arrow.down.right", "Taille") { save(DeskWidgets.resized(placement.kind, in: list)) }
+                        editButton("eye.slash", "Masquer") { save(DeskWidgets.toggled(placement.kind, in: list)) }
+                    }
+                    .padding(4)
+                    .deskGlass(in: Capsule())
+                    .padding(8)
+                }
+            }
+    }
+
+    private func editButton(_ icon: String, _ help: LocalizedStringKey, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.caption.weight(.semibold)).frame(width: 24, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(StudyPalette.ink)
+        .help(help)
+    }
+
+    private func title(_ kind: DeskWidgets.Kind) -> String {
+        switch kind {
+        case .session: return String(localized: "Session")
+        case .target: return String(localized: "Exercice")
+        case .upNext: return String(localized: "Ensuite")
+        case .steps: return String(localized: "Ta session")
+        case .redo: return String(localized: "Reprises")
+        case .exam: return String(localized: "Examen")
+        case .music: return String(localized: "Musique")
+        case .today: return String(localized: "Aujourd'hui")
+        case .claude: return "Claude"
+        case .courses: return String(localized: "Sur quoi ?")
+        case .accounts: return String(localized: "Comptes")
+        }
+    }
+
+    /// Le fond d'une carte : du verre, jamais sur ce qu'on lit.
+    private func glassCard<Content: View>(@ViewBuilder _ inner: () -> Content) -> some View {
+        inner()
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .deskGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func content(_ kind: DeskWidgets.Kind, size: DeskWidgets.Size) -> some View {
+        switch kind {
+        case .session:
+            glassCard {
+                StudyDial(tint: tint, size: size == .small ? 200 : (size == .medium ? 280 : 340))
+                    .frame(maxWidth: .infinity)
+            }
+        case .target:
+            StudyTargetCard(course: course, tint: tint)
+        case .upNext:
+            if let course {
+                glassCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Kicker("Ensuite")
+                        UpNextList(course: course, limit: size == .small ? 2 : 4)
+                    }
+                }
+            }
+        case .steps:
+            glassCard {
+                VStack(alignment: .leading, spacing: 10) {
                     // Les étapes et leur ordre : Personnaliser › Ta session (les mêmes sur l'iPhone).
-                    // Seulement les étapes qui ont un sens ici : pas de « Faire la série » sans
-                    // série, pas de débrief avant la fin.
+                    // Seulement celles qui ont un sens ici : pas de « Faire la série » sans série,
+                    // pas de débrief avant la fin.
                     ForEach(Array(SessionFlow.load().steps.filter(applies).enumerated()), id: \.element) { index, item in
                         switch item {
                         case .course:
@@ -1508,38 +1611,104 @@ private struct StudyDeskHome: View {
                         }
                     }
                     toolsRow
-                    accounts
-                }
-                .frame(width: 420)
                 }
             }
-            .padding(40)
+        case .redo:
+            redoCard
+        case .exam:
+            examCard
+        case .music:
+            glassCard { MusicNowPlayingCard(compact: true) }
+        case .today:
+            todayCard
+        case .claude:
+            glassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Claude", systemImage: "sparkle").font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink)
+                    Text(lastClaudeAnswer ?? String(localized: "Un indice, ou fais vérifier ta copie."))
+                        .font(.callout).foregroundStyle(StudyPalette.inkSecondary).lineLimit(4)
+                    Button { desk.showClaude() } label: { Label("Demander", systemImage: "arrow.up.forward") }
+                        .buttonStyle(.paper)
+                }
+            }
+        case .courses:
+            glassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Sur quoi ?").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink)
+                    FlowLayout(spacing: 7) {
+                        ForEach(allCourses.filter(\.isTracked)) { item in
+                            CourseChip(title: item.displayCode, color: Carnet.tint(item.colorHex), selected: false) {
+                                timer.retarget(courseID: item.id, taskType: .exercise)
+                            }
+                            .help(item.name)
+                        }
+                    }
+                }
+            }
+        case .accounts:
+            glassCard { accounts }
         }
-        .task {
-            while !Task.isCancelled {
-                classes = DeskSchedule.today(context: context)
-                try? await Task.sleep(for: .seconds(300))
+    }
+
+    /// La dernière réponse de Claude, pour qu'elle reste sous les yeux.
+    private var lastClaudeAnswer: String? {
+        desk.chats[course?.allExercises.first { $0.id == timer.targetID }?.series?.id]?.messages
+            .last { $0.role == .claude && !$0.text.isEmpty }?.text
+    }
+
+    private var redoCard: some View {
+        Group {
+            if let first = due.first {
+                Button {
+                    if let course { timer.retarget(courseID: course.id, taskType: .exercise, targetID: first.id) }
+                    desk.pane = .exercise
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.counterclockwise.circle.fill").font(.title2).foregroundStyle(Carnet.review)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(due.count == 1 ? "Une reprise due : \(first.displayNumber)" : "\(due.count) reprises dues")
+                                .font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink)
+                            Text("Sur papier, l'énoncé seul, sans tes notes — 15 min chacune").font(.caption).foregroundStyle(StudyPalette.inkSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(StudyPalette.inkTertiary)
+                    }
+                    .padding(16)
+                    .background(Carnet.review.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Carnet.review.opacity(0.35)))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                glassCard { Label("Aucune reprise due", systemImage: "checkmark").foregroundStyle(StudyPalette.inkSecondary) }
             }
         }
     }
 
-    // MARK: Une session libre
-
-    /// Sans cours : choisir sur quoi on travaille, et ce que la journée réserve.
-    private var freeColumn: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Sur quoi ?").font(Carnet.serif(.title2)).foregroundStyle(StudyPalette.ink)
-            FlowLayout(spacing: 7) {
-                ForEach(allCourses.filter(\.isTracked)) { item in
-                    CourseChip(title: item.displayCode, color: Carnet.tint(item.colorHex), selected: false) {
-                        timer.retarget(courseID: item.id, taskType: .exercise)
-                    }
-                    .help(item.name)
+    private var examCard: some View {
+        glassCard {
+            if let exam = course?.nextExam {
+                let days = exam.daysUntil
+                VStack(alignment: .leading, spacing: 4) {
+                    Kicker("Examen")
+                    Text(days == 0 ? String(localized: "Aujourd'hui") : String(localized: "Dans \(days) j"))
+                        .font(Carnet.serif(.title)).foregroundStyle(StudyPalette.ink)
+                    Text(exam.date.formatted(.dateTime.weekday(.wide).day().month())).font(.caption).foregroundStyle(StudyPalette.inkSecondary)
                 }
+            } else {
+                Label("Pas d'examen à venir", systemImage: "calendar").foregroundStyle(StudyPalette.inkSecondary)
             }
-            let upcoming = classes.filter { $0.slot.end > Date() }.prefix(4)
-            if !upcoming.isEmpty {
-                Text("Aujourd'hui").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink).padding(.top, 4)
+        }
+    }
+
+    private var todayCard: some View {
+        glassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Aujourd'hui").font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink)
+                let upcoming = classes.filter { $0.slot.end > Date() }.prefix(4)
+                if upcoming.isEmpty {
+                    Text("Plus rien à l'horaire.").font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+                }
                 ForEach(Array(upcoming)) { klass in
                     HStack(spacing: 10) {
                         RoundedRectangle(cornerRadius: 1.5).fill(Carnet.tint(klass.colorHex)).frame(width: 3, height: 30)
@@ -1552,8 +1721,6 @@ private struct StudyDeskHome: View {
                     }
                 }
             }
-            toolsRow
-            accounts
         }
     }
 
