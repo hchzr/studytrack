@@ -103,6 +103,21 @@ final class StudyMusic {
     private(set) var authorization = MusicAuthorization.currentStatus
     /// La dernière chose qui n'a pas marché (lecture refusée, Music fermé…).
     var lastError: String?
+    /// Remet à zéro le refus d'Automatisation de Music pour StudyTrack, puis refait une
+    /// demande : macOS reposera la question. Réversible, sans droits d'administration.
+    func askAutomationAgain() {
+        #if os(macOS)
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "AppleEvents", Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"]
+        try? reset.run()
+        reset.waitUntilExit()
+        automationDenied = false
+        // Une lecture neuve : le premier script refait la demande au système.
+        if observers > 0 { backend.stop(); backend.start() }
+        #endif
+    }
+
     /// macOS a refusé à StudyTrack de contrôler Music (Automatisation) : sans cela,
     /// l'écran disait seulement « Rien ne joue ».
     var automationDenied = false

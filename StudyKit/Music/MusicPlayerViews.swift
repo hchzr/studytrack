@@ -130,6 +130,8 @@ struct MusicNowPlayingCard: View {
                         .foregroundStyle(StudyPalette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     #if os(macOS)
+                    Button("Redemander l'autorisation") { StudyMusic.shared.askAutomationAgain() }
+                        .buttonStyle(.paper)
                     Button("Ouvrir les Réglages Système") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
                             NSWorkspace.shared.open(url)

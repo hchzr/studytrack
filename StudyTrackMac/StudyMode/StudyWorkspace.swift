@@ -1144,7 +1144,7 @@ private struct SideTabBar: View {
                 .padding(.trailing, 6)
         }
         .frame(height: 40)
-        .background(StudyPalette.raised.opacity(0.5))
+        .deskGlass(in: Rectangle())
     }
 }
 
@@ -1388,9 +1388,8 @@ private struct ClaudeLayer<Content: View>: View {
         }
         .frame(width: rect.width, height: rect.height)
         .clipShape(shape)
-        // L'ombre sur une simple forme, sous la conversation : la dessiner
-        // d'après tout le contenu coûtait cher à chaque image.
-        .background(shape.fill(Carnet.ground).shadow(color: .black.opacity(0.45), radius: 24, y: 10))
+        // Du papier sous la conversation, sans ombre : le trait fin suffit à la détacher.
+        .background(shape.fill(Carnet.ground))
         .overlay(shape.strokeBorder(StudyPalette.rule).allowsHitTesting(false))
         .overlay(alignment: .bottomLeading) { corner(rect, leading: true) }
         .overlay(alignment: .bottomTrailing) { corner(rect, leading: false) }
@@ -1416,7 +1415,7 @@ private struct ClaudeLayer<Content: View>: View {
             .frame(width: 40, height: 4)
             .frame(maxWidth: .infinity)
             .frame(height: 16)
-            .background(StudyPalette.raised.opacity(0.7))
+            .deskGlass(in: Rectangle())
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { value in

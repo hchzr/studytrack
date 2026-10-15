@@ -94,6 +94,9 @@ final class StudyShell {
             hot.register(key: kVK_Tab, modifiers: cmd | shift) { [weak self] in self?.advanceSwitcher(by: -1) },
             hot.register(key: kVK_Space, modifiers: cmd) { [weak self] in self?.showSearch() },
             hot.register(key: kVK_Space, modifiers: cmd | option) { [weak self] in self?.showSearch() },
+            // ⌘` : l'onglet d'à côté suivant (⇧ : précédent), le volet s'ouvre au besoin.
+            hot.register(key: kVK_ANSI_Grave, modifiers: cmd) { [weak self] in self?.cycleSide(1) },
+            hot.register(key: kVK_ANSI_Grave, modifiers: cmd | shift) { [weak self] in self?.cycleSide(-1) },
         ].compactMap { $0 }
     }
 
@@ -102,6 +105,14 @@ final class StudyShell {
         keys = []
         hideSwitcher(commit: false)
         hideSearch()
+    }
+
+    private func cycleSide(_ step: Int) {
+        let desk = controller.desk
+        let courseID = controller.timer?.courseID
+        let items = desk.sideItems.filter { $0.courseID == nil || $0.courseID == courseID }
+        desk.cycleSide(by: step, among: items)
+        controller.present()
     }
 
     // MARK: Sélecteur (⌘Tab)
@@ -123,6 +134,15 @@ final class StudyShell {
             desk.showClaude()
             self?.controller.present()
         })
+        // Les onglets d'à côté (l'énoncé, un cahier, un PDF…) : on y va comme à un outil.
+        let courseID = controller.timer?.courseID
+        for item in desk.sideItems where item.courseID == nil || item.courseID == courseID {
+            all.append(Entry(id: "side:\(item.id)", title: item.title, icon: item.icon, bundleID: nil) { [weak self] in
+                desk.sideSelection = item.id
+                desk.sideOpen = true
+                self?.controller.present()
+            })
+        }
         for bundleID in controller.settings?.studyApps ?? [] where bundleID != StudyMode.finderBundleID
             && StudyModeController.isInstalled(bundleID) {
             all.append(Entry(id: "app:\(bundleID)", title: StudyModeController.name(for: bundleID), icon: "app",
@@ -266,6 +286,7 @@ struct StudySearchView: View {
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
     @Query(sort: \Course.code) private var courses: [Course]
+    @Environment(\.modelContext) private var modelContext
     @State private var query = ""
     @State private var selected = 0
     @FocusState private var focused: Bool
@@ -360,6 +381,7 @@ struct StudySearchView: View {
             })
         }
         found += actions.filter { needle.isEmpty || matches($0.title, needle) }
+        found += library.filter { !needle.isEmpty && matches($0.title, needle) }
         found += tools.filter { !needle.isEmpty && matches($0.title, needle) }
         if !needle.isEmpty {
             let documents = SearchIndexBuilder.documents(courses: tracked)
@@ -385,6 +407,14 @@ struct StudySearchView: View {
             desk.showClaude()
             controller.present()
         })
+        // Un repère : un instant du cours à revoir, d'un seul geste (le créneau en cours).
+        if let course = tracked.first(where: { $0.id == timer.courseID }),
+           let klass = DeskSchedule.latest(of: course.id, in: DeskSchedule.today(context: modelContext)),
+           LectureClock.current(at: Date(), in: [klass.slot]) != nil {
+            list.append(Result(id: "a.mark", title: "Poser un repère", subtitle: course.displayCode, icon: "flag", section: "Actions") {
+                _ = LectureMarkStore.shared.mark(courseID: course.id, classStart: klass.slot.start)
+            })
+        }
         list.append(Result(id: "a.pause", title: timer.phase == .running ? "Mettre en pause" : "Reprendre", icon: "playpause", section: "Actions") {
             timer.toggle()
         })
@@ -408,6 +438,28 @@ struct StudySearchView: View {
                 }
             }
         }
+    }
+
+    /// Les ressources gardées du cours et ses cahiers (GoodNotes) : ils s'ouvrent à côté.
+    private var library: [Result] {
+        guard let course = tracked.first(where: { $0.id == timer.courseID }) else { return [] }
+        var list: [Result] = []
+        for resource in course.sortedResources {
+            let reading: CoursePane.Reading? = resource.kind == .poly
+                ? .botafogo(title: resource.title, url: resource.address) : ResourceLibrary.reading(for: resource)
+            guard let reading else { continue }
+            list.append(Result(id: "res.\(resource.id)", title: resource.title, subtitle: "Gardé", icon: resource.kind.icon, section: "Gardés") {
+                controller.desk.openSide(.init(kind: .reading(reading), title: resource.title, icon: resource.kind.icon, courseID: course.id))
+                controller.present()
+            })
+        }
+        for document in NotesStore.shared.documents(for: course, among: tracked) {
+            list.append(Result(id: "nb.\(document.path)", title: document.title, subtitle: "Cahier", icon: "pencil.and.scribble", section: "Cahiers") {
+                controller.desk.openSide(.init(kind: .notebook(path: document.path), title: document.title, icon: "pencil.and.scribble", courseID: course.id))
+                controller.present()
+            })
+        }
+        return list
     }
 
     private func open(_ course: UUID, _ item: UUID?, theory: Bool) {

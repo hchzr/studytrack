@@ -320,8 +320,7 @@ private struct StudySetupView: View {
         }
         .padding(32)
         .frame(width: 720)
-        .background(StudyPalette.raised.opacity(0.92), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(StudyPalette.rule))
+        .deskGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .onAppear {
             minutes = settings.studyMinutes
             openEnded = settings.studyOpenEnded
