@@ -380,7 +380,7 @@ private struct StudySetupView: View {
 }
 
 /// La playlist qui accompagne la session : aucune, ou l'une de la bibliothèque.
-private struct SoundtrackPicker: View {
+struct SoundtrackPicker: View {
     @Binding var choice: SessionSoundtrack.Choice?
     @State private var playlists: [SessionSoundtrack.Choice] = []
     @State private var loaded = false

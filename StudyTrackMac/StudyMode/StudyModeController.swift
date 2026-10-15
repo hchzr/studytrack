@@ -157,7 +157,6 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private func updateSoundtrack(_ timer: MacTimer) {
         guard let settings else { return }
         let soundtrack = StudySoundtrack.shared
-        soundtrack.choice = settings.studySoundtrack
         soundtrack.breakPolicy = settings.studySoundtrackOnBreak
         let phase: SessionSoundtrack.Phase
         if !timer.isStudying { phase = .ended }
@@ -166,6 +165,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         else { phase = .running }
         let course = (timer.courseID).flatMap { id in container.flatMap { try? ModelContext($0).fetch(FetchDescriptor<Course>()).first { $0.id == id } } }
         let moment = DeskSchedule.moment(taskType: timer.taskType, inGroup: timer.state?.groupSession != nil, course: course)
+        // Une bande-son par moment : celle de la révision si elle est choisie, sinon celle des séries.
+        soundtrack.choice = moment == .revision ? (settings.studySoundtrackRevision ?? settings.studySoundtrack) : settings.studySoundtrack
         soundtrack.update(phase: phase, moment: moment)
     }
 
@@ -590,7 +591,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             calm.backgroundColor = NSColor(StudyPalette.ground)
             calm.hasShadow = false
             calm.appearance = NSAppearance(named: .darkAqua)
-            var root = AnyView(StudyCalmView().environment(timer).environment(settings))
+            var root = AnyView(StudyCalmView(screenFrame: screenInfo.frame).environment(timer).environment(settings))
             if let container { root = AnyView(root.modelContainer(container)) }
             calm.contentView = NSHostingView(rootView: root)
             calm.setFrame(screenInfo.frame, display: true)

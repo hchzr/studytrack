@@ -151,6 +151,19 @@ final class AppPlacement {
         }
     }
 
+    /// « Amener ici » depuis un autre écran : la fenêtre principale de l'app prend tout
+    /// cet écran. Sans l'Accessibilité, l'app est seulement ouverte.
+    func bringFrontWindow(of app: NSRunningApplication, to screen: NSScreen) {
+        guard Self.isTrusted, let primary = NSScreen.screens.first else { return }
+        let target = DeskGeometry.Rect(x: screen.frame.minX, y: primary.frame.height - screen.frame.maxY,
+                                       width: screen.frame.width, height: screen.frame.height)
+        let element = AXUIElementCreateApplication(app.processIdentifier)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXFocusedWindowAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return }
+        set(focused as! AXUIElement, to: target)
+    }
+
     // MARK: Lire et écrire une fenêtre
 
     private func frame(of window: AXUIElement) -> DeskGeometry.Rect? {

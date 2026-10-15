@@ -6,7 +6,10 @@ import SwiftData
 /// l'heure de fin. Sans cela, un second écran resterait un bureau ordinaire
 /// (Finder, fenêtres ouvertes) à côté d'une session verrouillée.
 struct StudyCalmView: View {
+    /// L'écran que ce bureau calme occupe (pour y amener une app).
+    var screenFrame: CGRect
     @Environment(MacTimer.self) private var timer
+    @Environment(MacSettings.self) private var settings
     @Query(sort: \Course.code) private var courses: [Course]
 
     var body: some View {
@@ -28,10 +31,35 @@ struct StudyCalmView: View {
                         .monospacedDigit()
                         .foregroundStyle(StudyPalette.inkSecondary)
                 }
+                // Une app permise sur cet écran : GoodNotes ici, le reste sur l'autre.
+                HStack(spacing: 14) {
+                    ForEach(settings.studyApps.filter { $0 != StudyMode.finderBundleID && StudyModeController.isInstalled($0) }, id: \.self) { bundleID in
+                        Button { bring(bundleID) } label: {
+                            VStack(spacing: 4) {
+                                if let icon = StudyModeController.icon(for: bundleID) { Image(nsImage: icon).resizable().frame(width: 32, height: 32) }
+                                Text(StudyModeController.name(for: bundleID)).font(.caption2).foregroundStyle(StudyPalette.inkTertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Amener ici")
+                    }
+                }
+                .padding(.top, 18)
             }
             .padding(60)
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
+    }
+
+    /// Ouvre l'app et pose sa fenêtre sur cet écran.
+    private func bring(_ bundleID: String) {
+        StudyModeController.shared.openApp(bundleID: bundleID)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+                  let screen = NSScreen.screens.first(where: { $0.frame == screenFrame }) else { return }
+            AppPlacement.shared.bringFrontWindow(of: app, to: screen)
+        }
     }
 }

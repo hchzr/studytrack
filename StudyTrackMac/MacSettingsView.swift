@@ -146,6 +146,8 @@ private struct StudySettingsPane: View {
                 Toggle("Bloquer le reste", isOn: $settings.studyBlocking)
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                     .disabled(!settings.studyBlocking)
+                LabeledContent("Bande-son des séries") { SoundtrackPicker(choice: $settings.studySoundtrack) }
+                LabeledContent("Bande-son de la révision") { SoundtrackPicker(choice: $settings.studySoundtrackRevision) }
                 Picker("Musique pendant une pause", selection: $settings.studySoundtrackOnBreak) {
                     Text("Pause").tag(SessionSoundtrack.BreakPolicy.pause)
                     Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)

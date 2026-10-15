@@ -85,6 +85,10 @@ final class MacSettings {
     var studySoundtrack: SessionSoundtrack.Choice? {
         didSet { defaults.set(SessionSoundtrack.encode(studySoundtrack), forKey: "mac.studySoundtrack") }
     }
+    /// La bande-son de la révision (sinon, celle des séries).
+    var studySoundtrackRevision: SessionSoundtrack.Choice? {
+        didSet { defaults.set(SessionSoundtrack.encode(studySoundtrackRevision), forKey: "mac.studySoundtrackRevision") }
+    }
     var studySoundtrackOnBreak: SessionSoundtrack.BreakPolicy {
         didSet { defaults.set(studySoundtrackOnBreak.rawValue, forKey: "mac.studySoundtrackOnBreak") }
     }
@@ -162,6 +166,7 @@ final class MacSettings {
         // Terminal demande), alors que la masquer et la couvrir marche toujours.
         studyCloseApps = defaults.object(forKey: "mac.studyCloseApps2") as? Bool ?? false
         studySoundtrack = SessionSoundtrack.decode(defaults.data(forKey: "mac.studySoundtrack"))
+        studySoundtrackRevision = SessionSoundtrack.decode(defaults.data(forKey: "mac.studySoundtrackRevision"))
         studySoundtrackOnBreak = defaults.string(forKey: "mac.studySoundtrackOnBreak")
             .flatMap(SessionSoundtrack.BreakPolicy.init(rawValue:)) ?? .pause
         studyAlwaysDark = defaults.object(forKey: "mac.studyAlwaysDark") as? Bool ?? true
