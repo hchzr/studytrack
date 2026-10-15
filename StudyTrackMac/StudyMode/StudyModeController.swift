@@ -272,6 +272,16 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             return
         }
         #endif
+        // Une fenêtre gardée d'une séance précédente (fermée, donc `stageChanged` l'a ignorée) porte
+        // encore la taille du centre : le choix reprend tout l'écran, sans barres.
+        if screen.panels, let primary = NSScreen.screens.first {
+            if screen.stage == .session {
+                window?.setFrame(panelFrames()?.desk ?? primary.frame, display: true)
+            } else {
+                hideChromePanels()
+                window?.setFrame(primary.frame, display: true)
+            }
+        }
         window?.makeKeyAndOrderFront(nil)
         showChromePanels()
         NSApp.activate(ignoringOtherApps: true)

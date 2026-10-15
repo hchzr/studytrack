@@ -61,16 +61,18 @@ struct DiagramsView: View {
     }
 
     private var empty: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "point.3.connected.trianglepath.dotted").font(.largeTitle).foregroundStyle(Carnet.inkTertiary)
-            Text("Des schémas pour comprendre").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
-            Text("Claude lit la fiche et dessine, chapitre par chapitre, ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre.")
-                .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
-            ComprehendButton(course: course)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: "point.3.connected.trianglepath.dotted").font(.largeTitle).foregroundStyle(Carnet.inkTertiary)
+                Text("Des schémas pour comprendre").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
+                Text("Claude lit la fiche et dessine, chapitre par chapitre, ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre.")
+                    .font(.callout).foregroundStyle(Carnet.inkSecondary)
+                ComprehendButton(course: course)
+            }
+            .padding(28)
+            .frame(maxWidth: 560, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
-        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .topLeading)
-        .frame(maxWidth: .infinity, alignment: .center)
         .background(Carnet.ground)
     }
 }

@@ -85,6 +85,8 @@ struct MindMapView: View {
                             .frame(width: model.width, height: model.height)
                             .scaleEffect(zoom, anchor: .topLeading)
                             .frame(width: model.width * zoom, height: model.height * zoom, alignment: .topLeading)
+                            // Une carte plus petite que la place se centre au lieu de se coller en haut à gauche.
+                            .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
                     }
                     .scrollIndicators(.hidden)
                     .background(Carnet.ground)
@@ -103,7 +105,6 @@ struct MindMapView: View {
                         if !userZoomed { fit(model, size: new) }
                         centre(scroller)
                     }
-                    .onChange(of: zoom) { _, _ in centre(scroller) }
                 }
                 .overlay(alignment: .top) { toolbar(model, map: map) }
                 .overlay(alignment: .bottomLeading) { legend.padding(12) }

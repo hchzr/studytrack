@@ -93,12 +93,13 @@ struct RevisionSheetView: View {
         VStack(spacing: 0) {
             topBar
             Rectangle().fill(Carnet.rule).frame(height: 1)
-            content
+            // Quel que soit l'onglet, le contenu prend toute la place : sinon la pile se centre et le haut descend.
+            content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Carnet.ground)
         .modifier(ConceptPresenter(course: course, concept: $concept, compact: compact, openPoly: openPoly))
         .onAppear {
-            StudyMapStore.shared.ensureBase(course)
             #if DEBUG
             // `-ficheTab carte|schemas|parcours|ecouter` et `-ficheConcept` : ouvrir directement un onglet, une notion.
             if let index = CommandLine.arguments.firstIndex(of: "-ficheTab"), index + 1 < CommandLine.arguments.count,
@@ -640,8 +641,14 @@ private struct ConceptPresenter: ViewModifier {
                 detail.presentationDetents([.medium, .large]).presentationBackground(Carnet.ground)
             }
         } else {
-            content.inspector(isPresented: shown) {
-                detail.inspectorColumnWidth(min: 320, ideal: 400, max: 520)
+            // Une colonne à côté, à nous : `.inspector` s'accroche au conteneur le plus proche (la fenêtre
+            // entière, ici) et déplaçait toute la page.
+            HStack(spacing: 0) {
+                content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                if concept != nil {
+                    Rectangle().fill(Carnet.rule).frame(width: 1)
+                    detail.frame(width: 400).frame(maxHeight: .infinity).background(Carnet.ground)
+                }
             }
         }
     }

@@ -229,7 +229,7 @@ final class MacStore {
                                       durationSeconds: 900, plannedWeek: course.currentWeek, sortOrder: i))
         }
         // `-seedFiche` : une fiche de révision et sa carte (liens, schémas, phrases en clair) pour les captures.
-        if CommandLine.arguments.contains("-seedFiche") { seedFiche(course) }
+        if CommandLine.arguments.contains("-seedFiche") || CommandLine.arguments.contains("-seedFicheBare") { seedFiche(course) }
         try? context.save()
     }
 
@@ -261,6 +261,8 @@ final class MacStore {
             ]),
         ])
         course.revisionSheet = sheet
+        // `-seedFicheBare` : la fiche seule, comme après « Faire la fiche » (rien d'enrichi par Claude).
+        if CommandLine.arguments.contains("-seedFicheBare") { return }
         let answer = """
         {"entries":[
          {"id":"e3","gist":"Une suite qui ne fait que monter sans dépasser un plafond finit forcément par se poser quelque part.","why":"C'est le moyen le plus rapide de prouver qu'une limite existe sans la connaître.","example":"$u_n = 1 - 1/n$ monte et reste sous 1.","question":"Pourquoi faut-il « bornée » dans le théorème ?","answer":"Sans plafond, une suite qui monte peut aller à l'infini : elle ne converge pas."},

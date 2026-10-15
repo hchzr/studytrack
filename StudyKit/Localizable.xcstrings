@@ -7,9 +7,6 @@
     " " : {
 
     },
-    " Raccourcis du système éteints." : {
-
-    },
     "–" : {
 
     },
@@ -933,6 +930,9 @@
           }
         }
       }
+    },
+    "%@×" : {
+
     },
     "%lld" : {
       "localizations" : {
@@ -1982,6 +1982,16 @@
     "%lld morceaux" : {
 
     },
+    "%lld notions solides sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld notions solides sur %2$lld"
+          }
+        }
+      }
+    },
     "%lld nouveauté" : {
       "localizations" : {
         "en" : {
@@ -2656,6 +2666,9 @@
         }
       }
     },
+    "⌃⌥Espace est déjà pris (Réglages Clavier › Raccourcis › Sources de saisie)." : {
+
+    },
     "⌘%@" : {
       "localizations" : {
         "en" : {
@@ -2813,6 +2826,9 @@
         }
       }
     },
+    "a besoin de" : {
+
+    },
     "à corriger" : {
       "localizations" : {
         "en" : {
@@ -2906,6 +2922,9 @@
     "À lire" : {
 
     },
+    "à ne pas confondre avec" : {
+
+    },
     "À noter dans StudyTrack" : {
       "localizations" : {
         "en" : {
@@ -2915,6 +2934,9 @@
           }
         }
       }
+    },
+    "a pour exemple" : {
+
     },
     "À propos" : {
       "extractionState" : "stale",
@@ -3002,6 +3024,9 @@
       }
     },
     "À retenir" : {
+
+    },
+    "À revoir" : {
 
     },
     "À scanner" : {
@@ -3214,6 +3239,9 @@
         }
       }
     },
+    "Adresse" : {
+
+    },
     "Adresse (ex : 192.168.1.42:8765)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3235,6 +3263,9 @@
           }
         }
       }
+    },
+    "Adresse de ton carnet (à coller une fois)" : {
+
     },
     "Adresse du serveur MCP" : {
       "localizations" : {
@@ -3357,6 +3388,9 @@
         }
       }
     },
+    "Agrandir" : {
+
+    },
     "Aide" : {
       "localizations" : {
         "en" : {
@@ -3387,6 +3421,9 @@
           }
         }
       }
+    },
+    "Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. StudyTrack ne se connecte jamais à Google." : {
+
     },
     "Ajoute son lien depuis la page du cours." : {
 
@@ -3599,6 +3636,9 @@
     "Ajouter un fichier… (PDF, image)" : {
 
     },
+    "Ajouter un lien" : {
+
+    },
     "Ajouter un point" : {
       "localizations" : {
         "en" : {
@@ -3668,6 +3708,12 @@
           }
         }
       }
+    },
+    "Ajouter une idée" : {
+
+    },
+    "Ajouter une idée ici" : {
+
     },
     "Ajouter une note à la session…" : {
       "localizations" : {
@@ -3831,6 +3877,9 @@
         }
       }
     },
+    "Allumer le Pomodoro" : {
+
+    },
     "Amener ici" : {
 
     },
@@ -3905,6 +3954,9 @@
           }
         }
       }
+    },
+    "Ancrer à côté" : {
+
     },
     "Ancrer à droite, dans le volet d'à côté" : {
       "localizations" : {
@@ -4095,6 +4147,9 @@
           }
         }
       }
+    },
+    "Apps pas posées dans le bureau (Accessibilité)" : {
+
     },
     "Apps permises" : {
       "localizations" : {
@@ -4879,6 +4934,9 @@
         }
       }
     },
+    "Automatique" : {
+
+    },
     "Automne" : {
       "localizations" : {
         "en" : {
@@ -5412,6 +5470,9 @@
     "Carnet d'erreurs" : {
 
     },
+    "Carte" : {
+
+    },
     "Carte Anki" : {
       "localizations" : {
         "en" : {
@@ -5585,6 +5646,9 @@
         }
       }
     },
+    "Ce qui n'est pas solide et sur quoi d'autres notions s'appuient." : {
+
+    },
     "Ce qui ne rentre nulle part ailleurs : le barème, ce que le prof a dit en amphi, l'erreur du corrigé." : {
       "localizations" : {
         "en" : {
@@ -5654,6 +5718,9 @@
           }
         }
       }
+    },
+    "Cette notion n'est plus sur la fiche" : {
+
     },
     "cette semaine" : {
       "localizations" : {
@@ -5791,6 +5858,9 @@
           }
         }
       }
+    },
+    "Changer la taille" : {
+
     },
     "Chapitre" : {
       "localizations" : {
@@ -5939,6 +6009,9 @@
       }
     },
     "Chercher un théorème, une notion…" : {
+
+    },
+    "Chercher une notion…" : {
 
     },
     "Choisir" : {
@@ -6194,6 +6267,9 @@
     "Chrono commun avec le groupe" : {
 
     },
+    "Chrono commun en cours." : {
+
+    },
     "Chrono démarré dans StudyTrack." : {
       "localizations" : {
         "en" : {
@@ -6356,10 +6432,16 @@
     "Claude écrit les méthodes des séries…" : {
 
     },
+    "Claude lit la fiche et dessine, chapitre par chapitre, ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre." : {
+
+    },
     "Claude lit tout le cours — diapositives, notes, séries et corrigés — et en écrit la fiche : définitions, théorèmes, formules, méthodes, pièges." : {
 
     },
     "Claude n'a pas rendu de fiche lisible. Réessaie." : {
+
+    },
+    "Claude n'a pas rendu de réponse lisible. Réessaie." : {
 
     },
     "Claude réfléchit…" : {
@@ -6371,6 +6453,15 @@
           }
         }
       }
+    },
+    "Claude relie les notions et dessine les schémas…" : {
+
+    },
+    "Claude relie les notions sur le Mac ; ça arrive ici par iCloud." : {
+
+    },
+    "Claude relie les notions, écrit l'idée de chacune, dessine les schémas" : {
+
     },
     "Claude, à droite (⌘J)" : {
       "localizations" : {
@@ -6621,6 +6712,9 @@
     "Commencer la lecture" : {
 
     },
+    "Commencer par" : {
+
+    },
     "Comment configurer ?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6656,6 +6750,9 @@
     "Compagnon" : {
 
     },
+    "Comparaison" : {
+
+    },
     "Comparer" : {
       "localizations" : {
         "en" : {
@@ -6686,6 +6783,12 @@
           }
         }
       }
+    },
+    "Comprendre" : {
+
+    },
+    "Comprendre avec Claude" : {
+
     },
     "Compte" : {
       "extractionState" : "stale",
@@ -6822,6 +6925,9 @@
         }
       }
     },
+    "Connecte ton compte Google : StudyTrack crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google." : {
+
+    },
     "Connecte-toi (Réglages › Compte et groupes) pour voir qui travaille." : {
       "localizations" : {
         "en" : {
@@ -6935,6 +7041,9 @@
         }
       }
     },
+    "Connexion à Google" : {
+
+    },
     "Connexion à Moodle" : {
       "localizations" : {
         "en" : {
@@ -6975,6 +7084,9 @@
           }
         }
       }
+    },
+    "Consigne copiée : colle-la dans « Personnaliser » du résumé audio." : {
+
     },
     "Contenu" : {
       "extractionState" : "stale",
@@ -7123,6 +7235,9 @@
           }
         }
       }
+    },
+    "Copier la consigne du podcast" : {
+
     },
     "Copier le lien" : {
       "localizations" : {
@@ -7299,6 +7414,9 @@
           }
         }
       }
+    },
+    "Couper le Pomodoro" : {
+
     },
     "Cours" : {
       "localizations" : {
@@ -7556,6 +7674,9 @@
           }
         }
       }
+    },
+    "Créer le podcast" : {
+
     },
     "Créer un compte" : {
       "localizations" : {
@@ -7893,6 +8014,9 @@
         }
       }
     },
+    "découle de" : {
+
+    },
     "Déduire des ECTS" : {
       "localizations" : {
         "en" : {
@@ -8163,6 +8287,15 @@
         }
       }
     },
+    "Déplier" : {
+
+    },
+    "Déplier les chapitres" : {
+
+    },
+    "Dépose-les dans NotebookLM" : {
+
+    },
     "Déposer le PDF de la série" : {
       "localizations" : {
         "en" : {
@@ -8234,6 +8367,9 @@
           }
         }
       }
+    },
+    "Des schémas pour comprendre" : {
+
     },
     "Des semaines passées : %@." : {
       "localizations" : {
@@ -8346,6 +8482,9 @@
 
     },
     "Dock et barre des menus : refusé, ils resteront visibles (Réglages Système › Automatisation)." : {
+
+    },
+    "Dock et barre des menus : visibles (permission manquante)" : {
 
     },
     "Document scanné : crée la série à la main, avec le plan « 1(a-d) 2 3 »." : {
@@ -8615,7 +8754,13 @@
         }
       }
     },
+    "Écouter" : {
+
+    },
     "Écouter sur" : {
+
+    },
+    "Écouter ton cours" : {
 
     },
     "Écrire" : {
@@ -8930,6 +9075,9 @@
         }
       }
     },
+    "Enchaînement" : {
+
+    },
     "Enchaîner sur la série" : {
 
     },
@@ -9149,6 +9297,9 @@
         }
       }
     },
+    "Ensuite : bloc %lld" : {
+
+    },
     "Ensuite · %@" : {
 
     },
@@ -9345,6 +9496,12 @@
           }
         }
       }
+    },
+    "est nécessaire à" : {
+
+    },
+    "est un exemple de" : {
+
     },
     "Étape %lld sur 4 : %@" : {
       "localizations" : {
@@ -9704,6 +9861,9 @@
 
     },
     "Faire les fiches de révision" : {
+
+    },
+    "Fais d'abord la fiche du cours." : {
 
     },
     "Fais défiler horizontalement pour voir toutes les semaines." : {
@@ -10122,6 +10282,9 @@
         }
       }
     },
+    "Fragile" : {
+
+    },
     "Gardé" : {
       "localizations" : {
         "en" : {
@@ -10207,6 +10370,9 @@
     "Général : brief, semaine, revue…" : {
 
     },
+    "Genre" : {
+
+    },
     "GeoGebra" : {
       "localizations" : {
         "en" : {
@@ -10237,6 +10403,9 @@
           }
         }
       }
+    },
+    "Gestes du trackpad : bloqués" : {
+
     },
     "Glisse pour changer l'ordre : les premiers sont les plus accessibles. Un raccourci lance le chrono immédiatement." : {
       "extractionState" : "stale",
@@ -10284,6 +10453,9 @@
 
     },
     "GoodNotes, Claude… s'ouvrent au centre du bureau, la barre du haut et le volet d'à côté restant visibles. Demande l'Accessibilité (écran de lancement)." : {
+
+    },
+    "Google a refusé la demande (code %@) : la limite du jour est peut-être atteinte, ou NotebookLM a changé son fonctionnement." : {
 
     },
     "Google Tasks" : {
@@ -10738,6 +10910,9 @@
     "Image indisponible" : {
 
     },
+    "implique" : {
+
+    },
     "Import de séries" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10800,6 +10975,9 @@
           }
         }
       }
+    },
+    "Importe-le sur cet appareil" : {
+
     },
     "Importe-les sur ton iPhone : ils arrivent ici par iCloud. Le chrono marche déjà." : {
       "localizations" : {
@@ -11022,6 +11200,9 @@
           }
         }
       }
+    },
+    "Importer un podcast" : {
+
     },
     "Importer une série" : {
       "extractionState" : "stale",
@@ -11317,6 +11498,25 @@
         }
       }
     },
+    "Je cherche le podcast dans ton carnet…" : {
+
+    },
+    "Je crée le carnet…" : {
+
+    },
+    "Je dépose la fiche (%lld/%lld)…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Je dépose la fiche (%1$lld/%2$lld)…"
+          }
+        }
+      }
+    },
+    "Je lance le podcast…" : {
+
+    },
     "Je n'ai pas trouvé l'exercice %@. Précise le cours." : {
       "localizations" : {
         "en" : {
@@ -11356,6 +11556,15 @@
           }
         }
       }
+    },
+    "Je regarde si tu es connecté·e à Google…" : {
+
+    },
+    "Je savais" : {
+
+    },
+    "Je télécharge le podcast…" : {
+
     },
     "Jeton API" : {
       "extractionState" : "stale",
@@ -11701,6 +11910,12 @@
         }
       }
     },
+    "La carte se dessine d'après la fiche du cours." : {
+
+    },
+    "La connexion à Google a expiré : reconnecte-toi." : {
+
+    },
     "La conversation générale : ton brief, ta semaine, ta revue — les commandes de ton projet." : {
 
     },
@@ -11716,6 +11931,9 @@
       }
     },
     "La fiche de ce cours se fait sur le Mac (Claude lit ses documents)." : {
+
+    },
+    "La fiche, ses liens, ses schémas et ses questions, en Markdown : ce que NotebookLM lit le mieux." : {
 
     },
     "La file de Music apparaît ici." : {
@@ -11992,6 +12210,9 @@
     "Le cours reprend dans quelques minutes." : {
 
     },
+    "Le fichier n'a pas pu être copié." : {
+
+    },
     "Le groupe est supprimé côté serveur : les %lld membres le perdent, avec l'avancement partagé. Pour partir seul·e, utilise « Quitter »." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12060,6 +12281,12 @@
       }
     },
     "Le PDF entier, l'exercice surligné" : {
+
+    },
+    "Le podcast est prêt mais son fichier n'a pas pu être récupéré." : {
+
+    },
+    "Le podcast met trop de temps. Il continue peut-être dans NotebookLM : « Récupérer » le retrouvera." : {
 
     },
     "Le poids sert à hiérarchiser les échéances. Il n'est jamais inventé : laisse-le vide s'il n'est pas connu." : {
@@ -12174,6 +12401,9 @@
           }
         }
       }
+    },
+    "Le volet d'à côté flotte au-dessus des apps permises : cliquer dedans ne ramène pas le bureau devant GoodNotes." : {
+
     },
     "Leçons" : {
       "localizations" : {
@@ -12489,6 +12719,9 @@
           }
         }
       }
+    },
+    "Les sources n'ont pas pu être écrites." : {
+
     },
     "Les sous-exercices seront nommés %lld.1, %lld.2… Les bonus sont placés en fin de série." : {
       "extractionState" : "stale",
@@ -13158,10 +13391,13 @@
         }
       }
     },
+    "Méthodes" : {
+
+    },
     "Méthodes · " : {
 
     },
-    "Méthodes et pièges" : {
+    "Mettre à côté" : {
 
     },
     "Mettre à jour tout seul" : {
@@ -13525,6 +13761,9 @@
         }
       }
     },
+    "Mon carnet" : {
+
+    },
     "Mon horaire (.ics)" : {
       "localizations" : {
         "en" : {
@@ -13539,6 +13778,9 @@
 
     },
     "Montrer" : {
+
+    },
+    "Montrer dans le Finder" : {
 
     },
     "Montrer la liste (⌃⌘S)" : {
@@ -13884,6 +14126,9 @@
         }
       }
     },
+    "Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste." : {
+
+    },
     "Non planifié" : {
       "localizations" : {
         "en" : {
@@ -13977,6 +14222,21 @@
         }
       }
     },
+    "NotebookLM" : {
+
+    },
+    "NotebookLM n'a pas pu créer le podcast." : {
+
+    },
+    "NotebookLM n'a pas répondu comme prévu : son fonctionnement a peut-être changé. L'export manuel reste possible." : {
+
+    },
+    "NotebookLM prépare le podcast… (%lld min)" : {
+
+    },
+    "NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien." : {
+
+    },
     "Noter" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14041,6 +14301,9 @@
           }
         }
       }
+    },
+    "Nouveau carnet › Ajouter des sources. Puis « Résumé audio » pour le podcast." : {
+
     },
     "Nouveau cours" : {
       "localizations" : {
@@ -14173,6 +14436,9 @@
           }
         }
       }
+    },
+    "Nouvelle idée" : {
+
     },
     "Nouvelle question" : {
       "localizations" : {
@@ -14449,6 +14715,9 @@
     "Organiser" : {
 
     },
+    "Ou à la main" : {
+
+    },
     "ou ajouter un cours à la main" : {
       "localizations" : {
         "en" : {
@@ -14678,6 +14947,9 @@
         }
       }
     },
+    "Ouvrir au centre" : {
+
+    },
     "Ouvrir autre chose à côté" : {
       "localizations" : {
         "en" : {
@@ -14744,6 +15016,9 @@
     "Ouvrir la musique" : {
 
     },
+    "Ouvrir la notion" : {
+
+    },
     "Ouvrir la page des identifiants" : {
       "localizations" : {
         "en" : {
@@ -14799,6 +15074,9 @@
           }
         }
       }
+    },
+    "Ouvrir NotebookLM" : {
+
     },
     "Ouvrir StudyTrack" : {
       "localizations" : {
@@ -14998,6 +15276,9 @@
           }
         }
       }
+    },
+    "Parcours" : {
+
     },
     "Partage" : {
       "localizations" : {
@@ -15238,6 +15519,9 @@
         }
       }
     },
+    "Pas encore" : {
+
+    },
     "Pas encore de contenu · importe-le depuis Moodle" : {
       "localizations" : {
         "en" : {
@@ -15257,6 +15541,9 @@
           }
         }
       }
+    },
+    "Pas encore de fiche" : {
+
     },
     "Pas encore de session." : {
       "localizations" : {
@@ -15406,6 +15693,9 @@
           }
         }
       }
+    },
+    "Pause : %lld min" : {
+
     },
     "Pause · reprise dans %lld min" : {
 
@@ -15782,6 +16072,9 @@
     "Plutôt un indice" : {
 
     },
+    "Podcast" : {
+
+    },
     "Poids : %lld %% de la note" : {
       "localizations" : {
         "en" : {
@@ -15965,6 +16258,12 @@
         }
       }
     },
+    "Pour ma révision" : {
+
+    },
+    "Pour mes séances de séries" : {
+
+    },
     "Pré-remplir pour Groq" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16010,6 +16309,9 @@
         }
       }
     },
+    "Prépare les sources" : {
+
+    },
     "Préparer" : {
       "localizations" : {
         "en" : {
@@ -16019,6 +16321,9 @@
           }
         }
       }
+    },
+    "Préparer les sources" : {
+
     },
     "Présence" : {
       "extractionState" : "stale",
@@ -16282,6 +16587,9 @@
     "Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
 
     },
+    "Que choisir ?" : {
+
+    },
     "Quelle base Notion ?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16342,6 +16650,9 @@
           }
         }
       }
+    },
+    "Qui découle de quoi" : {
+
     },
     "Qui en est où" : {
       "extractionState" : "stale",
@@ -16416,6 +16727,9 @@
           }
         }
       }
+    },
+    "Raccourcis du système : non bloqués" : {
+
     },
     "rad" : {
       "localizations" : {
@@ -16508,6 +16822,9 @@
         }
       }
     },
+    "Rapporte le podcast ici" : {
+
+    },
     "Réactiver" : {
       "localizations" : {
         "en" : {
@@ -16548,6 +16865,9 @@
           }
         }
       }
+    },
+    "Récemment" : {
+
     },
     "Recharger" : {
       "localizations" : {
@@ -16615,6 +16935,9 @@
         }
       }
     },
+    "Récupérer" : {
+
+    },
     "Redemander l'autorisation" : {
 
     },
@@ -16661,7 +16984,16 @@
     "Refaire" : {
 
     },
+    "Refaire avec Claude" : {
+
+    },
     "Refaire ceux ratés" : {
+
+    },
+    "Refaire les liens" : {
+
+    },
+    "Refaire les sources" : {
 
     },
     "Refresh token" : {
@@ -16817,6 +17149,9 @@
         }
       }
     },
+    "Relation" : {
+
+    },
     "Relecture" : {
       "localizations" : {
         "en" : {
@@ -16836,6 +17171,15 @@
           }
         }
       }
+    },
+    "Relier à une autre notion" : {
+
+    },
+    "Relier à une autre notion…" : {
+
+    },
+    "Relier la notion choisie à une autre" : {
+
     },
     "Relier un assistant" : {
       "localizations" : {
@@ -16861,6 +17205,9 @@
 
     },
     "Relire · %@" : {
+
+    },
+    "Relire dans le cours" : {
 
     },
     "Relire le cahier (sauvegardé %@)" : {
@@ -16918,6 +17265,9 @@
         }
       }
     },
+    "Remettre la disposition automatique" : {
+
+    },
     "Remonter en question" : {
       "localizations" : {
         "en" : {
@@ -16937,6 +17287,9 @@
           }
         }
       }
+    },
+    "Renommer" : {
+
     },
     "Renuméroter %lld.1, %lld.2…" : {
       "localizations" : {
@@ -17067,6 +17420,9 @@
       }
     },
     "Replier le sommaire (⌃⌘S)" : {
+
+    },
+    "Replier les chapitres" : {
 
     },
     "Répondre" : {
@@ -17318,6 +17674,9 @@
         }
       }
     },
+    "Retirer mon lien" : {
+
+    },
     "Retour" : {
       "localizations" : {
         "en" : {
@@ -17328,6 +17687,9 @@
         }
       }
     },
+    "Rétrécir" : {
+
+    },
     "Rétrograder" : {
       "localizations" : {
         "en" : {
@@ -17337,6 +17699,9 @@
           }
         }
       }
+    },
+    "Retrouve le dernier podcast du carnet (si le lancement a été interrompu)" : {
+
     },
     "Revenir à aujourd'hui" : {
       "extractionState" : "stale",
@@ -17532,6 +17897,9 @@
     "Rien après ce morceau." : {
 
     },
+    "Rien cette semaine." : {
+
+    },
     "Rien d'importé pour ce cours." : {
       "localizations" : {
         "en" : {
@@ -17718,7 +18086,6 @@
       }
     },
     "Rien pour l'instant." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17872,6 +18239,9 @@
         }
       }
     },
+    "Sans les liens et les schémas de Claude, NotebookLM ne reçoit que la fiche. « Comprendre avec Claude » les ajoute." : {
+
+    },
     "Sans les secondes, ça use moins la batterie." : {
       "localizations" : {
         "en" : {
@@ -17934,6 +18304,9 @@
         }
       }
     },
+    "Schémas" : {
+
+    },
     "Scolarité" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -17975,6 +18348,9 @@
         }
       }
     },
+    "Se connecter à Google" : {
+
+    },
     "Se connecter avec EPFL" : {
       "localizations" : {
         "en" : {
@@ -18004,6 +18380,9 @@
           }
         }
       }
+    },
+    "se sert de" : {
+
     },
     "Se tait pendant les pauses, s'éteint à la fin." : {
 
@@ -18395,6 +18774,9 @@
         }
       }
     },
+    "sert à" : {
+
+    },
     "Sert à dire si le plan tient dans tes journées. Rien n'est enregistré : c'est une simulation." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18703,6 +19085,9 @@
         }
       }
     },
+    "Solide" : {
+
+    },
     "Solution" : {
       "localizations" : {
         "en" : {
@@ -18825,6 +19210,9 @@
           }
         }
       }
+    },
+    "Spotlight, ⌘Tab et Mission Control : éteints" : {
+
     },
     "Statistiques" : {
       "extractionState" : "stale",
@@ -19767,6 +20155,9 @@
         }
       }
     },
+    "Télécharge-le depuis NotebookLM et glisse-le : il se lit ici, à ta vitesse, sans quitter le mode étude." : {
+
+    },
     "Téléchargement…" : {
       "localizations" : {
         "en" : {
@@ -20530,6 +20921,9 @@
         }
       }
     },
+    "Touche la notion à relier à « %@ »" : {
+
+    },
     "Touche le temps pour le saisir, ou fais glisser le point." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20783,6 +21177,9 @@
         }
       }
     },
+    "Tout voir" : {
+
+    },
     "Toute la section" : {
 
     },
@@ -20841,6 +21238,9 @@
           }
         }
       }
+    },
+    "Travail : %lld min" : {
+
     },
     "Travail personnel : %@ h / semaine" : {
       "localizations" : {
@@ -20960,6 +21360,9 @@
           }
         }
       }
+    },
+    "Tu peux continuer à travailler : le podcast arrive dans « Rapporte le podcast » plus bas." : {
+
     },
     "Tu peux déjà relire la liste." : {
       "extractionState" : "stale",
@@ -21194,6 +21597,9 @@
           }
         }
       }
+    },
+    "Une idée, une question, un exemple…" : {
+
     },
     "Une ligne par élément, avec les colonnes : course_code, course_name, kind, number, title, duration_seconds, week, is_bonus, date, weight." : {
       "localizations" : {
@@ -21578,6 +21984,9 @@
         }
       }
     },
+    "Voir la réponse" : {
+
+    },
     "Voir le corrigé" : {
       "localizations" : {
         "en" : {
@@ -21641,6 +22050,12 @@
           }
         }
       }
+    },
+    "Volet d'à côté en fenêtre à part" : {
+
+    },
+    "Volet d'à côté sur le second écran" : {
+
     },
     "Volume" : {
 

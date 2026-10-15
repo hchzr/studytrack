@@ -306,7 +306,13 @@ enum StudyLinks {
     static func neighbourhood(of key: String, in map: StudyMap, among keys: Set<String>) -> Neighbourhood {
         var result = Neighbourhood()
         func add(_ list: inout [Neighbourhood.Item], _ item: Neighbourhood.Item) {
-            if !list.contains(item) { list.append(item) }
+            // Une notion n'apparaît qu'une fois : le lien déduit d'une citation et celui de Claude sur la
+            // même paire ne font pas deux lignes (on garde celui qui explique).
+            if let index = list.firstIndex(where: { $0.key == item.key }) {
+                if list[index].note == nil, item.note != nil { list[index] = item }
+            } else {
+                list.append(item)
+            }
         }
         for link in map.links where keys.contains(link.from) && keys.contains(link.to) {
             if link.relation == .contrast {

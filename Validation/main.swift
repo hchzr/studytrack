@@ -6552,6 +6552,12 @@ do {
     check(StudyMap.Relation.needs.label != StudyMap.Relation.needs.inverseLabel && StudyMap.Link(from: "a", to: "b", relation: .implies).prerequisite! == (before: "a", after: "b"), "liens : « implique » met le premier avant, « a besoin de » le second")
     check(StudyMap.Link(from: "a", to: "b", relation: .contrast).prerequisite == nil, "liens : un contraste n'a pas d'ordre")
 
+    // Un même voisin n'est montré qu'une fois (citation + lien de Claude sur la même paire)
+    var twice = StudyMap()
+    twice.links = [.init(from: "x", to: "y", relation: .uses), .init(from: "x", to: "y", relation: .needs, note: "un plafond")]
+    let once = StudyLinks.neighbourhood(of: "x", in: twice, among: ["x", "y"])
+    check(once.before.count == 1 && once.before[0].note == "un plafond", "voisinage : un voisin une seule fois, avec l'explication")
+
     // NotebookLM
     var notebook = applied!
     notebook.enrichment[byID["a"]!] = .init(gist: "Un plafond et un plancher.", why: nil, example: nil, check: nil)

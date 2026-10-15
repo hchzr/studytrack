@@ -29,7 +29,11 @@ final class StudyMapStore {
     func map(_ course: Course) -> StudyMap {
         let raw = course.studyMapRaw
         if let cached = cache[course.id], cached.raw == raw { return cached.map }
-        let decoded = course.studyMap
+        var decoded = course.studyMap
+        // Une fiche sans carte : les liens qu'on déduit des citations, sans rien écrire (écrire dans
+        // le modèle pendant l'affichage d'une vue le faisait tomber). Ils sont rangés dès le premier
+        // vrai changement (une maîtrise, une note, Claude).
+        if decoded.links.isEmpty, let sheet = course.revisionSheet { decoded.links = StudyLinks.cited(in: sheet) }
         cache[course.id] = (raw, decoded)
         return decoded
     }
@@ -70,14 +74,6 @@ final class StudyMapStore {
                                           generated: StudyLinks.cited(in: sheet) + map.links.filter { !$0.userMade },
                                           keys: keys)
         }
-    }
-
-    /// Les liens qu'on déduit sans IA, pour une fiche qui n'a pas encore de carte (rien n'est écrasé).
-    func ensureBase(_ course: Course) {
-        guard let sheet = course.revisionSheet, map(course).links.isEmpty, states[course.id] == nil else { return }
-        let cited = StudyLinks.cited(in: sheet)
-        guard !cited.isEmpty else { return }
-        update(course) { $0.links = cited }
     }
 
     // MARK: Claude écrit
