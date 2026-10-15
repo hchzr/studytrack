@@ -87,8 +87,13 @@ private struct StudyBackground: View {
             // Le fond d'écran, flouté une fois, sous le papier de nuit : le verre du
             // dessus a quelque chose à traverser.
             if let image = ground.image {
-                Image(nsImage: image).resizable().scaledToFill()
+                // Rogné, et sans effet sur la mise en page : une image « remplir » rend sa
+                // taille débordante au parent, et la fenêtre devenait plus large que l'écran.
+                Color.clear
+                    .overlay { Image(nsImage: image).resizable().scaledToFill() }
+                    .clipped()
                     .overlay(StudyPalette.ground.opacity(0.7))
+                    .allowsHitTesting(false)
             }
             RadialGradient(colors: [tint.opacity(0.14), .clear], center: .topLeading, startRadius: 40, endRadius: 900)
             RadialGradient(colors: [tint.opacity(0.06), .clear], center: .bottomTrailing, startRadius: 20, endRadius: 700)
