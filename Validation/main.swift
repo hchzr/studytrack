@@ -6411,8 +6411,11 @@ do {
     func kinds(_ list: [W.Placement]) -> [W.Kind] { list.map(\.kind) }
     let free = W.defaults(W.Context(moment: .series, hasCourse: false))
     check(kinds(free).first == .courses && kinds(free).contains(.today) && !kinds(free).contains(.target) && !kinds(free).contains(.steps), "cartes : session libre → choisir sur quoi, l'horaire, rien sur une cible")
-    let course = W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true))
-    check(Array(kinds(course).prefix(2)) == [.session, .target] && kinds(course).contains(.upNext) && kinds(course).contains(.steps), "cartes : un cours → la session, l'exercice, la suite")
+    let course = W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true, hasTarget: true))
+    check(Array(kinds(course).prefix(2)) == [.session, .target] && kinds(course).contains(.steps), "cartes : un exercice visé → la session, l'exercice, les étapes")
+    check(!kinds(course).contains(.upNext), "cartes : l'exercice montre déjà la suite, pas de seconde liste")
+    check(kinds(W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true))).contains(.upNext) && !kinds(W.defaults(W.Context(moment: .series, hasCourse: true, hasSeries: true))).contains(.target),
+          "cartes : une série sans exercice visé → la suite, pas de carte d'exercice")
     check(!kinds(W.defaults(W.Context(moment: .series, hasCourse: true))).contains(.upNext), "cartes : sans série, pas de « suite »")
     check(!kinds(course).contains(.redo) && kinds(W.defaults(W.Context(moment: .series, hasCourse: true, redosDue: 2))).contains(.redo), "cartes : les reprises seulement quand il y en a")
     check(kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 10))).contains(.exam) && !kinds(W.defaults(W.Context(moment: .series, hasCourse: true, daysToExam: 60))).contains(.exam), "cartes : l'examen à moins de trois semaines")

@@ -154,6 +154,10 @@ struct StudyWorkspace: View {
         desk.pins = DeskArrangement.pins(desk.pins, previous: desk.lastSignature, current: key)
         guard force || key != desk.lastSignature else { return }
         desk.lastSignature = key
+        #if DEBUG
+        // `-studyPane …` (essais de débogage) : l'outil demandé reste, rien ne le déplace.
+        if !force, CommandLine.arguments.contains("-studyPane") { desk.pins.center = true }
+        #endif
         if force { desk.pins = DeskArrangement.Pins() }
         let wanted = layout
         let apply = DeskArrangement.applicable(wanted, pins: desk.pins)
@@ -1462,6 +1466,7 @@ private struct StudyDeskHome: View {
 
     private var widgetContext: DeskWidgets.Context {
         DeskWidgets.Context(moment: moment, hasCourse: course != nil, hasSeries: series != nil,
+                            hasTarget: course?.allExercises.contains { $0.id == timer.targetID } ?? false,
                             redosDue: due.count, daysToExam: course?.nextExam?.daysUntil)
     }
 

@@ -69,6 +69,8 @@ enum DeskWidgets {
         var moment: DeskMoment
         var hasCourse: Bool
         var hasSeries = false
+        /// Un exercice est visé (sa carte montre déjà la suite de la série).
+        var hasTarget = false
         var redosDue = 0
         /// Jours avant le prochain examen (`nil` : aucun).
         var daysToExam: Int?
@@ -84,11 +86,13 @@ enum DeskWidgets {
             // Session libre : choisir, puis ce que la journée réserve.
             return [p(.courses, .medium), p(.today, .medium), p(.session, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]
         }
-        var list: [Placement] = [p(.session, .medium), p(.target, .medium)]
+        // L'exercice visé montre déjà ce qui vient ensuite : pas de seconde liste.
+        var list: [Placement] = [p(.session, .medium)]
+        if c.hasTarget { list.append(p(.target, .medium)) }
         if c.redosDue > 0 { list.append(p(.redo, .medium)) }
         if c.moment == .revision || (c.daysToExam.map { $0 >= 0 && $0 <= examHorizonDays } ?? false) { list.append(p(.exam, .small)) }
         list.append(p(.steps, .medium))
-        if c.hasSeries { list.append(p(.upNext, .medium)) }
+        if c.hasSeries && !c.hasTarget { list.append(p(.upNext, .medium)) }
         list.append(contentsOf: [p(.music, .small), p(.claude, .small), p(.today, .small), p(.accounts, .small)])
         return list
     }
