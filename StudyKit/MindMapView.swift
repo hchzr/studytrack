@@ -34,7 +34,7 @@ struct MindMapView: View {
         var minX: Double, minY: Double, width: Double, height: Double
     }
 
-    private let margin = 90.0
+    private let margin = 50.0
 
     private func size(of node: MindNode) -> CGSize {
         switch node.role {
@@ -97,13 +97,13 @@ struct MindMapView: View {
                     .onAppear {
                         viewport = proxy.size
                         if !fitted { fit(model, size: proxy.size); fitted = true }
-                        centre(scroller)
+                        centre(scroller, model: model, size: proxy.size, zoom: userZoomed ? zoom : fitZoom(model, proxy.size))
                     }
                     // La place change (la page d'une notion s'ouvre à côté) : on réajuste, sauf zoom choisi.
                     .onChange(of: proxy.size) { _, new in
                         viewport = new
                         if !userZoomed { fit(model, size: new) }
-                        centre(scroller)
+                        centre(scroller, model: model, size: new, zoom: userZoomed ? zoom : fitZoom(model, new))
                     }
                 }
                 .overlay(alignment: .top) { toolbar(model, map: map) }
@@ -397,14 +397,19 @@ struct MindMapView: View {
 
     // MARK: Barre d'outils
 
+    private func fitZoom(_ model: Model, _ area: CGSize) -> CGFloat {
+        guard area.width > 0, area.height > 0, model.width > 0, model.height > 0 else { return zoom }
+        return min(1, max(0.3, min(area.width / model.width, area.height / model.height)))
+    }
+
     private func fit(_ model: Model, size: CGSize? = nil) {
-        let area = size ?? viewport
-        guard area.width > 0, area.height > 0, model.width > 0, model.height > 0 else { return }
-        zoom = min(1, max(0.3, min(area.width / model.width, area.height / model.height)))
+        zoom = fitZoom(model, size ?? viewport)
     }
 
     /// La racine au milieu de la vue (un instant après : la toile a changé de taille).
-    private func centre(_ scroller: ScrollViewProxy) {
+    private func centre(_ scroller: ScrollViewProxy, model: Model, size: CGSize, zoom: CGFloat) {
+        // Une carte qui tient dans la place n'a rien à défiler ; sinon, la racine au milieu.
+        guard model.width * zoom > size.width + 1 || model.height * zoom > size.height + 1 else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(60))
             scroller.scrollTo("mind-root", anchor: .center)
