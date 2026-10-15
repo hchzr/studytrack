@@ -1450,6 +1450,8 @@ private struct StudyDeskHome: View {
     var moment: DeskMoment = .series
     @State private var placements: [DeskWidgets.Placement] = []
     @State private var editing = false
+    /// La largeur du centre : une carte large ne la dépasse pas (le volet d'à côté la réduit).
+    @State private var available: CGFloat = 1000
 
     // MARK: Le plan de travail
 
@@ -1503,6 +1505,7 @@ private struct StudyDeskHome: View {
             }
             .padding(40)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
         .onAppear { load() }
         .onChange(of: moment) { _, _ in load() }
         .task {
@@ -1521,7 +1524,7 @@ private struct StudyDeskHome: View {
     @ViewBuilder
     private func card(_ placement: DeskWidgets.Placement, in list: [DeskWidgets.Placement]) -> some View {
         content(placement.kind, size: placement.size)
-            .frame(width: placement.size.width, alignment: .topLeading)
+            .frame(width: DeskWidgets.width(of: placement.size, available: Double(available)), alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
                 if editing {
                     HStack(spacing: 2) {
@@ -1618,7 +1621,19 @@ private struct StudyDeskHome: View {
         case .exam:
             examCard
         case .music:
-            glassCard { MusicNowPlayingCard(compact: true) }
+            glassCard {
+                if StudyMusic.shared.nowPlaying.hasTrack {
+                    MusicNowPlayingCard(compact: true)
+                } else {
+                    // Au repos, la carte ne reste pas vide : elle mène au choix de la musique.
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Musique", systemImage: "music.note").font(.callout.weight(.semibold)).foregroundStyle(StudyPalette.ink)
+                        Text(StudyMusic.shared.automationDenied ? "Music n'est pas autorisé (Réglages Système › Automatisation)." : "Rien ne joue.")
+                            .font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+                        Button { desk.pane = .music } label: { Label("Choisir", systemImage: "arrow.up.forward") }.buttonStyle(.paper)
+                    }
+                }
+            }
         case .today:
             todayCard
         case .claude:

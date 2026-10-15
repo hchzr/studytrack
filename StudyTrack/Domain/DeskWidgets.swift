@@ -95,8 +95,8 @@ enum DeskWidgets {
 
     /// Les cartes montrées : ce que l'étudiant·e a rangé (ordre, taille, masquées),
     /// puis les cartes que le moment propose et qu'elle n'a jamais vues. Une carte
-    /// que le moment ne propose plus (pas de reprise due) disparaît, sauf si elle
-    /// l'avait rangée elle-même.
+    /// que le moment ne propose plus (pas de reprise due) disparaît, même rangée :
+    /// le moment décide de ce qui existe, l'étudiant·e de l'ordre et de la taille.
     static func merged(defaults: [Placement], stored: [Placement]?) -> [Placement] {
         guard let stored else { return defaults }
         let offered = Set(defaults.map(\.kind))
@@ -118,6 +118,12 @@ enum DeskWidgets {
         var result = list
         result.swapAt(index, visible[target])
         return result
+    }
+
+    /// La largeur d'une carte dans `available` points : sa taille, sans jamais
+    /// dépasser la place (le volet d'à côté ouvert rétrécit le centre).
+    static func width(of size: Size, available: Double, margin: Double = 80) -> Double {
+        min(size.width, max(240, available - margin))
     }
 
     static func resized(_ kind: Kind, in list: [Placement]) -> [Placement] {

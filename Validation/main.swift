@@ -6438,6 +6438,8 @@ do {
     let skip = W.moved(.session, by: 1, in: hiddenMid)
     check(skip.firstIndex { $0.kind == .session }! > skip.firstIndex { $0.kind == .target }!, "cartes : déplacer saute les cartes masquées")
     check(W.decode(W.encode(mine)) == mine && W.decode(nil) == nil && W.decode(Data("x".utf8)) == nil, "cartes : le rangement voyage en JSON")
+    check(W.width(of: .large, available: 1000) == 640 && W.width(of: .large, available: 520) == 440 && W.width(of: .small, available: 200) == 240,
+          "cartes : jamais plus larges que la place, jamais sous 240")
     check(W.storageKey(.lecture) != W.storageKey(.series), "cartes : un bureau par moment")
     check(W.Size.small.width < W.Size.medium.width && W.Size.medium.width < W.Size.large.width, "cartes : trois tailles")
 }
