@@ -811,7 +811,11 @@ struct CoursePane: View {
             }
             .task(id: "\(ed.id)|\(desk.signInRevision)|\(edReload)") {
                 await SchoolConnect.shared.ensure(.ed)
-                do { desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id) }
+                do {
+                    desk.edThreads[ed.id] = try await desk.ed.threads(course: ed.id)
+                    // Les fils sont lus : le mode étude du Mac retire son point « nouveau ».
+                    if let course { NotificationCenter.default.post(name: .studyEdThreadsRead, object: course.id) }
+                }
                 catch HiddenSiteSession.SiteError.notSignedIn { desk.edNeedsLogin = true }
                 catch {}
                 if desk.edLessons[ed.id] == nil { desk.edLessons[ed.id] = (try? await desk.ed.lessons(course: ed.id)) ?? [] }
@@ -1331,4 +1335,9 @@ private struct TheoryDetail: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+}
+
+extension Notification.Name {
+    /// La liste des fils Ed d'un cours vient d'être lue (l'objet : l'identifiant du cours).
+    static let studyEdThreadsRead = Notification.Name("study.edThreadsRead")
 }

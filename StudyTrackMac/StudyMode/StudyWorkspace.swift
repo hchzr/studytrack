@@ -76,6 +76,16 @@ struct StudyWorkspace: View {
         }
         .task { await watchNotices() }
         .task {
+            // Ed : les nouveaux fils du cours étudié, relus toutes les cinq minutes.
+            while !Task.isCancelled {
+                await EdWatcher.shared.poll(courses: courses.filter { $0.id == timer.courseID }, hub: desk.sites)
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .studyEdThreadsRead)) { note in
+            if let id = note.object as? UUID { EdWatcher.shared.markSeen(id, hub: desk.sites, courses: courses) }
+        }
+        .task {
             arrange(force: false)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
@@ -874,6 +884,7 @@ struct StudyTopBar: View {
 
 struct StudyRail: View {
     @State private var running = RunningApps.shared
+    @State private var ed = EdWatcher.shared
     var desk: StudyDesk
     var browser: StudyBrowserModel
     let course: Course?
@@ -883,7 +894,8 @@ struct StudyRail: View {
         VStack(spacing: 6) {
             ForEach(StudyDesk.Pane.allCases) { pane in
                 RailButton(title: pane.title, icon: pane.icon, selected: desk.pane == pane,
-                           badge: pane == .web && !browser.tabs.isEmpty ? "\(browser.tabs.count)" : nil) {
+                           badge: pane == .web && !browser.tabs.isEmpty ? "\(browser.tabs.count)"
+                                : (pane == .course && edUnread > 0 ? "\(edUnread)" : nil)) {
                     desk.pane = pane
                 }
                 .help("\(pane.title) (⌘\(String(pane.shortcut.character)))")
@@ -929,6 +941,9 @@ struct StudyRail: View {
         .frame(width: 76)
         .deskChrome(edge: .trailing)
     }
+
+    /// Les nouveaux messages Ed du cours étudié (le point de « Cours »).
+    private var edUnread: Int { course.map { ed.unread[$0.id] ?? 0 } ?? 0 }
 
     /// Les apps permises et installées (sauf le Finder et la Calculette : le
     /// bureau a les siennes).

@@ -123,6 +123,10 @@ struct StudyModeScreen: View {
     /// Le bureau complet même quand la session est sur le Mac.
     @AppStorage("study.fullDeskWithMac") private var fullDeskWithMac = false
     @State private var showingAllowedApps = false
+    /// Le même arrangement que sur le Mac (`DeskArrangement`) : l'onglet suit le moment,
+    /// sauf si on a choisi un onglet soi-même (jusqu'au moment suivant).
+    @State private var lastArrangement: String?
+    @State private var tabPinned = false
 
     /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
     enum StudyTab: String, CaseIterable, Identifiable {
@@ -155,9 +159,41 @@ struct StudyModeScreen: View {
         DeskSchedule.moment(taskType: focus.state?.taskType ?? .exercise, inGroup: focus.state?.groupSession != nil, course: course)
     }
 
+    /// Ce que le bureau sait du moment (voir `DeskArrangement`, le même qu'au Mac).
+    private var arrangementContext: DeskArrangement.Context {
+        var context = DeskArrangement.Context(moment: moment)
+        context.isTheory = (focus.state?.taskType ?? .exercise).canonical == .theory
+        let exercise = course?.allExercises.first { $0.id == focus.state?.targetID }
+        context.hasTarget = exercise != nil
+        context.targetDone = exercise?.isDone ?? false
+        context.seriesComplete = exercise != nil && (exercise?.series?.isComplete ?? false)
+        return context
+    }
+
+    private var arrangementKey: String { DeskArrangement.signature(arrangementContext) }
+
+    /// À un changement de moment, l'onglet se met où le moment le veut — sauf si on a
+    /// choisi le sien (épinglé jusqu'au moment suivant).
+    private func arrange() {
+        guard PreviewLaunch.string(PreviewLaunch.studyTabFlag) == nil else { return }
+        let key = arrangementKey
+        guard key != lastArrangement else { return }
+        lastArrangement = key
+        tabPinned = false
+        switch DeskArrangement.layout(for: arrangementContext).center {
+        case .exercise: tab = .series
+        case .course: tab = .course
+        case .desk: tab = .desk
+        default: break
+        }
+    }
+
     var body: some View {
         ZStack {
             Carnet.ground.ignoresSafeArea()
+            Color.clear.frame(width: 0, height: 0)
+                .onAppear { arrange() }
+                .onChange(of: arrangementKey) { _, _ in arrange() }
             RadialGradient(colors: [tint.opacity(0.18), .clear], center: .top, startRadius: 20, endRadius: 520)
                 .ignoresSafeArea()
             if focus.studyIsOver, focus.state?.taskType == .lecture {
@@ -475,7 +511,7 @@ struct StudyModeScreen: View {
     private var tabBar: some View {
         HStack(spacing: 4) {
             ForEach(StudyTab.allCases) { item in
-                Button { tab = item } label: {
+                Button { tabPinned = true; tab = item } label: {
                     VStack(spacing: 3) {
                         Image(systemName: item.icon).font(.system(size: 17, weight: tab == item ? .semibold : .regular))
                         Text(item.title).font(.caption2.weight(tab == item ? .semibold : .regular))
