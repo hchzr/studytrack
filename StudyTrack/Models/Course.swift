@@ -253,6 +253,10 @@ final class Course {
 
     var nextExam: Exam? { sortedExams.first { $0.date >= Date() } }
 
+    /// La prochaine **vraie** épreuve (midterm ou examen) : ni un quiz, ni un devoir,
+    /// ni une échéance importée de Moodle. C'est elle qui déclenche la révision.
+    var nextSitting: Exam? { sortedExams.first { $0.date >= Date() && $0.kind.isSitting } }
+
     /// Semaine courante, bornée à la durée du semestre.
     ///
     /// Bornée volontairement : un semestre importé dont la date de début est loin

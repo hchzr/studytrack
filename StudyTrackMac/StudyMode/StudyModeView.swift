@@ -92,7 +92,7 @@ private struct StudyBackground: View {
                 Color.clear
                     .overlay { Image(nsImage: image).resizable().scaledToFill() }
                     .clipped()
-                    .overlay(StudyPalette.ground.opacity(0.7))
+                    .overlay(StudyPalette.ground.opacity(0.86))
                     .allowsHitTesting(false)
             }
             RadialGradient(colors: [tint.opacity(0.14), .clear], center: .topLeading, startRadius: 40, endRadius: 900)

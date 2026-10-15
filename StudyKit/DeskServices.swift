@@ -74,7 +74,7 @@ enum DeskSchedule {
 
     /// La forme du bureau pour cette session.
     static func moment(taskType: TaskType, inGroup: Bool, course: Course?) -> DeskMoment {
-        DeskMoment.resolve(taskType: taskType, inGroup: inGroup, daysToExam: course?.nextExam?.daysUntil)
+        DeskMoment.resolve(taskType: taskType, inGroup: inGroup, daysToExam: course?.nextSitting?.daysUntil)
     }
 }
 

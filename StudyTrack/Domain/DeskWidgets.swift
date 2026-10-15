@@ -51,12 +51,12 @@ enum DeskWidgets {
             }
         }
 
-        /// La largeur d'une carte (la hauteur suit son contenu).
-        var width: Double {
+        /// Le nombre de colonnes qu'une carte occupe (la hauteur suit son contenu).
+        var span: Int {
             switch self {
-            case .small: return 300
-            case .medium: return 420
-            case .large: return 640
+            case .small: return 1
+            case .medium: return 2
+            case .large: return 3
             }
         }
     }
@@ -87,24 +87,24 @@ enum DeskWidgets {
     static func defaults(_ c: Context) -> [Placement] {
         func p(_ kind: Kind, _ size: Size) -> Placement { Placement(kind: kind, size: size) }
         if c.hasCourse && c.moment == .lecture {
-            return [p(.lectureClock, .medium), p(.lectureMarks, .medium), p(.lectureTools, .medium), p(.lectureWeek, .large),
-                    p(.lectureTheory, .medium), p(.session, .small), p(.music, .small)]
+            return [p(.lectureClock, .medium), p(.lectureMarks, .small), p(.lectureTools, .small), p(.lectureWeek, .large),
+                    p(.lectureTheory, .small), p(.session, .small), p(.music, .small)]
         }
         if c.hasCourse && c.moment == .revision {
-            return [p(.revisionExam, .medium), p(.revisionSheet, .medium), p(.revisionRedo, .medium), p(.revisionPast, .large),
-                    p(.revisionTheory, .medium), p(.session, .small), p(.music, .small)]
+            return [p(.revisionExam, .small), p(.revisionSheet, .small), p(.revisionRedo, .small), p(.revisionPast, .large),
+                    p(.revisionTheory, .small), p(.session, .small), p(.music, .small)]
         }
         guard c.hasCourse else {
             // Session libre : choisir, puis ce que la journée réserve.
-            return [p(.courses, .medium), p(.today, .medium), p(.session, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]
+            return [p(.courses, .medium), p(.session, .small), p(.today, .small), p(.music, .small), p(.claude, .small), p(.accounts, .small)]
         }
         // L'exercice visé montre déjà ce qui vient ensuite : pas de seconde liste.
-        var list: [Placement] = [p(.session, .medium)]
+        var list: [Placement] = [p(.session, .small)]
         if c.hasTarget { list.append(p(.target, .medium)) }
         if c.redosDue > 0 { list.append(p(.redo, .medium)) }
         if c.moment == .revision || (c.daysToExam.map { $0 >= 0 && $0 <= examHorizonDays } ?? false) { list.append(p(.exam, .small)) }
-        list.append(p(.steps, .medium))
-        if c.hasSeries && !c.hasTarget { list.append(p(.upNext, .medium)) }
+        list.append(p(.steps, .small))
+        if c.hasSeries && !c.hasTarget { list.append(p(.upNext, .small)) }
         list.append(contentsOf: [p(.music, .small), p(.claude, .small), p(.today, .small), p(.accounts, .small)])
         return list
     }
@@ -136,10 +136,21 @@ enum DeskWidgets {
         return result
     }
 
-    /// La largeur d'une carte dans `available` points : sa taille, sans jamais
-    /// dépasser la place (le volet d'à côté ouvert rétrécit le centre).
-    static func width(of size: Size, available: Double, margin: Double = 80) -> Double {
-        min(size.width, max(240, available - margin))
+    /// La grille : des colonnes égales qui remplissent la place, au moins 300 pt chacune.
+    /// Les cartes s'alignent dessus (une, deux ou trois colonnes) au lieu de flotter.
+    static let minimumColumn = 300.0
+    static let gap = 16.0
+    static let maximumColumns = 4
+
+    static func columnCount(available: Double) -> Int {
+        let fit = Int(((available + gap) / (minimumColumn + gap)).rounded(.down))
+        return min(maximumColumns, max(1, fit))
+    }
+
+    /// Les colonnes d'une carte : sa taille, sans dépasser la grille (le volet d'à côté
+    /// ouvert la rétrécit).
+    static func span(of size: Size, columns: Int) -> Int {
+        min(size.span, max(1, columns))
     }
 
     static func resized(_ kind: Kind, in list: [Placement]) -> [Placement] {

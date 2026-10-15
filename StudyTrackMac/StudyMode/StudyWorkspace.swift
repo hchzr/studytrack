@@ -851,7 +851,7 @@ struct StudyTopBar: View {
                 Label(DeskMoment.series.title, systemImage: DeskMoment.series.icon)
             }
             Button { timer.retarget(courseID: timer.courseID, taskType: .theory) } label: {
-                Label(course?.nextExam != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
+                Label(course?.nextSitting != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
             }
         } label: {
             HStack(spacing: 4) {
@@ -1479,8 +1479,6 @@ private struct StudyDeskHome: View {
     var revisionPart: ((RevisionDeskView.Part) -> AnyView)?
     @State private var placements: [DeskWidgets.Placement] = []
     @State private var editing = false
-    /// La largeur du centre : une carte large ne la dépasse pas (le volet d'à côté la réduit).
-    @State private var available: CGFloat = 1000
 
     // MARK: Le plan de travail
 
@@ -1492,7 +1490,7 @@ private struct StudyDeskHome: View {
     private var widgetContext: DeskWidgets.Context {
         DeskWidgets.Context(moment: moment, hasCourse: course != nil, hasSeries: series != nil,
                             hasTarget: course?.allExercises.contains { $0.id == timer.targetID } ?? false,
-                            redosDue: due.count, daysToExam: course?.nextExam?.daysUntil)
+                            redosDue: due.count, daysToExam: course?.nextSitting?.daysUntil)
     }
 
     private var shown: [DeskWidgets.Placement] {
@@ -1516,9 +1514,10 @@ private struct StudyDeskHome: View {
                         .buttonStyle(.paper)
                         .help("Masquer, agrandir ou déplacer les cartes : retenu pour ce moment")
                 }
-                FlowLayout(spacing: 16) {
+                DeskWidgetGrid {
                     ForEach(list.filter { !$0.hidden }) { placement in
                         card(placement, in: list)
+                            .layoutValue(key: DeskWidgetGrid.SpanKey.self, value: placement.size.span)
                     }
                 }
                 if editing, list.contains(where: \.hidden) {
@@ -1535,7 +1534,6 @@ private struct StudyDeskHome: View {
             }
             .padding(40)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
         .onAppear { load() }
         .onChange(of: moment) { _, _ in load() }
         .task {
@@ -1554,7 +1552,7 @@ private struct StudyDeskHome: View {
     @ViewBuilder
     private func card(_ placement: DeskWidgets.Placement, in list: [DeskWidgets.Placement]) -> some View {
         content(placement.kind, size: placement.size)
-            .frame(width: DeskWidgets.width(of: placement.size, available: Double(available)), alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
                 if editing {
                     HStack(spacing: 2) {
@@ -1618,7 +1616,7 @@ private struct StudyDeskHome: View {
         switch kind {
         case .session:
             glassCard {
-                StudyDial(tint: tint, size: size == .small ? 200 : (size == .medium ? 280 : 340))
+                StudyDial(tint: tint, size: size == .small ? 220 : (size == .medium ? 280 : 320))
                     .frame(maxWidth: .infinity)
             }
         case .target:
@@ -1752,7 +1750,7 @@ private struct StudyDeskHome: View {
 
     private var examCard: some View {
         glassCard {
-            if let exam = course?.nextExam {
+            if let exam = course?.nextSitting {
                 let days = exam.daysUntil
                 VStack(alignment: .leading, spacing: 4) {
                     Kicker("Examen")

@@ -101,7 +101,7 @@ final class MacSettings {
     /// Poser les apps permises (GoodNotes…) dans le centre du bureau (Accessibilité).
     var studyPlaceApps: Bool { didSet { defaults.set(studyPlaceApps, forKey: "mac.studyPlaceApps") } }
     /// La barre du haut et la colonne d'outils en fenêtres flottantes (expérimental).
-    var studyPanels: Bool { didSet { defaults.set(studyPanels, forKey: "mac.studyPanels") } }
+    var studyPanels: Bool { didSet { defaults.set(studyPanels, forKey: "mac.studyPanels2") } }
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
@@ -173,7 +173,8 @@ final class MacSettings {
         studyBlockGestures = defaults.object(forKey: "mac.studyBlockGestures") as? Bool ?? true
         studyCalmDisplays = defaults.object(forKey: "mac.studyCalmDisplays") as? Bool ?? true
         studyPlaceApps = defaults.object(forKey: "mac.studyPlaceApps") as? Bool ?? true
-        studyPanels = defaults.bool(forKey: "mac.studyPanels")
+        // Barres flottantes : le défaut — elles recouvrent aussi la barre des menus de macOS.
+        studyPanels = defaults.object(forKey: "mac.studyPanels2") as? Bool ?? true
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off

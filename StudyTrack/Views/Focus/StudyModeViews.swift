@@ -315,7 +315,7 @@ struct StudyModeScreen: View {
             Button { focus.updateContext(taskType: .lecture) } label: { Label(DeskMoment.lecture.title, systemImage: DeskMoment.lecture.icon) }
             Button { focus.updateContext(taskType: .exercise) } label: { Label(DeskMoment.series.title, systemImage: DeskMoment.series.icon) }
             Button { focus.updateContext(taskType: .theory) } label: {
-                Label(course?.nextExam != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
+                Label(course?.nextSitting != nil ? DeskMoment.revision.title : TaskType.theory.label, systemImage: DeskMoment.revision.icon)
             }
         } label: {
             Label(moment.title, systemImage: moment.icon)

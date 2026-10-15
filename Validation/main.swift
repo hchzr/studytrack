@@ -6333,6 +6333,13 @@ do {
     check(S.decode(S.encode(choice)) == choice && S.decode(nil) == nil && S.decode(Data("x".utf8)) == nil, "bande-son : le choix voyage en JSON")
 }
 
+// MARK: Une épreuve n'est pas un devoir
+do {
+    check(ExamKind.exam.isSitting && ExamKind.midterm.isSitting, "épreuve : un examen et un midterm comptent")
+    check(!ExamKind.quiz.isSitting && !ExamKind.assignment.isSitting && !ExamKind.project.isSitting && !ExamKind.other.isSitting,
+          "épreuve : un quiz, un devoir, un projet ou une échéance importée ne font pas passer en révision")
+}
+
 // MARK: Bureau selon le contexte
 do {
     typealias D = DeskArrangement
@@ -6450,10 +6457,13 @@ do {
     let skip = W.moved(.session, by: 1, in: hiddenMid)
     check(skip.firstIndex { $0.kind == .session }! > skip.firstIndex { $0.kind == .target }!, "cartes : déplacer saute les cartes masquées")
     check(W.decode(W.encode(mine)) == mine && W.decode(nil) == nil && W.decode(Data("x".utf8)) == nil, "cartes : le rangement voyage en JSON")
-    check(W.width(of: .large, available: 1000) == 640 && W.width(of: .large, available: 520) == 440 && W.width(of: .small, available: 200) == 240,
-          "cartes : jamais plus larges que la place, jamais sous 240")
+    check(W.columnCount(available: 1360) == 4 && W.columnCount(available: 1000) == 3 && W.columnCount(available: 640) == 2 && W.columnCount(available: 400) == 1 && W.columnCount(available: 100) == 1,
+          "cartes : la grille a de une à quatre colonnes selon la place")
+    check(W.columnCount(available: 3000) == W.maximumColumns, "cartes : jamais plus de quatre colonnes")
+    check(W.span(of: .large, columns: 4) == 3 && W.span(of: .large, columns: 2) == 2 && W.span(of: .medium, columns: 1) == 1 && W.span(of: .small, columns: 4) == 1,
+          "cartes : une carte ne dépasse jamais la grille")
     check(W.storageKey(.lecture) != W.storageKey(.series), "cartes : un bureau par moment")
-    check(W.Size.small.width < W.Size.medium.width && W.Size.medium.width < W.Size.large.width, "cartes : trois tailles")
+    check(W.Size.small.span < W.Size.medium.span && W.Size.medium.span < W.Size.large.span, "cartes : trois tailles")
 }
 
 // MARK: Géométrie du bureau (placement des apps permises)

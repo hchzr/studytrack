@@ -103,7 +103,7 @@ struct RevisionDeskView: View {
 
     @ViewBuilder
     private var exam: some View {
-        if let next = course.nextExam {
+        if let next = course.nextSitting {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Circle().fill(tint).frame(width: 8, height: 8)

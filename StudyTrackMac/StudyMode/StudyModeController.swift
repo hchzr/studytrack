@@ -263,7 +263,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
                 if let container { root = AnyView(root.modelContainer(container)) }
                 return root
             }
-            chromePanels = [ChromePanel(content: host(StudyTopBarHost()), frame: frames.bar),
+            chromePanels = [ChromePanel(content: host(StudyTopBarHost()), frame: frames.bar, level: StudyLevels.topBar),
                             ChromePanel(content: host(StudyRailHost()), frame: frames.rail)]
         } else {
             chromePanels[0].setFrame(frames.bar, display: true)

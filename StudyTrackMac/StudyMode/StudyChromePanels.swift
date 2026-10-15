@@ -11,6 +11,9 @@ enum StudyLevels {
     /// Les barres flottantes : au-dessus des apps (une app permise posée dans le
     /// centre ne les recouvre pas), au-dessous de tout le reste.
     static let chrome = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue + 1)
+    /// La barre du haut : au-dessus de la barre des menus de macOS et de ses icônes
+    /// (niveau 25), donc elle la recouvre quand la souris monte en haut de l'écran.
+    static let topBar = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
     static let hud = NSWindow.Level.popUpMenu
     static let shield = NSWindow.Level.statusBar
     static let miniTimer = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
@@ -28,10 +31,10 @@ final class ChromePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    init(content: AnyView, frame: NSRect) {
+    init(content: AnyView, frame: NSRect, level: NSWindow.Level = StudyLevels.chrome) {
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
                    backing: .buffered, defer: false)
-        level = StudyLevels.chrome
+        self.level = level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear

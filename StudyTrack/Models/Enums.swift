@@ -174,6 +174,10 @@ enum Correctness: String, Codable, CaseIterable, Identifiable {
 enum ExamKind: String, Codable, CaseIterable, Identifiable {
     case midterm, exam, quiz, project, assignment, other
 
+    /// Une vraie épreuve (midterm, examen) : ce qui fait passer le bureau en révision.
+    /// Un quiz, un devoir ou une échéance importée n'en est pas une.
+    var isSitting: Bool { self == .midterm || self == .exam }
+
     var id: String { rawValue }
 
     var label: String {

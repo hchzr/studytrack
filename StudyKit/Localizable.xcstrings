@@ -3828,6 +3828,9 @@
         }
       }
     },
+    "Amener ici" : {
+
+    },
     "Amphi" : {
       "localizations" : {
         "en" : {
@@ -4099,6 +4102,9 @@
           }
         }
       }
+    },
+    "Après" : {
+
     },
     "Après une série" : {
 
@@ -4694,6 +4700,9 @@
     "Aucune playlist trouvée" : {
 
     },
+    "Aucune reprise due" : {
+
+    },
     "Aucune séance. Importe ton horaire (.ics) depuis l'onglet Agenda ou le profil." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4990,6 +4999,9 @@
         }
       }
     },
+    "Autres écrans au calme" : {
+
+    },
     "Autres sites" : {
       "localizations" : {
         "en" : {
@@ -5032,6 +5044,9 @@
         }
       }
     },
+    "Avant" : {
+
+    },
     "Avec les secondes" : {
       "localizations" : {
         "en" : {
@@ -5042,6 +5057,12 @@
         }
       }
     },
+    "Bande-son de la révision" : {
+
+    },
+    "Bande-son des séries" : {
+
+    },
     "Barème, ce que le prof a dit…" : {
       "localizations" : {
         "en" : {
@@ -5051,6 +5072,9 @@
           }
         }
       }
+    },
+    "Barres flottantes (expérimental)" : {
+
     },
     "Base" : {
       "localizations" : {
@@ -9110,7 +9134,6 @@
 
     },
     "Ensuite" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10252,6 +10275,9 @@
       }
     },
     "Glisser pour redimensionner" : {
+
+    },
+    "GoodNotes, Claude… s'ouvrent au centre du bureau, la barre du haut et le volet d'à côté restant visibles. Demande l'Accessibilité (écran de lancement)." : {
 
     },
     "Google Tasks" : {
@@ -11656,6 +11682,9 @@
         }
       }
     },
+    "La barre du haut et la colonne d'outils deviennent des fenêtres à part, visibles par-dessus GoodNotes et les autres apps permises. Au prochain mode étude." : {
+
+    },
     "La calculatrice" : {
       "localizations" : {
         "en" : {
@@ -12892,6 +12921,9 @@
         }
       }
     },
+    "Masquées" : {
+
+    },
     "Masquer" : {
       "localizations" : {
         "en" : {
@@ -12942,6 +12974,9 @@
           }
         }
       }
+    },
+    "Masquer, agrandir ou déplacer les cartes : retenu pour ce moment" : {
+
     },
     "MATH-101" : {
       "localizations" : {
@@ -13719,6 +13754,9 @@
     "Music n'est pas autorisé" : {
 
     },
+    "Music n'est pas autorisé (Réglages Système › Automatisation)." : {
+
+    },
     "Musique" : {
       "localizations" : {
         "en" : {
@@ -14402,6 +14440,9 @@
         }
       }
     },
+    "Organiser" : {
+
+    },
     "ou ajouter un cours à la main" : {
       "localizations" : {
         "en" : {
@@ -14502,6 +14543,9 @@
           }
         }
       }
+    },
+    "Outils du cours" : {
+
     },
     "Ouvert" : {
       "localizations" : {
@@ -15091,6 +15135,9 @@
           }
         }
       }
+    },
+    "Pas d'examen à venir" : {
+
     },
     "Pas d'heure de fin : tu termines quand tu as fini." : {
       "localizations" : {
@@ -15703,6 +15750,9 @@
         }
       }
     },
+    "Plus rien à l'horaire." : {
+
+    },
     "Plus tard" : {
       "localizations" : {
         "en" : {
@@ -15846,6 +15896,12 @@
           }
         }
       }
+    },
+    "Poser GoodNotes et les autres apps permises dans le bureau : autorise l'Accessibilité." : {
+
+    },
+    "Poser les apps permises dans le bureau" : {
+
     },
     "Position" : {
 
@@ -16553,6 +16609,9 @@
         }
       }
     },
+    "Redemander l'autorisation" : {
+
+    },
     "Réduire" : {
       "localizations" : {
         "en" : {
@@ -16955,6 +17014,9 @@
     "Repère" : {
 
     },
+    "Repères" : {
+
+    },
     "Répéter" : {
       "localizations" : {
         "en" : {
@@ -17080,6 +17142,9 @@
           }
         }
       }
+    },
+    "Reprises" : {
+
     },
     "Réservé aux administrateurs." : {
       "localizations" : {
@@ -17627,7 +17692,6 @@
       }
     },
     "Rien ne joue." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19683,6 +19747,9 @@
         }
       }
     },
+    "Taille" : {
+
+    },
     "Tape `claude` puis `/mcp` dans le Terminal, dans le dossier du projet" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -21028,6 +21095,9 @@
           }
         }
       }
+    },
+    "Un indice, ou fais vérifier ta copie." : {
+
     },
     "Un modèle de langage — sur l'appareil quand c'est possible — complète la détection des séries et des exercices." : {
       "extractionState" : "stale",
