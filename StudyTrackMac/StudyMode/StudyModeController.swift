@@ -5,12 +5,12 @@ import OSLog
 
 /// Le mode étude sur le Mac : un écran plein, et le reste du Mac fermé.
 ///
-/// **Comment le Mac est « bloqué ».** L'app est dans le bac à sable : elle ne
-/// peut ni quitter ni masquer de force les autres apps. Elle fait donc comme
-/// le Temps d'écran de l'iPhone : quand une app non permise passe au premier
-/// plan (clic dans le Dock, ⌘Tab, Spotlight), un **voile** couvre tous les
-/// écrans par-dessus elle — « Safari est fermé pendant le mode étude » — avec
-/// de quoi revenir à l'étude ou ouvrir un outil permis. Les apps permises
+/// **Comment le Mac est « bloqué ».** L'app est hors du bac à sable : au début
+/// de la session, les apps non permises reçoivent « quitter », et une qui se
+/// lance ensuite est fermée aussitôt. Ce qui passe quand même au premier plan
+/// (une app qui refuse de quitter, le Finder, Music) est couvert par un
+/// **voile** sur tous les écrans — « Safari est fermé pendant le mode étude »
+/// — avec de quoi revenir à l'étude ou ouvrir un outil permis. Les apps permises
 /// (GoodNotes, Claude, Aperçu…) passent au-dessus de l'écran du mode étude
 /// comme d'habitude ; les sites de cours s'ouvrent dans son navigateur, qui ne
 /// suit que les adresses permises.
@@ -57,6 +57,12 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// secondes, on les laisse afficher « Enregistrer les modifications ? ».
     private var quitting: [pid_t: Date] = [:]
     private var blocking = false
+    /// Les autres écrans pendant un blocage : calmes, sans rien à y faire.
+    private var calmWindows: [NSWindow] = []
+    private var screenObserver: NSObjectProtocol?
+    /// Le dernier masquage que nous avons fait : macOS met alors le Finder devant
+    /// (plus rien de visible), ce qui n'est pas un clic de l'étudiant·e.
+    private var lastHideAt: Date?
     private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "study")
     #if DEBUG
     /// `-studyPreview` : l'écran dans une fenêtre ordinaire, sans rien bloquer.
@@ -98,7 +104,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // app avec un document non enregistré le demande d'abord).
         let locks = screen.locks
         if locks, settings?.studyCloseApps ?? true {
-            for app in runningBlockedApps() where !Self.playsInBackground(app) { ask(app, toQuit: true, force: false) }
+            for app in runningBlockedApps() where !neverQuit(app) { ask(app, toQuit: true, force: false) }
         }
         if timer.phase == .idle { timer.pomodoro = pomodoro }
         timer.enterStudy(minutes: minutes, courseID: screen.courseID, taskType: screen.taskType,
@@ -170,7 +176,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard let timer, let settings else { return }
         if !HeadlessCapture.active { NSApp.setActivationPolicy(.regular) }
         if window == nil {
-            let screenFrame = (NSScreen.main ?? NSScreen.screens.first)?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            let screenFrame = (NSScreen.screens.first ?? NSScreen.main)?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
             var frame = previewOnly ? NSRect(x: 80, y: 80, width: 1440, height: 900) : screenFrame
             #if DEBUG
             // `-snapshot` : hors de l'écran, rien ne passe devant ce qu'on fait.
@@ -187,7 +193,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             window.title = "Mode étude"
             window.isReleasedWhenClosed = false
             window.level = .normal
-            window.collectionBehavior = [.managed, .fullScreenNone]
+            window.collectionBehavior = blocking && !previewOnly ? [.canJoinAllSpaces, .fullScreenNone] : [.managed, .fullScreenNone]
             window.backgroundColor = NSColor(StudyPalette.ground)
             window.hasShadow = false
             window.appearance = NSAppearance(named: .darkAqua)
@@ -226,16 +232,21 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     }
 
     /// Dock et barre des menus cachés tant que StudyTrack est au premier plan.
-    /// Sous verrou, en plus : ni ⌘Tab, ni « Forcer à quitter » (⌥⌘⎋), ni
-    /// fermeture de session ou redémarrage, ni ⌘H, ni menu Pomme. Ces options
+    /// Sous blocage, en plus : ni ⌘Tab, ni ⌘H, ni menu Pomme. Sous verrou
+    /// encore : ni « Forcer à quitter » (⌥⌘⎋), ni fermeture de session ou
+    /// redémarrage. Ces options
     /// ne valent que quand StudyTrack est au premier plan ; ailleurs (une app
     /// permise), le voile et le gardien (`StudyGuard`) prennent le relais.
     private func applyPresentation() {
         guard window?.isVisible == true, !previewOnly else { return }
         var options: NSApplication.PresentationOptions = [.hideDock, .hideMenuBar]
+        // Bloquer, c'est ne plus pouvoir passer à une autre app — session sans fin
+        // comprise ; le verrou (ne pas finir avant l'heure) ajoute ce qui ferme.
+        if timer?.studyLocks == true {
+            options.formUnion([.disableProcessSwitching, .disableHideApplication, .disableAppleMenu])
+        }
         if timer?.isLocked == true {
-            options.formUnion([.disableProcessSwitching, .disableForceQuit, .disableSessionTermination,
-                               .disableHideApplication, .disableAppleMenu])
+            options.formUnion([.disableForceQuit, .disableSessionTermination])
         }
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
@@ -255,8 +266,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         MiniTimerPanel.shared.update()
         // Une autre fenêtre de StudyTrack (le cours, les réglages) : sous
-        // verrou, rien ne se relâche.
-        guard timer?.isLocked != true else { return }
+        // blocage, rien ne se relâche.
+        guard timer?.studyLocks != true else { return }
         NSApp.presentationOptions = []
     }
 
@@ -270,6 +281,15 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         blocking = true
         // Tué de force depuis une app permise, StudyTrack revient (`StudyGuard`).
         StudyGuard.arm()
+        // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
+        // second écran n'est pas une porte de sortie.
+        window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
+        showCalmWindows()
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.screensChanged() }
+        }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
@@ -297,6 +317,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         launchObserver = nil
         quitting.removeAll()
         hideShields()
+        hideCalmWindows()
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = nil
+        window?.collectionBehavior = [.managed, .fullScreenNone]
         log.notice("mode étude : blocage levé")
     }
 
@@ -305,12 +329,20 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         NSWorkspace.shared.runningApplications.filter(isBlocked)
     }
 
-    private func isBlocked(_ app: NSRunningApplication) -> Bool {
-        StudyMode.shouldBlock(bundleID: app.bundleIdentifier,
+    private func disposition(_ app: NSRunningApplication) -> StudyMode.Disposition {
+        StudyMode.disposition(bundleID: app.bundleIdentifier,
                               isRegular: app.activationPolicy == .regular,
                               own: Bundle.main.bundleIdentifier ?? "",
                               allowed: settings?.studyApps ?? StudyMode.defaultMacApps)
     }
+
+    private func isBlocked(_ app: NSRunningApplication) -> Bool {
+        let result = disposition(app)
+        return result == .close || result == .hideOnly
+    }
+
+    /// Music et le Finder : masqués, jamais fermés.
+    private func neverQuit(_ app: NSRunningApplication) -> Bool { disposition(app) == .hideOnly }
 
     /// Demande à une app de quitter ; `force` : la forcer si elle n'a pas
     /// quitté au bout de deux secondes (une app tout juste lancée).
@@ -325,8 +357,9 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     }
 
     private func launched(_ app: NSRunningApplication?) {
-        // Music lancé pour jouer la musique du mode étude : il reste.
-        guard blocking, let app, isBlocked(app), !Self.playsInBackground(app) else { return }
+        // Music lancé pour jouer la musique du mode étude, le Finder que le Dock
+        // relance : ils restent (masqués s'ils passent devant, voir `check`).
+        guard blocking, let app, isBlocked(app), !neverQuit(app) else { return }
         screen.blockedName = app.localizedName
         screen.blockedAt = Date()
         log.notice("mode étude : \(app.bundleIdentifier ?? "?", privacy: .public) lancée, fermée")
@@ -355,6 +388,13 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             }
             return
         }
+        // Le Finder qui vient devant parce que nous venons de masquer une app :
+        // on le masque aussi et on revient à l'étude, sans voile ni bruit.
+        if neverQuit(app), let last = lastHideAt, Date().timeIntervalSince(last) < 1.5 {
+            _ = app.hide()
+            present()
+            return
+        }
         // On vient de lui demander de quitter : elle demande peut-être
         // d'enregistrer un document — on la laisse répondre.
         if let asked = quitting[app.processIdentifier], Date().timeIntervalSince(asked) < 20 { return }
@@ -366,10 +406,11 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // Puis masquer l'app, quand le système le permet (ses fenêtres partent,
         // son icône reste), et revenir à l'écran d'étude, qui le dit. Sinon le
         // voile reste, jusqu'à ce qu'on choisisse quoi faire.
-        if settings?.studyCloseApps ?? true {
+        if settings?.studyCloseApps ?? true, !neverQuit(app) {
             ask(app, toQuit: true, force: false)
         }
         if app.hide() {
+            lastHideAt = Date()
             present()
         }
     }
@@ -405,6 +446,47 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     private func hideShields() {
         for shield in shields { shield.orderOut(nil) }
+    }
+
+    // MARK: Autres écrans
+
+    /// Un écran calme sur chaque écran qui n'est pas celui du bureau d'étude.
+    private func showCalmWindows() {
+        guard let timer, let settings, !previewOnly, calmWindows.isEmpty else { return }
+        for screenInfo in NSScreen.screens.dropFirst() {
+            let calm = StudyWindow(contentRect: screenInfo.frame, styleMask: [.borderless, .fullSizeContentView],
+                                   backing: .buffered, defer: false)
+            calm.isReleasedWhenClosed = false
+            calm.level = .normal
+            calm.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
+            calm.backgroundColor = NSColor(StudyPalette.ground)
+            calm.hasShadow = false
+            calm.appearance = NSAppearance(named: .darkAqua)
+            var root = AnyView(StudyCalmView().environment(timer).environment(settings))
+            if let container { root = AnyView(root.modelContainer(container)) }
+            calm.contentView = NSHostingView(rootView: root)
+            calm.setFrame(screenInfo.frame, display: true)
+            calm.orderFront(nil)
+            calmWindows.append(calm)
+        }
+    }
+
+    private func hideCalmWindows() {
+        for calm in calmWindows { calm.orderOut(nil) }
+        calmWindows.removeAll()
+    }
+
+    /// Un écran branché ou débranché : tout est reposé à la bonne place. Les
+    /// voiles, bâtis une fois pour les écrans d'alors, sont refaits au besoin.
+    private func screensChanged() {
+        guard blocking else { return }
+        let showingShields = shields.contains { $0.isVisible }
+        for shield in shields { shield.orderOut(nil) }
+        shields.removeAll()
+        hideCalmWindows()
+        showCalmWindows()
+        if let first = NSScreen.screens.first { window?.setFrame(first.frame, display: true) }
+        if showingShields { showShields() }
     }
 
     /// « Revenir à l'étude » depuis le voile.

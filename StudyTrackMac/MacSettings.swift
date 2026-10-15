@@ -126,7 +126,15 @@ final class MacSettings {
         // Les sites ajoutés depuis (GeoGebra, Desmos…) rejoignent une liste déjà enregistrée.
         let savedSites = defaults.stringArray(forKey: "mac.studySites") ?? StudyMode.defaultSites
         studySites = savedSites + StudyMode.defaultSites.filter { !savedSites.contains($0) && StudyMode.addedLater.contains($0) }
-        studyApps = defaults.stringArray(forKey: "mac.studyApps") ?? StudyMode.defaultMacApps
+        // Le Finder n'est plus permis d'office (⌥⌘Espace y ouvrait tout le disque) :
+        // retiré des listes déjà enregistrées, une seule fois.
+        var savedApps = defaults.stringArray(forKey: "mac.studyApps") ?? StudyMode.defaultMacApps
+        if !defaults.bool(forKey: "mac.studyApps.v2") {
+            savedApps = StudyMode.removingFinder(from: savedApps)
+            defaults.set(savedApps, forKey: "mac.studyApps")
+            defaults.set(true, forKey: "mac.studyApps.v2")
+        }
+        studyApps = savedApps
         studyMinutes = defaults.object(forKey: "mac.studyMinutes") as? Int ?? 50
         studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")

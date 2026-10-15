@@ -227,9 +227,18 @@ enum StudyMode {
         "com.goodnotesapp.x",
         "com.anthropic.claudefordesktop",
         "com.apple.Preview",
-        "com.apple.finder",
         "com.apple.calculator",
     ]
+
+    /// Le Finder n'est plus permis d'office : ⌥⌘Espace y ouvrait une fenêtre de
+    /// recherche, donc tout le disque. Il n'est pas non plus fermé (le Dock le
+    /// relance aussitôt) : voir `hideOnlyApps`. Une seule fois, on le retire des
+    /// listes déjà enregistrées ; ensuite, c'est le choix de l'utilisateur·rice.
+    static let finderBundleID = "com.apple.finder"
+
+    static func removingFinder(from apps: [String]) -> [String] {
+        apps.filter { $0 != finderBundleID }
+    }
 
     /// Ce qui fait marcher le Mac lui-même : jamais bloqué (fenêtre de
     /// connexion, Touch ID, économiseur, Dock, Spotlight, centre de contrôle…).
@@ -246,16 +255,45 @@ enum StudyMode {
     /// jamais fermées — seulement masquées si elles passent au premier plan.
     static let backgroundApps: Set<String> = ["com.apple.Music"]
 
-    /// Une app qui passe au premier plan doit-elle être arrêtée ?
-    ///
-    /// - `regular` : l'app a une fenêtre et une icône dans le Dock. Les agents
-    ///   (barre des menus, services) ne sont jamais bloqués : ce ne sont pas des
-    ///   distractions, et les bloquer casserait le système.
-    static func shouldBlock(bundleID: String?, isRegular: Bool, own: String, allowed: [String]) -> Bool {
-        guard isRegular, let bundleID, !bundleID.isEmpty else { return false }
-        if bundleID == own || systemBundles.contains(bundleID) { return false }
+    /// Les apps qu'on masque quand elles passent devant, sans jamais leur
+    /// demander de quitter : Music (il joue) et le Finder (le système le
+    /// relance aussitôt fermé, puis on le fermerait de nouveau, sans fin).
+    static let hideOnlyApps: Set<String> = backgroundApps.union([finderBundleID])
+
+    /// Les lanceurs (Raycast, Alfred, LaunchBar) : des apps « accessoires » sans
+    /// icône dans le Dock, donc ignorées par la règle des apps ordinaires, mais
+    /// qui ouvrent n'importe quoi d'un raccourci. Fermés comme les autres.
+    static let launcherApps: Set<String> = [
+        "com.raycast.macos", "com.runningwithcrayons.Alfred", "at.obdev.LaunchBar",
+    ]
+
+    /// Ce qu'il faut faire d'une app qui passe au premier plan.
+    enum Disposition: Equatable {
+        /// Permise.
+        case allowed
+        /// Masquée, jamais fermée (Music, Finder).
+        case hideOnly
+        /// Couverte, puis fermée.
+        case close
+        /// Hors de portée : StudyTrack, le système, les agents.
+        case system
+    }
+
+    static func disposition(bundleID: String?, isRegular: Bool, own: String, allowed: [String]) -> Disposition {
+        guard let bundleID, !bundleID.isEmpty else { return .system }
+        if bundleID == own || systemBundles.contains(bundleID) { return .system }
         // Les assistants d'une app permise (« … .helper ») le sont avec elle.
-        return !allowed.contains { bundleID == $0 || bundleID.hasPrefix($0 + ".") }
+        if allowed.contains(where: { bundleID == $0 || bundleID.hasPrefix($0 + ".") }) { return .allowed }
+        if launcherApps.contains(bundleID) { return .close }
+        guard isRegular else { return .system }
+        return hideOnlyApps.contains(bundleID) ? .hideOnly : .close
+    }
+
+    /// Une app qui passe au premier plan doit-elle être arrêtée (couverte,
+    /// masquée ou fermée) ? Voir `disposition` pour savoir comment.
+    static func shouldBlock(bundleID: String?, isRegular: Bool, own: String, allowed: [String]) -> Bool {
+        let result = disposition(bundleID: bundleID, isRegular: isRegular, own: own, allowed: allowed)
+        return result == .close || result == .hideOnly
     }
 
     // MARK: Outils

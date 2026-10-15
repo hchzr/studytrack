@@ -6229,6 +6229,21 @@ do {
     check(!StudyMode.isOpenEnded(state) && StudyMode.locks(state, at: t0), "une durée : verrou comme avant")
     check(StudyMode.clock(state, at: t0.addingTimeInterval(60.2)) == 29 * 60, "une durée : l'horloge compte ce qui reste")
     check(StudyMode.backgroundApps.contains("com.apple.Music"), "Music joue en arrière-plan pendant le mode étude")
+    // Finder : masqué, jamais fermé ; lanceurs : fermés même sans icône dans le Dock.
+    let d = { (id: String?, regular: Bool, allowed: [String]) in StudyMode.disposition(bundleID: id, isRegular: regular, own: "me", allowed: allowed) }
+    check(!StudyMode.defaultMacApps.contains(StudyMode.finderBundleID), "le Finder n'est plus permis d'office")
+    check(d("com.apple.finder", true, StudyMode.defaultMacApps) == .hideOnly, "Finder : masqué quand il passe devant, jamais fermé")
+    check(d("com.apple.finder", true, StudyMode.defaultMacApps + ["com.apple.finder"]) == .allowed, "Finder permis explicitement : permis")
+    check(d("com.apple.Music", true, []) == .hideOnly, "Music : masqué, jamais fermé")
+    check(d("com.raycast.macos", false, StudyMode.defaultMacApps) == .close, "Raycast : fermé même sans icône dans le Dock")
+    check(d("com.runningwithcrayons.Alfred", false, []) == .close && d("at.obdev.LaunchBar", false, []) == .close, "Alfred et LaunchBar : fermés")
+    check(d("com.raycast.macos", false, ["com.raycast.macos"]) == .allowed, "un lanceur permis explicitement le reste")
+    check(d("com.example.agent", false, []) == .system, "un agent quelconque : hors de portée")
+    check(d("com.apple.Safari", true, StudyMode.defaultMacApps) == .close, "Safari : fermé")
+    check(d(nil, true, []) == .system && d("", true, []) == .system, "sans identifiant : hors de portée")
+    check(d("com.apple.Spotlight", true, []) == .system, "Spotlight reste hors de portée de la règle des apps")
+    check(StudyMode.removingFinder(from: ["com.goodnotesapp.x", "com.apple.finder", "com.apple.Preview"]) == ["com.goodnotesapp.x", "com.apple.Preview"], "migration : le Finder sort de la liste")
+    check(StudyMode.removingFinder(from: StudyMode.removingFinder(from: ["com.apple.finder"])) == [], "migration : sans effet la seconde fois")
 }
 
 // MARK: Réveil des autres appareils (verrou)
