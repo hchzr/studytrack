@@ -81,6 +81,13 @@ final class MacSettings {
     /// Fermer les apps non permises (sinon : seulement les couvrir d'un voile).
     var studyCloseApps: Bool { didSet { defaults.set(studyCloseApps, forKey: "mac.studyCloseApps2") } }
     /// Cacher le Dock et la barre des menus pendant un blocage (System Events).
+    /// La bande-son des sessions (jamais pendant un cours) et ce qu'elle fait pendant une pause.
+    var studySoundtrack: SessionSoundtrack.Choice? {
+        didSet { defaults.set(SessionSoundtrack.encode(studySoundtrack), forKey: "mac.studySoundtrack") }
+    }
+    var studySoundtrackOnBreak: SessionSoundtrack.BreakPolicy {
+        didSet { defaults.set(studySoundtrackOnBreak.rawValue, forKey: "mac.studySoundtrackOnBreak") }
+    }
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
@@ -144,6 +151,9 @@ final class MacSettings {
         // Fermer les autres apps n'est plus le défaut : une app peut refuser (le
         // Terminal demande), alors que la masquer et la couvrir marche toujours.
         studyCloseApps = defaults.object(forKey: "mac.studyCloseApps2") as? Bool ?? false
+        studySoundtrack = SessionSoundtrack.decode(defaults.data(forKey: "mac.studySoundtrack"))
+        studySoundtrackOnBreak = defaults.string(forKey: "mac.studySoundtrackOnBreak")
+            .flatMap(SessionSoundtrack.BreakPolicy.init(rawValue:)) ?? .pause
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off

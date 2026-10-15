@@ -217,6 +217,12 @@ private struct StudySetupView: View {
                 .disabled(timer.phase != .idle)
             }
 
+            if course == nil || screen.taskType != .lecture {
+                field("Bande-son") {
+                    SoundtrackPicker(choice: Bindable(settings).studySoundtrack)
+                }
+            }
+
             field("Blocage") {
                 Toggle(isOn: Bindable(screen).locks) {
                     Text("Bloquer le reste").foregroundStyle(StudyPalette.ink)
@@ -323,6 +329,42 @@ private struct StudySetupView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(Carnet.serif(.title3)).foregroundStyle(StudyPalette.ink)
             content()
+        }
+    }
+}
+
+/// La playlist qui accompagne la session : aucune, ou l'une de la bibliothèque.
+private struct SoundtrackPicker: View {
+    @Binding var choice: SessionSoundtrack.Choice?
+    @State private var playlists: [SessionSoundtrack.Choice] = []
+    @State private var loaded = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Menu {
+                Button("Aucune") { choice = nil }
+                Divider()
+                ForEach(playlists, id: \.id) { item in
+                    Button(item.title) { choice = item }
+                }
+                if playlists.isEmpty {
+                    Text(loaded ? "Aucune playlist trouvée" : "Chargement…")
+                }
+            } label: {
+                Label(choice?.title ?? "Aucune", systemImage: "music.note")
+            }
+            .menuStyle(.button)
+            .fixedSize()
+            if choice != nil {
+                Text("Se tait pendant les pauses, s'éteint à la fin.")
+                    .font(.caption)
+                    .foregroundStyle(StudyPalette.inkSecondary)
+            }
+        }
+        .task {
+            await StudyMusic.shared.requestAuthorization()
+            playlists = await StudySoundtrack.libraryPlaylists()
+            loaded = true
         }
     }
 }

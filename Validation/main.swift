@@ -6298,6 +6298,31 @@ do {
     check(StudySearchQuery.mathExpression("12") == nil, "recherche : un nombre seul n'est pas un calcul")
 }
 
+// MARK: Bande-son de la session
+do {
+    typealias S = SessionSoundtrack
+    func act(_ from: S.Phase?, _ to: S.Phase, moment: DeskMoment = .series, choice: Bool = true, owns: Bool = true, policy: S.BreakPolicy = .pause) -> S.Action {
+        S.action(from: from, to: to, moment: moment, hasChoice: choice, ownsPlayback: owns, policy: policy)
+    }
+    check(act(nil, .running, owns: false) == .start, "bande-son : démarre avec la session")
+    check(act(.ended, .running, owns: false) == .start, "bande-son : redémarre après une session finie")
+    check(act(nil, .running, moment: .lecture) == .none, "bande-son : jamais pendant un cours")
+    check(act(nil, .running, choice: false) == .none, "bande-son : rien sans playlist choisie")
+    check(act(.running, .onBreak) == .fadeOutAndPause, "bande-son : fondu et pause pendant la pause")
+    check(act(.onBreak, .running) == .resumeAndFadeIn, "bande-son : reprise en fondu après la pause")
+    check(act(.running, .onBreak, policy: .lower) == .lower && act(.onBreak, .running, policy: .lower) == .restoreVolume, "bande-son : baisser puis rétablir")
+    check(act(.running, .onBreak, policy: .keep) == .none && act(.onBreak, .running, policy: .keep) == .none, "bande-son : continuer pendant la pause")
+    check(act(.running, .onBreak, owns: false) == .none, "bande-son : la musique de l'étudiant·e n'est pas touchée pendant une pause")
+    check(act(.running, .paused) == .none && act(.paused, .running) == .none, "bande-son : une pause manuelle ne touche pas à la musique")
+    check(act(.running, .ended) == .fadeOutAndStop, "bande-son : s'éteint à la fin")
+    check(act(.running, .ended, owns: false) == .none, "bande-son : à la fin, sa propre musique reste")
+    check(act(.running, .ended, moment: .lecture) == .fadeOutAndStop, "bande-son : lancée avant un cours changé en cours de route, elle s'éteint quand même")
+    let steps = S.fade(from: 1, to: 0, steps: 4)
+    check(steps.count == 4 && steps.last == 0 && abs(steps[0] - 0.75) < 1e-9, "bande-son : fondu en paliers jusqu'à la cible")
+    let choice = S.Choice(kind: .playlist, id: "p.123", title: "Focus", shuffled: false)
+    check(S.decode(S.encode(choice)) == choice && S.decode(nil) == nil && S.decode(Data("x".utf8)) == nil, "bande-son : le choix voyage en JSON")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

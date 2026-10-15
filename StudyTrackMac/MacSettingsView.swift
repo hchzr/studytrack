@@ -146,6 +146,11 @@ private struct StudySettingsPane: View {
                 Toggle("Bloquer le reste", isOn: $settings.studyBlocking)
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                     .disabled(!settings.studyBlocking)
+                Picker("Musique pendant une pause", selection: $settings.studySoundtrackOnBreak) {
+                    Text("Pause").tag(SessionSoundtrack.BreakPolicy.pause)
+                    Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
+                    Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
+                }
                 Toggle("Cacher le Dock et la barre des menus", isOn: $settings.studyHideSystemChrome)
                     .disabled(!settings.studyBlocking)
                 Button("Rétablir les raccourcis du système") { SystemLock.release() }
