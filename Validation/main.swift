@@ -7043,6 +7043,59 @@ if CommandLine.arguments.contains("--bench") {
 }
 
 print("")
+// MARK: NotebookLM : le protocole (NotebookLMWire)
+do {
+    let id = "11111111-2222-3333-4444-555555555555"
+    let body = NotebookLMWire.body(rpc: .createNotebook, params: NotebookLMWire.createNotebookParams(title: "Analyse & co"), token: "AB:12=")
+    check(body.hasPrefix("f.req=") && body.hasSuffix("&") && body.contains("&at=AB%3A12%3D&"), "NotebookLM : le corps porte f.req et le jeton at, encodés")
+    check(body.contains("CCqFvf") && body.contains("Analyse%20%26%20co"), "NotebookLM : le code d'appel et le titre (encodé) sont dans le corps")
+    let url = NotebookLMWire.url(host: "https://notebook.google.com", rpc: .addSource, sourcePath: "/notebook/\(id)", session: "123")!.absoluteString
+    check(url.contains("rpcids=izAoDd") && url.contains("f.sid=123") && url.contains("rt=c") && url.contains("source-path=/notebook/"), "NotebookLM : l'adresse d'un appel")
+    check(NotebookLMWire.createNotebookParams(title: "T").count == 4, "NotebookLM : créer un carnet = titre + 3 emplacements")
+
+    let text = NotebookLMWire.addTextSourceParams(notebookID: id, title: "Fiche", text: "Corps")
+    check(text.count == 3 && (text[1] as? String) == id, "NotebookLM : une source texte vise le carnet")
+    let audio = NotebookLMWire.createAudioParams(notebookID: id, sourceIDs: ["s1", "s2"], instructions: "Consigne", language: "fr", format: .deepDive, length: .standard)
+    let sent = String(data: try! JSONSerialization.data(withJSONObject: audio), encoding: .utf8)!
+    check(sent.contains("\"s1\"") && sent.contains("\"s2\"") && sent.contains("Consigne") && sent.contains("\"fr\""), "NotebookLM : le podcast cite ses sources, la consigne et la langue")
+
+    // Réponse : préfixe anti-XSSI, longueur, bloc wrb.fr
+    let payload = "[[\"" + id + "\",\"Titre\"]]"
+    let inner = String(data: try! JSONSerialization.data(withJSONObject: ["wrb.fr", "CCqFvf", payload, NSNull(), NSNull(), NSNull(), "generic"]), encoding: .utf8)!
+    let response = ")]}'\n\n123\n[" + inner + "]\n25\n[[\"e\",4,null,null,64]]\n"
+    let parsed = try? NotebookLMWire.result(of: response, rpc: .createNotebook)
+    check(NotebookLMWire.firstID(in: parsed ?? nil) == id, "NotebookLM : l'identifiant du carnet se retrouve dans la réponse")
+    check((try? NotebookLMWire.result(of: response, rpc: .addSource)) == nil && { if case .some = (try? NotebookLMWire.result(of: response, rpc: .addSource)) { return false }; return true }(), "NotebookLM : une réponse à un autre appel n'est pas la nôtre")
+    var notAnswer = false
+    do { _ = try NotebookLMWire.result(of: "<html>Connexion</html>", rpc: .createNotebook) } catch NotebookLMWire.ParseError.notAnswer { notAnswer = true } catch {}
+    check(notAnswer, "NotebookLM : la page de connexion à la place d'une réponse = session expirée")
+    let refusedRow = String(data: try! JSONSerialization.data(withJSONObject: ["wrb.fr", "CCqFvf", NSNull(), NSNull(), NSNull(), [3], "generic"]), encoding: .utf8)!
+    var refused: Int?
+    do { _ = try NotebookLMWire.result(of: ")]}'\n10\n[" + refusedRow + "]", rpc: .createNotebook) } catch NotebookLMWire.ParseError.refused(let code) { refused = code } catch {}
+    check(refused == 3, "NotebookLM : un code d'erreur dans la réponse est remonté")
+
+    // Les jetons de la page
+    let page = "<script>window.WIZ_global_data = {\"SNlM0e\":\"AF1_Qp:1785\",\"FdrFJe\":\"-98765\",\"x\":1}</script>"
+    check(NotebookLMWire.field("SNlM0e", inPage: page) == "AF1_Qp:1785" && NotebookLMWire.field("FdrFJe", inPage: page) == "-98765", "NotebookLM : le jeton et la session se lisent dans la page")
+    check(NotebookLMWire.field("SNlM0e", inPage: "<html>rien</html>") == nil, "NotebookLM : pas de jeton, rien")
+
+    // L'adresse d'un carnet
+    check(NotebookLMWire.notebookID(fromURL: "https://notebooklm.google.com/notebook/\(id)?authuser=0") == id, "NotebookLM : l'identifiant se lit dans l'adresse du carnet")
+    check(NotebookLMWire.notebookID(fromURL: "https://notebooklm.google.com/") == nil && NotebookLMWire.notebookID(fromURL: "n'importe quoi") == nil, "NotebookLM : sans carnet dans l'adresse, rien")
+
+    // Les artefacts : état, type, adresse du son
+    let ready: [Any] = ["a1", "Résumé audio", 1, NSNull(), 3, NSNull(), [NSNull(), NSNull(), NSNull(), NSNull(), NSNull(), [["https://x.test/a.m4a", NSNull(), "audio/mp4"], ["https://x.test/b.webm", NSNull(), "audio/webm"]]]]
+    let working: [Any] = ["a2", "En cours", 1, NSNull(), 2]
+    let failed: [Any] = ["a3", "Raté", 1, NSNull(), 4]
+    for shape in [[[ready, working, failed]], [ready, working, failed]] as [[Any]] {
+        let list = NotebookLMWire.artifacts(from: shape)
+        check(list.map(\.state) == [.ready, .working, .failed] && list[0].audioURL?.absoluteString == "https://x.test/a.m4a" && list[1].audioURL == nil, "NotebookLM : les artefacts (enveloppés ou à plat) : état et son")
+    }
+    check(NotebookLMWire.artifacts(from: nil).isEmpty && NotebookLMWire.artifacts(from: "n'importe quoi").isEmpty, "NotebookLM : pas d'artefacts, une liste vide")
+    check(NotebookLMWire.isApp(host: "notebook.google.com") && NotebookLMWire.isApp(host: "notebooklm.google.com") && !NotebookLMWire.isApp(host: "accounts.google.com") && !NotebookLMWire.isApp(host: "notebooklm.google"), "NotebookLM : l'app, pas la page de connexion ni la vitrine")
+    check(NotebookLMWire.podcastInstructions(courseName: "Analyse I").contains("Analyse I"), "NotebookLM : la consigne cite le cours")
+}
+
 if failures == 0 {
     print("✅ TOUS LES CONTRÔLES SONT PASSÉS")
 } else {

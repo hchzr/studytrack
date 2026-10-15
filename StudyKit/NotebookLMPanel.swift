@@ -22,6 +22,8 @@ struct NotebookLMPanel: View {
     @State private var linkAddress = ""
     @State private var linkKind: StudyMap.Resource.Kind = .video
     @State private var message: String?
+    @State private var account = NotebookLMAccount.shared
+    @State private var signingIn = false
     private var store: StudyMapStore { .shared }
     private var tint: Color { Carnet.tint(course.colorHex) }
 
@@ -30,6 +32,8 @@ struct NotebookLMPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 intro
+                automatic
+                Text("Ou à la main").font(.headline).foregroundStyle(Carnet.ink).padding(.top, 4)
                 step(1, "Prépare les sources", detail: "La fiche, ses liens, ses schémas et ses questions, en Markdown : ce que NotebookLM lit le mieux.") { prepare }
                 step(2, "Dépose-les dans NotebookLM", detail: "Nouveau carnet › Ajouter des sources. Puis « Résumé audio » pour le podcast.") { open(map) }
                 step(3, "Rapporte le podcast ici", detail: "Télécharge-le depuis NotebookLM et glisse-le : il se lit ici, à ta vitesse, sans quitter le mode étude.") { resources(map) }
@@ -41,6 +45,10 @@ struct NotebookLMPanel: View {
         }
         .background(Carnet.ground)
         .onAppear { notebook = map.notebookURL ?? "" }
+        .task { if account.state == .unknown { await account.refresh() } }
+        .sheet(isPresented: $signingIn) {
+            NotebookLMLogin { signingIn = false; Task { await account.refresh() } }
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio, .mpeg4Audio, .mp3, .wav]) { result in
             guard case .success(let url) = result else { return }
             importPodcast(url)
@@ -53,7 +61,7 @@ struct NotebookLMPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             Kicker("NotebookLM · \(course.displayCode)", color: tint)
             Text("Écouter ton cours").font(Carnet.serif(26)).foregroundStyle(Carnet.ink)
-            Text("NotebookLM transforme des sources en podcast, en vidéo ou en quiz. Il n'a pas d'interface pour les autres apps : StudyTrack prépare tout, tu fais le lien.")
+            Text("NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien.")
                 .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -67,6 +75,61 @@ struct NotebookLMPanel: View {
                 Text(detail).font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
                 content()
             }
+        }
+    }
+
+    // MARK: Automatique (compte Google)
+
+    /// Connecté à Google : StudyTrack crée le carnet, y dépose la fiche, lance le podcast et le rapporte.
+    private var automatic: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Automatique", systemImage: "wand.and.stars").font(.headline).foregroundStyle(Carnet.ink)
+            switch account.state {
+            case .unknown, .checking:
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Je regarde si tu es connecté·e à Google…").font(.callout).foregroundStyle(Carnet.inkSecondary) }
+            case .signedOut:
+                Text("Connecte ton compte Google : StudyTrack crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google.")
+                    .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
+                Button { signingIn = true } label: { Label("Se connecter à Google", systemImage: "person.crop.circle.badge.checkmark") }.buttonStyle(.ink)
+            case .ready:
+                automaticReady
+            }
+            Text("Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste.")
+                .font(.caption).foregroundStyle(Carnet.inkTertiary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var automaticReady: some View {
+        let working = account.progress[course.id]
+        if let sheet = course.revisionSheet {
+            HStack(spacing: 10) {
+                Button { account.makePodcast(for: course, sheet: sheet) } label: { Label("Créer le podcast", systemImage: "waveform") }
+                    .buttonStyle(.ink).disabled(working != nil)
+                if store.map(course).notebookURL != nil {
+                    Button { account.fetchLatest(for: course) } label: { Label("Récupérer", systemImage: "arrow.down.circle") }
+                        .buttonStyle(.paper).disabled(working != nil)
+                        .help("Retrouve le dernier podcast du carnet (si le lancement a été interrompu)")
+                }
+                Spacer(minLength: 4)
+                Button("Se déconnecter") { Task { await account.signOut() } }.buttonStyle(.plain).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            }
+        } else {
+            Label("Fais d'abord la fiche du cours.", systemImage: "doc.text").font(.callout).foregroundStyle(Carnet.inkSecondary)
+        }
+        if let working {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(working).font(.callout).foregroundStyle(Carnet.inkSecondary)
+                Spacer(minLength: 4)
+                Button("Arrêter") { account.cancel(course) }.buttonStyle(.plain).font(.caption).foregroundStyle(Carnet.inkSecondary)
+            }
+            Text("Tu peux continuer à travailler : le podcast arrive dans « Rapporte le podcast » plus bas.").font(.caption).foregroundStyle(Carnet.inkTertiary)
+        }
+        if let failure = account.failure[course.id] {
+            Label(failure, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Carnet.wrong).fixedSize(horizontal: false, vertical: true)
         }
     }
 
