@@ -110,13 +110,20 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         screen.targetID = targetID ?? (courseID == nil ? timer.targetID : nil)
         screen.label = label
         screen.locks = settings?.studyBlocking ?? true
-        showWindow()
+        showWindowSoon()
+    }
+
+    /// La fenêtre se bâtit au tour suivant de la boucle, pas dans le geste qui l'ouvre : bâtir une
+    /// vue pleine de requêtes SwiftData dans l'action d'un bouton, pendant qu'iCloud fusionne des
+    /// changements, faisait échouer une vérification interne de SwiftUI (plantage juste après le clic).
+    private func showWindowSoon() {
+        DispatchQueue.main.async { [weak self] in self?.showWindow() }
     }
 
     /// Revenir à l'écran du mode étude.
     func present() {
         screen.stage = .session
-        showWindow()
+        showWindowSoon()
     }
 
     /// Lancer : le chrono démarre (ou se verrouille), l'iPhone suit.

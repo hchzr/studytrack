@@ -48,6 +48,8 @@ enum MacDebugLaunch {
                 try? await Task.sleep(for: .seconds(3))
                 if action == "start" { timer.start(taskType: .exercise, label: "Test du chrono partagé") }
                 if action == "discard" { timer.discard() }
+                // `-debugTimer setup` : le chemin du clic sur « Mode étude » (l'écran de choix), comme à la main.
+                if action == "setup" { StudyModeController.shared.presentSetup() }
                 if action == "study" {
                     let context = ModelContext(store.container)
                     let course = (try? context.fetch(FetchDescriptor<Course>()))?.first
