@@ -5275,6 +5275,9 @@
         }
       }
     },
+    "Cacher le Dock et la barre des menus" : {
+
+    },
     "Cahier introuvable" : {
       "localizations" : {
         "en" : {
@@ -15834,6 +15837,9 @@
         }
       }
     },
+    "Pour les cacher aussi quand une autre app est devant." : {
+
+    },
     "Pré-remplir pour Groq" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16540,6 +16546,9 @@
         }
       }
     },
+    "Refusé : ils resteront visibles. À changer dans Réglages Système › Confidentialité › Automatisation." : {
+
+    },
     "Regarder" : {
       "localizations" : {
         "en" : {
@@ -17083,6 +17092,9 @@
           }
         }
       }
+    },
+    "Rétablir les raccourcis du système" : {
+
     },
     "Retélécharger" : {
       "localizations" : {
@@ -18519,6 +18531,9 @@
           }
         }
       }
+    },
+    "Si un blocage s'est mal fini : rallume Spotlight, ⌘Tab, Mission Control, le Dock et la barre des menus." : {
+
     },
     "Sinon, elles sont juste cachées." : {
       "localizations" : {

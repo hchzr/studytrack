@@ -265,6 +265,8 @@ enum StudyMode {
     /// qui ouvrent n'importe quoi d'un raccourci. Fermés comme les autres.
     static let launcherApps: Set<String> = [
         "com.raycast.macos", "com.runningwithcrayons.Alfred", "at.obdev.LaunchBar",
+        // Les sélecteurs de fenêtres : ils sortent de l'app d'un raccourci (AltTab).
+        "com.lwouis.alt-tab-macos", "com.contextsformac.Contexts", "com.manytricks.Witch",
     ]
 
     /// Ce qu'il faut faire d'une app qui passe au premier plan.

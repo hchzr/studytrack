@@ -79,7 +79,7 @@ final class MacSettings {
     /// réflexion contre le réflexe.
     var studyHoldToLeave: Bool { didSet { defaults.set(studyHoldToLeave, forKey: "mac.studyHoldToLeave") } }
     /// Fermer les apps non permises (sinon : seulement les couvrir d'un voile).
-    var studyCloseApps: Bool { didSet { defaults.set(studyCloseApps, forKey: "mac.studyCloseApps") } }
+    var studyCloseApps: Bool { didSet { defaults.set(studyCloseApps, forKey: "mac.studyCloseApps2") } }
     /// Cacher le Dock et la barre des menus pendant un blocage (System Events).
     var studyHideSystemChrome: Bool { didSet { defaults.set(studyHideSystemChrome, forKey: "mac.studyHideSystemChrome") } }
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
@@ -141,7 +141,9 @@ final class MacSettings {
         studyHoldToLeave = defaults.object(forKey: "mac.studyHoldToLeave") as? Bool ?? true
         studyPomodoro = defaults.bool(forKey: "mac.studyPomodoro")
         studyOpenEnded = defaults.bool(forKey: "mac.studyOpenEnded")
-        studyCloseApps = defaults.object(forKey: "mac.studyCloseApps") as? Bool ?? true
+        // Fermer les autres apps n'est plus le défaut : une app peut refuser (le
+        // Terminal demande), alors que la masquer et la couvrir marche toujours.
+        studyCloseApps = defaults.object(forKey: "mac.studyCloseApps2") as? Bool ?? false
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
         studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off

@@ -6237,6 +6237,7 @@ do {
     check(d("com.apple.Music", true, []) == .hideOnly, "Music : masqué, jamais fermé")
     check(d("com.raycast.macos", false, StudyMode.defaultMacApps) == .close, "Raycast : fermé même sans icône dans le Dock")
     check(d("com.runningwithcrayons.Alfred", false, []) == .close && d("at.obdev.LaunchBar", false, []) == .close, "Alfred et LaunchBar : fermés")
+    check(d("com.lwouis.alt-tab-macos", false, StudyMode.defaultMacApps) == .close, "AltTab : fermé, c'est une porte de sortie")
     check(d("com.raycast.macos", false, ["com.raycast.macos"]) == .allowed, "un lanceur permis explicitement le reste")
     check(d("com.example.agent", false, []) == .system, "un agent quelconque : hors de portée")
     check(d("com.apple.Safari", true, StudyMode.defaultMacApps) == .close, "Safari : fermé")
