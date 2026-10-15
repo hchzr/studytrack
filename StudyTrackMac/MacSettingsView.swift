@@ -154,6 +154,8 @@ private struct StudySettingsPane: View {
                 Toggle("Poser les apps permises dans le bureau", isOn: $settings.studyPlaceApps)
                     .disabled(!settings.studyBlocking)
                     .help("GoodNotes, Claude… s'ouvrent au centre du bureau, la barre du haut et le volet d'à côté restant visibles. Demande l'Accessibilité (écran de lancement).")
+                Toggle("Barres flottantes (expérimental)", isOn: $settings.studyPanels)
+                    .help("La barre du haut et la colonne d'outils deviennent des fenêtres à part, visibles par-dessus GoodNotes et les autres apps permises. Au prochain mode étude.")
                 Toggle("Autres écrans au calme", isOn: $settings.studyCalmDisplays)
                     .disabled(!settings.studyBlocking)
                 Toggle("Bloquer les gestes du trackpad", isOn: $settings.studyBlockGestures)

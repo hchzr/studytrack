@@ -18,7 +18,8 @@ final class MiniTimerPanel {
     /// À appeler à chaque changement du chrono ou du réglage.
     func update() {
         guard let timer, let settings else { return }
-        let wanted = settings.floatingTimer && timer.phase != .idle
+        // Les barres flottantes montrent déjà le chrono par-dessus toutes les apps.
+        let wanted = settings.floatingTimer && timer.phase != .idle && !StudyModeController.shared.chromeUp
         if wanted {
             show(timer: timer, settings: settings)
         } else {

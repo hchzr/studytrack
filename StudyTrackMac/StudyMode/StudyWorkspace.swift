@@ -10,6 +10,8 @@ struct StudyWorkspace: View {
     @Bindable var browser: StudyBrowserModel
     @Bindable var desk: StudyDesk
     let courses: [Course]
+    /// La barre du haut et la colonne d'outils sont des fenêtres à part (`-studyPanels`).
+    var panels = false
 
     @Environment(MacTimer.self) private var timer
     @Environment(MacSettings.self) private var settings
@@ -31,11 +33,15 @@ struct StudyWorkspace: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            StudyTopBar(course: course, tint: tint, moment: moment, openMusic: { desk.pane = .music }, openResource: openResource)
-            Rectangle().fill(Carnet.rule).frame(height: 1)
+            if !panels {
+                StudyTopBar(course: course, tint: tint, moment: moment, openMusic: { desk.pane = .music }, openResource: openResource)
+                Rectangle().fill(Carnet.rule).frame(height: 1)
+            }
             HStack(spacing: 0) {
-                StudyRail(desk: desk, browser: browser, course: course)
-                Rectangle().fill(Carnet.rule).frame(width: 1)
+                if !panels {
+                    StudyRail(desk: desk, browser: browser, course: course)
+                    Rectangle().fill(Carnet.rule).frame(width: 1)
+                }
                 ZStack(alignment: .topLeading) {
                     DeskSplit(desk: desk) {
                         center
@@ -580,7 +586,7 @@ struct StudyWorkspace: View {
 
 // MARK: - Barre du haut
 
-private struct StudyTopBar: View {
+struct StudyTopBar: View {
     let course: Course?
     var tint: Color
     var moment: DeskMoment
@@ -866,7 +872,7 @@ private struct StudyTopBar: View {
 
 // MARK: - Colonne d'outils
 
-private struct StudyRail: View {
+struct StudyRail: View {
     @State private var running = RunningApps.shared
     var desk: StudyDesk
     var browser: StudyBrowserModel

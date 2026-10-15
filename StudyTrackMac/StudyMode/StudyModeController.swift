@@ -41,6 +41,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         /// Bloquer le reste pendant cette session (le réglage, par défaut).
         var locks = true
         /// L'app arrêtée en dernier, pour le dire.
+        /// La barre du haut et la colonne d'outils sont des fenêtres à part (`ChromePanel`).
+        var panels = false
         var blockedName: String?
         var blockedAt: Date?
     }
@@ -60,6 +62,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private var enforcer: Timer?
     /// Les autres écrans pendant un blocage : calmes, sans rien à y faire.
     private var calmWindows: [NSWindow] = []
+    /// La barre du haut et la colonne d'outils flottantes (mode « barres flottantes »).
+    private var chromePanels: [NSPanel] = []
     private var screenObserver: NSObjectProtocol?
     /// Le dernier masquage que nous avons fait : macOS met alors le Finder devant
     /// (plus rien de visible), ce qui n'est pas un clic de l'étudiant·e.
@@ -194,8 +198,13 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         guard let timer, let settings else { return }
         if !HeadlessCapture.active { NSApp.setActivationPolicy(.regular) }
         if window == nil {
-            let screenFrame = (NSScreen.screens.first ?? NSScreen.main)?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-            var frame = previewOnly ? NSRect(x: 80, y: 80, width: 1440, height: 900) : screenFrame
+            let primary = NSScreen.screens.first ?? NSScreen.main
+            let screenFrame = primary?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            // Barres flottantes : le bureau ne garde que le centre et le volet d'à côté.
+            screen.panels = (settings.studyPanels || Self.panelsForced) && primary != nil
+            let realGeometry = !previewOnly || screen.panels
+            var frame = !realGeometry ? NSRect(x: 80, y: 80, width: 1440, height: 900)
+                : (screen.panels ? Self.chromeFrames(on: primary!).desk : screenFrame)
             #if DEBUG
             // `-snapshot` : hors de l'écran, rien ne passe devant ce qu'on fait.
             if Self.snapshotPath != nil {
@@ -206,7 +215,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
             }
             #endif
             let window = StudyWindow(contentRect: frame,
-                                     styleMask: previewOnly ? [.titled, .closable, .resizable] : [.borderless, .fullSizeContentView],
+                                     styleMask: !realGeometry ? [.titled, .closable, .resizable] : [.borderless, .fullSizeContentView],
                                      backing: .buffered, defer: false)
             window.title = "Mode étude"
             window.isReleasedWhenClosed = false
@@ -235,12 +244,45 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         }
         #endif
         window?.makeKeyAndOrderFront(nil)
+        showChromePanels()
         NSApp.activate(ignoringOtherApps: true)
         applyPresentation()
     }
 
+    // MARK: Barres flottantes
+
+    /// La barre du haut et la colonne d'outils, au-dessus des apps permises : on peut
+    /// y cliquer sans que le bureau repasse devant l'app posée au centre.
+    private func showChromePanels() {
+        guard screen.panels, let timer, let settings, let primary = NSScreen.screens.first else { return }
+        let frames = Self.chromeFrames(on: primary)
+        if chromePanels.isEmpty {
+            func host(_ view: some View) -> AnyView {
+                var root = AnyView(view.environment(timer).environment(settings))
+                if let container { root = AnyView(root.modelContainer(container)) }
+                return root
+            }
+            chromePanels = [ChromePanel(content: host(StudyTopBarHost()), frame: frames.bar),
+                            ChromePanel(content: host(StudyRailHost()), frame: frames.rail)]
+        } else {
+            chromePanels[0].setFrame(frames.bar, display: true)
+            chromePanels[1].setFrame(frames.rail, display: true)
+        }
+        for panel in chromePanels { panel.orderFrontRegardless() }
+        MiniTimerPanel.shared.update()
+    }
+
+    private func hideChromePanels() {
+        for panel in chromePanels { panel.orderOut(nil) }
+        chromePanels.removeAll()
+    }
+
+    /// Les barres flottantes sont en place : le chrono flottant n'a rien à faire.
+    var chromeUp: Bool { chromePanels.contains { $0.isVisible } }
+
     private func closeWindow() {
         window?.orderOut(nil)
+        hideChromePanels()
         // Le bureau parti, la pilule reprend sa place si la session continue.
         defer { MiniTimerPanel.shared.update() }
         NSApp.presentationOptions = []
@@ -571,7 +613,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         shields.removeAll()
         hideCalmWindows()
         showCalmWindows()
-        if let first = NSScreen.screens.first { window?.setFrame(first.frame, display: true) }
+        if let first = NSScreen.screens.first {
+            window?.setFrame(screen.panels ? Self.chromeFrames(on: first).desk : first.frame, display: true)
+            if screen.panels { showChromePanels() }
+        }
         if showingShields { showShields() }
     }
 

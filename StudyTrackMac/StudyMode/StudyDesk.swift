@@ -52,7 +52,11 @@ final class StudyDesk {
     var pane: Pane = .desk {
         didSet {
             opened.insert(pane)
-            if !applying { pins.center = true }
+            if !applying {
+                pins.center = true
+                // Barres flottantes : un outil choisi dans la colonne ramène le bureau devant.
+                if StudyModeController.shared.screen.panels { StudyModeController.shared.present() }
+            }
         }
     }
 
