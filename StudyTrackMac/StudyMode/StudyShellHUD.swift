@@ -80,6 +80,31 @@ final class StudyShell {
     private var switcherPanel: HUDPanel?
     private var searchPanel: HUDPanel?
     private var poll: Timer?
+    /// Un clic ailleurs annule, comme sur macOS (seuls les clics dans la fenêtre comptent).
+    private var switcherClicks: [Any] = []
+    private var searchClicks: [Any] = []
+
+    private func watchClicks(outside panel: @escaping () -> NSPanel?, cancel: @escaping () -> Void) -> [Any] {
+        let outside: (NSEvent) -> Void = { _ in
+            guard let panel = panel(), !panel.frame.contains(NSEvent.mouseLocation) else { return }
+            cancel()
+        }
+        let kinds: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        var monitors: [Any] = []
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: kinds, handler: { event in
+            MainActor.assumeIsolated { outside(event) }
+        }) { monitors.append(global) }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: kinds, handler: { event in
+            MainActor.assumeIsolated { outside(event) }
+            return event
+        }) { monitors.append(local) }
+        return monitors
+    }
+
+    private func stopWatching(_ monitors: inout [Any]) {
+        for monitor in monitors { NSEvent.removeMonitor(monitor) }
+        monitors = []
+    }
 
     var controller: StudyModeController { .shared }
 
@@ -173,6 +198,7 @@ final class StudyShell {
         panel.place(on: NSScreen.screens.first)
         panel.orderFrontRegardless()
         escape = StudyHotKeys.shared.register(key: kVK_Escape, modifiers: 0) { [weak self] in self?.hideSwitcher(commit: false) }
+        switcherClicks = watchClicks(outside: { [weak self] in self?.switcherPanel }, cancel: { [weak self] in self?.hideSwitcher(commit: false) })
         // On valide au relâchement de ⌘ : lu sans permission, 60 fois par seconde.
         poll = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -184,6 +210,7 @@ final class StudyShell {
     private func hideSwitcher(commit: Bool) {
         poll?.invalidate()
         poll = nil
+        stopWatching(&switcherClicks)
         StudyHotKeys.shared.unregister(escape)
         escape = nil
         guard switcherPanel?.isVisible == true else { return }
@@ -206,9 +233,11 @@ final class StudyShell {
         searchPanel = panel
         panel.place(on: NSScreen.screens.first)
         panel.makeKeyAndOrderFront(nil)
+        searchClicks = watchClicks(outside: { [weak self] in self?.searchPanel }, cancel: { [weak self] in self?.hideSearch() })
     }
 
     func hideSearch() {
+        stopWatching(&searchClicks)
         searchPanel?.orderOut(nil)
         searchPanel = nil
     }
@@ -289,6 +318,8 @@ struct StudySearchView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var query = ""
     @State private var selected = 0
+    /// Élargi à tous les cours (⇥) ; sinon, seulement celui qu'on étudie.
+    @State private var everyCourse = false
     @FocusState private var focused: Bool
 
     struct Result: Identifiable {
@@ -303,12 +334,23 @@ struct StudySearchView: View {
     private var tracked: [Course] { courses.filter(\.isTracked) }
     private var controller: StudyModeController { .shared }
 
+    /// Le cours étudié, s'il y en a un.
+    private var current: Course? { tracked.first { $0.id == timer.courseID } }
+
+    /// Les cours où l'on cherche : celui qu'on étudie seul (les séries, la théorie et les
+    /// fiches des autres cours ne sont pas ce qu'on cherche pendant une séance) ; tous si
+    /// la session est libre ou si on a élargi.
+    private var scope: [Course] {
+        if everyCourse { return tracked }
+        return current.map { [$0] } ?? tracked
+    }
+
     var body: some View {
         let items = results
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(StudyPalette.inkSecondary)
-                TextField("Un outil, une série, un calcul…", text: $query)
+                TextField(current.map { "Chercher dans \($0.displayCode)…" } ?? "Un outil, une série, un calcul…", text: $query)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)
@@ -316,6 +358,12 @@ struct StudySearchView: View {
                     .onKeyPress(.downArrow) { move(1, items.count); return .handled }
                     .onKeyPress(.upArrow) { move(-1, items.count); return .handled }
                     .onKeyPress(.escape) { dismiss(); return .handled }
+                    // ⇥ : élargir à tous les cours, ou revenir à celui qu'on étudie.
+                    .onKeyPress(.tab) {
+                        guard current != nil else { return .ignored }
+                        everyCourse.toggle()
+                        return .handled
+                    }
             }
             .padding(.horizontal, 18).padding(.vertical, 14)
             if !items.isEmpty {
@@ -336,11 +384,20 @@ struct StudySearchView: View {
                 .frame(maxHeight: 340)
             }
         }
+        .overlay(alignment: .bottom) {
+            // Le périmètre de la recherche, dit : on sait dans quoi on cherche.
+            if let current, !query.isEmpty {
+                Text(everyCourse ? "Tous les cours · ⇥ pour \(current.displayCode) seul" : "\(current.displayCode) seul · ⇥ pour tous les cours")
+                    .font(.caption2).foregroundStyle(StudyPalette.inkTertiary)
+                    .padding(.bottom, 4)
+            }
+        }
         .frame(width: 620)
         .deskGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .environment(\.colorScheme, .dark)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selected = 0 }
+        .onChange(of: everyCourse) { _, _ in selected = 0 }
     }
 
     private func row(_ item: Result, selected: Bool) -> some View {
@@ -384,7 +441,8 @@ struct StudySearchView: View {
         found += library.filter { !needle.isEmpty && matches($0.title, needle) }
         found += tools.filter { !needle.isEmpty && matches($0.title, needle) }
         if !needle.isEmpty {
-            let documents = SearchIndexBuilder.documents(courses: tracked)
+            found += fiches(matching: needle)
+            let documents = SearchIndexBuilder.documents(courses: scope)
             for hit in SearchEngine.search(needle, in: documents).prefix(30) {
                 guard let target = resolve(hit) else { continue }
                 found.append(Result(id: hit.document.id, title: hit.document.title,
@@ -438,6 +496,27 @@ struct StudySearchView: View {
                 }
             }
         }
+    }
+
+    /// Les entrées des fiches de révision (définitions, théorèmes, méthodes…) des cours
+    /// cherchés : la fiche s'ouvre à côté.
+    private func fiches(matching needle: String) -> [Result] {
+        var list: [Result] = []
+        for course in scope {
+            guard let sheet = course.revisionSheet else { continue }
+            for chapter in sheet.filtered(needle) {
+                for entry in chapter.entries.prefix(6) {
+                    list.append(Result(id: "fiche.\(course.id).\(entry.id)", title: entry.title,
+                                       subtitle: [scope.count > 1 ? course.displayCode : nil, entry.kind.label, chapter.title]
+                                           .compactMap { $0 }.joined(separator: " · "),
+                                       icon: entry.kind.icon, section: "Fiche") {
+                        controller.desk.openSide(.init(kind: .sheet, title: String(localized: "Fiche"), icon: "list.bullet.rectangle", courseID: course.id))
+                        controller.present()
+                    })
+                }
+            }
+        }
+        return Array(list.prefix(12))
     }
 
     /// Les ressources gardées du cours et ses cahiers (GoodNotes) : ils s'ouvrent à côté.
