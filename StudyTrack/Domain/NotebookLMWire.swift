@@ -18,6 +18,13 @@ enum NotebookLMWire {
         hosts.contains { URL(string: $0)?.host == host }
     }
 
+    /// Les cookies qui n'existent qu'une fois connecté·e à Google (les cookies de visite, `NID`,
+    /// `…PSIDTS`, `…SIDCC`, existent aussi sans compte : ils ne comptent pas).
+    static func isSignedIn(cookieNames: [String]) -> Bool {
+        let signedIn: Set<String> = ["SID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PAPISID", "__Secure-3PAPISID"]
+        return cookieNames.contains { signedIn.contains($0) }
+    }
+
     enum RPC: String {
         case listNotebooks = "wXbhsf"
         case createNotebook = "CCqFvf"

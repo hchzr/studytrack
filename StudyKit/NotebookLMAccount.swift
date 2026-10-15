@@ -56,7 +56,7 @@ final class NotebookLMAccount {
     func refresh() async {
         state = .checking
         let all = await Self.store.httpCookieStore.allCookies().filter { $0.domain.hasSuffix("google.com") }
-        guard all.contains(where: { $0.name.contains("SID") }) else { state = .signedOut; return }
+        guard NotebookLMWire.isSignedIn(cookieNames: all.map(\.name)) else { state = .signedOut; return }
         cookies = all.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
         for candidate in NotebookLMWire.hosts {
             guard let url = URL(string: candidate + "/") else { continue }
@@ -270,8 +270,13 @@ private final class LoginCoordinator: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // NotebookLM s'affiche (et non la page de connexion de Google) : c'est fait.
+        // La page d'accueil de NotebookLM s'affiche aussi sans compte : on ne ferme que lorsque la
+        // session Google existe vraiment (sinon la fenêtre se fermait aussitôt ouverte).
         guard let host = webView.url?.host, NotebookLMWire.isApp(host: host) else { return }
-        finished()
+        Task { @MainActor in
+            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+            if NotebookLMWire.isSignedIn(cookieNames: cookies.filter { $0.domain.hasSuffix("google.com") }.map(\.name)) { self.finished() }
+        }
     }
 }
 
@@ -298,6 +303,8 @@ private struct LoginWebView: UIViewRepresentable {
     // Google refuse les navigateurs intégrés qui se présentent comme tels : on se présente comme Safari.
     view.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
     view.navigationDelegate = coordinator
-    view.load(URLRequest(url: URL(string: NotebookLMWire.hosts[0] + "/")!))
+    // Directement la page de connexion de Google, qui renvoie vers NotebookLM une fois connecté·e
+    // (la page d'accueil de NotebookLM, elle, s'affiche aussi sans compte).
+    view.load(URLRequest(url: URL(string: "https://accounts.google.com/ServiceLogin?continue=" + NotebookLMWire.hosts[0] + "/")!))
     return view
 }

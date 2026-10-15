@@ -7098,6 +7098,7 @@ do {
         check(list.map(\.state) == [.ready, .working, .failed] && list[0].audioURL?.absoluteString == "https://x.test/a.m4a" && list[1].audioURL == nil, "NotebookLM : les artefacts (enveloppés ou à plat) : état et son")
     }
     check(NotebookLMWire.artifacts(from: nil).isEmpty && NotebookLMWire.artifacts(from: "n'importe quoi").isEmpty, "NotebookLM : pas d'artefacts, une liste vide")
+    check(!NotebookLMWire.isSignedIn(cookieNames: ["NID", "__Secure-1PSIDTS", "SIDCC"]) && NotebookLMWire.isSignedIn(cookieNames: ["NID", "SAPISID"]), "NotebookLM : connecté seulement avec un cookie de session, pas ceux d'une simple visite")
     check(NotebookLMWire.isApp(host: "notebook.google.com") && NotebookLMWire.isApp(host: "notebooklm.google.com") && !NotebookLMWire.isApp(host: "accounts.google.com") && !NotebookLMWire.isApp(host: "notebooklm.google"), "NotebookLM : l'app, pas la page de connexion ni la vitrine")
     check(NotebookLMWire.podcastInstructions(courseName: "Analyse I").contains("Analyse I"), "NotebookLM : la consigne cite le cours")
 }
