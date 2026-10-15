@@ -548,8 +548,20 @@ private struct StudyTopBar: View {
             sessionClock
             subject
                 .frame(maxWidth: 360, alignment: .leading)
-            Spacer(minLength: 24)
-            trailing
+                .layoutPriority(-1)
+            Spacer(minLength: 12)
+            // Les outils se replient quand la place manque (musique, état, centre de
+            // contrôle) ; la sortie, elle, est toujours là — elle ne se replie jamais.
+            ViewThatFits(in: .horizontal) {
+                tools(.full)
+                tools(.medium)
+                tools(.small)
+                tools(.minimal)
+            }
+            .layoutPriority(1)
+            exitControls
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
@@ -636,16 +648,41 @@ private struct StudyTopBar: View {
         return "jusqu'à \(DateUtils.time.string(from: timer.state?.studyUntil ?? Date()))"
     }
 
-    private var trailing: some View {
+    private enum ToolsLevel { case full, medium, small, minimal }
+
+    /// Ce qui se replie : les ressources, la musique, l'état, le centre de contrôle.
+    @ViewBuilder
+    private func tools(_ level: ToolsLevel) -> some View {
         HStack(spacing: 12) {
             resourcesMenu
-            // Ce qui joue dans Music : à part, séparé des gestes de la session.
-            // Toujours là : au repos, il ouvre le choix de la musique.
-            MusicMiniPlayer(open: openMusic)
-            Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
-            // Ce que la barre des menus de macOS montrait, et qu'un blocage cache.
-            DeskStatusItems()
+            switch level {
+            case .full, .medium:
+                MusicMiniPlayer(open: openMusic)
+            case .small:
+                Button(action: openMusic) {
+                    Image(systemName: music.nowPlaying.isPlaying ? "music.note" : "music.note")
+                        .foregroundStyle(music.nowPlaying.isPlaying ? StudyPalette.ink : StudyPalette.inkSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Musique")
+            case .minimal:
+                EmptyView()
+            }
+            if level == .full {
+                Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
+                // Ce que la barre des menus de macOS montrait, et qu'un blocage cache.
+                DeskStatusItems()
+            }
             DeskControlCenterButton()
+        }
+        .fixedSize()
+    }
+
+    /// La sortie de la session : toujours visible.
+    private var exitControls: some View {
+        HStack(spacing: 12) {
             Rectangle().fill(StudyPalette.rule).frame(width: 1, height: 26)
             if timer.isLocked {
                 // Sous verrou : une seule sortie, qu'on ne prend pas par réflexe.

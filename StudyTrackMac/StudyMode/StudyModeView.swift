@@ -24,7 +24,7 @@ struct StudyModeView: View {
                 GeometryReader { proxy in
                     ScrollView {
                         StudySetupView(screen: screen, courses: tracked)
-                            .padding(.vertical, 40)
+                            .padding(.vertical, 24)
                             .frame(maxWidth: .infinity, minHeight: proxy.size.height)
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -120,8 +120,8 @@ private struct StudySetupView: View {
     private var tint: Color { MacTargets.tint(course) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
-            VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
                 Kicker("Mode étude", color: tint)
                 Text("On s'y met ?")
                     .font(StudyType.hero)
@@ -223,6 +223,7 @@ private struct StudySetupView: View {
                 }
             }
 
+            HStack(alignment: .top, spacing: 36) {
             field("Rythme") {
                 Toggle(isOn: $pomodoro) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -236,36 +237,34 @@ private struct StudySetupView: View {
                 .tint(Carnet.correct)
                 .disabled(timer.phase != .idle)
             }
-
-            if course == nil || screen.taskType != .lecture {
+            if screen.taskType != .lecture {
                 field("Bande-son") {
                     SoundtrackPicker(choice: Bindable(settings).studySoundtrack)
                 }
             }
-
-            field("Blocage") {
-                Toggle(isOn: Bindable(screen).locks) {
-                    Text("Bloquer le reste").foregroundStyle(StudyPalette.ink)
-                }
-                .toggleStyle(.switch)
-                .tint(Carnet.correct)
             }
 
-            if screen.locks, settings.studyHideSystemChrome, chromePermission != .granted {
-                // Une fois le blocage en route, les Réglages sont fermés : c'est ici
-                // qu'on autorise StudyTrack à cacher le Dock et la barre des menus.
-                field("Dock et barre des menus") {
-                    HStack(spacing: 12) {
-                        Text(chromePermission == .denied
-                             ? "Refusé : ils resteront visibles. À changer dans Réglages Système › Confidentialité › Automatisation."
-                             : "Pour les cacher aussi quand une autre app est devant.")
-                            .font(.callout)
-                            .foregroundStyle(StudyPalette.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                        if chromePermission != .denied {
-                            Button("Autoriser") { chromePermission = SystemChrome.request() }
-                                .buttonStyle(PaperButtonStyle())
+            field("Blocage") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(isOn: Bindable(screen).locks) {
+                        Text("Bloquer le reste").foregroundStyle(StudyPalette.ink)
+                    }
+                    .toggleStyle(.switch)
+                    .tint(Carnet.correct)
+                    // Une fois le blocage en route, les Réglages sont fermés : c'est ici
+                    // qu'on autorise StudyTrack à cacher le Dock et la barre des menus.
+                    if screen.locks, settings.studyHideSystemChrome, chromePermission != .granted {
+                        HStack(spacing: 10) {
+                            Text(chromePermission == .denied
+                                 ? "Dock et barre des menus : refusé, ils resteront visibles (Réglages Système › Automatisation)."
+                                 : "Cacher aussi le Dock et la barre des menus ?")
+                                .font(.caption)
+                                .foregroundStyle(StudyPalette.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if chromePermission != .denied {
+                                Button("Autoriser") { chromePermission = SystemChrome.request() }
+                                    .buttonStyle(PaperButtonStyle())
+                            }
                         }
                     }
                 }
@@ -298,8 +297,8 @@ private struct StudySetupView: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(48)
-        .frame(width: 660)
+        .padding(32)
+        .frame(width: 720)
         .background(StudyPalette.raised.opacity(0.92), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(StudyPalette.rule))
         .onAppear {

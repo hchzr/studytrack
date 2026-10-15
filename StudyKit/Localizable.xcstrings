@@ -5281,6 +5281,9 @@
         }
       }
     },
+    "Cacher aussi le Dock et la barre des menus ?" : {
+
+    },
     "Cacher le Dock et la barre des menus" : {
 
     },
@@ -8307,6 +8310,9 @@
 
     },
     "Diapositives et notes" : {
+
+    },
+    "Dock et barre des menus : refusé, ils resteront visibles (Réglages Système › Automatisation)." : {
 
     },
     "Document scanné : crée la série à la main, avec le plan « 1(a-d) 2 3 »." : {
@@ -15891,9 +15897,6 @@
         }
       }
     },
-    "Pour les cacher aussi quand une autre app est devant." : {
-
-    },
     "Pré-remplir pour Groq" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16602,9 +16605,6 @@
           }
         }
       }
-    },
-    "Refusé : ils resteront visibles. À changer dans Réglages Système › Confidentialité › Automatisation." : {
-
     },
     "Regarder" : {
       "localizations" : {
