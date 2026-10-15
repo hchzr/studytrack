@@ -5166,6 +5166,9 @@
         }
       }
     },
+    "Bloquer les gestes du trackpad" : {
+
+    },
     "bonus" : {
       "localizations" : {
         "en" : {
@@ -13213,6 +13216,9 @@
         }
       }
     },
+    "Mission Control, changer de bureau, Launchpad : les gestes à trois ou quatre doigts. Le Dock se relance au début et à la fin." : {
+
+    },
     "Mode" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16399,9 +16405,6 @@
         }
       }
     },
-    "Ranger le bureau" : {
-
-    },
     "Rappel quotidien" : {
       "localizations" : {
         "en" : {
@@ -16899,6 +16902,12 @@
           }
         }
       }
+    },
+    "Réorganiser les outils" : {
+
+    },
+    "Réorganiser les outils selon mon travail" : {
+
     },
     "Réparation…" : {
       "extractionState" : "stale",

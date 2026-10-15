@@ -544,7 +544,9 @@ private struct StudyTopBar: View {
     /// et les sorties. Rien au milieu : en plein écran, l'encoche des MacBook
     /// y cache ce qu'on pose.
     var body: some View {
-        HStack(spacing: 16) {
+        // Avec l'encoche, les trois blocs (gauche, vide, droite) font exactement la
+        // largeur de l'écran : aucun espacement entre eux.
+        HStack(spacing: Self.notch == nil ? 16 : 0) {
             if let notch = Self.notch {
                 // L'encoche : rien dessous. La session et la cible à sa gauche, tout le
                 // reste à sa droite, chacun dans la place qu'elle laisse.
