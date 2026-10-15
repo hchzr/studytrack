@@ -253,7 +253,10 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // Bloquer, c'est ne plus pouvoir passer à une autre app — session sans fin
         // comprise ; le verrou (ne pas finir avant l'heure) ajoute ce qui ferme.
         if timer?.studyLocks == true {
-            options.formUnion([.disableProcessSwitching, .disableHideApplication, .disableAppleMenu])
+            options.formUnion([.disableHideApplication, .disableAppleMenu])
+            // Si ⌘Tab du système est éteint, c'est le nôtre qui répond : l'option
+            // l'avalerait. Sans les fonctions du système, elle reste le seul frein.
+            if !SystemHotKeys.isAvailable { options.insert(.disableProcessSwitching) }
         }
         if timer?.isLocked == true {
             options.formUnion([.disableForceQuit, .disableSessionTermination])
@@ -297,6 +300,8 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // Les raccourcis du système (Spotlight, ⌘Tab, Mission Control…) éteints,
         // la fiche pour les rallumer écrite d'abord.
         SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true)
+        // ⌘Tab et ⌘Espace, éteints dans le système, reviennent en version d'étude.
+        if SystemHotKeys.isAvailable { StudyShell.shared.engage() }
         // Sur tous les bureaux (Spaces) et sur tous les écrans : un balayage ou un
         // second écran n'est pas une porte de sortie.
         window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
@@ -349,6 +354,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         window?.collectionBehavior = [.managed, .fullScreenNone]
+        StudyShell.shared.disengage()
         SystemLock.release()
         log.notice("mode étude : blocage levé")
     }

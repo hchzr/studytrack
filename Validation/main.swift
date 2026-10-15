@@ -6277,6 +6277,27 @@ do {
           "la liste couvre Spotlight, ⌥⌘Espace et ⌘Tab")
 }
 
+// MARK: Sélecteur et recherche d'étude
+do {
+    var model = StudySwitcherModel()
+    model.touch("pane:exercise"); model.touch("app:goodnotes"); model.touch("pane:course")
+    let all = ["pane:desk", "pane:exercise", "pane:course", "app:goodnotes", "claude"]
+    check(model.order(available: all) == ["pane:course", "app:goodnotes", "pane:exercise", "pane:desk", "claude"], "sélecteur : le plus récent d'abord, puis l'ordre donné")
+    check(model.order(available: ["claude", "pane:course"]) == ["pane:course", "claude"], "sélecteur : seulement ce qui existe")
+    model.touch("pane:exercise")
+    check(model.recent.first == "pane:exercise" && model.recent.filter { $0 == "pane:exercise" }.count == 1, "sélecteur : pas de doublon")
+    for i in 0..<40 { model.touch("x\(i)") }
+    check(model.recent.count == StudySwitcherModel.memory, "sélecteur : mémoire bornée")
+    check(StudySwitcherModel.move(from: 0, by: 1, count: 4) == 1 && StudySwitcherModel.move(from: 3, by: 1, count: 4) == 0, "sélecteur : en avant, en boucle")
+    check(StudySwitcherModel.move(from: 0, by: -1, count: 4) == 3 && StudySwitcherModel.move(from: 0, by: 1, count: 0) == 0, "sélecteur : en arrière, en boucle ; vide")
+    check(StudySearchQuery.mathExpression("2+3*4") == "2+3*4", "recherche : un calcul est un calcul")
+    check(StudySearchQuery.mathExpression("= x^2 - 2") == "x^2 - 2", "recherche : « = » force le calcul")
+    check(StudySearchQuery.mathExpression("sqrt(2)+1") == "sqrt(2)+1", "recherche : les fonctions connues")
+    check(StudySearchQuery.mathExpression("série 3") == nil && StudySearchQuery.mathExpression("PHYS-101") == nil, "recherche : « série 3 » et un code de cours restent des recherches")
+    check(StudySearchQuery.mathExpression("analyse") == nil && StudySearchQuery.mathExpression("") == nil && StudySearchQuery.mathExpression("=") == nil, "recherche : des mots, du vide")
+    check(StudySearchQuery.mathExpression("12") == nil, "recherche : un nombre seul n'est pas un calcul")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")
