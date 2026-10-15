@@ -112,15 +112,18 @@ final class StudyMusic {
         reset.arguments = ["reset", "AppleEvents", Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"]
         try? reset.run()
         reset.waitUntilExit()
-        automationDenied = false
+        automation = .undetermined
         // Une lecture neuve : le premier script refait la demande au système.
         if observers > 0 { backend.stop(); backend.start() }
         #endif
     }
 
-    /// macOS a refusé à StudyTrack de contrôler Music (Automatisation) : sans cela,
-    /// l'écran disait seulement « Rien ne joue ».
-    var automationDenied = false
+    /// L'Automatisation de Music pour StudyTrack : pas encore demandée, accordée (un
+    /// script a répondu) ou refusée (erreur -1743) — sans cela, l'écran disait seulement
+    /// « Rien ne joue ».
+    enum Automation: Equatable { case undetermined, granted, denied }
+    var automation: Automation = .undetermined
+    var automationDenied: Bool { automation == .denied }
 
     var isAuthorized: Bool { authorization == .authorized }
 
@@ -563,6 +566,16 @@ final class StudyMusic {
 }
 
 /// Un album ou une playlist, pour les jouer en entier.
+extension MusicCollection {
+    /// Ce qu'on garde pour une bande-son : l'identifiant et le titre.
+    var sessionChoice: SessionSoundtrack.Choice? {
+        switch self {
+        case .playlist(let playlist): return .init(kind: .playlist, id: playlist.id.rawValue, title: playlist.name)
+        case .album(let album): return .init(kind: .album, id: album.id.rawValue, title: album.title)
+        }
+    }
+}
+
 enum MusicCollection {
     case album(Album)
     case playlist(Playlist)
@@ -1358,16 +1371,19 @@ private final class Backend {
 private final class MusicScript: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.hczr.studytrack.music-script", qos: .userInitiated)
 
-    /// Dernier état connu du refus, lu et écrit sur la file seulement.
-    private var denied = false
+    /// Dernier état connu, lu et écrit sur la file seulement.
+    private var state = StudyMusic.Automation.undetermined
 
-    /// -1743 : « l'utilisateur·rice n'a pas autorisé ce contrôle » (Automatisation).
+    /// -1743 : « l'utilisateur·rice n'a pas autorisé ce contrôle » (Automatisation) ; une
+    /// réponse sans erreur : accordée.
     private func note(_ error: NSDictionary?) {
-        let nowDenied = (error?[NSAppleScript.errorNumber] as? Int) == -1743
-        let succeeded = error == nil
-        guard nowDenied != denied, nowDenied || succeeded else { return }
-        denied = nowDenied
-        Task { @MainActor in StudyMusic.shared.automationDenied = nowDenied }
+        let next: StudyMusic.Automation
+        if (error?[NSAppleScript.errorNumber] as? Int) == -1743 { next = .denied }
+        else if error == nil { next = .granted }
+        else { return }
+        guard next != state else { return }
+        state = next
+        Task { @MainActor in StudyMusic.shared.automation = next }
     }
 
     func send(_ command: String) {

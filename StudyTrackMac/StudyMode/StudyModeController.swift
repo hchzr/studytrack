@@ -175,6 +175,13 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private func updateSoundtrack(_ timer: MacTimer) {
         guard let settings else { return }
         let soundtrack = StudySoundtrack.shared
+        // « Pour mes sessions » (la musique) range la collection choisie dans les réglages.
+        if soundtrack.pick == nil {
+            soundtrack.pick = { [weak self] choice, moment in
+                if moment == .revision { self?.settings?.studySoundtrackRevision = choice } else { self?.settings?.studySoundtrack = choice }
+                DeskNotifications.shared.post(.info, "« \(choice.title) » accompagnera \(moment == .revision ? "ta révision" : "tes séances")", icon: "headphones")
+            }
+        }
         soundtrack.breakPolicy = settings.studySoundtrackOnBreak
         let phase: SessionSoundtrack.Phase
         if !timer.isStudying { phase = .ended }

@@ -10,6 +10,9 @@ import Observation
 final class StudySoundtrack {
     static let shared = StudySoundtrack()
 
+    /// Choisir cette playlist ou cet album pour les sessions d'un moment (le Mac l'enregistre ;
+    /// `nil` sur l'iPhone, où le bouton n'apparaît pas).
+    var pick: ((SessionSoundtrack.Choice, DeskMoment) -> Void)?
     var choice: SessionSoundtrack.Choice?
     var breakPolicy: SessionSoundtrack.BreakPolicy = .pause
 

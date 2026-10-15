@@ -127,6 +127,8 @@ struct StudyModeScreen: View {
     /// sauf si on a choisi un onglet soi-même (jusqu'au moment suivant).
     @State private var lastArrangement: String?
     @State private var tabPinned = false
+    /// La pause ou le bilan qu'on a écarté (jusqu'au prochain changement).
+    @State private var dismissedTakeover: DeskArrangement.Takeover?
 
     /// Les onglets du mode étude — les mêmes outils que le bureau du Mac.
     enum StudyTab: String, CaseIterable, Identifiable {
@@ -167,7 +169,41 @@ struct StudyModeScreen: View {
         context.hasTarget = exercise != nil
         context.targetDone = exercise?.isDone ?? false
         context.seriesComplete = exercise != nil && (exercise?.series?.isComplete ?? false)
+        switch focus.phase() {
+        case .onBreak: context.phase = .onBreak
+        case .paused: context.phase = .paused
+        default: context.phase = focus.isStudying ? .running : .ended
+        }
+        if let until = focus.state?.studyUntil, !StudyMode.isOpenEnded(focus.state) {
+            context.minutesLeft = Int(max(0, until.timeIntervalSinceNow) / 60)
+        }
         return context
+    }
+
+    /// Ce qui prend l'écran un instant : la pause, la pause du chrono, les cinq dernières minutes.
+    @ViewBuilder
+    private var takeoverCard: some View {
+        let kind = DeskArrangement.takeover(for: arrangementContext)
+        if kind != .none, kind != .classBreak, dismissedTakeover != kind {
+            VStack(spacing: 12) {
+                Image(systemName: kind == .onBreak ? "cup.and.saucer" : (kind == .paused ? "pause.circle" : "hourglass"))
+                    .font(.largeTitle).foregroundStyle(Carnet.inkSecondary)
+                Text(kind == .onBreak ? "Pause" : (kind == .paused ? "En pause" : "Bientôt fini"))
+                    .font(Carnet.serif(.title)).foregroundStyle(Carnet.ink)
+                HStack(spacing: 10) {
+                    switch kind {
+                    case .onBreak: Button("Écourter la pause") { focus.skipBreak() }.buttonStyle(.ink)
+                    case .paused: Button("Reprendre") { focus.resume() }.buttonStyle(.ink)
+                    default: Button("Encore 25 min") { focus.extendStudy(minutes: 25) }.buttonStyle(.ink)
+                    }
+                    Button("Plus tard") { dismissedTakeover = kind }.buttonStyle(.paper)
+                }
+            }
+            .padding(24)
+            .carnetGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(24)
+            .transition(.opacity)
+        }
     }
 
     private var arrangementKey: String { DeskArrangement.signature(arrangementContext) }
@@ -257,6 +293,8 @@ struct StudyModeScreen: View {
                 }
             }
         }
+        .overlay { takeoverCard }
+        .onChange(of: DeskArrangement.takeover(for: arrangementContext)) { _, _ in dismissedTakeover = nil }
         .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
         .sheet(item: Binding(get: { SiteHub.shared.signIn }, set: { SiteHub.shared.signIn = $0 })) { site in
