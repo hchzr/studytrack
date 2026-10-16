@@ -60,6 +60,17 @@ final class SeriesAutoReader {
         }
         let moodleReady = needsMoodle ? await MoodleClient.background.ensureSignedIn() : false
         if moodleReady { await repairLinks(courses: courses, context: context) }
+        // Les exercices que la première version des révisions gardait, marqués
+        // « retiré de l'énoncé » : ils n'existent plus dans l'énoncé.
+        var cleaned = false
+        for series in courses.flatMap(\.series) {
+            for exercise in series.exercises where exercise.title.hasSuffix("(\(SeriesDraftWriter.removedMark))") {
+                series.exercises.removeAll { $0.id == exercise.id }
+                context.delete(exercise)
+                cleaned = true
+            }
+        }
+        if cleaned { try? context.save() }
         // Un énoncé révisé à la source est relu (`SeriesSourceWatch`).
         await SeriesSourceWatch.flagChanged(courses: courses, moodleReady: moodleReady)
         for course in courses {

@@ -6952,11 +6952,12 @@ do {
         return draft
     }), to: aicc, mode: .revision, context: nil)
     let now6 = revision.series.sortedExercises
-    check(revision.outcome == .init(created: 1, updated: 7, deleted: 2), "révision : 1 nouveau, 7 retrouvés, 2 retirés vierges — \(revision.outcome)")
+    check(revision.outcome == .init(created: 1, updated: 7, deleted: 3), "révision : 1 nouveau, 7 retrouvés, 3 retirés supprimés — \(revision.outcome)")
     check(now6.prefix(8).map(\.exerciseNumber) == (1...8).map { "6.\($0)" }, "révision : numéros du PDF")
     check(telescoping.exerciseNumber == "6.2" && telescoping.isDone && telescoping.title == "Telescoping", "le télescopage devient 6.2 et reste fait")
     check(now6[0].statement.contains("generating functions") && !now6[0].isDone, "6.1 est le nouvel exercice, vierge")
-    check(matching.exerciseNumber == "6.9" && matching.title.contains(SeriesDraftWriter.removedMark), "retiré mais travaillé : gardé à la fin, marqué")
+    check(revision.series.exercises.count == 8 && !revision.series.exercises.contains { $0.id == matching.id },
+          "retiré de l'énoncé : supprimé, même déjà commencé")
 }
 
 // MARK: Réveil des autres appareils (verrou)

@@ -347,8 +347,8 @@ enum SubQuestionTree {
 ///   • **modification** — le brouillon *est* la série : un exercice retiré de la
 ///     liste est supprimé, un exercice renuméroté garde son avancement ;
 ///   • **révision** — l'énoncé a changé à la source (`SeriesSourceWatch`) : la
-///     nouvelle lecture *est* la série, mais un exercice retiré sur lequel on a
-///     déjà travaillé reste, à la fin, marqué « retiré de l'énoncé ».
+///     nouvelle lecture *est* la série ; un exercice que l'énoncé n'a plus est
+///     supprimé (son temps chronométré reste au cours).
 ///
 /// À l'import comme à la révision, un exercice se retrouve **par son contenu**
 /// (`SeriesReconciler`), le numéro ne servant qu'en dernier recours : un
@@ -358,8 +358,9 @@ enum SeriesDraftWriter {
 
     enum Mode { case importMerge, edit, revision }
 
-    /// La marque d'un exercice retiré de l'énoncé, gardé pour son avancement.
-    static let removedMark = String(localized: "retiré de l'énoncé")
+    /// La marque que posait la première version des révisions sur un exercice
+    /// retiré ; ces exercices sont supprimés au passage (`SeriesAutoReader`).
+    static let removedMark = "retiré de l'énoncé"
 
     struct Outcome: Equatable {
         var created = 0
@@ -460,23 +461,12 @@ enum SeriesDraftWriter {
                 outcome.deleted += 1
             }
         } else if mode == .revision {
-            // Retiré de l'énoncé : supprimé s'il est vierge ; sinon gardé à la
-            // fin, renuméroté après les autres et marqué — son temps, ses
-            // erreurs et ses corrections ne se perdent pas.
-            var order = draft.exercises.count
-            for exercise in series.sortedExercises where !kept.contains(exercise.id) {
-                if exercise.hasProgress {
-                    order += 1
-                    exercise.exerciseNumber = "\(draft.number).\(order)"
-                    exercise.sortOrder = order
-                    if !exercise.title.contains(removedMark) {
-                        exercise.title = exercise.title.isEmpty ? removedMark : "\(exercise.title) (\(removedMark))"
-                    }
-                } else {
-                    series.exercises.removeAll { $0.id == exercise.id }
-                    context?.delete(exercise)
-                    outcome.deleted += 1
-                }
+            // Retiré de l'énoncé : il n'existe plus, il part. Les sessions qui
+            // le visaient restent au cours (la relation se vide).
+            for exercise in series.exercises where !kept.contains(exercise.id) {
+                series.exercises.removeAll { $0.id == exercise.id }
+                context?.delete(exercise)
+                outcome.deleted += 1
             }
         } else {
             // Les exercices que le PDF ne cite pas restent, après ceux du PDF.
@@ -487,17 +477,5 @@ enum SeriesDraftWriter {
             }
         }
         return (series, outcome)
-    }
-}
-
-extension Exercise {
-    /// Une trace de travail : fait, corrigé, sûreté, note, erreurs, temps
-    /// chronométré, question cochée. Un tel exercice ne se supprime jamais
-    /// tout seul (une révision de l'énoncé le garde).
-    var hasProgress: Bool {
-        doneAt != nil || correctedAt != nil || confidenceRaw != nil || correctnessRaw != nil || redoRequired
-            || !(correctionNote ?? "").isEmpty || !hint.isEmpty || !solution.isEmpty
-            || !(targetedSessions ?? []).isEmpty || !(mistakesStore ?? []).isEmpty
-            || leafSubQuestions.contains(where: \.isDone)
     }
 }
