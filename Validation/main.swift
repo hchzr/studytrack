@@ -6896,6 +6896,69 @@ do {
     check(allowance.allowed(at: t0.addingTimeInterval(100)) == ["com.apple.systempreferences"], "permission brève : redemandée, elle repart")
 }
 
+// MARK: Série révisée : les exercices suivent leur contenu (AICC semaine 6)
+do {
+    typealias I = SeriesReconciler.Item
+    // Ce que l'app avait importé (première version du PDF)…
+    let stored = [
+        I(number: "6.1", title: "Telescoping", statement: "Show that \\sum_{j=1}^n (a_j-a_{j-1})=a_n-a_0 for a sequence of real numbers."),
+        I(number: "6.2", title: "Sum both sides of the identity k2", statement: "Use k^2-(k-1)^2=2k-1 and Exercise 1 to find formulas for two sums."),
+        I(number: "6.3", title: "Sorting algorithms", statement: "Use Bubble Sort, Selection Sort, and Insertion Sort to sort the given sequence."),
+        I(number: "6.4", title: "Bubble sort", statement: "Adapt bubble sort to stop when no swaps are required and express it in pseudocode."),
+        I(number: "6.5", title: "Anagrams", statement: "Devise an algorithm to determine whether two strings are anagrams."),
+        I(number: "6.6", title: "Injective functions", statement: "Describe an algorithm to determine whether a function between finite sets is injective."),
+        I(number: "6.7", title: "Stable matching", statement: "Determine whether the given matching is unstable, stable and optimal, or stable but not optimal."),
+        I(number: "6.8", title: "Making change", statement: "Use the cashier's algorithm to make change using quarters, dimes, nickels, and pennies."),
+        I(number: "6.9", title: "Gale-Shapley algorithm", statement: "Find the matchings produced by the Gale-Shapley algorithm for both proposer groups and identify a's best stable partner."),
+        I(number: "6.10", title: "Sorting algorithm analysis", statement: "Count comparisons and swaps for the given sequence, then determine their worst-case order for input length n+1."),
+    ]
+    // …et le PDF révisé, tel que la lecture le donne (titre vide, début de l'énoncé).
+    let revised = [
+        I(number: "6.1", title: "", statement: "(Repeated from Week 5) Solve the following recurrence relation using generating functions: an = 4an−1 − 4an−2, n ≥ 2, with a0 = 1 and a1 = 4."),
+        I(number: "6.2", title: "", statement: "Show that ∑ (aj − aj−1) = an − a0, where a0, a1, ..., an is a sequence of real numbers. This type of sum is called telescoping."),
+        I(number: "6.3", title: "", statement: "Sum both sides of the identity k2 − (k − 1)2 = 2k − 1 from k = 1 to k = n and use Exercise 2 to find a formula for the sum of the first n odd natural numbers"),
+        I(number: "6.4", title: "", statement: "The following three algorithms sort the input sequence of real numbers in ascending order. Use Bubble Sort, Selection Sort and Insertion Sort to sort the following sequence"),
+        I(number: "6.5", title: "", statement: "Adapt the bubble sort algorithm so that it stops when no swaps are required (when the list is sorted). Express this more efficient version of the algorithm in pseudocode."),
+        I(number: "6.6", title: "", statement: "Two strings are anagrams if each can be formed from the other string by rearranging its characters. Devise an algorithm to determine whether two strings are anagrams"),
+        I(number: "6.7", title: "", statement: "Describe an algorithm that determines whether a function from a finite set to another finite set is injective."),
+        I(number: "6.8", title: "", statement: "We use Bubble Sort, Selection Sort, and Insertion Sort to sort the following sequence. How many comparisons are done in each of the algorithms? How many swaps? In the worst-case scenario, what is the order"),
+    ]
+    let found = SeriesReconciler.match(existing: stored, incoming: revised)
+    check(found == [nil, 0, 1, 2, 3, 4, 5, 9], "série révisée : chaque exercice retrouve le sien (\(found))")
+    check(SeriesReconciler.match(existing: stored, incoming: stored) == Array(0..<10).map { Optional($0) }, "même énoncé : rien ne bouge")
+    let renumbered = stored.enumerated().map { I(number: "6.\($0.offset + 3)", title: $0.element.title, statement: $0.element.statement) }
+    check(SeriesReconciler.match(existing: stored, incoming: renumbered) == Array(0..<10).map { Optional($0) }, "numéros changés : le contenu l'emporte")
+    check(SeriesReconciler.match(existing: [], incoming: revised).allSatisfy { $0 == nil }, "série vide : tout est nouveau")
+    let blank = [I(number: "6.1", title: "", statement: ""), I(number: "6.2", title: "", statement: "")]
+    check(SeriesReconciler.match(existing: blank, incoming: blank) == [0, 1], "sans texte : le numéro départage")
+    check(SeriesLayoutParser.firstSentence(of: "Exercise 5. Adapt the bubble sort algorithm so that it stops when no swaps are required (when the list is sorted). Express this in pseudocode.")
+          == "Adapt the bubble sort algorithm so that it stops when no swaps are required (when the list is sorted).", "énoncé lu dans le PDF : la première phrase, sans « Exercise 5. »")
+
+    // L'écriture : l'avancement suit l'exercice, les retirés vierges partent,
+    // un retiré déjà travaillé reste, marqué.
+    let aicc = Course(code: "CS-101", name: "AICC", credits: 4)
+    let first = SeriesDraftWriter.write(SeriesDraft(number: 6, title: "", plannedWeek: 6, exercises: stored.map { item in
+        var draft = ExerciseDraft(minor: String(item.number.dropFirst(2)), title: item.title, isBonus: false)
+        draft.statement = item.statement
+        return draft
+    }), to: aicc, mode: .importMerge, context: nil).series
+    let telescoping = first.sortedExercises[0]
+    telescoping.doneAt = Date()
+    let matching = first.sortedExercises[6]
+    matching.confidenceRaw = ConfidenceLevel.medium.rawValue
+    let revision = SeriesDraftWriter.write(SeriesDraft(existingID: first.id, number: 6, title: "", plannedWeek: 6, exercises: revised.map { item in
+        var draft = ExerciseDraft(minor: String(item.number.dropFirst(2)), title: item.title, isBonus: false)
+        draft.statement = item.statement
+        return draft
+    }), to: aicc, mode: .revision, context: nil)
+    let now6 = revision.series.sortedExercises
+    check(revision.outcome == .init(created: 1, updated: 7, deleted: 2), "révision : 1 nouveau, 7 retrouvés, 2 retirés vierges — \(revision.outcome)")
+    check(now6.prefix(8).map(\.exerciseNumber) == (1...8).map { "6.\($0)" }, "révision : numéros du PDF")
+    check(telescoping.exerciseNumber == "6.2" && telescoping.isDone && telescoping.title == "Telescoping", "le télescopage devient 6.2 et reste fait")
+    check(now6[0].statement.contains("generating functions") && !now6[0].isDone, "6.1 est le nouvel exercice, vierge")
+    check(matching.exerciseNumber == "6.9" && matching.title.contains(SeriesDraftWriter.removedMark), "retiré mais travaillé : gardé à la fin, marqué")
+}
+
 // MARK: Réveil des autres appareils (verrou)
 do {
     check(TimerLink.shouldWake(previous: nil, now: true), "réveil : un premier état verrouillé réveille")

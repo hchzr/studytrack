@@ -538,7 +538,7 @@ struct SeriesImportSheet: View {
             Task { @MainActor in courseWasDetected = true }
         }
 
-        let parsed = SeriesLayoutParser.parse(lines, defaultSeries: preferredSeries)
+        let parsed = SeriesLayoutParser.fillingStatements(SeriesLayoutParser.parse(lines, defaultSeries: preferredSeries), from: lines)
         localResult = parsed
         aiResult = nil
         apply(parsed)

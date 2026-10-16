@@ -54,6 +54,13 @@ final class OfflineLibrary {
         return folder.appendingPathComponent(digest + ".pdf")
     }
 
+    /// L'énoncé a changé à la source : la copie hors ligne est reprise au
+    /// prochain passage.
+    func forget(_ url: URL) {
+        try? FileManager.default.removeItem(at: Self.file(forKey: Self.key(for: url)))
+        measure()
+    }
+
     /// Le fichier gardé pour cette adresse, s'il existe.
     func localFile(for url: URL) -> URL? {
         let file = Self.file(forKey: Self.key(for: url))

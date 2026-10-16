@@ -709,3 +709,53 @@ enum SeriesLayoutParser {
         return nil
     }
 }
+
+extension SeriesLayoutParser {
+    /// Le texte de chaque exercice : les lignes entre son titre et le suivant,
+    /// lues dans l'ordre de la page.
+    ///
+    /// La lecture par la mise en page trouve les numéros mais laisse l'énoncé
+    /// vide (c'est le modèle de langage qui le résume). Sans texte, une série
+    /// révisée ne pouvait retrouver ses exercices que par leur numéro — qui
+    /// est justement ce qui a bougé. Un énoncé vide reçoit ici sa première
+    /// phrase.
+    static func fillingStatements(_ detected: [DetectedSeries], from lines: [PDFLayoutLine]) -> [DetectedSeries] {
+        let placed = lines.filter { $0.verticalPosition != nil && !$0.isEmpty }
+            .sorted { ($0.pageIndex, $0.verticalPosition ?? 0) < ($1.pageIndex, $1.verticalPosition ?? 0) }
+        guard !placed.isEmpty else { return detected }
+        return detected.map { series in
+            var series = series
+            let anchors = series.exercises.map { exercise in
+                exercise.pageIndex.flatMap { page in exercise.verticalPosition.map { (page, $0) } }
+            }
+            for index in series.exercises.indices where series.exercises[index].statement.isEmpty {
+                guard let start = anchors[index] else { continue }
+                let end = anchors[(index + 1)...].compactMap { $0 }.first
+                let body = placed.filter { line in
+                    let at = (line.pageIndex, line.verticalPosition ?? 0)
+                    return at >= (start.0, start.1 - 0.001) && (end.map { at < ($0.0, $0.1 - 0.001) } ?? true)
+                }
+                .map(\.trimmed).joined(separator: " ")
+                series.exercises[index].statement = firstSentence(of: body)
+            }
+            return series
+        }
+    }
+
+    /// « Exercise 5. Adapt the bubble sort… (when the list is sorted). Express… »
+    /// → « Adapt the bubble sort… (when the list is sorted). »
+    static func firstSentence(of body: String) -> String {
+        var text = body
+        if let heading = text.range(of: #"^\s*(Exercise|Exercice|Exercices?|Problem|Problème|Ex\.?)\s*[\d.]+\s*[.:)]?\s*"#,
+                                    options: [.regularExpression, .caseInsensitive]) {
+            text.removeSubrange(heading)
+        }
+        text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        if let stop = text.range(of: #"(?<=[a-z\)])\.\s+(?=[A-Z])"#, options: .regularExpression),
+           text.distance(from: text.startIndex, to: stop.lowerBound) >= 25 {
+            text = String(text[..<stop.lowerBound]) + "."
+        }
+        return String(text.prefix(240))
+    }
+}

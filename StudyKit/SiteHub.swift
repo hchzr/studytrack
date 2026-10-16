@@ -104,6 +104,12 @@ final class SiteHub {
         return cached
     }
 
+    /// Le document a changé à la source : la prochaine lecture le retélécharge.
+    func forget(_ address: String) {
+        documents[address] = nil
+        try? FileManager.default.removeItem(at: Self.cacheURL(for: address))
+    }
+
     func retry(_ address: String) {
         documents[address] = nil
         try? FileManager.default.removeItem(at: Self.cacheURL(for: address))

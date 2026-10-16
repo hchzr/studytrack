@@ -345,10 +345,21 @@ enum SubQuestionTree {
 ///     jour les exercices de même numéro, on ajoute les autres, on ne supprime
 ///     rien de ce que le PDF ne mentionne pas ;
 ///   • **modification** — le brouillon *est* la série : un exercice retiré de la
-///     liste est supprimé, un exercice renuméroté garde son avancement.
+///     liste est supprimé, un exercice renuméroté garde son avancement ;
+///   • **révision** — l'énoncé a changé à la source (`SeriesSourceWatch`) : la
+///     nouvelle lecture *est* la série, mais un exercice retiré sur lequel on a
+///     déjà travaillé reste, à la fin, marqué « retiré de l'énoncé ».
+///
+/// À l'import comme à la révision, un exercice se retrouve **par son contenu**
+/// (`SeriesReconciler`), le numéro ne servant qu'en dernier recours : un
+/// énoncé où l'on a inséré un exercice décale tous les numéros, pas les
+/// exercices.
 enum SeriesDraftWriter {
 
-    enum Mode { case importMerge, edit }
+    enum Mode { case importMerge, edit, revision }
+
+    /// La marque d'un exercice retiré de l'énoncé, gardé pour son avancement.
+    static let removedMark = String(localized: "retiré de l'énoncé")
 
     struct Outcome: Equatable {
         var created = 0
@@ -366,6 +377,7 @@ enum SeriesDraftWriter {
         let existing: ExerciseSeries? = switch mode {
         case .edit: course.series.first { $0.id == draft.existingID }
         case .importMerge: course.series.first { $0.seriesNumber == draft.number }
+        case .revision: course.series.first { $0.id == draft.existingID } ?? course.series.first { $0.seriesNumber == draft.number }
         }
         if let existing {
             series = existing
@@ -386,6 +398,15 @@ enum SeriesDraftWriter {
 
         var kept = Set<UUID>()
         var usedNumbers = Set<String>()
+        // Import et révision : chaque ligne retrouve son exercice par le contenu.
+        var byContent: [Int: Exercise] = [:]
+        if mode != .edit {
+            let olds = series.sortedExercises
+            let found = SeriesReconciler.match(
+                existing: olds.map { SeriesReconciler.Item(number: $0.exerciseNumber, title: $0.title, statement: $0.statement) },
+                incoming: draft.exercises.map { SeriesReconciler.Item(number: "\(draft.number).\($0.minor)", title: $0.title, statement: $0.statement) })
+            for (index, old) in found.enumerated() { if let old { byContent[index] = olds[old] } }
+        }
         for (order, item) in draft.exercises.enumerated() {
             let minor = item.minor.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !minor.isEmpty else { continue }
@@ -395,11 +416,19 @@ enum SeriesDraftWriter {
 
             let match: Exercise? = switch mode {
             case .edit: series.exercises.first { $0.id == item.existingID }
-            case .importMerge: series.exercises.first { $0.exerciseNumber == number }
+            case .importMerge, .revision:
+                item.existingID.flatMap { id in series.exercises.first { $0.id == id } }
+                    ?? byContent[order]
+                    // Le numéro, seulement à l'import et si cet exercice n'est
+                    // pas déjà celui d'une autre ligne.
+                    ?? (mode == .importMerge
+                        ? series.exercises.first { $0.exerciseNumber == number && !kept.contains($0.id) && !byContent.values.contains($0) }
+                        : nil)
             }
-            if let match {
+            if let match, !kept.contains(match.id) {
                 match.exerciseNumber = number
-                match.title = itemTitle
+                // Une lecture sans titre ne retire pas celui qu'on avait.
+                if mode == .edit || !itemTitle.isEmpty { match.title = itemTitle }
                 // Un import sans énoncé (lecture locale) n'efface pas celui qu'on avait.
                 let statement = item.statement.trimmingCharacters(in: .whitespacesAndNewlines)
                 if mode == .edit || !statement.isEmpty { match.statement = statement }
@@ -430,6 +459,25 @@ enum SeriesDraftWriter {
                 context?.delete(exercise)
                 outcome.deleted += 1
             }
+        } else if mode == .revision {
+            // Retiré de l'énoncé : supprimé s'il est vierge ; sinon gardé à la
+            // fin, renuméroté après les autres et marqué — son temps, ses
+            // erreurs et ses corrections ne se perdent pas.
+            var order = draft.exercises.count
+            for exercise in series.sortedExercises where !kept.contains(exercise.id) {
+                if exercise.hasProgress {
+                    order += 1
+                    exercise.exerciseNumber = "\(draft.number).\(order)"
+                    exercise.sortOrder = order
+                    if !exercise.title.contains(removedMark) {
+                        exercise.title = exercise.title.isEmpty ? removedMark : "\(exercise.title) (\(removedMark))"
+                    }
+                } else {
+                    series.exercises.removeAll { $0.id == exercise.id }
+                    context?.delete(exercise)
+                    outcome.deleted += 1
+                }
+            }
         } else {
             // Les exercices que le PDF ne cite pas restent, après ceux du PDF.
             var order = draft.exercises.count
@@ -439,5 +487,17 @@ enum SeriesDraftWriter {
             }
         }
         return (series, outcome)
+    }
+}
+
+extension Exercise {
+    /// Une trace de travail : fait, corrigé, sûreté, note, erreurs, temps
+    /// chronométré, question cochée. Un tel exercice ne se supprime jamais
+    /// tout seul (une révision de l'énoncé le garde).
+    var hasProgress: Bool {
+        doneAt != nil || correctedAt != nil || confidenceRaw != nil || correctnessRaw != nil || redoRequired
+            || !(correctionNote ?? "").isEmpty || !hint.isEmpty || !solution.isEmpty
+            || !(targetedSessions ?? []).isEmpty || !(mistakesStore ?? []).isEmpty
+            || leafSubQuestions.contains(where: \.isDone)
     }
 }

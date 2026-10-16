@@ -60,18 +60,25 @@ final class SeriesAutoReader {
         }
         let moodleReady = needsMoodle ? await MoodleClient.background.ensureSignedIn() : false
         if moodleReady { await repairLinks(courses: courses, context: context) }
+        // Un énoncé révisé à la source est relu (`SeriesSourceWatch`).
+        await SeriesSourceWatch.flagChanged(courses: courses, moodleReady: moodleReady)
         for course in courses {
             for series in course.sortedSeries where (series.exercises.isEmpty || series.needsReread) && failures[series.id] == nil {
                 guard let url = URL(string: series.urlString), url.scheme?.hasPrefix("http") == true else { continue }
                 if url.host?.contains("moodle") == true, !moodleReady { continue }
                 reading.insert(series.id)
                 defer { reading.remove(series.id) }
+                // Une série déjà remplie et marquée : c'est une révision de l'énoncé.
+                let revising = !series.exercises.isEmpty
                 do {
-                    let count = try await read(series, from: url, course: course, context: context, settings: settings)
+                    let count = try await read(series, from: url, course: course, context: context, settings: settings,
+                                               mode: revising ? .revision : .importMerge)
                     series.needsReread = false
                     if count > 0 {
+                        if revising { SeriesSourceWatch.commit(series) }
                         try? context.save()
-                        report.append("\(course.displayCode) série \(series.seriesNumber) : \(Plural.count(count, "\(count) exercice", "\(count) exercices"))")
+                        report.append("\(course.displayCode) série \(series.seriesNumber) : "
+                                      + (revising ? String(localized: "énoncé révisé, \(count) exercices") : Plural.count(count, "\(count) exercice", "\(count) exercices")))
                     }
                 } catch {
                     failures[series.id] = error.localizedDescription
@@ -125,7 +132,8 @@ final class SeriesAutoReader {
     // MARK: Lecture
 
     private func read(_ series: ExerciseSeries, from url: URL, course: Course,
-                      context: ModelContext, settings: SettingsStore, depth: Int = 0) async throws -> Int {
+                      context: ModelContext, settings: SettingsStore, mode: SeriesDraftWriter.Mode = .importMerge,
+                      depth: Int = 0) async throws -> Int {
         let file: URL
         if url.host?.contains("moodle") == true {
             file = try await AuthenticatedDownloader.download(url)
@@ -142,7 +150,7 @@ final class SeriesAutoReader {
             } else {
                 let html = String(decoding: data, as: UTF8.self)
                 if let page = SeriesPageParser.parseProginsc(html: html, baseURL: base) {
-                    write(page.exercises, into: series, course: course, context: context)
+                    write(page.exercises, into: series, course: course, context: context, mode: mode)
                     if series.solutionURLString.isEmpty || URL(string: series.solutionURLString)?.host?.contains("courseware") == true {
                 series.solutionURLString = page.solutionURL
             }
@@ -151,7 +159,8 @@ final class SeriesAutoReader {
                 // Une page qui porte le PDF de la série (site de cours, GitHub…).
                 if depth == 0, let next = MoodleLinks.statementLink(inHTML: html, baseURL: base).statement.flatMap(URL.init(string:)),
                    next != url {
-                    let count = (try? await read(series, from: next, course: course, context: context, settings: settings, depth: 1)) ?? 0
+                    let count = (try? await read(series, from: next, course: course, context: context, settings: settings,
+                                                 mode: mode, depth: 1)) ?? 0
                     if count > 0 {
                         series.urlString = next.absoluteString
                         return count
@@ -160,7 +169,7 @@ final class SeriesAutoReader {
                 // Une page qui contient les énoncés eux-mêmes, quel que soit le
                 // site : lue comme une mise en page (titres, gras, retraits).
                 let count = try await extract(lines: HTMLLayout.lines(fromHTML: html), pageImages: [],
-                                              into: series, course: course, context: context, settings: settings)
+                                              into: series, course: course, context: context, settings: settings, mode: mode)
                 if count > 0 { return count }
                 throw HiddenSiteSession.SiteError.failed("Page web sans énoncé lisible (\(base.host ?? "site inconnu")) : ouvre-la depuis la série.")
             }
@@ -174,15 +183,16 @@ final class SeriesAutoReader {
             throw HiddenSiteSession.SiteError.failed("Le PDF ne contient pas de texte (scan ?).")
         }
         return try await extract(lines: lines, pageImages: PDFPageRenderer.jpegPages(of: document),
-                                 into: series, course: course, context: context, settings: settings)
+                                 into: series, course: course, context: context, settings: settings, mode: mode)
     }
 
     /// Les exercices d'un énoncé mis en page (PDF ou page web) : règles, puis
     /// le modèle de langage s'il est disponible, fusionnés.
     private func extract(lines: [PDFLayoutLine], pageImages: [Data], into series: ExerciseSeries, course: Course,
-                         context: ModelContext, settings: SettingsStore) async throws -> Int {
+                         context: ModelContext, settings: SettingsStore,
+                         mode: SeriesDraftWriter.Mode = .importMerge) async throws -> Int {
         guard lines.contains(where: { !$0.isEmpty }) else { return 0 }
-        var detected = SeriesLayoutParser.parse(lines, defaultSeries: series.seriesNumber)
+        var detected = SeriesLayoutParser.fillingStatements(SeriesLayoutParser.parse(lines, defaultSeries: series.seriesNumber), from: lines)
         if settings.aiExtractionEnabled, SeriesAIExtractor.plannedSource(settings) != nil {
             let language = SeriesDocumentInference.languageName(of: lines.map(\.text).joined(separator: "\n"))
             let prepared = SeriesAIParsing.prepareLayout(lines, seriesHint: series.seriesNumber, language: language)
@@ -202,12 +212,12 @@ final class SeriesAutoReader {
                                  title: exercise.title, statement: exercise.statement,
                                  isBonus: exercise.isBonus, questions: exercise.subQuestions)
         }
-        write(exercises, into: series, course: course, context: context)
+        write(exercises, into: series, course: course, context: context, mode: mode)
         return series.exercises.count
     }
 
     private func write(_ exercises: [ContentExerciseDraft], into series: ExerciseSeries,
-                       course: Course, context: ModelContext) {
+                       course: Course, context: ModelContext, mode: SeriesDraftWriter.Mode = .importMerge) {
         let draft = SeriesDraft(existingID: series.id, number: series.seriesNumber, title: "",
                                 plannedWeek: series.plannedWeek,
                                 exercises: exercises.map { spec in
@@ -217,7 +227,7 @@ final class SeriesAutoReader {
                                     exercise.statement = spec.statement
                                     return exercise
                                 })
-        SeriesDraftWriter.write(draft, to: course, mode: .importMerge, context: context)
+        SeriesDraftWriter.write(draft, to: course, mode: mode, context: context)
         for spec in exercises where !spec.url.isEmpty {
             series.exercises.first { $0.exerciseNumber == spec.number }?.statementURLString = spec.url
         }

@@ -58,6 +58,12 @@ final class SeriesPDFStore {
         entries[seriesID] = nil
     }
 
+    /// L'énoncé a changé à la source : la copie gardée et ses découpes partent.
+    func forget(_ seriesID: UUID) {
+        entries[seriesID] = nil
+        try? FileManager.default.removeItem(at: Self.file(for: seriesID))
+    }
+
     #if canImport(UIKit)
     /// Les bandes de page de l'énoncé d'un exercice, rendues en images.
     func statementImages(for exercise: Exercise, width: CGFloat) async throws -> [UIImage] {

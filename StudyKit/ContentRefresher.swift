@@ -39,7 +39,10 @@ enum ContentRefresher {
         guard force || forced || CloudRelay.refreshIsDue(localLast: settings.contentLastRefresh,
                                                 claim: CloudRelay.moodleRefreshClaim(),
                                                 device: CloudRelay.deviceID,
-                                                interval: interval, now: now) else { return }
+                                                interval: interval, now: now) else {
+            await watchSourcesIfDue(context: context, settings: settings, now: now)
+            return
+        }
         CloudRelay.claimMoodleRefresh(now: now)
         #if os(iOS)
         MoodleWatcher.hasPendingNews = false
@@ -96,6 +99,30 @@ enum ContentRefresher {
         if !news.isEmpty {
             settings.contentRefreshNews = news.joined(separator: " · ")
             AppLog.record(.info, "import", "Mise à jour automatique", detail: settings.contentRefreshNews)
+        }
+    }
+
+    /// Entre deux mises à jour (12 h, un seul appareil) : les énoncés publics
+    /// des séries récentes, vérifiés au plus toutes les trois heures — une
+    /// requête conditionnelle par série, rien de téléchargé s'ils n'ont pas
+    /// changé. Un énoncé révisé est relu tout de suite (`SeriesSourceWatch`).
+    static let sourceWatchInterval: TimeInterval = 3 * 3600
+    private static let sourceWatchKey = "content.sourceWatch.last"
+
+    private static func watchSourcesIfDue(context: ModelContext, settings: SettingsStore, now: Date) async {
+        let last = UserDefaults.standard.object(forKey: sourceWatchKey) as? Date ?? .distantPast
+        guard now.timeIntervalSince(last) >= sourceWatchInterval else { return }
+        UserDefaults.standard.set(now, forKey: sourceWatchKey)
+        running = true
+        defer { running = false }
+        let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).filter(\.isTracked)
+        // Sans Moodle : ses fichiers demandent la session, ils attendent la
+        // mise à jour complète.
+        guard await SeriesSourceWatch.flagChanged(courses: courses, moodleReady: false) > 0 else { return }
+        let news = await SeriesAutoReader.shared.readPending(courses: courses, context: context, settings: settings)
+        if !news.isEmpty {
+            settings.contentRefreshNews = settings.contentRefreshNews.isEmpty
+                ? news.joined(separator: " · ") : settings.contentRefreshNews + " · " + news.joined(separator: " · ")
         }
     }
 
