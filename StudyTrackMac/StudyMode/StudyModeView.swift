@@ -116,7 +116,7 @@ private struct StudySetupView: View {
     @State private var openEnded = false
     @State private var pomodoro = false
     @State private var classes: [ScheduledClass] = []
-    @State private var chromePermission = SystemChrome.permission
+    @State private var chromePermission = SystemChrome.currentPermission
     @State private var trusted = AppPlacement.isTrusted
     @Environment(\.modelContext) private var context
 
@@ -329,6 +329,8 @@ private struct StudySetupView: View {
             fitLecture()
         }
         .task {
+            // Lue hors du fil principal : elle peut lancer System Events.
+            if settings.studyHideSystemChrome { chromePermission = await SystemChrome.resolvePermission() }
             // L'autorisation se donne dans les Réglages Système : on relit chaque seconde.
             while !Task.isCancelled {
                 trusted = AppPlacement.isTrusted

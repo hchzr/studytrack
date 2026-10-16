@@ -168,7 +168,7 @@ private struct DeskControlCenter: View {
                     Label("Gestes du trackpad : bloqués", systemImage: "checkmark")
                         .font(.caption).foregroundStyle(StudyPalette.inkSecondary)
                 }
-                if SystemChrome.permission != .granted, settings.studyHideSystemChrome {
+                if SystemChrome.currentPermission != .granted, settings.studyHideSystemChrome {
                     Label("Dock et barre des menus : visibles (permission manquante)", systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(Carnet.review)
                 }

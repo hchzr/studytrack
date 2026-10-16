@@ -159,7 +159,21 @@ enum SystemChrome {
 
     private static let target = "com.apple.systemevents"
 
+    /// Peut lancer System Events et attendre : jamais depuis un corps de vue
+    /// (`waitUntilExit` fait tourner la boucle, SwiftUI y rentre en pleine mise à jour).
     static var permission: Permission { check(ask: false) }
+
+    /// Lecture passive, sans lancer ni attendre : pour les vues. Hors ligne (System
+    /// Events fermé), la permission ne se lit pas : `.undetermined`.
+    static var currentPermission: Permission {
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: target).isEmpty else { return .undetermined }
+        return query(ask: false)
+    }
+
+    /// La permission, lue hors du fil principal (peut lancer System Events).
+    static func resolvePermission() async -> Permission {
+        await Task.detached { check(ask: false) }.value
+    }
 
     /// Demande la permission (l'écran de lancement, avant « Commencer »).
     @discardableResult
@@ -180,6 +194,10 @@ enum SystemChrome {
 
     private static func check(ask: Bool) -> Permission {
         ensureRunning()
+        return query(ask: ask)
+    }
+
+    private static func query(ask: Bool) -> Permission {
         // Le descripteur reste à `NSAppleEventDescriptor` : on n'en copie ni n'en libère rien.
         let address = NSAppleEventDescriptor(bundleIdentifier: target)
         guard let pointer = address.aeDesc else { return .undetermined }

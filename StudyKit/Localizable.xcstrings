@@ -7201,6 +7201,9 @@
         }
       }
     },
+    "Copie" : {
+
+    },
     "Copié" : {
       "localizations" : {
         "en" : {
@@ -9188,6 +9191,9 @@
         }
       }
     },
+    "énoncé révisé, %lld exercices" : {
+
+    },
     "Énoncés" : {
 
     },
@@ -9878,6 +9884,9 @@
         }
       }
     },
+    "Faire" : {
+
+    },
     "Faire bouger la figure, comme sur le site" : {
 
     },
@@ -9885,6 +9894,9 @@
 
     },
     "Faire la fiche du cours : ce qu'il faut savoir pour chaque exercice s'affichera ici" : {
+
+    },
+    "Faire la série" : {
 
     },
     "Faire les fiches de révision" : {
@@ -10108,6 +10120,9 @@
           }
         }
       }
+    },
+    "Fiche · %@" : {
+
     },
     "Fiche de révision" : {
 
@@ -11874,6 +11889,9 @@
           }
         }
       }
+    },
+    "L'énoncé" : {
+
     },
     "L'énoncé, les exercices, j'ai fini" : {
       "localizations" : {
@@ -17696,6 +17714,9 @@
     "Retient cet instant du cours" : {
 
     },
+    "retiré de l'énoncé" : {
+
+    },
     "Retirer" : {
       "localizations" : {
         "en" : {
@@ -17863,6 +17884,9 @@
           }
         }
       }
+    },
+    "Revoir la série" : {
+
     },
     "Rien à chercher" : {
       "extractionState" : "stale",
@@ -20483,6 +20507,9 @@
           }
         }
       }
+    },
+    "Tes documents gardés (le signet en haut d'un document)" : {
+
     },
     "Tes données apparaîtront ici." : {
       "extractionState" : "stale",

@@ -27,3 +27,6 @@ build-mac/
 
 # Build artefacts (simulateur)
 build-sim/
+
+# Copies de travail des agents (Claude Code)
+.claude/worktrees/
