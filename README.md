@@ -568,10 +568,50 @@ coller comme connecteur personnalisé.
   2025-03-26, 2024-11-05). Vérifié avec l'inspecteur MCP officiel.
 - **Outils** : lecture — `get_overview`, `list_courses`, `get_course`,
   `what_to_do`, `search`, `upcoming_dates`, `study_time`,
-  `list_pending_changes` ; écriture — `update_exercise`, `check_questions`,
-  `update_theory`, `log_study_session`, `add_series`, `add_exam`. Rien ne
-  supprime.
-- **Données** : l'app publie un instantané (`AssistantExport`, v2 avec
+  `list_pending_changes`, `list_files`, `read_file` ; écriture —
+  `update_exercise`, `check_questions`, `update_theory`, `log_study_session`,
+  `add_series`, `add_exam`. Rien ne supprime.
+- **Fichiers et notes** (Profil › Assistant IA › « Fichiers et notes », éteint
+  par défaut) : `list_files` donne énoncés et corrigés PDF, notes de cours, fiche
+  de révision, corrigés rédigés, notes d'anciens examens et fichiers ajoutés ;
+  `read_file(id)` rend le texte, ou le PDF en pièce jointe (Claude Code
+  l'enregistre et l'ouvre avec `Read`). Les textes voyagent dans l'instantané ;
+  les PDF **déjà sur l'iPhone** (cache des séries, bibliothèque hors ligne,
+  fichiers ajoutés) sont envoyés un à un, par SHA-256, dans un stockage privé
+  (`assistant-files`) — le serveur répond à chaque synchronisation par ceux qui
+  lui manquent, efface ceux qu'on n'annonce plus (et tout si le réglage est
+  coupé ou l'assistant déconnecté). Rien n'est téléchargé pour l'occasion :
+  activer « Garder les énoncés » (Hors ligne) pour avoir toutes les séries. 10 Mo
+  au plus par fichier (une réponse MCP plafonne à 16 Mo, base64 compris). Les
+  notes du dossier du Mac (`NotesStore`) n'y sont pas : le jeton est propre à
+  l'iPhone, seul à synchroniser.
+- **Serveur local des fichiers (Mac)** (Réglages › Mode étude › « Fichiers pour
+  Claude », éteint par défaut) : un second serveur MCP, `studytrack-files`, dans
+  l'app du Mac (`Domain/LocalMCP.swift`, `MacLocalMCP`), sur `127.0.0.1` seulement.
+  Il lève les limites du serveur en ligne : il lit les données du Mac, a la
+  session Moodle et le dossier de notes, et rend des **chemins** (pas des octets),
+  donc sans plafond de taille. `list_files` (cours, type, série, mots),
+  `read_file(id)` — met le fichier sur le disque, téléchargé au besoin, dans
+  `<projet Claude>/cours/<CODE>/`, que l'agent ouvre avec `Read` —, et
+  `fetch_all_files` (tout préparer, par lots de 25 s). Couvre : énoncés et
+  corrigés PDF, anciens examens, transparents et documents des cours, ressources
+  ajoutées, cahiers du dossier de notes, notes, fiche, corrigés rédigés. Le projet
+  Claude de l'app le déclare tout seul quand il tourne. Sécurité : jeton de
+  256 bits dans l'adresse, en-tête `Origin` refusé (une page web ne l'atteint
+  pas), `Host` vérifié (DNS rebinding), écoute limitée à la boucle locale. Le
+  serveur en ligne reste pour le téléphone, claude.ai et l'écriture.
+- **Dans l'app Claude (Desktop), sans étape compliquée** : Réglages › Mode étude ›
+  « Fichiers pour Claude » › **Ajouter à l'app Claude**. L'app allume le serveur
+  local, fabrique `StudyTrack.mcpb` (`ClaudeDesktopExtension`, manifeste 0.4,
+  validé par `mcpb validate`) et l'ouvre : un clic « Installer » dans l'app
+  Claude. L'extension est un pont Node sans dépendance : il relaie au serveur
+  local (adresse lue dans `~/Library/Application Support/StudyTrack/local-mcp.json`,
+  donc rien à réinstaller si le port change), rouvre StudyTrack s'il est fermé, et
+  demande `read_file` en mode `inline` : les pages d'un PDF reviennent en
+  **images** (formules intactes ; 5 pages par défaut, 8 au plus, `pages="9-16"`
+  pour la suite), le texte et les `.docx` en texte — l'app Claude ne sait pas ouvrir
+  un chemin. Claude Code, lui, reçoit des chemins.
+- **Données** : l'app publie un instantané (`AssistantExport`, v3 ; v2 avec
   identifiants) à l'ouverture, au passage en arrière-plan et quelques secondes
   après chaque enregistrement (`AssistantSync`). L'assistant dépose des
   commandes ; l'app les applique à sa synchronisation suivante

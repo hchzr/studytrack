@@ -647,6 +647,124 @@ check(emptyExport["format"] as? String == "studytrack.assistant",
 check((emptyExport["courses"] as? [[String: Any]])?.isEmpty == true,
       "…et une liste de cours vide plutôt qu'absente")
 
+// v3 : notes, fiche, corrigés rédigés et fichiers — seulement sur demande.
+if let contentCourse = exportCourses.first,
+   let contentSeries = contentCourse.sortedSeries.first,
+   let contentExercise = contentSeries.sortedExercises.first {
+    let before = (notes: contentCourse.notes, solution: contentExercise.solution, hint: contentExercise.hint, url: contentSeries.urlString,
+                  solutionURL: contentSeries.solutionURLString)
+    contentCourse.notes = "Théorème d'unicité de la limite."
+    contentExercise.solution = "On lit la limite sur le graphe."
+    contentExercise.hint = "Pense à epsilon."
+    contentSeries.urlString = "https://moodle.example/serie.pdf"
+    contentSeries.solutionURLString = "https://moodle.example/corrige.pdf"
+    func export(_ includeContent: Bool, files: [[String: Any]] = []) -> [String: Any] {
+        AssistantExport.make(courses: [contentCourse], sessions: [], milestones: [], groups: [], hoursPerCredit: 30,
+                             displayName: "Test", includeContent: includeContent, files: files)
+    }
+    func exerciseEntry(_ data: [String: Any]) -> [String: Any]? {
+        let series = (data["courses"] as? [[String: Any]])?.first?["series"] as? [[String: Any]]
+        return (series?.first?["exercises"] as? [[String: Any]])?.first
+    }
+    func seriesEntry(_ data: [String: Any]) -> [String: Any]? {
+        ((data["courses"] as? [[String: Any]])?.first?["series"] as? [[String: Any]])?.first
+    }
+
+    let plain = export(false, files: [["id": "x"]])
+    check(AssistantExport.formatVersion == 3, "le format est en version 3")
+    check((plain["sharing"] as? [String: Bool])?["files"] == false, "sans réglage, le partage des fichiers est annoncé éteint")
+    check(plain["files"] == nil, "…aucun fichier n'est annoncé (même si on en passe)")
+    let plainCourse = (plain["courses"] as? [[String: Any]])?.first
+    check(plainCourse?["notes"] == nil && plainCourse?["revisionSheet"] == nil && plainCourse?["pastExams"] == nil,
+          "…ni notes, ni fiche, ni anciens examens")
+    check(exerciseEntry(plain)?["solution"] == nil && exerciseEntry(plain)?["hint"] == nil, "…ni corrigé rédigé, ni indice")
+    check(seriesEntry(plain)?["url"] == nil && seriesEntry(plain)?["solutionUrl"] == nil, "…ni adresse de série")
+
+    let rich = export(true, files: [["id": "serie:1", "sha": "abc"]])
+    check((rich["sharing"] as? [String: Bool])?["files"] == true, "le réglage allumé est annoncé")
+    check((rich["files"] as? [[String: Any]])?.first?["id"] as? String == "serie:1", "l'index des fichiers voyage")
+    let richCourse = (rich["courses"] as? [[String: Any]])?.first
+    check(richCourse?["notes"] as? String == "Théorème d'unicité de la limite.", "les notes de cours sont exportées")
+    check(richCourse?["pastExams"] is [[String: Any]] && richCourse?["resources"] is [[String: Any]], "anciens examens et ressources : listes présentes")
+    check(exerciseEntry(rich)?["solution"] as? String == "On lit la limite sur le graphe.", "le corrigé rédigé d'un exercice est exporté")
+    check(exerciseEntry(rich)?["hint"] as? String == "Pense à epsilon.", "…et son indice")
+    check(seriesEntry(rich)?["url"] as? String == "https://moodle.example/serie.pdf"
+          && seriesEntry(rich)?["solutionUrl"] as? String == "https://moodle.example/corrige.pdf", "les adresses de la série et de son corrigé sont exportées")
+    check(emptyExport["files"] == nil, "un export vide n'annonce aucun fichier")
+
+    contentCourse.notes = String(repeating: "a", count: AssistantExport.notesLimit + 500)
+    contentExercise.solution = String(repeating: "b", count: AssistantExport.solutionLimit + 500)
+    let clipped = export(true)
+    let clippedNotes = (clipped["courses"] as? [[String: Any]])?.first?["notes"] as? String ?? ""
+    check(clippedNotes.hasSuffix("[…tronqué]") && clippedNotes.count < AssistantExport.notesLimit + 50, "des notes démesurées sont tronquées (\(clippedNotes.count) car.)")
+    check((exerciseEntry(clipped)?["solution"] as? String ?? "").count < AssistantExport.solutionLimit + 50, "…et un corrigé démesuré aussi")
+    if let reparsed = (try? JSONSerialization.data(withJSONObject: rich)).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) {
+        check((reparsed["files"] as? [[String: Any]])?.count == 1, "l'instantané v3 se relit après un aller-retour JSON")
+    } else {
+        check(false, "l'instantané v3 est sérialisable")
+    }
+
+    contentCourse.notes = before.notes
+    contentExercise.solution = before.solution
+    contentExercise.hint = before.hint
+    contentSeries.urlString = before.url
+    contentSeries.solutionURLString = before.solutionURL
+} else {
+    check(false, "le cours d'exemple a une série et un exercice pour l'export v3")
+}
+
+print("== Serveur MCP local (fichiers du Mac) ==")
+for (ok, label) in localMCPResults() { check(ok, label) }
+for (ok, label) in desktopBridgeResults() { check(ok, label) }
+check(LocalFileCatalog.pageIndices("1-5,8", total: 10) == [0, 1, 2, 3, 4, 7], "pages : « 1-5,8 »")
+check(LocalFileCatalog.pageIndices("3", total: 10) == [2] && LocalFileCatalog.pageIndices("8-", total: 10) == [7, 8, 9], "pages : une page, une plage ouverte")
+check(LocalFileCatalog.pageIndices("9-20", total: 10) == [8, 9], "pages : bornées au document")
+check(LocalFileCatalog.pageIndices("2,2,1-3", total: 5) == [1, 0, 2], "pages : sans doublon, dans l'ordre demandé")
+check(LocalFileCatalog.pageIndices("0,x,5-2", total: 5) == nil && LocalFileCatalog.pageIndices("1", total: 0) == nil, "pages : rien d'utilisable → nil")
+
+// Le catalogue : tout ce qui se lit d'un cours, sans réseau.
+if let catalogCourse = exportCourses.first, let catalogSeries = catalogCourse.sortedSeries.first {
+    let before = (url: catalogSeries.urlString, solution: catalogSeries.solutionURLString, notes: catalogCourse.notes)
+    catalogSeries.urlString = "https://moodle.epfl.ch/pluginfile.php/1/mod_resource/content/0/serie03.pdf"
+    catalogSeries.solutionURLString = "https://moodle.epfl.ch/mod/resource/view.php?id=77"
+    catalogCourse.notes = "# Notes\nthéorème d'unicité"
+    let exam = PastExam(course: catalogCourse, title: "Examen final", year: 2024, kind: .exam,
+                        urlString: "https://exemple.ch/examen-2024.pdf", solutionURLString: "https://exemple.ch/page-web", notes: "piège à l'exo 2")
+    context.insert(exam)
+    let upload = SavedResource(course: catalogCourse, title: "Aide-mémoire", kind: .pdf, fileName: "aide.pdf", fileData: Data("%PDF-1.4".utf8))
+    context.insert(upload)
+    let webLink = SavedResource(course: catalogCourse, title: "Un site", address: "https://exemple.ch/site", kind: .web)
+    context.insert(webLink)
+    let notebook = LocalFileCatalog.Notebook(courseID: catalogCourse.id,
+        document: NotesLibrary.Document(path: "Analyse/serie-3.pdf", notebook: "Analyse", title: "Série 3", week: 3, seriesNumber: 3, isSolution: false, modified: Date()),
+        url: URL(fileURLWithPath: "/tmp/serie-3.pdf"))
+    let entries = LocalFileCatalog.entries(courses: [catalogCourse], notebooks: [notebook])
+    func entry(_ prefix: String) -> LocalFileCatalog.Entry? { entries.first { $0.id.hasPrefix(prefix) } }
+    check(entry("serie:")?.type == "enonce" && entry("serie:")?.baseName == "serie-\(String(format: "%02d", catalogSeries.seriesNumber))-enonce", "catalogue : l'énoncé PDF de la série")
+    check(entry("corrige:")?.type == "corrige" && entry("corrige:")?.seriesNumber == catalogSeries.seriesNumber, "…son corrigé (une activité Moodle compte comme document)")
+    check(entry("notes:")?.type == "notes", "…les notes de cours")
+    check(entry("examen:")?.type == "examen" && entry("examen:")?.baseName.contains("2024") == true, "…l'ancien examen")
+    check(entry("corrige-examen:") == nil, "…mais pas un « corrigé » qui est une page web")
+    check(entry("notes-examen:")?.type == "notes-examen", "…les notes d'un ancien examen")
+    check(entry("ressource:\(upload.id)")?.type == "ressource", "…le fichier ajouté à un cours")
+    check(entry("ressource:\(webLink.id)") == nil, "…mais pas un simple lien web")
+    check(entry("cahier:")?.type == "cahier" && entry("cahier:")?.seriesNumber == 3 && entry("cahier:")?.week == 3, "…le cahier du dossier de notes, avec sa série et sa semaine")
+    let courseEntries = entries.filter { $0.courseID == catalogCourse.id.uuidString }
+    check(Set(courseEntries.map(\.id)).count == courseEntries.count, "catalogue : identifiants uniques")
+    check(courseEntries.allSatisfy { !$0.baseName.contains("/") && !$0.baseName.contains("..") && !$0.baseName.contains(" ") }, "catalogue : des noms de fichiers sûrs")
+    check(LocalFileCatalog.filter(entries, course: nil, type: "examen", series: nil, query: nil).count == 1, "filtre par type")
+    check(LocalFileCatalog.filter(entries, course: nil, type: nil, series: 3, query: nil).allSatisfy { $0.seriesNumber == 3 }, "filtre par série")
+    check(LocalFileCatalog.filter(entries, course: nil, type: nil, series: nil, query: "Aide MÉMOIRE").count == 1, "recherche sans accents ni majuscules")
+    check(LocalFileCatalog.documentURL("https://exemple.ch/site") == nil && LocalFileCatalog.documentURL("https://exemple.ch/a.pptx") != nil
+          && LocalFileCatalog.documentURL("file:///tmp/a.pdf") != nil && LocalFileCatalog.documentURL("") == nil, "une page web n'est pas un document ; un .pptx ou un fichier local, si")
+    check(LocalFileCatalog.slug("Séries d'Analyse — n°3") == "series-d-analyse-n-3" && LocalFileCatalog.hash("a") == LocalFileCatalog.hash("a")
+          && LocalFileCatalog.hash("a") != LocalFileCatalog.hash("b"), "slug lisible, empreinte stable")
+    context.delete(exam); context.delete(upload); context.delete(webLink)
+    catalogSeries.urlString = before.url; catalogSeries.solutionURLString = before.solution; catalogCourse.notes = before.notes
+} else {
+    check(false, "le cours d'exemple a une série pour le catalogue")
+}
+
 print("== Live Activity : le compteur ne repart pas de zéro ==")
 // Le bogue : l'état portait `accumulated` **et** `runningSince`, et le compteur
 // système n'affichait que le second. Après une pause, il repartait de zéro —
@@ -925,7 +1043,7 @@ do {
                                         hoursPerCredit: 30, displayName: "")
     let firstCourse = (exported["courses"] as? [[String: Any]])?.first
     let firstExercise = ((firstCourse?["series"] as? [[String: Any]])?.first?["exercises"] as? [[String: Any]])?.first
-    check(exported["version"] as? Int == 2 && firstCourse?["id"] as? String == aCourse.id.uuidString, "l'instantané porte les identifiants")
+    check(exported["version"] as? Int == AssistantExport.formatVersion && firstCourse?["id"] as? String == aCourse.id.uuidString, "l'instantané porte les identifiants")
     check(firstExercise?["stage"] as? String == "à refaire" && (firstExercise?["questions"] as? [[String: Any]])?.count == 2,
           "…l'étape de chaque exercice et ses questions")
 
@@ -5684,6 +5802,16 @@ do {
             check(Set(servers.keys) == ["notion", "todoist", "studytrack"], "MCP : les serveurs du fichier et StudyTrack")
         } else { check(false, "MCP : JSON lisible") }
         check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: "http://pas-sur").contains("studytrack"), "MCP : une adresse non chiffrée est refusée")
+        let withLocal = ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: "http://127.0.0.1:47821/TOKEN")
+        let declared = (try? JSONSerialization.jsonObject(with: Data(withLocal.utf8))) as? [String: Any]
+        let localEntry = (declared?["mcpServers"] as? [String: Any])?["studytrack-files"] as? [String: Any]
+        check(localEntry?["url"] as? String == "http://127.0.0.1:47821/TOKEN" && localEntry?["type"] as? String == "http", "MCP : le serveur local des fichiers est déclaré")
+        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: "http://evil.example:47821/T").contains("studytrack-files"),
+              "MCP : seule la boucle locale est acceptée comme serveur de fichiers")
+        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: nil).contains("studytrack-files"), "MCP : éteint, il n'est pas déclaré")
+        check(ClaudeProject.allowedTools(file: file, studyTrack: false, localFiles: true).contains("mcp__studytrack-files")
+              && !ClaudeProject.allowedTools(file: file, studyTrack: false).contains("mcp__studytrack-files"), "MCP : ses outils ne sont permis que s'il tourne")
+        check(ClaudeProject.permissionSummary(file: file, studyTrack: false, localFiles: true).contains("fichiers du Mac"), "MCP : les permis le disent")
         check(ClaudeProject.permissionSummary(file: file, studyTrack: true) == "lecture, compétences, écriture limitée, Notion, Todoist, StudyTrack",
               "permissions en clair")
         check(ClaudeProject.expand(file.commands[1].prompt, .init(code: "MATH-101", course: "analyse", seriesNumber: "4")) == "post-mortem série 4 analyse",

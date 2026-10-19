@@ -52,6 +52,7 @@ cp "$ROOT"/StudyTrack/Services/PDFLayoutExtractor.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/main.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/PDFFixtures.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/BotafogoFixtures.swift "$WORK/Sources/"
+cp "$ROOT"/Validation/LocalMCPTests.swift "$WORK/Sources/"
 
 # Garde-fou : tout type annoté `@Model` doit figurer dans le schéma versionné.
 #

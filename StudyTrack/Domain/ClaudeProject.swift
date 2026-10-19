@@ -304,16 +304,17 @@ enum ClaudeProject {
 
     /// Les règles `--allowedTools` : la base, les connecteurs du compte, les
     /// serveurs du fichier, ses règles.
-    static func allowedTools(file: File, studyTrack: Bool, connectors: [String] = []) -> [String] {
+    static func allowedTools(file: File, studyTrack: Bool, connectors: [String] = [], localFiles: Bool = false) -> [String] {
         var result = baseTools + connectors.map(toolPrefix(server:))
             + file.mcpServers.keys.sorted().map { "mcp__" + $0 } + (studyTrack ? ["mcp__studytrack"] : [])
+            + (localFiles ? ["mcp__studytrack-files"] : [])
         for rule in file.allowedTools where !result.contains(rule) { result.append(rule) }
         return result
     }
 
     /// Le fichier `--mcp-config` : les serveurs du fichier du projet, et celui
     /// de StudyTrack s'il est relié. Rien d'autre (`--strict-mcp-config`).
-    static func mcpConfig(file: File, studyTrackURL: String?) -> String {
+    static func mcpConfig(file: File, studyTrackURL: String?, localFilesURL: String? = nil) -> String {
         var servers: [String: Any] = [:]
         for (name, server) in file.mcpServers {
             var entry: [String: Any] = ["type": server.type]
@@ -325,17 +326,22 @@ enum ClaudeProject {
         if let address = studyTrackURL?.trimmingCharacters(in: .whitespacesAndNewlines), address.hasPrefix("https://") {
             servers["studytrack"] = ["type": "http", "url": address]
         }
+        // Le serveur local des fichiers : seulement sur la boucle locale, jamais une autre adresse.
+        if let address = localFilesURL?.trimmingCharacters(in: .whitespacesAndNewlines), address.hasPrefix("http://127.0.0.1:") {
+            servers["studytrack-files"] = ["type": "http", "url": address]
+        }
         let data = (try? JSONSerialization.data(withJSONObject: ["mcpServers": servers], options: [.sortedKeys, .prettyPrinted])) ?? Data()
         return String(decoding: data, as: UTF8.self)
     }
 
     /// Ce que Claude a le droit de faire, en clair (affiché dans la conversation).
-    static func permissionSummary(file: File, studyTrack: Bool, connectors: [String] = []) -> String {
+    static func permissionSummary(file: File, studyTrack: Bool, connectors: [String] = [], localFiles: Bool = false) -> String {
         var parts = ["lecture", "compétences"]
         if file.allowedTools.contains(where: { $0.hasPrefix("Write") || $0.hasPrefix("Edit") }) { parts.append("écriture limitée") }
         parts += connectors.map { String($0.dropFirst("claude.ai ".count)) }
         parts += file.mcpServers.keys.sorted().map { ClaudeTutor.toolLabel("mcp__" + $0) }
         if studyTrack { parts.append("StudyTrack") }
+        if localFiles { parts.append("fichiers du Mac") }
         return parts.joined(separator: ", ")
     }
 

@@ -122,6 +122,8 @@ private struct StudySettingsPane: View {
     @State private var newSite = ""
     @State private var siteError = false
     @State private var editingButtons = false
+    @State private var localTick = 0
+    @State private var desktopError: String?
 
     private var keepAwakeFooter: String {
         switch settings.studyKeepAwake {
@@ -249,6 +251,54 @@ private struct StudySettingsPane: View {
                 Text("Claude")
             } footer: {
                 Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json." : "Passe par ton abonnement, sans outils.")
+            }
+
+            Section {
+                Toggle("Serveur local des fichiers", isOn: $settings.localFilesServer)
+                    .onChange(of: settings.localFilesServer) { _, _ in
+                        Task { await MacLocalMCP.shared.reapply(settings: settings); localTick += 1 }
+                    }
+                if settings.localFilesServer {
+                    LabeledContent("Dossier") {
+                        Text(MacLocalMCP.mirrorRoot(settings).path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                            .foregroundStyle(.secondary)
+                    }
+                    if let url = MacLocalMCP.shared.url {
+                        LabeledContent("Adresse") {
+                            HStack {
+                                Text("http://127.0.0.1:\(url.port ?? 0)/…").foregroundStyle(.secondary)
+                                Button("Copier la commande") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString("claude mcp add --transport http studytrack-files \(url.absoluteString)", forType: .string)
+                                }
+                            }
+                        }
+                    } else {
+                        Text(MacLocalMCP.shared.lastError ?? "Démarrage…").foregroundStyle(Carnet.wrong)
+                    }
+                }
+                LabeledContent("App Claude") {
+                    HStack {
+                        if ClaudeDesktopSetup.isInstalled {
+                            Label("Installée", systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)
+                        } else if !ClaudeDesktopSetup.claudeAppFound {
+                            Text("introuvable").foregroundStyle(Carnet.wrong)
+                        }
+                        Button(ClaudeDesktopSetup.isInstalled ? "Réinstaller" : "Ajouter à l'app Claude") {
+                            Task {
+                                do { try await ClaudeDesktopSetup.install(settings: settings); desktopError = nil }
+                                catch { desktopError = error.localizedDescription }
+                                localTick += 1
+                            }
+                        }
+                    }
+                }
+                if let desktopError { Text(desktopError).foregroundStyle(Carnet.wrong) }
+            } header: {
+                Text("Fichiers pour Claude")
+            } footer: {
+                Text("Tous tes PDF et documents (énoncés, corrigés, anciens examens, supports, notes) lisibles par Claude, sans limite de taille : ils sont téléchargés à la demande avec ta session Moodle et copiés dans le dossier ci-dessus. « Ajouter à l'app Claude » installe une extension (un clic de confirmation dans l'app Claude) : l'app Claude lit alors tout directement. L'adresse n'écoute que ce Mac et contient un code secret.")
+                    .id(localTick)
             }
 
             Section {

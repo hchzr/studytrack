@@ -9387,6 +9387,16 @@
         }
       }
     },
+    "Envoie aussi à l'assistant les énoncés et corrigés déjà téléchargés sur l'iPhone, les fichiers que tu as ajoutés, tes notes de cours, ta fiche de révision et les corrigés rédigés. Coupé, le serveur efface ce qu'il avait reçu. Pour avoir toutes les séries, active « Garder les énoncés » dans les réglages hors ligne." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also sends the assistant the statements and solutions already downloaded on the iPhone, the files you added, your course notes, your revision sheet and written solutions. Turned off, the server erases what it had received. To have every series, turn on “Keep the statements” in the offline settings."
+          }
+        }
+      }
+    },
     "Envoie tes exercices à refaire et ta théorie à résumer dans un paquet Anki, via AnkiConnect." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10167,6 +10177,26 @@
         }
       }
     },
+    "Fichiers et notes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files and notes"
+          }
+        }
+      }
+    },
+    "Fichiers pour Claude" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files for Claude"
+          }
+        }
+      }
+    },
     "Fil introuvable." : {
       "localizations" : {
         "en" : {
@@ -10771,6 +10801,9 @@
       }
     },
     "Hors série" : {
+
+    },
+    "http://127.0.0.1:%lld/…" : {
 
     },
     "https://…" : {
@@ -18870,6 +18903,16 @@
         }
       }
     },
+    "Serveur local des fichiers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local files server"
+          }
+        }
+      }
+    },
     "Serveur StudyTrack (https://…)" : {
       "localizations" : {
         "en" : {
@@ -22254,6 +22297,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zero"
+          }
+        }
+      }
+    },
+    "Tous tes PDF et documents (énoncés, corrigés, anciens examens, supports, notes) lisibles par Claude, sans limite de taille : ils sont téléchargés à la demande avec ta session Moodle et copiés dans le dossier ci-dessus. « Ajouter à l'app Claude » installe une extension (un clic de confirmation dans l'app Claude) : l'app Claude lit alors tout directement. L'adresse n'écoute que ce Mac et contient un code secret." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All your PDFs and documents (statements, solutions, past exams, course material, notes) readable by Claude, with no size limit: they are downloaded on demand with your Moodle session and copied into the folder above. “Add to the Claude app” installs an extension (one confirmation click in the Claude app): the Claude app then reads everything directly. The address only listens on this Mac and contains a secret code."
+          }
+        }
+      }
+    },
+    "App Claude" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude app"
+          }
+        }
+      }
+    },
+    "Installée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed"
+          }
+        }
+      }
+    },
+    "Réinstaller" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinstall"
+          }
+        }
+      }
+    },
+    "Ajouter à l'app Claude" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to the Claude app"
           }
         }
       }

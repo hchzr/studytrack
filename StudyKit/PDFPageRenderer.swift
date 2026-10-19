@@ -35,6 +35,19 @@ enum PDFPageRenderer {
         return result
     }
 
+    /// Ces pages-là seulement (indices à partir de 0), sans le plafond d'une
+    /// série : l'appelant borne ce qu'il demande.
+    static func jpegPages(of document: PDFDocument, indices: [Int]) -> [(index: Int, data: Data)] {
+        indices.compactMap { index in
+            guard let page = document.page(at: index) else { return nil }
+            let bounds = page.bounds(for: .mediaBox)
+            guard bounds.width > 0 else { return nil }
+            let scale = targetWidth / bounds.width
+            let image = page.thumbnail(of: CGSize(width: targetWidth, height: bounds.height * scale), for: .mediaBox)
+            return jpeg(image).map { (index, $0) }
+        }
+    }
+
     #if canImport(UIKit)
     private static func jpeg(_ image: UIImage) -> Data? {
         image.jpegData(compressionQuality: jpegQuality)

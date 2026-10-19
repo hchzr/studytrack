@@ -95,6 +95,8 @@ struct StudyTrackMacApp: App {
         }
         MacAppDelegate.settings = settings
         MacAppDelegate.store = store
+        // Le serveur MCP local des fichiers (réglage « Fichiers pour Claude », éteint par défaut).
+        Task { @MainActor in await MacLocalMCP.shared.apply(settings: settings, container: store.container) }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         #if DEBUG
         MacDebugLaunch.apply(timer: timer, store: store)

@@ -76,6 +76,21 @@ final class SeriesPDFStore {
     }
     #endif
 
+    /// Le PDF de cette série, **s'il est déjà sur l'appareil** (cache de la série
+    /// ou copie hors ligne) : rien n'est téléchargé.
+    func localFile(for series: ExerciseSeries) -> URL? {
+        localFile(id: series.id, address: series.urlString)
+    }
+
+    func localFile(id: UUID, address: String) -> URL? {
+        let local = Self.file(for: id)
+        if FileManager.default.fileExists(atPath: local.path) { return local }
+        #if os(iOS)
+        if let remote = Self.documentURL(address) { return OfflineLibrary.shared.localFile(for: remote) }
+        #endif
+        return nil
+    }
+
     /// Peut-on espérer un PDF pour cette série ?
     func hasDocument(for series: ExerciseSeries) -> Bool {
         if entries[series.id] != nil || FileManager.default.fileExists(atPath: Self.file(for: series.id).path) { return true }

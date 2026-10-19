@@ -31,13 +31,20 @@ declare const Deno: {
   serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
-const SERVER_INFO = { name: "studytrack", title: "StudyTrack", version: "2.0.0" };
+const SERVER_INFO = { name: "studytrack", title: "StudyTrack", version: "3.0.0" };
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const MAX_BODY = 4 * 1024 * 1024;
+// L'instantané porte maintenant les notes et les fiches : de la marge.
+const MAX_BODY = 8 * 1024 * 1024;
+// Une réponse MCP plafonne à 16 Mo, base64 (×4/3) compris — vérifié avec Claude
+// Code : un PDF de 12 Mo est refusé en entier. 10 Mo de fichier en font 13,4.
+const MAX_FILE = 10 * 1024 * 1024;
+const BUCKET = "assistant-files";
+const SHA = /^[0-9a-f]{64}$/;
 
 const INSTRUCTIONS = `StudyTrack suit les études d'un·e étudiant·e de l'EPFL : cours, séries d'exercices (avec sous-questions et correction vert/orange/rouge), théorie (vidéos, sections de polycopié), évaluations et temps de travail.
 
 - Commence par get_overview. Pour agir sur un exercice précis, lis d'abord get_course : il donne les identifiants (id) à passer aux outils d'écriture.
+- Les fichiers : list_files donne les énoncés et corrigés (PDF), les notes de cours, la fiche de révision, les corrigés rédigés et les fichiers ajoutés ; read_file(id) les rend (texte, ou PDF/image à ouvrir avec Read). Un fichier « pas disponible » n'est pas encore passé par l'app : la raison est donnée.
 - Les outils d'écriture sont appliqués par l'app à sa prochaine ouverture ; la lecture reflète le changement immédiatement. list_pending_changes dit ce qui attend et ce qui a échoué.
 - Étapes d'un exercice : à faire → en cours (questions) → fait, à corriger → corrigé vert (juste), orange (moyen) ou rouge (faux, donc « à refaire »).
 - Le code vert/orange/rouge est celui de la CORRECTION. Sois honnête : une correction se constate (avec l'étudiant·e ou en comparant au corrigé), elle ne s'invente pas.`;
@@ -109,6 +116,8 @@ const exerciseTarget = {
   exercise: { type: "string", description: "Numéro de l'exercice (ex. 3.4), avec course" },
 };
 
+const FILE_TYPES = ["enonce", "corrige", "corrige-texte", "notes", "fiche", "notes-examen", "ressource"];
+
 const TOOLS = [
   {
     name: "get_overview",
@@ -164,6 +173,27 @@ const TOOLS = [
     title: "Temps de travail",
     description: "Temps de travail par cours, par type et par jour sur les N derniers jours.",
     inputSchema: { type: "object", properties: { days: { type: "number" }, course } },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: "list_files",
+    title: "Fichiers",
+    description: "Les fichiers du cours que l'assistant peut lire : énoncés et corrigés de séries (PDF), notes de cours, fiche de révision, corrigés rédigés, fichiers ajoutés. Chacun a un identifiant pour read_file, et dit s'il est disponible.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        course,
+        type: { type: "string", enum: FILE_TYPES, description: "enonce, corrige (PDF de la série), corrige-texte (corrigés rédigés), notes, fiche, notes-examen, ressource" },
+        series: { type: "number", description: "Numéro de série" },
+      },
+    },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: "read_file",
+    title: "Lire un fichier",
+    description: "Le contenu d'un fichier de list_files. Texte et Markdown reviennent en texte ; un PDF revient en pièce jointe que l'assistant enregistre et ouvre avec son outil de lecture (les formules y sont intactes) ; une image, en image.",
+    inputSchema: { type: "object", properties: { id: { type: "string", description: "Identifiant donné par list_files" } }, required: ["id"] },
     annotations: { readOnlyHint: true },
   },
   {
@@ -408,11 +438,14 @@ function getCourse(data: any, args: any) {
   const series = (c.series ?? []).filter((s: any) => !Number.isFinite(args.series) || s.number === args.series);
   return {
     id: c.id, code: c.code, nom: c.name, credits: c.credits, semaine: c.currentWeek, enseignant: c.lecturer,
+    fichiers: fileIndex(data).filter((e) => e.courseId === c.id).map((e) => ({ id: e.id, type: e.type, titre: e.titre, serie: e.serie })),
     series: series.map((s: any) => ({
       id: s.id, numero: s.number, titre: s.title, semaine: s.plannedWeek, terminee: s.complete,
+      sujet: s.topic || undefined, adresse: s.url || undefined, adresseCorrige: s.solutionUrl || undefined,
       exercices: (s.exercises ?? []).map((e: any) => ({
         id: e.id, numero: e.number, titre: e.title || undefined, enonce: e.statement, etape: e.stage,
         bonus: e.bonus || undefined, correction: e.correctness, remarque: e.correctionNote,
+        indice: e.hint || undefined, corrige: e.solution || undefined,
         questions: e.questions?.map((q: any) => `${q.done ? "☑" : "☐"} ${q.path}${q.text ? " " + q.text : ""}`),
         tempsPasse: seconds[e.id] ? hours(seconds[e.id]) : undefined,
       })),
@@ -421,6 +454,11 @@ function getCourse(data: any, args: any) {
       id: t.id, numero: t.number, titre: t.title, semaine: t.plannedWeek, vu: t.watched, resume: t.summary,
     })),
     evaluations: (c.exams ?? []).map((e: any) => ({ id: e.id, titre: e.title, date: e.date, nature: e.kind, passee: e.past })),
+    anciensExamens: Number.isFinite(args.series) ? undefined : (c.pastExams ?? []).map((e: any) => ({
+      id: e.id, titre: e.title, annee: e.year, nature: e.kind, adresse: e.url || undefined, adresseCorrige: e.solutionUrl || undefined,
+    })),
+    documents: Number.isFinite(args.series) ? undefined : (c.documents ?? []).map((d: any) => ({ titre: d.title, groupe: d.group || undefined, adresse: d.url })),
+    ressources: Number.isFinite(args.series) ? undefined : (c.resources ?? []).map((r: any) => ({ id: r.id, titre: r.title, nature: r.kind, adresse: r.address || undefined, fichier: r.fileName || undefined })),
   };
 }
 
@@ -441,6 +479,13 @@ function search(data: any, args: any) {
       }
     }
   }
+  for (const f of fileIndex(data)) {
+    if (f.text === undefined) continue;
+    const at = fold(f.text).indexOf(needle);
+    if (at < 0) continue;
+    const extrait = f.text.slice(Math.max(0, at - 80), at + needle.length + 120).replace(/\s+/g, " ").trim();
+    hits.push({ type: f.type, cours: f.cours, fichier: f.id, texte: f.titre, extrait });
+  }
   return { requete: args.query, total: hits.length, resultats: hits.slice(0, 40) };
 }
 
@@ -454,6 +499,197 @@ function overview(data: any, snapshotAt: string | null) {
     priorites: whatToDo(data, { limit: 8 }).elements,
     prochainesEvaluations: upcomingDates(data, { days: 60 }).evaluations.slice(0, 5),
   };
+}
+
+// ─────────────────────────────────────────────────────── Fichiers ────
+
+/// Un fichier que l'assistant peut lire. Deux origines : un **texte** tiré de
+/// l'instantané (notes, fiche, corrigés rédigés), ou un fichier **envoyé par
+/// l'app** et gardé dans le stockage, désigné par son SHA-256.
+interface FileEntry {
+  id: string;
+  courseId: string;
+  cours: string;
+  type: string;
+  titre: string;
+  serie?: number;
+  nom: string;
+  mime: string;
+  text?: string;
+  sha?: string;
+  bytes?: number;
+  adresse?: string;
+  skipped?: string;
+}
+
+const slug = (value: unknown) => fold(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "fichier";
+
+function fileIndex(data: any): FileEntry[] {
+  const entries: FileEntry[] = [];
+  for (const c of data.courses ?? []) {
+    const base = { courseId: c.id, cours: c.code };
+    if (typeof c.notes === "string" && c.notes.trim()) {
+      entries.push({ ...base, id: `notes:${c.id}`, type: "notes", titre: `Notes — ${c.name}`, nom: `${slug(c.code)}-notes.md`, mime: "text/markdown", text: c.notes });
+    }
+    if (typeof c.revisionSheet === "string" && c.revisionSheet.trim()) {
+      entries.push({ ...base, id: `fiche:${c.id}`, type: "fiche", titre: `Fiche de révision — ${c.name}`, nom: `${slug(c.code)}-fiche.md`, mime: "text/markdown", text: c.revisionSheet });
+    }
+    for (const s of c.series ?? []) {
+      const solved = (s.exercises ?? []).filter((e: any) => typeof e.solution === "string" && e.solution.trim());
+      if (!solved.length) continue;
+      const text = [`# Corrigé — ${c.code}, série ${s.number}`, ...solved.map((e: any) => `## Exercice ${e.number}${e.title ? " — " + e.title : ""}\n\n${e.solution}`)].join("\n\n");
+      entries.push({ ...base, id: `corrige-texte:${s.id}`, type: "corrige-texte", titre: `Corrigé rédigé — série ${s.number}`, serie: s.number, nom: `${slug(c.code)}-serie-${s.number}-corrige.md`, mime: "text/markdown", text });
+    }
+    for (const e of c.pastExams ?? []) {
+      if (typeof e.notes === "string" && e.notes.trim()) {
+        entries.push({ ...base, id: `notes-examen:${e.id}`, type: "notes-examen", titre: `Notes — ${e.title}`, nom: `${slug(c.code)}-${slug(e.title)}-notes.md`, mime: "text/markdown", text: e.notes });
+      }
+    }
+  }
+  for (const f of data.files ?? []) {
+    if (typeof f?.id !== "string" || (f.sha !== undefined && !SHA.test(f.sha))) continue;
+    entries.push({
+      id: f.id, courseId: f.courseId, cours: f.course ?? "", type: f.kind, titre: f.title ?? f.name, serie: f.seriesNumber,
+      nom: f.name, mime: f.mime || "application/octet-stream", sha: f.sha, bytes: f.bytes, adresse: f.address, skipped: f.skipped,
+    });
+  }
+  return entries;
+}
+
+const NOT_SENT = "pas encore envoyé par l'app : ouvre StudyTrack sur le téléphone (il envoie les fichiers à l'ouverture), puis réessaie.";
+
+function unavailableReason(data: any, entry: FileEntry): string {
+  if (entry.skipped) return entry.skipped;
+  return data.sharing?.files === false ? "l'envoi des fichiers est désactivé dans StudyTrack (Profil › Assistant IA › Fichiers et notes)." : NOT_SENT;
+}
+
+function describeFile(entry: FileEntry, stored: Map<string, number> | null, data: any) {
+  const available = entry.text !== undefined || (!!entry.sha && !!stored?.has(entry.sha));
+  const bytes = entry.text !== undefined ? new TextEncoder().encode(entry.text).length : (stored?.get(entry.sha ?? "") || entry.bytes);
+  return {
+    id: entry.id, cours: entry.cours, type: entry.type, titre: entry.titre, serie: entry.serie, nom: entry.nom,
+    taille: bytes ? `${Math.max(1, Math.round(bytes / 1024))} ko` : undefined,
+    disponible: available,
+    raison: available ? undefined : unavailableReason(data, entry),
+    adresse: entry.adresse || undefined,
+  };
+}
+
+function listFiles(data: any, stored: Map<string, number>, args: any) {
+  const filter = args.course ? findCourse(data, args.course) : null;
+  if (args.course && !filter) throw new UserError(`Cours « ${args.course} » introuvable.`);
+  const files = fileIndex(data)
+    .filter((e) => !filter || e.courseId === filter.id)
+    .filter((e) => !args.type || e.type === args.type)
+    .filter((e) => !Number.isFinite(args.series) || e.serie === args.series)
+    .map((e) => describeFile(e, stored, data));
+  return {
+    total: files.length,
+    disponibles: files.filter((f) => f.disponible).length,
+    avis: !files.length && data.sharing?.files === false
+      ? "L'envoi des fichiers et des notes est désactivé : StudyTrack (Profil › Assistant IA › Fichiers et notes) l'active."
+      : undefined,
+    fichiers: files,
+  };
+}
+
+// Le stockage est la seule source de vérité de ce qui est arrivé : pas de table
+// à garder en phase. L'app ne se range pas dans la base pour un fichier.
+
+async function storage(path: string, init: RequestInit = {}): Promise<Response> {
+  return await fetch(`${SUPABASE_URL}/storage/v1/${path}`, {
+    ...init,
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, ...(init.headers ?? {}) },
+  });
+}
+
+/// SHA-256 → taille de ce que le serveur garde pour ce jeton.
+async function storedFiles(hash: string): Promise<Map<string, number>> {
+  const found = new Map<string, number>();
+  for (let offset = 0; ; offset += 1000) {
+    const response = await storage(`object/list/${BUCKET}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix: hash, limit: 1000, offset }),
+    });
+    if (!response.ok) throw new Error(`stockage : ${response.status} ${(await response.text()).slice(0, 200)}`);
+    const page: any[] = await response.json();
+    for (const item of page) if (SHA.test(item.name)) found.set(item.name, Number(item.metadata?.size ?? 0));
+    if (page.length < 1000) return found;
+  }
+}
+
+/// Le stockage en panne (migration pas encore appliquée, réseau) ne doit jamais
+/// casser la synchronisation, la lecture des cours ni la déconnexion.
+async function storedFilesOrNone(hash: string): Promise<Map<string, number>> {
+  try { return await storedFiles(hash); } catch { return new Map(); }
+}
+
+async function removeStored(hash: string, shas: string[]): Promise<void> {
+  for (let i = 0; i < shas.length; i += 100) {
+    const response = await storage(`object/${BUCKET}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: shas.slice(i, i + 100).map((sha) => `${hash}/${sha}`) }),
+    });
+    if (!response.ok) throw new Error(`stockage : ${response.status} ${(await response.text()).slice(0, 200)}`);
+  }
+}
+
+async function sha256Bytes(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+const fileURI = (id: string) => `studytrack://file/${encodeURIComponent(id)}`;
+
+/// Le contenu d'un fichier : du texte, ou les octets en base64.
+async function loadFile(hash: string, data: any, id: string): Promise<{ entry: FileEntry; text?: string; base64?: string }> {
+  const entry = fileIndex(data).find((e) => e.id === id);
+  if (!entry) throw new UserError("Fichier inconnu : list_files donne les identifiants.");
+  if (entry.text !== undefined) return { entry, text: entry.text };
+  if (!entry.sha) throw new UserError(`« ${entry.titre} » n'est pas disponible : ${unavailableReason(data, entry)}`);
+  const response = await storage(`object/${BUCKET}/${hash}/${entry.sha}`);
+  if (response.status === 404 || response.status === 400) {
+    throw new UserError(`« ${entry.titre} » n'est pas disponible : ${unavailableReason(data, entry)}`);
+  }
+  if (!response.ok) throw new Error(`stockage : ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > MAX_FILE) throw new UserError(`« ${entry.titre} » pèse ${Math.round(bytes.length / 1048576)} Mo : trop pour une réponse MCP (10 Mo au plus).`);
+  return { entry, base64: toBase64(bytes) };
+}
+
+async function readFileTool(hash: string, data: any, args: any) {
+  const { entry, text, base64 } = await loadFile(hash, data, String(args.id ?? ""));
+  if (text !== undefined) return { content: [{ type: "text", text }] };
+  const note = { type: "text", text: `${entry.titre} (${entry.mime}, ${Math.round((base64!.length * 3) / 4 / 1024)} ko)` };
+  if (entry.mime.startsWith("image/")) return { content: [note, { type: "image", data: base64, mimeType: entry.mime }] };
+  return { content: [note, { type: "resource", resource: { uri: fileURI(entry.id), mimeType: entry.mime, blob: base64 } }] };
+}
+
+async function listResources(hash: string) {
+  const link = await getLink(hash);
+  if (!link?.snapshot) return [];
+  const stored = await storedFilesOrNone(hash);
+  return fileIndex(link.snapshot)
+    .filter((e) => e.text !== undefined || (e.sha && stored.has(e.sha)))
+    .slice(0, 500)
+    .map((e) => ({ uri: fileURI(e.id), name: e.nom, title: `${e.cours} · ${e.titre}`, mimeType: e.mime }));
+}
+
+async function readResource(hash: string, uri: unknown) {
+  const link = await getLink(hash);
+  if (!link?.snapshot) throw new UserError("Aucune donnée pour l'instant.");
+  const prefix = "studytrack://file/";
+  if (typeof uri !== "string" || !uri.startsWith(prefix)) throw new UserError("Ressource inconnue.");
+  const { entry, text, base64 } = await loadFile(hash, link.snapshot, decodeURIComponent(uri.slice(prefix.length)));
+  return { contents: [text !== undefined ? { uri, mimeType: entry.mime, text } : { uri, mimeType: entry.mime, blob: base64 }] };
 }
 
 // ─────────────────────────────────────────────────────── Écritures ────
@@ -631,6 +867,8 @@ async function callTool(hash: string, name: string, args: any): Promise<unknown>
       case "search": return textResult(search(data, args));
       case "upcoming_dates": return textResult(upcomingDates(data, args));
       case "study_time": return textResult(studyTime(data, args));
+      case "list_files": return textResult(listFiles(data, await storedFilesOrNone(hash), args));
+      case "read_file": return await readFileTool(hash, data, args);
     }
     const write = prepareWrite(name, args, data);
     await db("assistant_commands", {
@@ -656,14 +894,22 @@ async function handleRPC(hash: string, message: any): Promise<unknown | null> {
       const asked = params?.protocolVersion;
       return reply({
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
         instructions: INSTRUCTIONS,
       });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: TOOLS });
-    case "resources/list": return reply({ resources: [] });
+    case "resources/list": return reply({ resources: await listResources(hash) });
+    case "resources/templates/list": return reply({ resourceTemplates: [] });
+    case "resources/read": {
+      try {
+        return reply(await readResource(hash, params?.uri));
+      } catch (error) {
+        return fail(error instanceof UserError ? -32002 : -32603, (error as Error).message);
+      }
+    }
     case "prompts/list": return reply({ prompts: [] });
     case "tools/call": {
       const name = params?.name;
@@ -699,14 +945,49 @@ async function sync(hash: string, body: any): Promise<Response> {
     });
   }
   const pending: Command[] = await db(`assistant_commands?token_hash=eq.${hash}&status=eq.pending&select=id,kind,payload&order=created_at.asc&limit=100`);
-  return json({ commands: pending.map((c) => ({ id: c.id, kind: c.kind, payload: c.payload })) });
+  const reply: Record<string, unknown> = { commands: pending.map((c) => ({ id: c.id, kind: c.kind, payload: c.payload })) };
+  if (body?.snapshot) {
+    // Les fichiers annoncés par l'app, comparés à ceux qui sont arrivés : on
+    // lui demande ce qui manque, et on efface ce qu'elle n'annonce plus (le
+    // réglage coupé, un cours retiré, un PDF révisé).
+    const list = Array.isArray(body.snapshot.files) ? body.snapshot.files : [];
+    const announced = new Set<string>(list.map((f: any) => f?.sha).filter((sha: unknown) => typeof sha === "string" && SHA.test(sha)));
+    try {
+      const stored = await storedFiles(hash);
+      const stale = [...stored.keys()].filter((sha) => !announced.has(sha));
+      if (stale.length) await removeStored(hash, stale);
+      reply.wantedFiles = [...announced].filter((sha) => !stored.has(sha)).slice(0, 25);
+    } catch {
+      reply.wantedFiles = [];
+    }
+  }
+  return json(reply);
+}
+
+/// L'app dépose un fichier qu'elle a annoncé dans son instantané. Rien d'autre
+/// n'est accepté : un jeton ne sert pas d'espace de stockage libre.
+async function receiveFile(hash: string, sha: string, request: Request): Promise<Response> {
+  if (!SHA.test(sha)) return json({ error: "empreinte invalide" }, 400);
+  const rows = await db(`assistant_links?token_hash=eq.${hash}&select=files:snapshot->files`);
+  const announced = (rows?.[0]?.files ?? []).some((f: any) => f?.sha === sha);
+  if (!announced) return json({ error: "fichier non annoncé : synchronise d'abord" }, 404);
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_FILE) return json({ error: "taille refusée (10 Mo au plus)" }, 413);
+  if (await sha256Bytes(bytes) !== sha) return json({ error: "empreinte différente du contenu" }, 400);
+  const response = await storage(`object/${BUCKET}/${hash}/${sha}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "x-upsert": "true" },
+    body: bytes,
+  });
+  if (!response.ok) throw new Error(`stockage : ${response.status} ${(await response.text()).slice(0, 200)}`);
+  return json({ ok: true });
 }
 
 // ───────────────────────────────────────────────────────── HTTP ────
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, content-type, mcp-protocol-version, mcp-session-id, apikey, x-client-info",
 };
 
@@ -735,8 +1016,11 @@ Deno.serve(async (request) => {
       if (text.length > MAX_BODY) return json({ error: "instantané trop volumineux" }, 413);
       return await sync(hash, JSON.parse(text || "{}"));
     }
+    if (action === "files" && request.method === "PUT") return await receiveFile(hash, rest[2] ?? "", request);
     if (!action && request.method === "DELETE") {
-      // Déconnecter l'assistant efface tout ce que le serveur gardait.
+      // Déconnecter l'assistant efface tout ce que le serveur gardait — les
+      // fichiers aussi : la cascade de la base n'atteint pas le stockage.
+      await removeStored(hash, [...(await storedFilesOrNone(hash)).keys()]).catch(() => {});
       await db(`assistant_links?token_hash=eq.${hash}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
       return new Response(null, { status: 204, headers: CORS });
     }

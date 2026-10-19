@@ -125,6 +125,13 @@ final class MacSettings {
     var claudeProject: Bool { didSet { defaults.set(claudeProject, forKey: "mac.claudeProject") } }
     /// Le dossier du projet (`~/EPFL` par défaut).
     var claudeProjectFolder: String { didSet { defaults.set(claudeProjectFolder, forKey: "mac.claudeProjectFolder") } }
+    /// Le serveur MCP **local** des fichiers (127.0.0.1) : tous les PDF et documents
+    /// des cours, téléchargés à la demande, sans la limite du serveur en ligne.
+    /// Éteint par défaut ; allumé, rien ne tourne que l'écoute.
+    var localFilesServer: Bool { didSet { defaults.set(localFilesServer, forKey: "mac.localFilesServer") } }
+    var localFilesPort: Int { didSet { defaults.set(localFilesPort, forKey: "mac.localFilesPort") } }
+    /// Le jeton secret de l'adresse locale (tiré au premier allumage).
+    var localFilesToken: String { didSet { defaults.set(localFilesToken, forKey: "mac.localFilesToken") } }
     /// L'adresse du serveur MCP de StudyTrack (iPhone › Réglages › Assistant IA).
     var claudeStudyTrackMCP: String { didSet { defaults.set(claudeStudyTrackMCP, forKey: "mac.claudeStudyTrackMCP") } }
 
@@ -188,6 +195,9 @@ final class MacSettings {
         claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("EPFL").path
         claudeStudyTrackMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
+        localFilesServer = defaults.bool(forKey: "mac.localFilesServer")
+        localFilesPort = defaults.object(forKey: "mac.localFilesPort") as? Int ?? 47821
+        localFilesToken = defaults.string(forKey: "mac.localFilesToken") ?? ""
         reviewMistakes = defaults.object(forKey: "mac.reviewMistakes") as? Bool ?? true
         reviewRedo = defaults.object(forKey: "mac.reviewRedo") as? Bool ?? true
         reviewHints = defaults.object(forKey: "mac.reviewHints") as? Bool ?? true

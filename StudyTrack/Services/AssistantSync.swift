@@ -99,16 +99,18 @@ enum AssistantSync {
     ///   après chaque coche, réseau ou pas.
     @discardableResult
     static func sync(context: ModelContext, settings: SettingsStore, force: Bool = true) async -> Bool {
-        guard let url = serverURL(token: settings.assistantToken)?.appendingPathComponent("sync"), !running else { return false }
+        guard let base = serverURL(token: settings.assistantToken), !running else { return false }
+        let url = base.appendingPathComponent("sync")
         let now = Date()
         if !force, now < nextAttempt { return false }
-        let current = snapshot(context: context, settings: settings)
+        var (current, locals) = snapshot(context: context, settings: settings)
         let fingerprint = fingerprint(of: current)
         if !force, fingerprint == lastFingerprint, let lastSuccess, now.timeIntervalSince(lastSuccess) < 600 { return true }
         running = true
         defer { running = false }
         do {
-            var commands = try await exchange(url, snapshot: current, results: [])
+            var reply = try await exchange(url, snapshot: current, results: [])
+            var commands = reply.commands
             // Deux tours au plus : appliquer, confirmer. Une commande déposée
             // entre-temps attendra la prochaine synchronisation.
             if !commands.isEmpty {
@@ -122,14 +124,23 @@ enum AssistantSync {
                 for result in newResults {
                     AppLog.record(result.status == "applied" ? .info : .warning, "assistant", result.message)
                 }
-                commands = try await exchange(url, snapshot: snapshot(context: context, settings: settings), results: results)
+                (current, locals) = snapshot(context: context, settings: settings)
+                reply = try await exchange(url, snapshot: current, results: results)
+                commands = reply.commands
                 if !results.isEmpty {
                     WidgetSnapshotWriter.scheduleRefresh(context: context, settings: settings)
                 }
             }
+            // Les fichiers que le serveur réclame (nouveaux, ou révisés à la source).
+            // Un envoi qui échoue ne fait pas échouer la synchronisation : il est
+            // redemandé à la suivante, qu'on ne saute donc pas.
+            var uploaded = true
+            if settings.assistantFiles, !reply.wantedFiles.isEmpty {
+                uploaded = await AssistantFiles.upload(wanted: reply.wantedFiles, from: locals, to: base, wifiOnly: settings.offlineWifiOnly)
+            }
             settings.assistantLastSync = Date()
             lastError = nil
-            lastFingerprint = commands.isEmpty ? fingerprint : nil
+            lastFingerprint = commands.isEmpty && uploaded ? fingerprint : nil
             lastSuccess = Date()
             if failureStreak > 1 {
                 AppLog.record(.info, "assistant", "Synchronisation rétablie", detail: "après \(failureStreak) échecs")
@@ -173,18 +184,34 @@ enum AssistantSync {
 
     // MARK: Échange
 
-    private static func snapshot(context: ModelContext, settings: SettingsStore) -> Any {
+    private static func snapshot(context: ModelContext, settings: SettingsStore) -> (payload: Any, files: [AssistantFiles.Local]) {
         let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
         var sessionsQuery = FetchDescriptor<StudySession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
         sessionsQuery.fetchLimit = 2000
         let sessions = (try? context.fetch(sessionsQuery)) ?? []
         let milestones = (try? context.fetch(FetchDescriptor<AcademicMilestone>())) ?? []
         let groups = (try? context.fetch(FetchDescriptor<StudyGroup>())) ?? []
-        return AssistantExport.make(courses: courses, sessions: sessions, milestones: milestones, groups: groups,
-                                    hoursPerCredit: settings.hoursPerCredit, displayName: settings.displayName)
+        let locals = settings.assistantFiles ? AssistantFiles.index(courses: courses) : []
+        let payload = AssistantExport.make(courses: courses, sessions: sessions, milestones: milestones, groups: groups,
+                                           hoursPerCredit: settings.hoursPerCredit, displayName: settings.displayName,
+                                           includeContent: settings.assistantFiles, files: locals.map(\.entry))
+        return (payload, locals)
     }
 
-    private static func exchange(_ url: URL, snapshot: Any, results: [AssistantCommandResult]) async throws -> [AssistantCommand] {
+    private struct Reply: Decodable {
+        var commands: [AssistantCommand]
+        /// Les empreintes des fichiers annoncés que le serveur n'a pas encore.
+        var wantedFiles: [String] = []
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            commands = try container.decode([AssistantCommand].self, forKey: .commands)
+            wantedFiles = try container.decodeIfPresent([String].self, forKey: .wantedFiles) ?? []
+        }
+        private enum CodingKeys: String, CodingKey { case commands, wantedFiles }
+    }
+
+    private static func exchange(_ url: URL, snapshot: Any, results: [AssistantCommandResult]) async throws -> Reply {
         var body: [String: Any] = ["snapshot": snapshot]
         if !results.isEmpty {
             body["results"] = results.map { ["id": $0.id, "status": $0.status, "message": $0.message] }
@@ -201,7 +228,6 @@ enum AssistantSync {
             let detail = String(decoding: data.prefix(200), as: UTF8.self)
             throw HiddenSiteSession.SiteError.failed("Serveur de l'assistant : \((response as? HTTPURLResponse)?.statusCode ?? 0) \(detail)")
         }
-        struct Reply: Decodable { var commands: [AssistantCommand] }
-        return try JSONDecoder().decode(Reply.self, from: data).commands
+        return try JSONDecoder().decode(Reply.self, from: data)
     }
 }

@@ -36,14 +36,15 @@ enum ClaudeProjectSetup {
         linkSkills(file.skills, into: folder)
         let studyTrack = settings.claudeStudyTrackMCP.hasPrefix("https://") ? settings.claudeStudyTrackMCP : nil
         let mcpFile = supportFolder.appendingPathComponent("claude-mcp.json")
-        try? ClaudeProject.mcpConfig(file: file, studyTrackURL: studyTrack).write(to: mcpFile, atomically: true, encoding: .utf8)
+        let localFiles = MacLocalMCP.shared.url?.absoluteString
+        try? ClaudeProject.mcpConfig(file: file, studyTrackURL: studyTrack, localFilesURL: localFiles).write(to: mcpFile, atomically: true, encoding: .utf8)
         return ClaudeChat.Config(profile: .project, folder: folder, mcpConfigPath: mcpFile.path,
                                  allowedTools: ClaudeProject.allowedTools(file: file, studyTrack: studyTrack != nil,
-                                                                          connectors: servers.connectors),
+                                                                          connectors: servers.connectors, localFiles: localFiles != nil),
                                  tools: ClaudeProject.tools(file: file),
                                  deniedServers: servers.local.filter { file.mcpServers[$0] == nil },
                                  permissions: ClaudeProject.permissionSummary(file: file, studyTrack: studyTrack != nil,
-                                                                              connectors: servers.connectors),
+                                                                              connectors: servers.connectors, localFiles: localFiles != nil),
                                  file: file, review: settings.reviewFeatures(file))
     }
 

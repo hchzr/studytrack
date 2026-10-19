@@ -153,7 +153,7 @@ struct ClaudePane: View {
     /// relu quand il change (sa date).
     static func configKey(settings: MacSettings) -> String {
         let modified = (try? FileManager.default.attributesOfItem(atPath: ClaudeProjectSetup.fileURL(settings: settings).path))?[.modificationDate] as? Date
-        return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeStudyTrackMCP)|\(modified?.timeIntervalSince1970 ?? 0)"
+        return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeStudyTrackMCP)|\(MacLocalMCP.shared.url?.absoluteString ?? "")|\(modified?.timeIntervalSince1970 ?? 0)"
     }
 
     private var chat: ClaudeChat? {

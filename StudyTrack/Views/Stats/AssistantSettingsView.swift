@@ -55,7 +55,7 @@ struct AssistantSettingsView: View {
             }
 
             Section {
-                capability("Lire", "avancement, séries, évaluations, temps")
+                capability("Lire", "avancement, séries, évaluations, temps — et, si tu l'actives, fichiers et notes")
                 capability("Noter", "exercices faits, corrections, questions")
                 capability("Ajouter", "séries, évaluations, sessions, résumés")
             } header: {
@@ -139,6 +139,12 @@ struct AssistantSettingsView: View {
             Text("Adresse du serveur MCP")
         } footer: {
             Text("Cette adresse est un **mot de passe** : qui l'a peut lire tes études et y noter des choses. Ne la colle que dans ton propre assistant.")
+        }
+
+        Section {
+            Toggle("Fichiers et notes", isOn: Bindable(app.settings).assistantFiles)
+        } footer: {
+            Text("Envoie aussi à l'assistant les énoncés et corrigés déjà téléchargés sur l'iPhone, les fichiers que tu as ajoutés, tes notes de cours, ta fiche de révision et les corrigés rédigés. Coupé, le serveur efface ce qu'il avait reçu. Pour avoir toutes les séries, active « Garder les énoncés » dans les réglages hors ligne.")
         }
 
         Section("Brancher ton assistant") {

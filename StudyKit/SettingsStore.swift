@@ -55,6 +55,7 @@ final class SettingsStore {
         static let offlineWifiOnly = "settings.offlineWifiOnly"
         static let offlineLimitMB = "settings.offlineLimitMB"
         static let assistantToken = "settings.assistantToken"
+        static let assistantFiles = "settings.assistantFiles"
         static let assistantLastSync = "settings.assistantLastSync"
     }
 
@@ -231,6 +232,11 @@ final class SettingsStore {
     /// Jeton secret qui relie l'app à son serveur MCP. Vide = pas relié.
     var assistantToken: String { didSet { defaults.set(assistantToken, forKey: Key.assistantToken) } }
     var assistantLastSync: Date? { didSet { defaults.set(assistantLastSync, forKey: Key.assistantLastSync) } }
+    /// Envoyer aussi à l'assistant les **fichiers** (énoncés et corrigés déjà sur
+    /// l'iPhone, fichiers ajoutés) et les **notes** (notes de cours, fiche,
+    /// corrigés rédigés). Éteint par défaut : c'est ce qui sort le plus de
+    /// l'appareil. Coupé, le serveur efface ce qu'il avait reçu.
+    var assistantFiles: Bool { didSet { defaults.set(assistantFiles, forKey: Key.assistantFiles) } }
 
     // MARK: Chrono
     /// Raccourcis du chrono, composés par l'étudiant·e.
@@ -296,6 +302,7 @@ final class SettingsStore {
         self.offlineLimitMB = defaults.object(forKey: Key.offlineLimitMB) as? Int ?? 500
         self.assistantToken = defaults.string(forKey: Key.assistantToken) ?? ""
         self.assistantLastSync = defaults.object(forKey: Key.assistantLastSync) as? Date
+        self.assistantFiles = defaults.bool(forKey: Key.assistantFiles)
         self.aiExtractionEnabled = defaults.object(forKey: Key.aiExtractionEnabled) as? Bool ?? true
         for key in Key.legacyAI { defaults.removeObject(forKey: key) }
         // Ce qu'iCloud ne connaît pas encore part d'ici ; ce qu'il connaît
