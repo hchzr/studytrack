@@ -51,9 +51,51 @@ private struct GeneralSettings: View {
             } footer: {
                 Text("Sans les secondes, ça use moins la batterie.")
             }
+            AboutSection()
         }
         .formStyle(.grouped)
         .frame(height: 440)
+    }
+}
+
+/// La version, les mises à jour (le Mac n'a pas l'App Store pour les annoncer)
+/// et « Signaler un problème ».
+private struct AboutSection: View {
+    @State private var updater = MacUpdater.shared
+
+    var body: some View {
+        Section {
+            LabeledContent("Version", value: AppDistribution.versionLabel)
+            if let update = updater.available {
+                HStack {
+                    Text("StudyTrack \(update.version) est disponible.")
+                    Spacer()
+                    Button("Télécharger") { updater.download() }
+                }
+                if let notes = update.notes, !notes.isEmpty {
+                    Text(notes).font(.caption).foregroundStyle(.secondary)
+                }
+            } else if AppDistribution.siteHost != nil {
+                HStack {
+                    Text(updater.status ?? "")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(updater.checking ? "Recherche…" : "Rechercher une mise à jour") {
+                        Task { await updater.check(manual: true) }
+                    }
+                    .disabled(updater.checking)
+                }
+            }
+            if AppDistribution.feedbackAddress != nil {
+                Button("Signaler un problème…") { MacFeedback.send() }
+            }
+        } header: {
+            Text("À propos")
+        } footer: {
+            if AppDistribution.feedbackAddress != nil {
+                Text("Le courriel joint la fin du journal de l'app : relis-le avant d'envoyer.")
+            }
+        }
     }
 }
 
@@ -150,6 +192,9 @@ private struct StudySettingsPane: View {
                 Stepper("Durée : \(settings.studyMinutes) min", value: $settings.studyMinutes, in: 15...240, step: 5)
                 Toggle("Maintenir pour finir plus tôt", isOn: $settings.studyHoldToLeave)
                 Toggle("Bloquer le reste", isOn: $settings.studyBlocking)
+                Toggle("Verrou système (expérimental)", isOn: $settings.studySystemLock)
+                    .disabled(!settings.studyBlocking)
+                    .help("Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance StudyTrack s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout.")
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                     .disabled(!settings.studyBlocking)
                 LabeledContent("Bande-son des séries") { SoundtrackPicker(choice: $settings.studySoundtrack) }

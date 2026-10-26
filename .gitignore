@@ -30,3 +30,6 @@ build-sim/
 
 # Copies de travail des agents (Claude Code)
 .claude/worktrees/
+
+# Distribution (./release.sh)
+build-release/

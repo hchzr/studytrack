@@ -225,7 +225,9 @@ struct StudyTrackApp: App {
     @State private var container: AppContainer
 
     init() {
-        AppLanguage.settle(existingUser: UserDefaults.standard.bool(forKey: "settings.hasCompletedOnboarding"))
+        let existingUser = UserDefaults.standard.bool(forKey: "settings.hasCompletedOnboarding")
+        AppLanguage.settle(existingUser: existingUser)
+        StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: existingUser)
         // Les grands titres en serif, avant la première barre de navigation.
         Carnet.installAppearance()
         let container = AppContainer()

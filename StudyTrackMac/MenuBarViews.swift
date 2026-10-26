@@ -183,6 +183,17 @@ struct MenuBarTimerView: View {
             if timer.phase == .idle {
                 hub
             }
+            if let update = MacUpdater.shared.available {
+                PaperRule()
+                Button { MacUpdater.shared.download() } label: {
+                    Label("StudyTrack \(update.version) est disponible — télécharger", systemImage: "arrow.down.circle")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.borderless)
+                .font(.callout)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
             PaperRule()
             footer
         }
@@ -486,6 +497,9 @@ struct MenuBarTimerView: View {
             }
             .help("Réglages (⌘,)")
             Menu {
+                if AppDistribution.feedbackAddress != nil {
+                    Button("Signaler un problème…") { MacFeedback.send() }
+                }
                 Button("Quitter") { NSApp.terminate(nil) }
             } label: {
                 Image(systemName: "ellipsis")

@@ -2931,7 +2931,16 @@ let runningTerm = AcademicTerm(year: 2025,
                                endDate: DateUtils.addWeeks(12, to: Date()),
                                totalWeeks: 14)
 check(runningTerm.isRunning, "semestre en cours détecté")
-check(DateUtils.clampedWeek(for: Date(), term: runningTerm) == 3,
+// Une date fixe, sans interruption des cours dans les deux semaines : avec
+// `Date()`, le contrôle échouait chaque fois qu'une pause du calendrier EPFL
+// (19–23 octobre 2026, Pâques…) tombait dans la fenêtre — l'app avait raison.
+let fixedNow = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 12))!
+let fixedTerm = AcademicTerm(year: 2026,
+                             season: .autumn,
+                             startDate: DateUtils.addWeeks(-2, to: DateUtils.startOfWeek(fixedNow)),
+                             endDate: DateUtils.addWeeks(12, to: fixedNow),
+                             totalWeeks: 14)
+check(DateUtils.clampedWeek(for: fixedNow, term: fixedTerm) == 3,
       "semestre démarré il y a 2 semaines → semaine 3")
 
 print("== ICSParser (horaire EPFL) ==")
@@ -5457,7 +5466,58 @@ do {
           "un état d'avant (sans cycle) prend les réglages de l'appareil")
 }
 
+// MARK: Distribution (retour, mises à jour du Mac)
+do {
+    print("== Distribution : retour et mises à jour du Mac ==")
+    let entry = LogEntry(id: UUID(), date: Date(timeIntervalSince1970: 2_000_000_000), level: .error,
+                         category: "Sync", message: "a & b = c ?", detail: "ligne 1\nligne 2")
+    let mail = FeedbackMail.url(to: "studytrack@example.ch", version: "2.1 (3)", device: "iPhone · iOS 27.0", entries: [entry])
+    let text = mail?.absoluteString ?? ""
+    check(text.hasPrefix("mailto:studytrack@example.ch?subject="), "retour : un lien mailto vers l'adresse configurée")
+    let body = text.components(separatedBy: "&body=").last ?? ""
+    check(!body.contains("&") && !body.contains("="), "retour : « & » et « = » du journal encodés (le corps n'est pas coupé)")
+    check((body.removingPercentEncoding ?? "").contains("a & b = c ?") && (body.removingPercentEncoding ?? "").contains("2.1 (3)"),
+          "retour : le journal et la version sont dans le corps")
+    check((body.removingPercentEncoding ?? "").contains("\r\n"), "retour : fins de ligne CRLF (RFC 6068)")
+    let many = (0..<500).map { _ in LogEntry(id: UUID(), date: Date(), level: .info, category: "x", message: String(repeating: "é", count: 80), detail: nil) }
+    let long = FeedbackMail.url(to: "a@b.ch", version: "1", device: "Mac", entries: many)
+    check(((long?.absoluteString.components(separatedBy: "&body=").last ?? "").removingPercentEncoding ?? "").count <= FeedbackMail.maxBody + 200,
+          "retour : un long journal est tronqué")
+
+    let json = #"{"version":"2.2","build":7,"url":"https://studytrack.hczr.ch/mac/StudyTrack.dmg","notes":"Mise à jour"}"#
+    let feed = MacUpdateFeed.decode(Data(json.utf8))
+    check(feed?.build == 7 && feed?.version == "2.2", "mise à jour : le flux se lit")
+    check(feed?.isNewer(thanBuild: "3") == true, "mise à jour : build 7 > 3 → proposée")
+    check(feed?.isNewer(thanBuild: "7") == false && feed?.isNewer(thanBuild: "9") == false, "mise à jour : même build ou plus récente → rien")
+    check(feed?.isNewer(thanBuild: nil) == false, "mise à jour : build inconnue → rien")
+    check(MacUpdateFeed.decode(Data("<html>".utf8)) == nil, "mise à jour : une page d'erreur n'est pas un flux")
+    let t = Date(timeIntervalSince1970: 2_000_000_000)
+    check(MacUpdateFeed.isDue(lastCheck: nil, now: t), "mise à jour : jamais lue → à lire")
+    check(!MacUpdateFeed.isDue(lastCheck: t.addingTimeInterval(-3600), now: t), "mise à jour : lue il y a une heure → pas encore")
+    check(MacUpdateFeed.isDue(lastCheck: t.addingTimeInterval(-90_000), now: t), "mise à jour : lue hier → à relire")
+    check(MacUpdateFeed.isDue(lastCheck: t.addingTimeInterval(3600), now: t), "mise à jour : horloge reculée → à relire")
+}
+
 // MARK: Mode étude
+do {
+    // Bloquer le reste : choisi pour une nouvelle installation, gardé pour qui
+    // s'en servait avec l'ancien défaut, jamais réécrit une fois choisi.
+    let suite = "studytrack.validation.blocking.\(UUID().uuidString)"
+    let fresh = UserDefaults(suiteName: suite)!
+    StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: false, in: fresh)
+    check(fresh.object(forKey: "studyMode.blocking") as? Bool == false, "nouvelle installation : le mode étude ne bloque rien")
+    StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: true, in: fresh)
+    check(fresh.object(forKey: "studyMode.blocking") as? Bool == false, "un choix déjà écrit n'est pas réécrit")
+    let existing = UserDefaults(suiteName: suite + ".existing")!
+    StudyMode.settleBlockingDefaults(["mac.studyBlocking", "mac.studySystemLock"], existingUser: true, in: existing)
+    check(existing.bool(forKey: "mac.studyBlocking") && existing.bool(forKey: "mac.studySystemLock"),
+          "utilisateur d'avant : blocage et verrou système gardés")
+    let chosen = UserDefaults(suiteName: suite + ".chosen")!
+    chosen.set(false, forKey: "mac.studyBlocking")
+    StudyMode.settleBlockingDefaults(["mac.studyBlocking"], existingUser: true, in: chosen)
+    check(!chosen.bool(forKey: "mac.studyBlocking"), "utilisateur d'avant qui l'avait coupé : reste coupé")
+    for name in [suite, suite + ".existing", suite + ".chosen"] { UserDefaults.standard.removePersistentDomain(forName: name) }
+}
 do {
     let t0 = Date(timeIntervalSince1970: 2_000_000_000)
     var state = FocusTimerState(sessionStartedAt: t0)

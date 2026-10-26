@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 import SwiftData
-#if canImport(FamilyControls)
+#if canImport(FamilyControls) && SCREEN_TIME
 import FamilyControls
 #endif
 
@@ -18,7 +18,7 @@ struct StudyModeEntry: View {
     @State private var showingSetup = false
     @State private var showingCustom = false
     /// Bloquer le reste (apps, sites) pendant le mode étude. Retenu d'une fois sur l'autre.
-    @AppStorage("studyMode.blocking") private var blocking = true
+    @AppStorage("studyMode.blocking") private var blocking = false
 
     var body: some View {
         if app.focus.isStudying {
@@ -39,9 +39,11 @@ struct StudyModeEntry: View {
                     Button("Sans fin", systemImage: "infinity") { enter(nil) }
                     Button("Autre durée…", systemImage: "clock") { showingCustom = true }
                 }
-                Toggle("Bloquer le reste", isOn: $blocking)
-                if blocking, !StudyLock.shared.isAuthorized {
-                    Button("Réglages", systemImage: "gearshape") { showingSetup = true }
+                if StudyLock.isAvailable {
+                    Toggle("Bloquer le reste", isOn: $blocking)
+                    if blocking, !StudyLock.shared.isAuthorized {
+                        Button("Réglages", systemImage: "gearshape") { showingSetup = true }
+                    }
                 }
             } label: {
                 Label("Mode étude", systemImage: "moon.stars")
@@ -62,7 +64,8 @@ struct StudyModeEntry: View {
     }
 
     private func enter(_ minutes: Int?) {
-        app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID, locks: blocking)
+        app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: taskType, targetID: targetID,
+                             locks: blocking && StudyLock.isAvailable)
         // L'autorisation et les apps permises se demandent dans l'écran du mode
         // étude, quel que soit le chemin par lequel on y entre.
         app.router.showingStudyMode = true
@@ -79,20 +82,20 @@ struct StudyModeMenu: View {
     var targetID: UUID?
 
     @Environment(AppContainer.self) private var app
-    @AppStorage("studyMode.blocking") private var blocking = true
+    @AppStorage("studyMode.blocking") private var blocking = false
 
     var body: some View {
         Menu {
             ForEach(StudyMode.durations, id: \.self) { minutes in
                 Button(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h\(minutes % 60 == 0 ? "" : " \(minutes % 60)")") {
                     app.focus.enterStudy(minutes: minutes, courseID: courseID, taskType: .exercise,
-                                         targetID: targetID, locks: blocking)
+                                         targetID: targetID, locks: blocking && StudyLock.isAvailable)
                     app.router.showingStudyMode = true
                 }
             }
             Button("Sans fin", systemImage: "infinity") {
                 app.focus.enterStudy(minutes: nil, courseID: courseID, taskType: .exercise,
-                                     targetID: targetID, locks: blocking)
+                                     targetID: targetID, locks: blocking && StudyLock.isAvailable)
                 app.router.showingStudyMode = true
             }
         } label: {
@@ -109,7 +112,16 @@ struct StudyModeScreen: View {
     @State private var browsing: BrowsedLink?
     @State private var holding = false
     @State private var holdProgress: Double = 0
-    @State private var tab: StudyTab = StudyTab(rawValue: PreviewLaunch.string(PreviewLaunch.studyTabFlag) ?? "") ?? .desk
+    @State private var tab: StudyTab = StudyTab(rawValue: StudyModeScreen.launchTab ?? "") ?? .desk
+    /// L'onglet imposé par `-studyTab` (captures). `PreviewLaunch` n'existe
+    /// qu'en Debug : sans ce garde, la build Release (l'archive) ne compile pas.
+    private static var launchTab: String? {
+        #if DEBUG
+        PreviewLaunch.string(PreviewLaunch.studyTabFlag)
+        #else
+        nil
+        #endif
+    }
     @State private var calc = CalcModel()
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
@@ -211,7 +223,7 @@ struct StudyModeScreen: View {
     /// À un changement de moment, l'onglet se met où le moment le veut — sauf si on a
     /// choisi le sien (épinglé jusqu'au moment suivant).
     private func arrange() {
-        guard PreviewLaunch.string(PreviewLaunch.studyTabFlag) == nil else { return }
+        guard StudyModeScreen.launchTab == nil else { return }
         let key = arrangementKey
         guard key != lastArrangement else { return }
         lastArrangement = key
@@ -321,7 +333,7 @@ struct StudyModeScreen: View {
         .onAppear { checkLockSetup() }
         .onChange(of: focus.isLocked) { _, _ in checkLockSetup() }
         .sheet(isPresented: $showingLockSetup) { NavigationStack { StudyModeSettingsView() } }
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         .familyActivityPicker(isPresented: $showingAllowedApps, selection: $lock.selection)
         #endif
     }
@@ -339,7 +351,7 @@ struct StudyModeScreen: View {
     }
 
     private func checkLockSetup() {
-        guard focus.isLocked else { return }
+        guard StudyLock.isAvailable, focus.isLocked else { return }
         if !lock.isAuthorized {
             showingLockSetup = true
         } else if lock.needsAllowedApps {
@@ -533,7 +545,7 @@ struct StudyModeScreen: View {
                     }
                 }
 
-                if !StudyLock.shared.isAuthorized {
+                if StudyLock.isAvailable, !StudyLock.shared.isAuthorized {
                     NavigationLink {
                         StudyModeSettingsView()
                     } label: {
@@ -721,40 +733,49 @@ struct StudyModeSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                if lock.isAuthorized {
-                    Label("Autorisé", systemImage: "checkmark.shield")
-                        .foregroundStyle(Carnet.correct)
-                } else {
-                    Button {
-                        Task { await lock.requestAuthorization() }
-                    } label: {
-                        Label("Autoriser", systemImage: "lock.shield")
+            if StudyLock.isAvailable {
+                Section {
+                    if lock.isAuthorized {
+                        Label("Autorisé", systemImage: "checkmark.shield")
+                            .foregroundStyle(Carnet.correct)
+                    } else {
+                        Button {
+                            Task { await lock.requestAuthorization() }
+                        } label: {
+                            Label("Autoriser", systemImage: "lock.shield")
+                        }
+                        if let error = lock.lastError {
+                            Text(error).font(.footnote).foregroundStyle(Carnet.wrong)
+                        }
                     }
-                    if let error = lock.lastError {
-                        Text(error).font(.footnote).foregroundStyle(Carnet.wrong)
-                    }
+                } header: {
+                    CarnetFormHeader("Temps d'écran")
+                } footer: {
+                    Text("Seulement tes apps et sites de cours, jusqu'à la fin.")
                 }
-            } header: {
-                CarnetFormHeader("Temps d'écran")
-            } footer: {
-                Text("Seulement tes apps et sites de cours, jusqu'à la fin.")
-            }
 
-            Section {
-                #if canImport(FamilyControls)
-                Button {
-                    showingPicker = true
-                } label: {
-                    LabeledContent("Apps permises", value: lock.allowedAppCount == 0 ? "aucune" : "\(lock.allowedAppCount)")
+                Section {
+                    #if canImport(FamilyControls) && SCREEN_TIME
+                    Button {
+                        showingPicker = true
+                    } label: {
+                        LabeledContent("Apps permises", value: lock.allowedAppCount == 0 ? "aucune" : "\(lock.allowedAppCount)")
+                    }
+                    .disabled(!lock.isAuthorized)
+                    .familyActivityPicker(isPresented: $showingPicker, selection: $lock.selection)
+                    #endif
+                } header: {
+                    CarnetFormHeader("Apps")
+                } footer: {
+                    Text("Par exemple GoodNotes, Claude et Safari.")
                 }
-                .disabled(!lock.isAuthorized)
-                .familyActivityPicker(isPresented: $showingPicker, selection: $lock.selection)
-                #endif
-            } header: {
-                CarnetFormHeader("Apps")
-            } footer: {
-                Text("Par exemple GoodNotes, Claude et Safari.")
+            } else {
+                Section {
+                    Text("Dans cette version, l'iPhone ne bloque pas les autres apps : Apple doit encore autoriser le Temps d'écran pour StudyTrack. Le mode étude reste ton écran de travail, et le Mac, lui, bloque.")
+                        .font(.subheadline)
+                } header: {
+                    CarnetFormHeader("Temps d'écran")
+                }
             }
 
             Section {

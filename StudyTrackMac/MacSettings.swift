@@ -110,6 +110,11 @@ final class MacSettings {
     /// Le mode étude bloque le reste (apps, sites, iPhone). Coupé : un écran
     /// de travail, sans rien fermer.
     var studyBlocking: Bool { didSet { defaults.set(studyBlocking, forKey: "mac.studyBlocking") } }
+    /// Pendant un blocage, éteindre aussi les raccourcis du système (Spotlight,
+    /// ⌘Tab, Mission Control, par SkyLight) et poser le gardien qui relance
+    /// l'app tuée (`StudyGuard`). Expérimental : coupé pour une nouvelle
+    /// installation ; sans lui, la présentation de l'app reste le seul frein.
+    var studySystemLock: Bool { didSet { defaults.set(studySystemLock, forKey: "mac.studySystemLock") } }
     /// Garder le Mac éveillé pendant que le chrono du mode étude tourne.
     var studyKeepAwake: KeepAwakePolicy.Mode { didSet { defaults.set(studyKeepAwake.rawValue, forKey: "mac.studyKeepAwake") } }
     /// Pomodoro pendant le mode étude.
@@ -189,7 +194,8 @@ final class MacSettings {
         studySideWindow = defaults.object(forKey: "mac.studySideWindow") as? Bool ?? true
         studySideOnSecondDisplay = defaults.bool(forKey: "mac.studySideOnSecondDisplay")
         studyHideSystemChrome = defaults.object(forKey: "mac.studyHideSystemChrome") as? Bool ?? true
-        studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? true
+        studyBlocking = defaults.object(forKey: "mac.studyBlocking") as? Bool ?? false
+        studySystemLock = defaults.object(forKey: "mac.studySystemLock") as? Bool ?? false
         studyKeepAwake = defaults.string(forKey: "mac.studyKeepAwake").flatMap(KeepAwakePolicy.Mode.init(rawValue:)) ?? .off
         claudeProject = defaults.bool(forKey: "mac.claudeProject")
         claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")

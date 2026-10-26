@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import OSLog
-#if canImport(FamilyControls)
+#if canImport(FamilyControls) && SCREEN_TIME
 import FamilyControls
 import ManagedSettings
 import DeviceActivity
@@ -29,6 +29,18 @@ import DeviceActivity
 final class StudyLock {
     static let shared = StudyLock()
 
+    /// Le blocage par le Temps d'écran est dans cette build. Une build
+    /// distribuée ne peut porter le droit qu'avec l'accord d'Apple (« Family
+    /// Controls (Distribution) ») : sans lui, `STUDYTRACK_SCREEN_TIME = NO` le
+    /// retire, et l'iPhone ne propose pas de bloquer — le Mac, lui, bloque.
+    static var isAvailable: Bool {
+        #if canImport(FamilyControls) && SCREEN_TIME
+        true
+        #else
+        false
+        #endif
+    }
+
     /// L'autorisation du Temps d'écran a été donnée.
     private(set) var isAuthorized = false
     /// Le bouclier est posé en ce moment.
@@ -39,7 +51,7 @@ final class StudyLock {
     private static let selectionKey = "studyLock.selection"
     private static let sitesKey = "studyMode.sites"
 
-    #if canImport(FamilyControls)
+    #if canImport(FamilyControls) && SCREEN_TIME
     /// Les apps permises, choisies dans le sélecteur d'Apple.
     var selection = FamilyActivitySelection() {
         didSet {
@@ -54,7 +66,7 @@ final class StudyLock {
     #endif
 
     init() {
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         isAuthorized = AuthorizationCenter.shared.authorizationStatus == .approved
         if let data = UserDefaults.standard.data(forKey: Self.selectionKey),
            let saved = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) {
@@ -65,7 +77,7 @@ final class StudyLock {
 
     /// Le nombre d'apps permises (pour les réglages).
     var allowedAppCount: Int {
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         return selection.applicationTokens.count + selection.categoryTokens.count
         #else
         return 0
@@ -84,7 +96,7 @@ final class StudyLock {
     // MARK: Autorisation
 
     func requestAuthorization() async {
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         do {
             try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
             lastError = nil
@@ -113,7 +125,7 @@ final class StudyLock {
     var needsAllowedApps: Bool { isAuthorized && allowedAppCount == 0 }
 
     private func shield(until: Date) {
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         guard isAuthorized else { return }
         shieldUntil = until
         store.shield.applicationCategories = .all(except: selection.applicationTokens)
@@ -132,7 +144,7 @@ final class StudyLock {
     }
 
     func release() {
-        #if canImport(FamilyControls)
+        #if canImport(FamilyControls) && SCREEN_TIME
         guard isShielding || store.shield.applicationCategories != nil else { return }
         store.clearAllSettings()
         DeviceActivityCenter().stopMonitoring([.studyMode])
@@ -141,7 +153,7 @@ final class StudyLock {
         #endif
     }
 
-    #if canImport(FamilyControls)
+    #if canImport(FamilyControls) && SCREEN_TIME
     /// La levée planifiée : l'extension lève le bouclier à l'échéance, même
     /// si l'app dort. Le système exige au moins 15 minutes : une session plus
     /// courte est levée par l'app elle-même, ou au plus tard à 15 min.
@@ -170,7 +182,7 @@ final class StudyLock {
     #endif
 }
 
-#if canImport(FamilyControls)
+#if canImport(FamilyControls) && SCREEN_TIME
 extension ManagedSettingsStore.Name {
     /// Le magasin du mode étude, partagé avec l'extension `StudyTrackLock`.
     static let studyMode = Self("studytrack.studyMode")

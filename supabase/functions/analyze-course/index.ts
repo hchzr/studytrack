@@ -40,7 +40,7 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const evaluation = isEvaluation(request);
   if (!evaluation) {
-    const gate = await allowed(request, { name: "analyze-course", perIPPerHour: 40, globalPerDay: 2000 });
+    const gate = await allowed(request, { name: "analyze-course", perInstallPerHour: 40, globalPerDay: 2000 });
     if (!gate.ok) return json({ error: gate.reason }, 429);
   }
   let body: { outline?: string; weeks?: number; course?: string; plan?: string; mooc?: string; sources?: string; model?: string; provider?: unknown };

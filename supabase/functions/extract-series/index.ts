@@ -119,7 +119,7 @@ Deno.serve(async (request) => {
   // La clé `anon` est publique : un plafond par adresse et par jour.
   const evaluation = isEvaluation(request);
   if (!evaluation) {
-    const gate = await allowed(request, { name: "extract-series", perIPPerHour: 120, globalPerDay: 4000 });
+    const gate = await allowed(request, { name: "extract-series", perInstallPerHour: 120, globalPerDay: 4000 });
     if (!gate.ok) return json({ error: gate.reason }, 429);
   }
 

@@ -44,25 +44,29 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>StudyTrack cherche dans Apple Music et votre bibliothèque pour faire jouer votre musique pendant le mode étude.</string>
+	<string>StudyTrack cherche dans Apple Music et ta bibliothèque pour faire jouer ta musique pendant le mode étude.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>StudyTrack numérise ta copie pour l'envoyer à ton bureau du Mac (et à Claude), pendant une session.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>StudyTrack utilise votre calendrier pour afficher vos cours, vos midterms et vos sessions d'étude, et pour y ajouter vos sessions planifiées.</string>
+	<string>StudyTrack utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude, et pour y ajouter tes sessions planifiées.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>StudyTrack utilise votre calendrier pour afficher vos cours, vos midterms et vos sessions d'étude.</string>
+	<string>StudyTrack utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>StudyTrack ajoute vos sessions d'étude planifiées à votre calendrier.</string>
+	<string>StudyTrack ajoute tes sessions d'étude planifiées à ton calendrier.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>StudyTrack synchronise vos tâches avec l'app Rappels.</string>
+	<string>StudyTrack synchronise tes tâches avec l'app Rappels.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>StudyTrack synchronise vos tâches avec l'app Rappels.</string>
+	<string>StudyTrack synchronise tes tâches avec l'app Rappels.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NotionClientID</key>
 	<string>$(NOTION_CLIENT_ID)</string>
 	<key>StudyTrackAppGroup</key>
 	<string>$(STUDYTRACK_APP_GROUP)</string>
+	<key>FeedbackEmail</key>
+	<string>$(FEEDBACK_EMAIL)</string>
+	<key>SiteHost</key>
+	<string>$(SITE_HOST)</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>TimerRelayHost</key>

@@ -9,6 +9,7 @@ struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.openURL) private var openURL
 
     @Query(sort: \Course.code) private var courses: [Course]
     @Query(sort: \StudySession.startedAt, order: .reverse) private var sessions: [StudySession]
@@ -207,7 +208,7 @@ struct ProfileView: View {
                 StudyModeSettingsView()
             } label: {
                 settingsRow("Mode étude", icon: "moon.stars",
-                            value: StudyLock.shared.isAuthorized ? Plural.count(StudyLock.shared.allowedAppCount, "\(StudyLock.shared.allowedAppCount) app permise", "\(StudyLock.shared.allowedAppCount) apps permises") : "à configurer")
+                            value: !StudyLock.isAvailable ? "sans blocage" : StudyLock.shared.isAuthorized ? Plural.count(StudyLock.shared.allowedAppCount, "\(StudyLock.shared.allowedAppCount) app permise", "\(StudyLock.shared.allowedAppCount) apps permises") : "à configurer")
             }
             NavigationLink {
                 subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
@@ -680,16 +681,17 @@ struct ProfileView: View {
         message = ok ? "Connecté." : "Échec de l'authentification."
     }
 
-    /// « 2.1 (14) » — lue dans le bundle, jamais écrite à la main : la valeur
-    /// affichée disait « 2.0 » alors que la build portait 1.0.
-    static var versionLabel: String {
-        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-        return build.isEmpty ? short : "\(short) (\(build))"
-    }
-
     static func sha256Hex(_ input: String) -> String {
         SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Un courriel prêt à envoyer, avec la fin du journal — lue au geste.
+    private func sendFeedback() {
+        guard let address = AppDistribution.feedbackAddress,
+              let url = FeedbackMail.url(to: address, version: AppDistribution.versionLabel,
+                                         device: "\(UIDevice.current.model) · \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+                                         entries: AppLog.load()) else { return }
+        openURL(url)
     }
 
     private var aboutSection: some View {
@@ -699,7 +701,16 @@ struct ProfileView: View {
             } label: {
                 Label("Diagnostic", systemImage: "stethoscope")
             }
-            LabeledContent("Version", value: Self.versionLabel)
+            if AppDistribution.feedbackAddress != nil {
+                Button {
+                    sendFeedback()
+                } label: {
+                    Label("Signaler un problème", systemImage: "envelope")
+                }
+            }
+            // Lue dans le bundle, jamais écrite à la main : la valeur affichée
+            // disait « 2.0 » alors que la build portait 1.0.
+            LabeledContent("Version", value: AppDistribution.versionLabel)
         }
     }
 }

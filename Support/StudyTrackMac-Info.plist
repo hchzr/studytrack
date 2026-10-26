@@ -6,6 +6,10 @@
 	<string>StudyTrack pilote Music pour faire jouer ta musique pendant le mode étude.</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>StudyTrack cherche dans Apple Music et ta bibliothèque pour faire jouer ta musique pendant le mode étude.</string>
+	<key>FeedbackEmail</key>
+	<string>$(FEEDBACK_EMAIL)</string>
+	<key>SiteHost</key>
+	<string>$(SITE_HOST)</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>TimerRelayHost</key>

@@ -16,12 +16,18 @@ struct StudyTrackMacApp: App {
     @State private var menuClock: MenuBarClock
 
     init() {
-        AppLanguage.settle(existingUser: UserDefaults.standard.object(forKey: "cloudRelay.device") != nil
-                                         || UserDefaults.standard.object(forKey: "mac.epflEmail") != nil)
+        let existingUser = UserDefaults.standard.object(forKey: "cloudRelay.device") != nil
+            || UserDefaults.standard.object(forKey: "mac.epflEmail") != nil
+        AppLanguage.settle(existingUser: existingUser)
+        // Avant `MacSettings`, qui lit ces clés.
+        StudyMode.settleBlockingDefaults(["mac.studyBlocking", "mac.studySystemLock"], existingUser: existingUser)
         #if DEBUG
         // `-cloudCheck` : iCloud marche-t-il hors du bac à sable ? Une base
         // jetable, le premier événement CloudKit, puis on quitte.
         if CommandLine.arguments.contains("-cloudCheck") { CloudCheck.run() }
+        // `-initCloudKitSchema` : tout le schéma dans Development, avant de le
+        // déployer en Production (voir `CloudSchemaInit`).
+        if CommandLine.arguments.contains("-initCloudKitSchema") { CloudSchemaInit.run() }
         #endif
         // Avant tout : les réglages et la base du bac à sable, repris une fois.
         MacSandboxMigration.run()
@@ -305,6 +311,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         MiniTimerPanel.shared.update()
+        MacUpdater.shared.checkIfDue()
         // Au réveil du Mac, la socket du chrono partagé est morte : on la relance.
         // À l'endormissement, on la ferme : pas de tentatives de reconnexion
         // pendant la veille.
@@ -313,6 +320,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
                 TimerLink.shared.resume()
                 StudyModeController.shared.update()
                 Self.refreshContent()
+                MacUpdater.shared.checkIfDue()
             }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
@@ -412,6 +420,74 @@ enum MacLivePayload {
 
 #if DEBUG
 import CoreData
+
+/// Pousse **tout** le schéma — chaque entité, chaque champ — dans
+/// l'environnement Development du conteneur, avant de le déployer en
+/// Production (console CloudKit › Deploy Schema Changes).
+///
+/// CloudKit ne crée un champ qu'à la première fiche qui le remplit : un champ
+/// resté vide dans nos propres données manquerait en Production, et la première
+/// fiche d'un·e ami·e qui le remplit y serait refusée — sa synchronisation
+/// bloquée sans un mot. `initializeCloudKitSchema` envoie des fiches d'exemple
+/// complètes, puis CloudKit les supprime. Base jetable : la vraie n'est pas
+/// touchée. Une build Debug **signée** (Development) ; rien ne s'affiche.
+enum CloudSchemaInit {
+    static func run() -> Never {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("schema-init-\(UUID().uuidString).store")
+        defer { for suffix in ["", "-shm", "-wal"] { try? FileManager.default.removeItem(atPath: url.path + suffix) } }
+        guard let model = NSManagedObjectModel.makeManagedObjectModel(for: SchemaV1.models) else {
+            say("SCHEMA modèle introuvable"); exit(1)
+        }
+        let description = NSPersistentStoreDescription(url: url)
+        description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: MacStore.cloudContainerID)
+        description.shouldAddStoreAsynchronously = false
+        let container = NSPersistentCloudKitContainer(name: "StudyTrack", managedObjectModel: model)
+        container.persistentStoreDescriptions = [description]
+        var loadError: Error?
+        container.loadPersistentStores { _, error in loadError = error }
+        if let loadError { say("SCHEMA ouverture échouée : \(loadError)"); exit(1) }
+        // D'abord la mise en place du miroir (zone, abonnement) **et** la première
+        // importation (la base jetable reçoit toutes les fiches du compte) :
+        // lancé pendant l'une ou l'autre, l'appel attend la file du miroir et
+        // échoue au bout de 30 s (« a 30s wait failed »).
+        var setupDone = false
+        var importDone = false
+        let observer = NotificationCenter.default.addObserver(forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                                                              object: container, queue: nil) { note in
+            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event,
+                  event.endDate != nil else { return }
+            say("SCHEMA évènement \(event.type.rawValue) réussi=\(event.succeeded) \(event.error.map { "\($0)" } ?? "")")
+            if event.type == .setup { setupDone = true }
+            if event.type == .import { importDone = true }
+        }
+        let deadline = Date().addingTimeInterval(600)
+        while !(setupDone && importDone), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }
+        // Le miroir se pose un instant après la dernière importation.
+        RunLoop.main.run(until: Date().addingTimeInterval(5))
+        NotificationCenter.default.removeObserver(observer)
+        if !(setupDone && importDone) { say("SCHEMA miroir pas prêt au bout de 10 min") }
+        // Hors du fil principal, la boucle principale tournant.
+        var outcome: Result<Void, Error>?
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try container.initializeCloudKitSchema() }
+            DispatchQueue.main.async { outcome = result }
+        }
+        while outcome == nil { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }
+        switch outcome {
+        case .failure(let error)?:
+            say("SCHEMA échec : \(error)"); exit(1)
+        default:
+            let names = model.entities.compactMap(\.name).sorted().joined(separator: ", ")
+            say("SCHEMA ok : \(model.entities.count) entités (\(names))")
+        }
+        if let store = container.persistentStoreCoordinator.persistentStores.first {
+            try? container.persistentStoreCoordinator.remove(store)
+        }
+        exit(0)
+    }
+}
 
 enum CloudCheck {
     static func run() -> Never {

@@ -670,6 +670,33 @@ le dépôt :
 Sans compte Apple Developer, la connexion e-mail/mot de passe Supabase fonctionne et
 le bouton Apple affiche désormais un message explicite au lieu de `(null)`.
 
+### Distribuer : TestFlight (iPhone) et Developer ID (Mac)
+
+`./release.sh ios` archive, exporte pour App Store Connect et envoie la build ;
+`./release.sh mac` archive le Mac, le fait notariser et produit `StudyTrack.dmg`
+et le `latest.json` du site. Avant chaque envoi : monter `CURRENT_PROJECT_VERSION`
+(le numéro de build doit être neuf pour App Store Connect, et le Mac compare ce
+numéro pour annoncer une mise à jour).
+
+- **Signature et envoi** : le compte du titulaire dans Xcode (signature « dans le
+  nuage » : une clé App Store Connect « App Manager » ne peut pas signer).
+- **Notarisation du Mac** : la clé App Store Connect — `ASC_KEY_ID`,
+  `ASC_ISSUER_ID` dans l'environnement, `AuthKey_<ID>.p8` à la racine (ignoré par git).
+- **Temps d'écran** : `STUDYTRACK_SCREEN_TIME` (`Support/Supabase.xcconfig`) vaut
+  `YES` en Debug et `NO` en Release tant qu'Apple n'a pas accordé « Family Controls
+  (Distribution) » pour `com.hczr.studytrack.app` et `.lock` : sans cet accord,
+  l'export échoue. `NO` retire le droit (app et extension), le code du bouclier
+  (`SCREEN_TIME`) et l'interface du blocage sur l'iPhone ; le Mac bloque toujours.
+- **Schéma CloudKit** : une build TestFlight parle à l'environnement **Production**.
+  Avant la première, et après tout ajout au modèle : lancer la build Debug signée
+  du Mac avec `-initCloudKitSchema` (tout le schéma dans Development), puis console
+  CloudKit › Deploy Schema Changes.
+- **Retours et site** : `FEEDBACK_EMAIL` et `SITE_HOST` (xcconfig). Le site
+  (dépôt `studytrack-site`) porte la confidentialité, `mac.html` et
+  `mac/latest.json`, lu par le Mac une fois par jour (`MacUpdater`).
+- Une build TestFlight **expire au bout de 90 jours** : en refaire une à
+  mi-semestre.
+
 ---
 
 ## 6. Structure du projet

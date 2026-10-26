@@ -33,12 +33,14 @@ enum SystemLock {
     /// présentation de StudyTrack reste le seul frein quand il est devant.
     private(set) static var processSwitchingOff = false
 
-    /// Début de blocage : raccourcis éteints, Dock et barre des menus cachés.
-    static func engage(hideChrome: Bool, blockGestures: Bool = true) {
+    /// Début de blocage : raccourcis éteints (si `shortcuts`), Dock et barre des
+    /// menus cachés. Sans `shortcuts`, c'est le chemin « SkyLight introuvable » :
+    /// la présentation de l'app garde `.disableProcessSwitching`.
+    static func engage(hideChrome: Bool, blockGestures: Bool = true, shortcuts: Bool = true) {
         guard !untouched else { return }
         let chrome = hideChrome && SystemChrome.permission == .granted ? SystemChrome.read() : nil
-        let available = SystemHotKeys.isAvailable
-        if !available { log.notice("raccourcis du système : fonctions introuvables, rien d'éteint") }
+        let available = shortcuts && SystemHotKeys.isAvailable
+        if shortcuts, !available { log.notice("raccourcis du système : fonctions introuvables, rien d'éteint") }
         let (disable, planned) = StudyLockPlan.plan(
             wanted: StudyLockPlan.shortcutIDs,
             enabledNow: { available && SystemHotKeys.isEnabled($0) },

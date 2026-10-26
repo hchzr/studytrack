@@ -103,6 +103,20 @@ enum StudyMode {
         return base.addingTimeInterval(TimeInterval(minutes * 60))
     }
 
+    // MARK: Blocage par défaut
+
+    /// Bloquer le reste se **choisit** : une nouvelle installation ouvre le mode
+    /// étude sans rien bloquer — qui essaie l'app ne doit pas se retrouver
+    /// l'iPhone fermé pour 1 h 45 en touchant « Suivre le cours ». Qui s'en
+    /// servait avec l'ancien défaut (bloquer) le garde : la valeur est écrite une
+    /// fois, au premier lancement de cette version, et un choix déjà fait n'est
+    /// jamais touché.
+    static func settleBlockingDefaults(_ keys: [String], existingUser: Bool, in defaults: UserDefaults = .standard) {
+        for key in keys where defaults.object(forKey: key) == nil {
+            defaults.set(existingUser, forKey: key)
+        }
+    }
+
     /// Entre en mode étude pour `minutes` à partir de `now` ; `nil` : sans fin.
     static func enter(_ state: inout FocusTimerState, minutes: Int?, locks: Bool = true, now: Date = Date()) {
         state.studySince = now

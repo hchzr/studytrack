@@ -109,7 +109,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         screen.taskType = taskType ?? timer.taskType
         screen.targetID = targetID ?? (courseID == nil ? timer.targetID : nil)
         screen.label = label
-        screen.locks = settings?.studyBlocking ?? true
+        screen.locks = settings?.studyBlocking ?? false
         showWindowSoon()
     }
 
@@ -446,13 +446,17 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     private func startBlocking() {
         guard !blocking, !previewOnly else { return }
         blocking = true
+        // Le verrou système (expérimental, `studySystemLock`) : sans lui, rien
+        // n'est écrit dans les raccourcis du système ni dans `LaunchAgents`.
+        let systemLock = settings?.studySystemLock ?? false
         // Tué de force depuis une app permise, StudyTrack revient (`StudyGuard`).
-        StudyGuard.arm()
+        if systemLock { StudyGuard.arm() }
         // Les raccourcis du système (Spotlight, ⌘Tab, Mission Control…) éteints,
         // la fiche pour les rallumer écrite d'abord.
-        SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true, blockGestures: settings?.studyBlockGestures ?? true)
+        SystemLock.engage(hideChrome: settings?.studyHideSystemChrome ?? true, blockGestures: settings?.studyBlockGestures ?? true,
+                          shortcuts: systemLock)
         // ⌘Tab et ⌘Espace, éteints dans le système, reviennent en version d'étude.
-        if SystemHotKeys.isAvailable { StudyShell.shared.engage() }
+        if systemLock, SystemHotKeys.isAvailable { StudyShell.shared.engage() }
         // Le Dock se cache (System Events) : la place libre change, les fenêtres se replacent.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(1200))

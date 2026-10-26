@@ -34,6 +34,20 @@ enum SupabaseConfig {
         isUsable(host) && isUsable(anonKey)
     }
 
+    /// Un identifiant d'installation tiré au hasard, envoyé aux fonctions qui
+    /// consomment des crédits de modèle (`x-studytrack-install`) : elles comptent
+    /// leurs appels **par installation**. Comptés par adresse IP seulement, des
+    /// ami·es qui installent l'app ensemble sur le Wi-Fi du campus partageaient
+    /// un seul plafond. Rien ne le relie à une personne ; supprimer l'app en tire
+    /// un nouveau.
+    static var installID: String {
+        let key = "supabase.installID"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
+
     /// Une valeur est-elle une vraie configuration ?
     ///
     /// Une variable de build non définie laisse littéralement `$(SUPABASE_URL)`

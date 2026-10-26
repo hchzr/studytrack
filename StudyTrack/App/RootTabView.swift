@@ -313,7 +313,7 @@ struct RootTabView: View {
         let klass = DeskSchedule.current(in: classes).flatMap { $0.slot.courseID == courseID ? $0 : nil }
             ?? classes.first { $0.slot.courseID == courseID && $0.slot.end > Date() }
         let minutes = klass.map { LectureClock.studyMinutes(for: $0.slot, now: Date()) } ?? 105
-        let blocking = UserDefaults.standard.object(forKey: "studyMode.blocking") as? Bool ?? true
+        let blocking = StudyLock.isAvailable && UserDefaults.standard.object(forKey: "studyMode.blocking") as? Bool ?? false
         if app.focus.isLocked {
             app.focus.updateContext(courseID: .some(courseID), taskType: .lecture, targetID: .some(nil))
         } else {

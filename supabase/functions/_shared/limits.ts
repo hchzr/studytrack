@@ -2,17 +2,31 @@
 //
 // La clé `anon` de l'app est publique : `verify_jwt` écarte les appels sans
 // clé, pas les appels d'un inconnu qui l'a extraite de l'app. Sans limite, la
-// fonction était un accès gratuit au modèle pour qui le voulait. Ici : un
-// plafond par adresse IP et par heure, et un plafond global par jour (coupe-
-// circuit), comptés en base (`hit_rate_limit`). Si la base ne répond pas, on
-// laisse passer : une panne de comptage ne doit pas casser l'import.
+// fonction était un accès gratuit au modèle pour qui le voulait. Ici, comptés
+// en base (`hit_rate_limit`) :
+//
+// - un plafond par **installation** et par heure (`x-studytrack-install`, un
+//   UUID tiré au hasard par l'app). Compter par adresse IP seulement faisait
+//   partager un plafond à toute une classe sur le Wi-Fi du campus ;
+// - un plafond par adresse IP, dix fois plus haut quand l'installation est
+//   connue (un inconnu qui change d'UUID à chaque appel bute dessus), au
+//   niveau de l'installation sinon (les builds d'avant l'en-tête) ;
+// - un plafond global par jour (coupe-circuit).
+//
+// Si la base ne répond pas, on laisse passer : une panne de comptage ne doit
+// pas casser l'import.
 
-export type Limit = { name: string; perIPPerHour: number; globalPerDay: number };
+export type Limit = { name: string; perInstallPerHour: number; globalPerDay: number };
+
+const INSTALL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function allowed(request: Request, limit: Limit): Promise<{ ok: boolean; reason?: string }> {
   const ip = (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "inconnue";
+  const install = (request.headers.get("x-studytrack-install") ?? "").trim().toLowerCase();
+  const known = INSTALL.test(install);
   const checks: Array<[string, number, number]> = [
-    [`${limit.name}:ip:${ip}`, 3600, limit.perIPPerHour],
+    ...(known ? [[`${limit.name}:install:${install}`, 3600, limit.perInstallPerHour] as [string, number, number]] : []),
+    [`${limit.name}:ip:${ip}`, 3600, known ? limit.perInstallPerHour * 10 : limit.perInstallPerHour],
     [`${limit.name}:global`, 86400, limit.globalPerDay],
   ];
   for (const [bucket, window, max] of checks) {
