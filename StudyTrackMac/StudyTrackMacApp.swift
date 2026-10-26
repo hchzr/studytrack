@@ -70,12 +70,18 @@ struct StudyTrackMacApp: App {
             MiniTimerPanel.shared.update()
             menuClock.update()
             StudyModeController.shared.update()
+            // Avec mesure : le mode étude et le chrono changent ce que Claude Code permet.
+            ClaudeMeasureService.shared.contextChanged()
         }
         timer.attach(store.container)
+        ClaudeMeasureService.shared.start(timer: timer, container: store.container, settings: settings)
         MiniTimerPanel.shared.timer = timer
         MiniTimerPanel.shared.settings = settings
         MiniTimerPanel.shared.container = store.container
-        store.onDataChange = refreshWidgets
+        store.onDataChange = {
+            refreshWidgets()
+            ClaudeMeasureService.shared.contextChanged()
+        }
         refreshWidgets()
         _settings = State(initialValue: settings)
         _store = State(initialValue: store)

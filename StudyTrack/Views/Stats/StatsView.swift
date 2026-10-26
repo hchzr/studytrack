@@ -219,6 +219,7 @@ struct StatsView: View {
         } trailing: {
             progressSection
         }
+        ClaudeMeasurePhoneCard()
         journal
     }
 
@@ -235,6 +236,7 @@ struct StatsView: View {
         case 6: PaceCard(rows: paceRows)
         case 7: progressSection
         case 8: correctionChart
+        case 9: ClaudeMeasurePhoneCard()
         default: journal
         }
     }
@@ -242,10 +244,10 @@ struct StatsView: View {
     private var visibleSections: [Int] {
         #if DEBUG
         // `-statsSkip 4` : les captures du simulateur ne défilent pas.
-        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...9) }
+        if let skip = PreviewLaunch.int("-statsSkip") { return Array(skip...10) }
         #endif
         // La tendance semaine par semaine n'a de sens que sur le semestre.
-        return Array(0...9).filter { $0 != 5 || period == .semester }
+        return Array(0...10).filter { $0 != 5 || period == .semester }
     }
 
     // MARK: Données des graphiques

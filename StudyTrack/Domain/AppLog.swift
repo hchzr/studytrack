@@ -125,6 +125,7 @@ enum AppLog {
         static let anki = "anki"
         static let storage = "stockage"
         static let calendar = "calendrier"
+        static let claude = "Claude Code"
     }
 
     static func load(defaults: UserDefaults = .standard) -> [LogEntry] {

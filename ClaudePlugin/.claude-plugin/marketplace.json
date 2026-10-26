@@ -1,0 +1,11 @@
+{
+  "name": "studytrack",
+  "owner": { "name": "StudyTrack" },
+  "plugins": [
+    {
+      "name": "mesure",
+      "source": "./mesure",
+      "description": "Avec mesure : ton temps de Claude Code, compté et réglé avec StudyTrack."
+    }
+  ]
+}

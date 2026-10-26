@@ -10,6 +10,15 @@ final class SettingsStore {
 
 var failures = 0
 
+/// Efface un domaine de préférences jetable, fichier compris : `removePersistentDomain`
+/// seul laisse le `.plist` dans ~/Library/Preferences.
+func dropSuite(_ name: String) {
+    UserDefaults.standard.removePersistentDomain(forName: name)
+    let file = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Preferences/\(name).plist")
+    try? FileManager.default.removeItem(at: file)
+}
+
 func check(_ condition: Bool, _ label: String) {
     if condition {
         print("  ✅ \(label)")
@@ -3236,7 +3245,11 @@ do {
           "plus restaurable au-delà de \(Int(FocusTimerState.maxRestorableAge / 3600)) h")
     check(!FocusTimerState(sessionStartedAt: t0).isRestorable(at: t0), "un chrono à zéro n'est pas restauré")
 
-    let defaults = UserDefaults(suiteName: "studytrack.validation.\(UUID().uuidString)")!
+    // Un domaine jetable, effacé après : sans ça, chaque passage laissait un
+    // `studytrack.validation.<UUID>.plist` dans ~/Library/Preferences (539 au 26 octobre).
+    let suite = "studytrack.validation.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { dropSuite(suite) }
     FocusTimerStore.save(timer, defaults: defaults)
     let reloaded = FocusTimerStore.load(defaults: defaults)
     check(reloaded == timer, "aller-retour UserDefaults sans perte")
@@ -5466,6 +5479,174 @@ do {
           "un état d'avant (sans cycle) prend les réglages de l'appareil")
 }
 
+// MARK: Avec mesure (Claude Code) — les mêmes cas que ClaudePlugin/mesure/hooks/policy.test.ts
+do {
+    print("== Avec mesure : temps de Claude Code et règles ==")
+    typealias CM = ClaudeMeasure
+    let cal = Calendar.current
+    func at(_ h: Int, _ m: Int = 0, day: Int = 27) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: h, minute: m))!
+    }
+    func ms(_ d: Date) -> Double { CM.ms(d) }
+    let minute = 60_000.0
+    func session(_ id: String, _ category: CM.Category, _ marks: [(Double, CM.EventKind)], headless: Bool = false) -> CM.SessionRecord {
+        CM.SessionRecord(session: id, cwd: "/x", category: category, headless: headless,
+                         events: marks.map { CM.Event(t: $0.0, k: $0.1) }, blocks: [])
+    }
+    let studied = CM.Studied(day: "2026-10-27", seconds: 4 * 3600, accumulated: 0, runningSince: nil)
+    func policy(_ rules: CM.Rules = .standard, _ context: CM.Context? = nil, enforceFrom: Double = 0) -> CM.Policy {
+        CM.Policy(writtenAt: 0, enabled: true, enforceFrom: enforceFrom, rules: rules, pending: nil,
+                  context: context ?? CM.Context(studyMode: nil, classes: [], studied: studied))
+    }
+    let none = CM.Usage()
+
+    // Le temps compté : une réponse longue plafonnée, une absence oubliée.
+    let t0 = ms(at(14))
+    let long = session("a", .projets, [(t0, .s), (t0 + minute, .p), (t0 + 3 * minute, .d), (t0 + 6 * minute, .p),
+                                       (t0 + 40 * minute, .d), (t0 + 60 * minute, .p), (t0 + 61 * minute, .d), (t0 + 62 * minute, .e)])
+    let counted = CM.intervals(long, from: ms(at(0)), to: ms(at(0, day: 28)), now: t0 + 70 * minute, live: false)
+        .reduce(0) { $0 + $1.end - $1.start }
+    check(counted == 28 * minute, "mesure : 1 + 2 + 3 + 20 (plafond) + 0 (absence) + 1 + 1 = 28 min (obtenu \(counted / minute))")
+
+    // Deux terminaux en même temps : une seule fois.
+    let t1 = ms(at(15))
+    let a = session("a", .projets, [(t1, .p), (t1 + 10 * minute, .d), (t1 + 11 * minute, .e)])
+    let b = session("b", .projets, [(t1 + 5 * minute, .p), (t1 + 12 * minute, .d), (t1 + 12 * minute, .e)])
+    check(CM.usage([a, b], now: CM.date(t1 + 30 * minute), rules: .standard).projets == 12 * 60,
+          "mesure : deux terminaux en même temps ne comptent qu'une fois")
+    let live = session("a", .projets, [(ms(at(16)), .p), (ms(at(16, 2)), .d)])
+    check(CM.usage([live], now: at(16, 5), rules: .standard, liveSession: "a").projets == 5 * 60
+          && CM.usage([live], now: at(16, 5), rules: .standard).projets == 2 * 60,
+          "mesure : la frappe en cours compte pour la séance vivante seulement")
+    check(CM.usage([session("h", .projets, [(t1, .p), (t1 + 30 * minute, .d)], headless: true)], now: at(16), rules: .standard).projets == 0,
+          "mesure : une séance sans clavier (claude -p) ne compte pas")
+
+    // Couvre-feu, classement.
+    let curfew = CM.Curfew(start: "23:30", end: "07:00")
+    check(CM.curfewEnd(curfew, now: at(23, 45)) == at(7, day: 28) && CM.curfewEnd(curfew, now: at(6)) == at(7)
+          && CM.curfewEnd(curfew, now: at(12)) == nil, "mesure : le couvre-feu passe minuit")
+    let home = "/Users/eleve"
+    check(CM.categorize("\(home)/EPFL/AICC", rules: .standard, home: home) == .etude
+          && CM.categorize("\(home)/EPFLX", rules: .standard, home: home) == .projets
+          && CM.categorize("\(home)/Prog/studytrack", rules: .standard, home: home) == .projets,
+          "mesure : ~/EPFL est l'étude, ~/EPFLX non, le reste est projets")
+    var free = CM.Rules.standard
+    free.freeFolders = ["~/Notes"]
+    check(CM.categorize("\(home)/Notes/x", rules: free, home: home) == .libre, "mesure : un dossier libre est exempté")
+
+    // Les règles, dans l'ordre.
+    var spent = none
+    spent.projets = 95 * 60
+    let budget = CM.evaluate(.projets, headless: false, policy: policy(), use: spent, passes: [], now: at(15))
+    check(!budget.allow && budget.rule == .budget && budget.passable && budget.message.contains("/mesure encore"),
+          "mesure : budget atteint → bloqué, un pass possible")
+    let pass = CM.Pass(at: ms(at(14, 55)), from: ms(at(14, 57)), until: ms(at(15, 12)), reason: "finir le correctif", rule: .budget, session: "a")
+    let withPass = CM.evaluate(.projets, headless: false, policy: policy(), use: spent, passes: [pass], now: at(15))
+    check(withPass.allow && (withPass.warn ?? "").contains("Pass ouvert"), "mesure : un pass ouvert lève le budget")
+    check(CM.evaluate(.etude, headless: false, policy: policy(), use: spent, passes: [], now: at(15)).allow,
+          "mesure : l'étude n'a pas de budget")
+    var near = none
+    near.projets = 75 * 60
+    let warned = CM.evaluate(.projets, headless: false, policy: policy(), use: near, passes: [], now: at(15))
+    check(warned.allow && warned.remainingMinutes == 15 && (warned.warn ?? "").contains("Projets"), "mesure : près du budget, une alerte")
+    let lesson = CM.Context(studyMode: nil, classes: [CM.Lesson(start: ms(at(14)), end: ms(at(16)), title: "AICC")], studied: studied)
+    let inClass = CM.evaluate(.projets, headless: false, policy: policy(.standard, lesson), use: none, passes: [], now: at(15))
+    check(inClass.rule == .lesson && !inClass.passable, "mesure : pendant un cours, bloqué sans pass")
+    let mode = CM.StudyModeInfo(since: ms(at(14)), until: ms(at(16)), blocks: true, locks: false)
+    check(CM.evaluate(.projets, headless: false, policy: policy(.standard, CM.Context(studyMode: mode, classes: [], studied: studied)),
+                      use: none, passes: [], now: at(15)).rule == .studyMode, "mesure : mode étude → les projets attendent")
+    var locked = mode
+    locked.locks = true
+    let lockCtx = CM.Context(studyMode: locked, classes: [], studied: studied)
+    check(CM.evaluate(.libre, headless: false, policy: policy(.standard, lockCtx), use: none, passes: [], now: at(15)).rule == .lock
+          && CM.evaluate(.etude, headless: false, policy: policy(.standard, lockCtx), use: none, passes: [], now: at(15)).allow,
+          "mesure : le verrou ferme aussi le libre, pas l'étude")
+    let early = CM.Context(studyMode: nil, classes: [],
+                           studied: CM.Studied(day: "2026-10-27", seconds: 20 * 60, accumulated: 5 * 60, runningSince: ms(at(14, 50))))
+    let first = CM.evaluate(.projets, headless: false, policy: policy(.standard, early), use: none, passes: [], now: at(15))
+    check(first.rule == .studyFirst && first.message.contains("25 min"), "mesure : d'abord étudier (35 min sur 60, encore 25)")
+    let stale = CM.Context(studyMode: nil, classes: [], studied: CM.Studied(day: "2026-10-26", seconds: 0, accumulated: 0, runningSince: nil))
+    check(CM.evaluate(.projets, headless: false, policy: policy(.standard, stale), use: none, passes: [], now: at(15)).allow
+          && CM.evaluate(.projets, headless: false, policy: policy(.standard, .empty), use: none, passes: [], now: at(15)).allow,
+          "mesure : temps étudié inconnu (StudyTrack fermé) → « d'abord étudier » ne bloque pas")
+    check(CM.evaluate(.projets, headless: false, policy: policy(), use: none, passes: [], now: at(23, 50)).rule == .curfew
+          && CM.evaluate(.etude, headless: false, policy: policy(), use: none, passes: [], now: at(23, 50)).allow,
+          "mesure : couvre-feu pour les projets, pas pour l'étude")
+    var all = CM.Rules.standard
+    all.curfewAll = true
+    check(CM.evaluate(.etude, headless: false, policy: policy(all), use: none, passes: [], now: at(23, 50)).rule == .curfew,
+          "mesure : couvre-feu « tout »")
+    var marks: [(Double, CM.EventKind)] = []
+    for i in 0..<12 { marks += [(t0 + Double(i) * 5 * minute, .p), (t0 + Double(i) * 5 * minute + 4 * minute, .d)] }
+    let run = CM.usage([session("a", .projets, marks)], now: CM.date(t0 + 60 * minute), rules: .standard)
+    let paused = CM.evaluate(.projets, headless: false, policy: policy(), use: run, passes: [], now: CM.date(t0 + 60 * minute))
+    check(paused.rule == .pause && paused.until == CM.date(t0 + 69 * minute), "mesure : pause de 10 min après 59 min d'affilée")
+    check(CM.usage([session("a", .projets, marks)], now: CM.date(t0 + 70 * minute), rules: .standard).streak == nil,
+          "mesure : dix minutes sans rien, la série est finie")
+    var lots = none
+    lots.projets = 200 * 60
+    let observing = CM.evaluate(.projets, headless: false, policy: policy(enforceFrom: ms(at(16))), use: lots, passes: [], now: at(15))
+    check(observing.allow && observing.observing && observing.message.hasPrefix("Observation"), "mesure : le jour d'observation ne bloque rien")
+    check(CM.evaluate(.projets, headless: true, policy: policy(), use: lots, passes: [], now: at(15)).allow
+          && CM.evaluate(.projets, headless: false, policy: nil, use: lots, passes: [], now: at(15)).allow,
+          "mesure : sans clavier ou sans règles, jamais bloqué")
+
+    // Le contrat de fichiers : des `null` écrits, et ce que le mod écrit se relit.
+    var open = CM.Rules.standard
+    open.budgetWeekday = nil
+    open.curfew = nil
+    let json = String(decoding: try! JSONEncoder().encode(policy(open)), as: UTF8.self)
+    check(json.contains("\"budgetWeekday\":null") && json.contains("\"curfew\":null") && json.contains("\"pending\":null"),
+          "mesure : « sans limite » s'écrit null (le mod ne le lirait pas absent)")
+    let fromMod = #"{"v":1,"session":"s1","cwd":"/Users/eleve/Prog","category":"projets","headless":false,"events":[{"t":1793054518868,"k":"s"},{"t":1793054519000,"k":"p"}],"blocks":[{"t":1793054520000,"rule":"class"}]}"#
+    let decoded = try? JSONDecoder().decode(CM.SessionRecord.self, from: Data(fromMod.utf8))
+    check(decoded?.events.count == 2 && decoded?.blocks.first?.rule == .lesson, "mesure : une séance écrite par le mod se relit (« class » → cours)")
+    let older = #"{"budgetWeekday":45}"#
+    let partial = try? JSONDecoder().decode(CM.Rules.self, from: Data(older.utf8))
+    check(partial?.budgetWeekday == 45 && partial?.curfew == CM.Rules.standard.curfew, "mesure : des règles incomplètes prennent les défauts")
+
+    // Durcir tout de suite, assouplir le lendemain.
+    check(CM.nextMorning(after: at(23, 45)) == at(4, day: 29) && CM.nextMorning(after: at(10)) == at(4, day: 28),
+          "mesure : « le lendemain » = 4 h du matin, au moins 12 h plus tard")
+    let start = CM.apply(desired: .standard, enabled: true, to: nil, now: at(23, 45))
+    check(start.enabled && start.enforceFrom == ms(at(4, day: 29)), "mesure : mise en route → une journée d'observation")
+    var running = start
+    running.enforceFrom = 0
+    var tighter = CM.Rules.standard
+    tighter.budgetWeekday = 45
+    let tightened = CM.apply(desired: tighter, enabled: true, to: running, now: at(15))
+    check(tightened.rules.budgetWeekday == 45 && tightened.pending == nil, "mesure : durcir s'applique tout de suite")
+    var looser = CM.Rules.standard
+    looser.budgetWeekday = 240
+    looser.curfew = CM.Curfew(start: "01:00", end: "06:00")
+    let loosened = CM.apply(desired: looser, enabled: true, to: tightened, now: at(15))
+    check(loosened.rules.budgetWeekday == 45 && loosened.rules.curfew == CM.Rules.standard.curfew
+          && loosened.pending?.rules == looser && loosened.pending?.from == ms(at(4, day: 28)),
+          "mesure : assouplir attend le lendemain à 4 h (la règle en vigueur reste la plus stricte)")
+    var mixed = looser
+    mixed.studyFirstWeekday = 90
+    let both = CM.apply(desired: mixed, enabled: true, to: tightened, now: at(15))
+    check(both.rules.studyFirstWeekday == 90 && both.rules.budgetWeekday == 45, "mesure : dans un même réglage, ce qui durcit vaut déjà")
+    let again = CM.apply(desired: looser, enabled: true, to: loosened, now: at(18))
+    check(again.pending?.from == loosened.pending?.from, "mesure : redemander n'avance ni ne repousse l'heure")
+    let off = CM.apply(desired: .standard, enabled: false, to: running, now: at(15))
+    check(off.enabled && off.pending?.enabled == false
+          && !CM.evaluate(.projets, headless: false, policy: off, use: lots, passes: [], now: at(15)).allow
+          && CM.evaluate(.projets, headless: false, policy: off, use: lots, passes: [], now: at(5, day: 28)).allow,
+          "mesure : couper Avec mesure attend aussi le lendemain")
+    let settled = CM.settle(loosened, now: at(5, day: 28))
+    check(settled.rules == looser && settled.pending == nil, "mesure : à l'heure dite, l'assouplissement s'applique")
+    var widened = CM.Rules.standard
+    widened.studyFolders = ["~/EPFL", "~/Prog"]
+    check(CM.apply(desired: widened, enabled: true, to: running, now: at(15)).rules.studyFolders == ["~/EPFL"],
+          "mesure : ajouter un dossier d'étude est un assouplissement")
+
+    // Le bilan d'un jour.
+    let day = CM.summary(day: at(12), records: [a, b, long], passes: [pass], rules: .standard, now: at(20))
+    // 26 min (14 h) + 12 min (15 h, trois séances qui se chevauchent : comptées une fois).
+    check(day.day == "2026-10-27" && day.projets == 38 * 60 && day.passes == 1, "mesure : le bilan du jour (38 min, 1 pass)")
+}
+
 // MARK: Distribution (retour, mises à jour du Mac)
 do {
     print("== Distribution : retour et mises à jour du Mac ==")
@@ -5516,7 +5697,7 @@ do {
     chosen.set(false, forKey: "mac.studyBlocking")
     StudyMode.settleBlockingDefaults(["mac.studyBlocking"], existingUser: true, in: chosen)
     check(!chosen.bool(forKey: "mac.studyBlocking"), "utilisateur d'avant qui l'avait coupé : reste coupé")
-    for name in [suite, suite + ".existing", suite + ".chosen"] { UserDefaults.standard.removePersistentDomain(forName: name) }
+    for name in [suite, suite + ".existing", suite + ".chosen"] { dropSuite(name) }
 }
 do {
     let t0 = Date(timeIntervalSince1970: 2_000_000_000)

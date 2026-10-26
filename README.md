@@ -670,6 +670,34 @@ le dépôt :
 Sans compte Apple Developer, la connexion e-mail/mot de passe Supabase fonctionne et
 le bouton Apple affiche désormais un message explicite au lieu de `(null)`.
 
+### Avec mesure : le temps de Claude Code (Mac)
+
+Un mod Claude Code (`ClaudePlugin/mesure`) et une page de StudyTrack (Réglages ›
+Claude Code, carte du Bilan, ligne de la barre des menus, carte du Bilan de
+l'iPhone). Éteint par défaut.
+
+- **Étude / projets / libre**, d'après le dossier de la séance : les dossiers
+  d'étude (`~/EPFL`, le projet Claude réglé dans StudyTrack) ne sont jamais
+  limités, seulement comptés ; le reste (« projets ») suit les règles.
+- **Règles**, dans l'ordre : verrou du mode étude (tout sauf l'étude), mode
+  étude, cours de l'horaire, couvre-feu, d'abord étudier (minutes du jour
+  dans StudyTrack), pause après une longue série, budget du jour.
+- **Passes** : `/mesure encore <raison>` — trois mots au moins, un délai de
+  réflexion, un nombre par jour ; la raison va au Bilan. Pas de pass pendant un
+  cours ni en mode étude.
+- **Durcir tout de suite, assouplir le lendemain** (4 h, au moins 12 h plus
+  tard), couper Avec mesure compris ; le premier jour observe seulement.
+- **Fichiers** (`~/Library/Application Support/StudyTrack/Claude/`) :
+  `policy.json` (StudyTrack → mod), `sessions/<jour>/<séance>.json` et
+  `passes/<jour>/…` (mod → StudyTrack), `mod.json`. Le calcul existe deux fois,
+  `ClaudePlugin/mesure/hooks/policy.ts` et `StudyTrack/Domain/ClaudeMeasure.swift`,
+  avec les mêmes cas de test (`claude plugin test ClaudePlugin/mesure`, `./validate.sh`).
+- **Brancher** : Réglages › Claude Code › « Brancher Claude Code » copie le mod
+  (dans l'app : référence de dossier `ClaudePlugin`) vers Application Support,
+  puis `claude plugin marketplace add` et `claude plugin install mesure@studytrack`.
+  Une séance sans clavier (`claude -p`, le tuteur) n'est ni comptée ni bloquée ;
+  un mod cassé laisse passer les demandes (pas de `.catch` sur `prompt.submit`).
+
 ### Distribuer : TestFlight (iPhone) et Developer ID (Mac)
 
 `./release.sh ios` archive, exporte pour App Store Connect et envoie la build ;

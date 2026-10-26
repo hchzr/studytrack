@@ -1,0 +1,6 @@
+{
+  "name": "mesure",
+  "version": "0.1.0",
+  "description": "Avec mesure : compte ton temps de Claude Code (étude / projets) et applique les règles réglées dans StudyTrack — budget, couvre-feu, cours, mode étude, d'abord étudier, pauses, passes avec raison.",
+  "types": "./types/index.d.ts"
+}

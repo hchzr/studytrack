@@ -132,6 +132,9 @@ struct MacStatsView: View {
                     }
                 }
 
+                // Le temps de Claude Code, à côté du temps d'étude (Avec mesure).
+                ClaudeMeasureCard()
+
                 sessionsCard
             }
             .padding(Carnet.pagePadding)

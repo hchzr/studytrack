@@ -15,6 +15,8 @@ struct MacSettingsView: View {
             PersonalizeForm()
                 .frame(height: 520)
                 .tabItem { Label("Personnaliser", systemImage: "slider.horizontal.3") }
+            ClaudeMeasureSettingsPane()
+                .tabItem { Label("Claude Code", systemImage: "terminal") }
             SyncSettings()
                 .tabItem { Label("iCloud", systemImage: "icloud") }
         }

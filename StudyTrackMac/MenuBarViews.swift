@@ -390,6 +390,7 @@ struct MenuBarTimerView: View {
         VStack(alignment: .leading, spacing: 12) {
             nowLine
             deadlines
+            ClaudeMeasureMenuLine()
             HStack(spacing: 8) {
                 HubAction(title: "Note", icon: "note.text.badge.plus") {
                     MacWindows.openMain(openWindow)
