@@ -711,9 +711,9 @@ numéro pour annoncer une mise à jour).
 - **Notarisation du Mac** : la clé App Store Connect — `ASC_KEY_ID`,
   `ASC_ISSUER_ID` dans l'environnement, `AuthKey_<ID>.p8` à la racine (ignoré par git).
 - **Temps d'écran** : `STUDYTRACK_SCREEN_TIME` (`Support/Supabase.xcconfig`) vaut
-  `YES` en Debug et `NO` en Release tant qu'Apple n'a pas accordé « Family Controls
-  (Distribution) » pour `com.hczr.studytrack.app` et `.lock` : sans cet accord,
-  l'export échoue. `NO` retire le droit (app et extension), le code du bouclier
+  `YES` partout depuis qu'Apple a accordé « Family Controls (Distribution) » au
+  compte (27 octobre 2026 ; sans cet accord, l'export d'une build distribuée
+  échoue). `NO` retire le droit (app et extension), le code du bouclier
   (`SCREEN_TIME`) et l'interface du blocage sur l'iPhone ; le Mac bloque toujours.
 - **Schéma CloudKit** : une build TestFlight parle à l'environnement **Production**.
   Avant la première, et après tout ajout au modèle : lancer la build Debug signée

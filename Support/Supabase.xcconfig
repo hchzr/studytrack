@@ -57,10 +57,10 @@ SITE_HOST = studytrack.hczr.ch
 //  com.hczr.studytrack.app et com.hczr.studytrack.app.lock. Sans lui, l'export
 //  échoue. NO : ni le droit (app et extension StudyTrackLock, qui reste dans
 //  l'app mais n'est jamais lancée), ni le code ni l'interface du blocage sur
-//  l'iPhone (le Mac bloque toujours). Accord reçu : YES partout.
+//  l'iPhone (le Mac bloque toujours). Accordé le 27 octobre 2026 : YES partout ;
+//  NO reste possible pour une build sans Temps d'écran.
 // ─────────────────────────────────────────────────────────────────────────────
-STUDYTRACK_SCREEN_TIME = NO
-STUDYTRACK_SCREEN_TIME[config=Debug] = YES
+STUDYTRACK_SCREEN_TIME = YES
 STUDYTRACK_SCREEN_TIME_CONDITION_YES = SCREEN_TIME
 STUDYTRACK_SCREEN_TIME_CONDITION_NO =
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) $(STUDYTRACK_SCREEN_TIME_CONDITION_$(STUDYTRACK_SCREEN_TIME))
