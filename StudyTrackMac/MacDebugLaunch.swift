@@ -9,6 +9,38 @@ import SwiftUI
 @MainActor
 enum MacDebugLaunch {
     static func apply(timer: MacTimer, store: MacStore) {
+        // `-snapshot -captureView claude-settings|claude-card|claude-menu <fichier.png>` :
+        // une vue d'Avec mesure dessinée dans une fenêtre jamais montrée (transparente,
+        // jamais mise devant), l'image écrite, puis on quitte.
+        if let index = CommandLine.arguments.firstIndex(of: "-captureView"), index + 2 < CommandLine.arguments.count {
+            let name = CommandLine.arguments[index + 1]
+            let path = CommandLine.arguments[index + 2]
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                ClaudeMeasureService.shared.refreshUsage(force: true)
+                let content: AnyView
+                let size: NSSize
+                switch name {
+                case "claude-card": content = AnyView(ClaudeMeasureCard().padding(24)); size = NSSize(width: 1000, height: 520)
+                case "claude-menu": content = AnyView(ClaudeMeasureMenuLine().padding(16)); size = NSSize(width: 340, height: 60)
+                default: content = AnyView(ClaudeMeasureSettingsPane()); size = NSSize(width: 520, height: 560)
+                }
+                let hosting = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(Carnet.ground))
+                hosting.appearance = NSAppearance(named: .aqua)
+                hosting.frame = NSRect(origin: .zero, size: size)
+                let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                window.alphaValue = 0
+                window.contentView = hosting
+                hosting.layoutSubtreeIfNeeded()
+                try? await Task.sleep(for: .seconds(1.5))
+                hosting.layoutSubtreeIfNeeded()
+                if let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+                    hosting.cacheDisplay(in: hosting.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                }
+                exit(0)
+            }
+        }
         // `-dumpHotKeys <fichier>` : les raccourcis du système (numéro, nom, état, touche) —
         // lecture seule, sert à confirmer les numéros que le blocage éteint (spike S1).
         if let index = CommandLine.arguments.firstIndex(of: "-dumpHotKeys"), index + 1 < CommandLine.arguments.count {

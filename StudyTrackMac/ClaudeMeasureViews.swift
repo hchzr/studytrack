@@ -9,6 +9,9 @@ private typealias CM = ClaudeMeasure
 
 // MARK: - Réglages
 
+/// « Demain » au milieu d'une phrase : sans majuscule.
+private func lowered(_ text: String) -> String { text.prefix(1).lowercased() + text.dropFirst() }
+
 /// Les règles se modifient sur un brouillon et s'appliquent d'un bouton : un
 /// pas de stepper ne crée pas une demande en attente à chaque clic.
 struct ClaudeMeasureSettingsPane: View {
@@ -126,7 +129,7 @@ struct ClaudeMeasureSettingsPane: View {
     @ViewBuilder private var plugin: some View {
         HStack {
             if let seen = service.modSeenAt {
-                Label("Mod branché\(service.modVersion.map { " (\($0))" } ?? ""), vu \(DateUtils.relativeLabel(seen))", systemImage: "checkmark.circle")
+                Label("Mod branché\(service.modVersion.map { " (\($0))" } ?? ""), vu \(lowered(DateUtils.relativeLabel(seen)))", systemImage: "checkmark.circle")
                     .foregroundStyle(Carnet.correct)
             } else {
                 Label("Mod pas encore branché sur Claude Code", systemImage: "puzzlepiece.extension")
@@ -157,7 +160,7 @@ struct ClaudeMeasureSettingsPane: View {
     }
 
     private func day(_ date: Date) -> String {
-        "\(DateUtils.relativeLabel(date)) à \(CM.clock(date))"
+        "\(lowered(DateUtils.relativeLabel(date))) à \(CM.clock(date))"
     }
 
     /// Une heure « hh:mm » du couvre-feu, éditée comme une date.
