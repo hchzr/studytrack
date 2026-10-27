@@ -4,7 +4,7 @@
 #
 #   ./release.sh ios           # archive → export App Store Connect → envoi (TestFlight)
 #   ./release.sh mac           # archive → Developer ID → notarisation → StudyTrack.dmg + latest.json
-#   ./release.sh publish-mac   # l'image sur une release du dépôt du site, latest.json poussé
+#   ./release.sh publish-mac   # l'image sur une release du site et de l'app, latest.json poussé
 #
 # Signature et envoi : le compte de Xcode (Réglages › Comptes), celui du
 # titulaire — la signature « dans le nuage » (certificats Distribution et
@@ -128,6 +128,13 @@ publish-mac)
   git -C "$SITE_REPO" add mac/latest.json
   git -C "$SITE_REPO" commit -m "Mac $VERSION ($BUILD)"
   git -C "$SITE_REPO" push
+  # La même release dans le dépôt de l'app (privé : le lien de latest.json reste
+  # celui du site, public). L'étiquette va sur HEAD, le commit construit par
+  # `./release.sh mac`, et part seule : main n'a pas à être poussée pour autant.
+  git tag -a "$TAG" -m "StudyTrack $VERSION ($BUILD)"
+  git push origin "refs/tags/$TAG"
+  gh release create "$TAG" "$OUT/StudyTrack.dmg" --verify-tag \
+    --title "StudyTrack $VERSION ($BUILD)" --notes "${NOTES:-StudyTrack pour Mac $VERSION ($BUILD).}"
   echo "✅ Publiée : https://github.com/$SITE_RELEASES/releases/tag/$TAG"
   ;;
 *)
