@@ -1,0 +1,71 @@
+/* La palette « Carnet » de l'iPhone et du Mac (StudyKit, Theme.swift), en
+   variables CSS. Clair par défaut, sombre selon le système ou [data-theme].
+   Un seul endroit : tous les écrans y puisent. */
+
+:root {
+  --ground: #F4F0E6;
+  --sheet: #FFFDF8;
+  --sheet-raised: #EFE9DC;
+  --ink: #1D1B16;
+  --ink-secondary: #6B655A;
+  --ink-tertiary: #696356;
+  --rule: #E6DFD0;
+  --marker: #FBF1C9;
+  --correct: #3A723A; /* vert : juste */
+  --review: #8F5E06;  /* ambre : à revoir / objectif */
+  --wrong: #A33A2A;   /* rouge : faux */
+  --selection: #6B5F4E;
+
+  --radius-card: 20px;
+  --radius-row: 12px;
+  --gap: 16px;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono: "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #15130F;
+    --sheet: #211E18;
+    --sheet-raised: #2B271F;
+    --ink: #EDE6D6;
+    --ink-secondary: #A89F8D;
+    --ink-tertiary: #9E9480;
+    --rule: #353027;
+    --marker: #4A4020;
+    --correct: #8FC58A;
+    --review: #E0B04E;
+    --wrong: #E7836F;
+    --selection: #463E31;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #15130F; --sheet: #211E18; --sheet-raised: #2B271F;
+  --ink: #EDE6D6; --ink-secondary: #A89F8D; --ink-tertiary: #9E9480;
+  --rule: #353027; --marker: #4A4020;
+  --correct: #8FC58A; --review: #E0B04E; --wrong: #E7836F; --selection: #463E31;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.serif { font-family: var(--serif); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.card {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  padding: var(--gap);
+}
+button { font: inherit; color: inherit; cursor: pointer; }

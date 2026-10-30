@@ -1,0 +1,90 @@
+// La coquille de l'app : une barre latérale et une page, comme le
+// `NavigationSplitView` du Mac (MacRootView.swift). Pages : aujourd'hui, cours,
+// chrono, agenda, stats, réglages ; un cours ouvre sa page détaillée.
+
+import { useMemo, useState } from "react";
+import { useData } from "../data/dataContext.tsx";
+import { Course } from "../models/index.ts";
+import { TodayScreen } from "./screens/TodayScreen.tsx";
+import { CoursesScreen } from "./screens/CoursesScreen.tsx";
+import { CourseScreen } from "./screens/CourseScreen.tsx";
+import { FocusScreen } from "./screens/FocusScreen.tsx";
+import { AgendaScreen } from "./screens/AgendaScreen.tsx";
+import { StatsScreen } from "./screens/StatsScreen.tsx";
+import { SettingsScreen } from "./screens/SettingsScreen.tsx";
+
+export type Page =
+  | { kind: "today" } | { kind: "courses" } | { kind: "focus" }
+  | { kind: "agenda" } | { kind: "stats" } | { kind: "settings" }
+  | { kind: "course"; id: string };
+
+type TabKind = Exclude<Page["kind"], "course">;
+const TABS: { kind: TabKind; label: string }[] = [
+  { kind: "today", label: "Aujourd'hui" },
+  { kind: "courses", label: "Cours" },
+  { kind: "focus", label: "Chrono" },
+  { kind: "agenda", label: "Agenda" },
+  { kind: "stats", label: "Stats" },
+  { kind: "settings", label: "Réglages" },
+];
+
+export function Shell() {
+  const { store } = useData();
+  const [page, setPage] = useState<Page>({ kind: "today" });
+
+  const courses = useMemo(
+    () => (store ? store.fetch(Course).filter((c) => c.isActive).sort((a, b) => a.code.localeCompare(b.code)) : []),
+    [store],
+  );
+
+  if (!store) return <div style={{ padding: 40, color: "var(--ink-secondary)" }}>Chargement…</div>;
+
+  const current = page.kind === "course" ? store.fetch(Course).find((c) => c.id === page.id) ?? null : null;
+  const activeKey = page.kind === "course" ? `course:${page.id}` : page.kind;
+
+  return (
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <nav style={{ width: 240, flexShrink: 0, background: "var(--ground)", borderRight: "1px solid var(--rule)",
+        padding: 12, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+        <div className="serif" style={{ fontSize: 22, padding: "8px 10px 12px" }}>StudyTrack</div>
+        {TABS.map((t) => (
+          <SidebarRow key={t.kind} label={t.label} active={activeKey === t.kind} onClick={() => setPage({ kind: t.kind })} />
+        ))}
+        {courses.length > 0 && (
+          <div style={{ marginTop: 16, padding: "6px 10px", fontSize: 11, textTransform: "uppercase",
+            letterSpacing: 0.5, color: "var(--ink-tertiary)" }}>Mes cours</div>
+        )}
+        {courses.map((c) => (
+          <SidebarRow key={c.id} label={c.name} dotColor={c.colorHex} active={activeKey === `course:${c.id}`}
+            onClick={() => setPage({ kind: "course", id: c.id })} />
+        ))}
+      </nav>
+      <main style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+        {page.kind === "today" && <TodayScreen onOpenCourse={(id) => setPage({ kind: "course", id })} />}
+        {page.kind === "courses" && <CoursesScreen onOpenCourse={(id) => setPage({ kind: "course", id })} />}
+        {page.kind === "focus" && <FocusScreen />}
+        {page.kind === "agenda" && <AgendaScreen />}
+        {page.kind === "stats" && <StatsScreen />}
+        {page.kind === "settings" && <SettingsScreen />}
+        {page.kind === "course" && current && <CourseScreen course={current} />}
+        {page.kind === "course" && !current && <p>Cours introuvable.</p>}
+      </main>
+    </div>
+  );
+}
+
+function SidebarRow({ label, active, onClick, dotColor }:
+  { label: string; active: boolean; onClick: () => void; dotColor?: string }) {
+  return (
+    <button onClick={onClick} style={{
+      display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+      padding: "8px 10px", borderRadius: 10, border: "none",
+      background: active ? "var(--selection)" : "transparent",
+      color: active ? "#fff" : "var(--ink)", fontSize: 14,
+    }}>
+      {dotColor && <span style={{ width: 9, height: 9, borderRadius: 3, background: dotColor, flexShrink: 0 }} />}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </button>
+  );
+}
+
