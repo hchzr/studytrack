@@ -1,0 +1,54 @@
+import Foundation
+import CryptoKit
+
+// gen            -> JSON des vecteurs sur la sortie standard
+// verify <json>  -> relit des vecteurs (venus de TS) et les déchiffre avec GroupCrypto.swift
+func b64(_ d: Data) -> String { d.base64EncodedString() }
+func keyData(_ k: SymmetricKey) -> Data { k.withUnsafeBytes { Data($0) } }
+
+let args = CommandLine.arguments
+if args.count >= 2 && args[1] == "gen" {
+    let group = "56B0C700-8B2E-4D63-A661-7CDB3E9B026F"
+    let author = "A1B2C3D4-0000-4000-8000-ABCDEFABCDEF"
+    let texts = ["Je bloque sur 4.3 (b) — l'intégrale ∫ diverge ?", "", "émoji 🎓 et accents éàù, retour\nligne"]
+    let key = GroupCrypto.newGroupKey()
+    let alice = Curve25519.KeyAgreement.PrivateKey()
+    let bob = Curve25519.KeyAgreement.PrivateKey()
+    let messages: [[String: Any]] = try texts.map {
+        ["plaintext": $0, "sealed": try GroupCrypto.seal($0, key: key, groupID: group, authorID: author)]
+    }
+    let out: [String: Any] = [
+        "groupID": group, "authorID": author,
+        "groupKey": GroupCrypto.encode(key), "keyID": GroupCrypto.keyID(of: key),
+        "messages": messages,
+        "alice": ["priv": b64(alice.rawRepresentation), "pub": GroupCrypto.publicKeyString(alice.publicKey)],
+        "bob": ["priv": b64(bob.rawRepresentation), "pub": GroupCrypto.publicKeyString(bob.publicKey)],
+        "envelopeAliceToBob": try GroupCrypto.wrap(key, from: alice, to: bob.publicKey, groupID: group),
+        "envelopeBobToAlice": try GroupCrypto.wrap(key, from: bob, to: alice.publicKey, groupID: group),
+    ]
+    let data = try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    print(String(decoding: data, as: UTF8.self))
+} else if args.count >= 3 && args[1] == "verify" {
+    let root = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: args[2]))) as! [String: Any]
+    var failures = 0
+    func check(_ ok: Bool, _ label: String) { print(ok ? "OK   \(label)" : "FAIL \(label)"); if !ok { failures += 1 } }
+    let group = root["groupID"] as! String, author = root["authorID"] as! String
+    let key = GroupCrypto.decodeKey(root["groupKey"] as! String)!
+    check(GroupCrypto.keyID(of: key) == root["keyID"] as! String, "keyID")
+    for m in root["messages"] as! [[String: Any]] {
+        let plain = m["plaintext"] as! String
+        let opened = try? GroupCrypto.open(m["sealed"] as! String, key: key, groupID: group, authorID: author)
+        check(opened == plain, "message \(plain.prefix(12))")
+    }
+    func priv(_ o: [String: String]) -> Curve25519.KeyAgreement.PrivateKey {
+        try! Curve25519.KeyAgreement.PrivateKey(rawRepresentation: Data(base64Encoded: o["priv"]!)!)
+    }
+    let alice = root["alice"] as! [String: String], bob = root["bob"] as! [String: String]
+    check(GroupCrypto.publicKeyString(priv(alice).publicKey) == alice["pub"], "clé publique d'Alice dérivée = celle de TS")
+    check(GroupCrypto.publicKeyString(priv(bob).publicKey) == bob["pub"], "clé publique de Bob dérivée = celle de TS")
+    let e1 = try? GroupCrypto.unwrap(root["envelopeAliceToBob"] as! String, with: priv(bob), from: GroupCrypto.publicKey(from: alice["pub"]!)!, groupID: group)
+    check(e1.map(keyData) == keyData(key), "enveloppe Alice→Bob ouverte par Bob")
+    let e2 = try? GroupCrypto.unwrap(root["envelopeBobToAlice"] as! String, with: priv(alice), from: GroupCrypto.publicKey(from: bob["pub"]!)!, groupID: group)
+    check(e2.map(keyData) == keyData(key), "enveloppe Bob→Alice ouverte par Alice")
+    exit(failures == 0 ? 0 : 1)
+}

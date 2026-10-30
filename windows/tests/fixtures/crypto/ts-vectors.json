@@ -1,0 +1,30 @@
+{
+  "groupID": "7C1E3A52-9D4B-4F60-B1A2-0123456789AB",
+  "authorID": "D4C3B2A1-1111-4222-8333-444455556666",
+  "groupKey": "n/+4Y1jixOhVxwIVp4+yRaXKzf802wWKHONDoO2s27o=",
+  "keyID": "be4106364bc59e81",
+  "messages": [
+    {
+      "plaintext": "Je bloque sur 4.3 (b) — l'intégrale ∫ diverge ?",
+      "sealed": "v1:JSTz5WJtPV1WFlNQbUtYjep2ChQ2EGUXX6QWmAa62fdma55+ud4x6420yfpy/q0SvZ5p4/zAjn0DEqstN6fcaP1Y/JS7EFMdCa319+D7xjw="
+    },
+    {
+      "plaintext": "",
+      "sealed": "v1:FNGIRuoZbUQzbl6CvdrKv4Nzi7TV/5n/KRg+cw=="
+    },
+    {
+      "plaintext": "émoji 🎓 et accents éàù, retour\nligne",
+      "sealed": "v1:p5uu/9nr725tHoTrBosyxY9hgUPXOcToJMVzJwC7/IF54SUT7fcjIxDk8taKiDWNadNw/36gmNeIvWQx2KQ/aqg6Hbv4YRg="
+    }
+  ],
+  "alice": {
+    "priv": "mZVHbsCWlWGB9RdkiprPmDljZBcipA7GWIfZhOwf8gU=",
+    "pub": "dJnt1InuzBWosUPZeMFsYqs4Q+Ky5ulMTHOTuTcv828="
+  },
+  "bob": {
+    "priv": "2QaVlJD9RDat0wFH42w3V85MR9UtZRLX/uvk+zc/gZk=",
+    "pub": "2zuDBP721/ofdnIiZiT3PnhtTOVc6WuCTrW5qiK8120="
+  },
+  "envelopeAliceToBob": "yiPwrFncRUbohLolZRc1QbndNvhwRdW6z5AJsc+DM/5gxFSkrf30elDvNPDb2ln+0g+ylz7QScboP6bc",
+  "envelopeBobToAlice": "mQK/MQIPZaGcDmfsMZOT7alxxVvZrhXL9p7nu4FzQ0eCpGwl/ZPJlllKyITfPPmX49w4SYQhnL8dqnsv"
+}
