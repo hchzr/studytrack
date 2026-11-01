@@ -7,6 +7,7 @@ import { PageHeader } from "../kit.tsx";
 import { AppearanceSection } from "./settings/AppearanceSection.tsx";
 import { TermSection } from "./settings/TermSection.tsx";
 import { CoursesSection } from "./settings/CoursesSection.tsx";
+import { SyncSection } from "./settings/SyncSection.tsx";
 import { AccountSection } from "./settings/AccountSection.tsx";
 import "./settings/settings.css";
 
@@ -17,6 +18,7 @@ export function SettingsScreen() {
       <AppearanceSection />
       <TermSection />
       <CoursesSection />
+      <SyncSection />
       <AccountSection />
     </div>
   );

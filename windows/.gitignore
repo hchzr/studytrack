@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Les valeurs de déploiement (Supabase) — jamais dans le dépôt.
+# `.env.example` documente les noms ; les valeurs réelles vivent dans
+# Support/Supabase.xcconfig (côté Apple) et ne se commitent pas non plus.
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

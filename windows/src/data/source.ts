@@ -59,6 +59,11 @@ export class SqliteSource implements DataSource {
     this.local = new LocalStore(db);
   }
 
+  /** La base locale, pour la synchronisation (une fois la source choisie par l'app). */
+  get localStore(): LocalStore {
+    return this.local;
+  }
+
   async load(): Promise<ModelStore> {
     return (await this.repository()).load();
   }

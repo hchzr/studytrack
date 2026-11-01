@@ -31,20 +31,17 @@ function ConnectionCard({ title, purpose, status }: { title: string; purpose: st
 export function AccountSection() {
   return (
     <>
-      <Section title="Compte et synchronisation">
+      <Section title="Compte">
         <Card>
-          <SettingRow label="Base" hint="Les données de cette installation.">
+          <SettingRow label="Base" hint="Les données de cette installation : la base locale, synchronisée si tu l'as activée.">
             <span className="settings-value">locale</span>
-          </SettingRow>
-          <SettingRow label="État">
-            <span className="settings-value">synchronisation non branchée</span>
           </SettingRow>
           <SettingRow label="Compte StudyTrack" hint="Groupes indisponibles dans cette version.">
             <span className="settings-value">aucun</span>
           </SettingRow>
         </Card>
         <p className="settings-footnote">
-          Les données restent sur cet appareil. La synchronisation et les groupes se brancheront plus tard.
+          Les données restent sur cet appareil ; la synchronisation se règle juste au-dessus. Les groupes se brancheront plus tard.
         </p>
       </Section>
 
