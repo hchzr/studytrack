@@ -11,6 +11,7 @@ import { useData } from "../../data/dataContext.tsx";
 import { Course, StudySession } from "../../models/index.ts";
 import { DateUtils } from "../../domain/dateUtils.ts";
 import { StudyGoal } from "../../domain/studyGoal.ts";
+import { StudyMode } from "../../domain/studyMode.ts";
 import { PageHeader } from "../kit.tsx";
 import { FocusDial, FocusControls, PomodoroDots } from "./focus/FocusDial.tsx";
 import {
@@ -32,7 +33,7 @@ import {
   tintOf,
 } from "./focus/timerView.ts";
 
-export function FocusScreen() {
+export function FocusScreen({ onEnterStudyMode }: { onEnterStudyMode?: () => void }) {
   const { store, version } = useData();
   const timer = useFocusTimer();
 
@@ -121,6 +122,23 @@ export function FocusScreen() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", maxWidth: 560 }}>
+          {onEnterStudyMode && (timer.state
+            ? (StudyMode.isActive(timer.state, timer.now) ? (
+              // En session de mode étude : ce qui reste, et la porte du bureau.
+              <StudyModeCard
+                title={StudyMode.isOpenEnded(timer.state)
+                  ? "Mode étude · sans fin"
+                  : `Mode étude · reste ${minutesLabel(StudyMode.remaining(timer.state, timer.now))}`}
+                button="Ouvrir"
+                locked
+                onOpen={onEnterStudyMode}
+              />
+            ) : (
+              <StudyModeCard button={timer.phase.type === "idle" ? "Entrer…" : "Verrouiller…"} onOpen={onEnterStudyMode} />
+            ))
+            : (
+              <StudyModeCard button="Entrer…" onOpen={onEnterStudyMode} />
+            ))}
           {!timer.state && timer.recap && (
             <FocusRecapCard
               recap={timer.recap}
@@ -135,5 +153,39 @@ export function FocusScreen() {
         </div>
       </div>
     </>
+  );
+}
+
+/** « 25 min », « 1 h 05 » — les minutes qui restent, arrondies au-dessus. */
+function minutesLabel(seconds: number): string {
+  const minutes = Math.ceil(Math.max(0, seconds) / 60);
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours} h ${minutes % 60 === 0 ? "" : `${minutes % 60}`.padStart(2, "0")}`.trim();
+  }
+  return `${minutes} min`;
+}
+
+/**
+ * Le mode étude, proposé à côté du chrono (le `studyCard` du Mac) : une
+ * session ouverte s'y verrouille ; une en cours s'y rouvre.
+ */
+function StudyModeCard({ title, button, locked, onOpen }:
+  { title?: string; button: string; locked?: boolean; onOpen: () => void }) {
+  return (
+    <div className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: 14 }}>
+      <span aria-hidden style={{
+        width: 40, height: 40, flexShrink: 0, borderRadius: 12, display: "grid", placeItems: "center",
+        background: "var(--sheet-raised)", fontSize: 18,
+      }}>{locked ? "🔒" : "🌙"}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="serif" style={{ fontSize: 16 }}>{title ?? "Mode étude"}</div>
+        {!title && <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>Seulement tes outils de cours.</div>}
+      </div>
+      <button onClick={onOpen} style={{
+        border: "none", borderRadius: 9, padding: "7px 14px",
+        background: "var(--ink)", color: "var(--ground)", fontWeight: 600,
+      }}>{button}</button>
+    </div>
   );
 }

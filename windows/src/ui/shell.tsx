@@ -2,9 +2,10 @@
 // `NavigationSplitView` du Mac (MacRootView.swift). Pages : aujourd'hui, cours,
 // chrono, agenda, stats, réglages ; un cours ouvre sa page détaillée.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../data/dataContext.tsx";
 import { Course } from "../models/index.ts";
+import { timerController } from "./timerController.ts";
 import { TodayScreen } from "./screens/TodayScreen.tsx";
 import { CoursesScreen } from "./screens/CoursesScreen.tsx";
 import { CourseScreen } from "./screens/CourseScreen.tsx";
@@ -43,7 +44,26 @@ export function Shell() {
   // La page de départ sur l'adresse, pour les captures et les essais —
   // l'équivalent du `-debugPage` du Mac (`?page=course:<id>`, `?page=agenda`).
   const [page, setPage] = useState<Page>(() => pageFromParams() ?? { kind: "today" });
-  const [studyMode, setStudyMode] = useState(false);
+  // `?study=1` : le mode étude ouvert d'office (l'équivalent du `-studyPreview`
+  // du Mac — l'écran sans rien bloquer, pour les essais et les captures).
+  // `?study=begin:50` : et la session lancée d'office (le `-debugTimer start`
+  // du Mac), sur le premier cours suivi — une session de mode étude sans
+  // toucher un bouton.
+  const [studyMode, setStudyMode] = useState(() =>
+    new URLSearchParams(window.location.search).get("study") !== null);
+  const begun = useRef(false);
+  useEffect(() => {
+    if (!store || begun.current) return;
+    begun.current = true;
+    const raw = new URLSearchParams(window.location.search).get("study");
+    if (!raw?.startsWith("begin:")) return;
+    const minutes = Number(raw.slice("begin:".length));
+    const course = store.fetch(Course).filter((c) => c.isTracked).sort((a, b) => a.code.localeCompare(b.code))[0];
+    timerController.enterStudy(Number.isFinite(minutes) && minutes > 0 ? minutes : 50, {
+      courseID: course?.id,
+      taskType: "exercise",
+    });
+  }, [store]);
 
   // La barre latérale liste les cours suivis, comme le Mac (tracked,
   // MacRootView.swift) — pas `isActive`, qui n'y filtre rien.
@@ -78,7 +98,7 @@ export function Shell() {
       <main style={{ flex: 1, overflowY: "auto", padding: 28 }}>
         {page.kind === "today" && <TodayScreen onOpenCourse={(id) => setPage({ kind: "course", id })} />}
         {page.kind === "courses" && <CoursesScreen onOpenCourse={(id) => setPage({ kind: "course", id })} />}
-        {page.kind === "focus" && <FocusScreen />}
+        {page.kind === "focus" && <FocusScreen onEnterStudyMode={() => setStudyMode(true)} />}
         {page.kind === "agenda" && <AgendaScreen />}
         {page.kind === "stats" && <StatsScreen />}
         {page.kind === "settings" && <SettingsScreen />}
