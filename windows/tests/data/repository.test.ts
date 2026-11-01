@@ -1,17 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DatabaseSync } from "node:sqlite";
-import { LocalStore, type Db, type Value } from "../../src/sync/store.ts";
+import { LocalStore } from "../../src/sync/store.ts";
 import { Repository, toColumns, tableFor } from "../../src/data/repository.ts";
 import { buildStore } from "../../src/data/hydrate.ts";
 import { Course, Exercise, ExerciseSeries, StudySession, SubQuestion } from "../../src/models/index.ts";
-
-function memoryDb(): Db {
-  const db = new DatabaseSync(":memory:");
-  return {
-    async execute(sql: string, p: Value[] = []) { db.prepare(sql).run(...p); },
-    async select<T>(sql: string, p: Value[] = []) { return db.prepare(sql).all(...p) as T[]; },
-  };
-}
+import { memoryDb } from "./helpers.ts";
 
 async function seeded() {
   const local = new LocalStore(memoryDb());
