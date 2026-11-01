@@ -12,6 +12,7 @@ import { FocusScreen } from "./screens/FocusScreen.tsx";
 import { AgendaScreen } from "./screens/AgendaScreen.tsx";
 import { StatsScreen } from "./screens/StatsScreen.tsx";
 import { SettingsScreen } from "./screens/SettingsScreen.tsx";
+import { StudyModeView } from "./studymode/StudyModeView.tsx";
 
 export type Page =
   | { kind: "today" } | { kind: "courses" } | { kind: "focus" }
@@ -28,12 +29,26 @@ const TABS: { kind: TabKind; label: string }[] = [
   { kind: "settings", label: "Réglages" },
 ];
 
+/** La page demandée dans l'adresse (`?page=…`), ou rien. */
+function pageFromParams(): Page | null {
+  const raw = new URLSearchParams(window.location.search).get("page");
+  if (!raw) return null;
+  if (raw.startsWith("course:")) return { kind: "course", id: raw.slice("course:".length) };
+  if (TABS.some((t) => t.kind === raw)) return { kind: raw as TabKind };
+  return null;
+}
+
 export function Shell() {
   const { store } = useData();
-  const [page, setPage] = useState<Page>({ kind: "today" });
+  // La page de départ sur l'adresse, pour les captures et les essais —
+  // l'équivalent du `-debugPage` du Mac (`?page=course:<id>`, `?page=agenda`).
+  const [page, setPage] = useState<Page>(() => pageFromParams() ?? { kind: "today" });
+  const [studyMode, setStudyMode] = useState(false);
 
+  // La barre latérale liste les cours suivis, comme le Mac (tracked,
+  // MacRootView.swift) — pas `isActive`, qui n'y filtre rien.
   const courses = useMemo(
-    () => (store ? store.fetch(Course).filter((c) => c.isActive).sort((a, b) => a.code.localeCompare(b.code)) : []),
+    () => (store ? store.fetch(Course).filter((c) => c.isTracked).sort((a, b) => a.code.localeCompare(b.code)) : []),
     [store],
   );
 
@@ -47,6 +62,7 @@ export function Shell() {
       <nav style={{ width: 240, flexShrink: 0, background: "var(--ground)", borderRight: "1px solid var(--rule)",
         padding: 12, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
         <div className="serif" style={{ fontSize: 22, padding: "8px 10px 12px" }}>StudyTrack</div>
+        <button onClick={() => setStudyMode(true)} className="card" style={{ margin: "0 6px 10px", padding: "8px 10px", textAlign: "left", background: "var(--sheet-raised)" }}>Entrer en mode étude</button>
         {TABS.map((t) => (
           <SidebarRow key={t.kind} label={t.label} active={activeKey === t.kind} onClick={() => setPage({ kind: t.kind })} />
         ))}
@@ -69,13 +85,13 @@ export function Shell() {
         {page.kind === "course" && current && <CourseScreen course={current} />}
         {page.kind === "course" && !current && <p>Cours introuvable.</p>}
       </main>
+      {studyMode && <StudyModeView onExit={() => setStudyMode(false)} />}
     </div>
   );
 }
 
 function SidebarRow({ label, active, onClick, dotColor }:
-  { label: string; active: boolean; onClick: () => void; dotColor?: string }) {
-  return (
+  { label: string; active: boolean; onClick: () => void; dotColor?: string }) {  return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
       padding: "8px 10px", borderRadius: 10, border: "none",
