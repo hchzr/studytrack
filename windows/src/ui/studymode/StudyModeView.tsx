@@ -17,7 +17,11 @@ import type { StudyPane } from "./paneKind.ts";
 
 type Stage = "setup" | "session";
 
-export function StudyModeView({ onExit }: { onExit?: () => void }) {
+/**
+ * `initialCourseID` : le cours choisi d'office (le `presentSetup(courseID:)` du
+ * Mac, depuis le menu d'un cours) ; sinon celui du chrono.
+ */
+export function StudyModeView({ onExit, initialCourseID }: { onExit?: () => void; initialCourseID?: string }) {
   const { store, version, save } = useData();
   const timer = useStudyTimer();
 
@@ -34,9 +38,9 @@ export function StudyModeView({ onExit }: { onExit?: () => void }) {
   const [stage, setStage] = useState<Stage>(() =>
     timerController.isStudying || timerController.studyIsOver ? "session" : "setup");
   const [screen, setScreen] = useState<SetupScreen>(() => ({
-    courseID: timer.courseID,
+    courseID: initialCourseID ?? timer.courseID,
     taskType: timer.taskType,
-    targetID: timer.targetID,
+    targetID: initialCourseID && initialCourseID !== timer.courseID ? undefined : timer.targetID,
     locks: readStudyLocks(),
   }));
   /** Le panneau que le prochain bureau ouvrira (enchaîner sur la série). */

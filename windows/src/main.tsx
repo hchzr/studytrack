@@ -1,4 +1,5 @@
 import "./ui/tokens.css";
+import "./ui/kit.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
