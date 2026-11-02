@@ -71,7 +71,21 @@
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://*.supabase.co/**"
+          "url": "https://**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$DESKTOP/**"
         }
       ]
     }

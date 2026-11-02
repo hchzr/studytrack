@@ -19,6 +19,8 @@ interface DataValue {
   save: (instance: object) => Promise<void>;
   /** Plusieurs objets d'un coup, une seule relecture à la fin (un import en écrit des centaines). */
   saveMany: (instances: readonly object[]) => Promise<void>;
+  /** Enregistre et supprime d'un coup (une seule relecture) : un import qui retire des doublons. */
+  commit: (changes: { save: readonly object[]; remove: readonly object[] }) => Promise<void>;
   remove: (instance: object) => Promise<void>;
 }
 
@@ -46,6 +48,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
     for (const o of new Set(list)) await source.save(o);
     await reload();
   }, [source, reload]);
+  const commit = useCallback(async (changes: { save: readonly object[]; remove: readonly object[] }) => {
+    for (const o of new Set(changes.remove)) await source.remove(o);
+    for (const o of new Set(changes.save)) await source.save(o);
+    await reload();
+  }, [source, reload]);
   const remove = useCallback(async (o: object) => { await source.remove(o); await reload(); }, [source, reload]);
 
   if (error && !store) {
@@ -57,7 +64,7 @@ export function DataProvider({ source, children }: { source: DataSource; childre
     );
   }
 
-  return <DataContext.Provider value={{ store, version, reload, save, saveMany, remove }}>{children}</DataContext.Provider>;
+  return <DataContext.Provider value={{ store, version, reload, save, saveMany, commit, remove }}>{children}</DataContext.Provider>;
 }
 
 export function useData(): DataValue {

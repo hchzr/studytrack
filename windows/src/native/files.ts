@@ -32,6 +32,28 @@ async function readPaths(paths: string[]): Promise<PickedFile[]> {
   return files;
 }
 
+/// Choisir un fichier texte (un `.ics` par exemple) : son nom et son contenu, ou `null` si on annule.
+export async function pickTextFile(name: string, extensions: string[]): Promise<{ name: string; text: string } | null> {
+  if (inNative()) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const chosen = await open({ multiple: false, filters: [{ name, extensions }] });
+    if (chosen === null || Array.isArray(chosen)) return null;
+    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    return { name: baseName(chosen), text: await readTextFile(chosen) };
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = extensions.map((e) => `.${e}`).join(",");
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      resolve(file ? { name: file.name, text: await file.text() } : null);
+    };
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}
+
 /// « Choisir un PDF » : une ou plusieurs fiches. Liste vide si on annule.
 export async function pickPDFs(multiple = true): Promise<PickedFile[]> {
   if (inNative()) {

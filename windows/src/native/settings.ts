@@ -96,3 +96,32 @@ export function installID(): string {
   write(key, id);
   return id;
 }
+
+// MARK: Connexions (SettingsStore : horaire, fournisseurs de tâches)
+
+/**
+ * Les réglages de connexion, sous les clés de `SettingsStore` (`settings.todoistToken`…).
+ * Ils restent dans le stockage de la webview, en clair, comme les `UserDefaults` du Mac ;
+ * un coffre Windows (Credential Manager) serait un changement de décision.
+ */
+export const ConnectionKeys = {
+  timetableURLString: "settings.timetableURLString",
+  todoistToken: "settings.todoistToken",
+  googleClientID: "settings.googleClientID",
+  googleClientSecret: "settings.googleClientSecret",
+  googleRefreshToken: "settings.googleRefreshToken",
+  tickTickToken: "settings.tickTickToken",
+  notionToken: "settings.notionToken",
+  notionDatabaseID: "settings.notionDatabaseID",
+  webhookURL: "settings.webhookURL",
+} as const;
+
+export type ConnectionKey = keyof typeof ConnectionKeys;
+
+export function readConnection(key: ConnectionKey): string {
+  return read(ConnectionKeys[key]) ?? "";
+}
+
+export function writeConnection(key: ConnectionKey, value: string): void {
+  write(ConnectionKeys[key], value);
+}

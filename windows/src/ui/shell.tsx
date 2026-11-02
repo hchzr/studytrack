@@ -15,6 +15,7 @@ import { displayClockOf } from "./screens/focus/timerView.ts";
 import { EmptyState, Icon, IconButton, cx, useContextMenu, type IconName } from "./kit.tsx";
 import { TodayScreen } from "./screens/TodayScreen.tsx";
 import { CoursesScreen } from "./screens/CoursesScreen.tsx";
+import { launchSync } from "../services/connectionsRunner.ts";
 import { CourseScreen } from "./screens/CourseScreen.tsx";
 import { FocusScreen } from "./screens/FocusScreen.tsx";
 import { AgendaScreen } from "./screens/AgendaScreen.tsx";
@@ -50,7 +51,14 @@ function pageFromParams(): Page | null {
 }
 
 export function Shell() {
-  const { store, save, remove } = useData();
+  const { store, save, remove, commit } = useData();
+  // Au lancement, une fois : l'abonnement .ics et les tâches liées, s'ils sont configurés.
+  const launched = useRef(false);
+  useEffect(() => {
+    if (!store || launched.current || new URLSearchParams(window.location.search).has("page")) return;
+    launched.current = true;
+    void launchSync({ store, commit });
+  }, [store, commit]);
   // La page de départ sur l'adresse, pour les captures et les essais —
   // l'équivalent du `-debugPage` du Mac (`?page=course:<id>`, `?page=agenda`).
   const [page, setPage] = useState<Page>(() => pageFromParams() ?? { kind: "today" });
