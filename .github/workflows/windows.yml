@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [main]
+    branches: [main, windows-port]
     paths: ["windows/**", "StudyTrack/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
   pull_request:
     paths: ["windows/**", "StudyTrack/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
