@@ -17,6 +17,8 @@ interface DataValue {
   version: number;
   reload: () => Promise<void>;
   save: (instance: object) => Promise<void>;
+  /** Plusieurs objets d'un coup, une seule relecture à la fin (un import en écrit des centaines). */
+  saveMany: (instances: readonly object[]) => Promise<void>;
   remove: (instance: object) => Promise<void>;
 }
 
@@ -40,6 +42,10 @@ export function DataProvider({ source, children }: { source: DataSource; childre
   useEffect(() => { void reload(); }, [reload]);
 
   const save = useCallback(async (o: object) => { await source.save(o); await reload(); }, [source, reload]);
+  const saveMany = useCallback(async (list: readonly object[]) => {
+    for (const o of new Set(list)) await source.save(o);
+    await reload();
+  }, [source, reload]);
   const remove = useCallback(async (o: object) => { await source.remove(o); await reload(); }, [source, reload]);
 
   if (error && !store) {
@@ -51,7 +57,7 @@ export function DataProvider({ source, children }: { source: DataSource; childre
     );
   }
 
-  return <DataContext.Provider value={{ store, version, reload, save, remove }}>{children}</DataContext.Provider>;
+  return <DataContext.Provider value={{ store, version, reload, save, saveMany, remove }}>{children}</DataContext.Provider>;
 }
 
 export function useData(): DataValue {

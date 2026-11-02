@@ -59,3 +59,9 @@
 .imp-preview-body { overflow: auto; padding: 14px; background: var(--ground); }
 .imp-preview-body canvas { width: 100%; height: auto; background: #fff; border-radius: 8px; display: block; }
 .imp-paste { width: min(560px, calc(100vw - 48px)); }
+.imp-section-head { display: flex; align-items: center; gap: 8px; }
+.imp-week { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.imp-week .select { width: 200px; }
+.imp-item { cursor: default; }
+.imp-item:hover { background: transparent; }
+.imp-ex-row .select { width: 120px; flex: none; margin: 4px 0; }

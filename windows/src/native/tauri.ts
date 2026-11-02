@@ -22,3 +22,9 @@ export async function callNative<T>(command: string, args?: Record<string, unkno
     return null;
   }
 }
+
+/** Comme `callNative`, mais l'erreur de la commande remonte (les clients de sites en ont besoin). */
+export async function callNativeOrThrow<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(command, args);
+}

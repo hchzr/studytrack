@@ -39,7 +39,7 @@ export function SeriesImportSheet({ course, initialFiles, initialText, onClose }
   initialText?: string;
   onClose: () => void;
 }) {
-  const { store, save } = useData();
+  const { store, saveMany } = useData();
   const courses = useMemo(() => (store?.fetch(Course) ?? []).filter((c) => c.isTracked)
     .sort((a, b) => a.code.localeCompare(b.code)), [store]);
   const [, bump] = useState(0);
@@ -240,7 +240,7 @@ export function SeriesImportSheet({ course, initialFiles, initialText, onClose }
         // Le PDF d'une seule série est gardé : le chrono et la fiche en montrent l'énoncé exercice par exercice.
         if (filled.length === 1 && sourceFiles.length === 1) await SeriesPDFStore.keep(sourceFiles[0].bytes, written.series.id);
       }
-      for (const object of [...new Set(touched)]) await save(object);
+      await saveMany(touched);
       onClose();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

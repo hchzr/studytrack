@@ -14,6 +14,7 @@ import type { TheoryItem } from "../../models/theoryItem.ts";
 import type { Exam } from "../../models/exam.ts";
 import type { PastExam } from "../../models/pastExam.ts";
 import { useData } from "../../data/dataContext.tsx";
+import { MoodleActivity, MoodleCourseAnalyzer, MoodleCourseSnapshot, MoodleSection } from "../../domain/moodleCourseAnalyzer.ts";
 import { ProgressEngine } from "../../domain/progressEngine.ts";
 import { Button, Icon, Segmented, Select, useContextMenu } from "../kit.tsx";
 import { listenForPDFDrops, type PickedFile } from "../../native/files.ts";
@@ -24,6 +25,7 @@ import { ExercisesTab } from "./course/ExercisesTab.tsx";
 import { ProgressTab } from "./course/ProgressTab.tsx";
 import { ExamsTab } from "./course/ExamsTab.tsx";
 import { NotesTab } from "./course/NotesTab.tsx";
+import { MoodleImportSheet } from "./course/import/MoodleImportSheet.tsx";
 import { SeriesImportSheet } from "./course/import/SeriesImportSheet.tsx";
 import { CourseDialog, ExamDialog, PastExamDialog, SeriesDialog, TheoryDialog } from "./course/Dialogs.tsx";
 import "./course/course.css";
@@ -35,12 +37,32 @@ const TABS: CourseTab[] = ["theory", "exercises", "progress", "exams", "notes"];
 type Editor =
   | { kind: "course" }
   | { kind: "importPDF"; files?: PickedFile[]; text?: string }
+  | { kind: "moodle" }
   | { kind: "series"; series: ExerciseSeries | null }
   | { kind: "theory"; item: TheoryItem | null }
   | { kind: "exam"; exam: Exam | null }
   | { kind: "pastExam"; exam: PastExam };
 
 const DEBUG_TEXT = "Série 3 — Récurrences\nExercice 1 : Tri fusion\n1. Montrer que l'algorithme est en O(n log n).\n2. Conclure.\nExercice 2 (facultatif)\nÉcrire la relation de récurrence.\n\nSérie 4 — Graphes\nExercice 1\nParcours en largeur.";
+
+/** Un cours Moodle d'essai, rangé par les règles (`?import=moodle`). */
+function debugDraft() {
+  const activity = (id: string, name: string, module: string, extra: Partial<{ target: string; dueDate: Date }> = {}) =>
+    new MoodleActivity({ id, name, module, url: `https://moodle.epfl.ch/mod/${module}/view.php?id=${id}`, ...extra });
+  const snapshot = new MoodleCourseSnapshot({
+    title: "Algorithms I (CS-250)", url: "https://moodle.epfl.ch/course/view.php?id=1",
+    sections: [
+      new MoodleSection({ number: 1, title: "Semaine 1", activities: [
+        activity("1", "Lecture 1 : introduction", "url", { target: "https://mediaspace.epfl.ch/media/1" }),
+        activity("2", "Série 1", "resource", { target: "https://moodle.epfl.ch/pluginfile.php/1/serie1.pdf" })] }),
+      new MoodleSection({ number: 2, title: "Semaine 2", activities: [
+        activity("3", "Lecture 2 : tri", "url", { target: "https://mediaspace.epfl.ch/media/2" }),
+        activity("4", "Série 2", "resource", { target: "https://moodle.epfl.ch/pluginfile.php/1/serie2.pdf" }),
+        activity("5", "Devoir 1", "assign", { dueDate: new Date(Date.now() + 9 * 86_400_000) })] }),
+    ],
+  });
+  return MoodleCourseAnalyzer.draft(snapshot, null, 14);
+}
 
 /** `?tab=` : le volet d'ouverture (captures et essais), sinon les exercices. */
 function initialTab(): CourseTab {
@@ -60,8 +82,10 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
       : initialTab());
   const [week, setWeek] = useState(0);
   // `?import=text` : l'import ouvert sur un énoncé d'essai (captures et essais).
-  const [editor, setEditor] = useState<Editor | null>(() =>
-    new URLSearchParams(window.location.search).get("import") === "text" ? { kind: "importPDF", text: DEBUG_TEXT } : null);
+  const [editor, setEditor] = useState<Editor | null>(() => {
+    const debug = new URLSearchParams(window.location.search).get("import");
+    return debug === "text" ? { kind: "importPDF", text: DEBUG_TEXT } : debug === "moodle" ? { kind: "moodle" } : null;
+  });
   const menu = useContextMenu();
   const [dropTargeted, setDropTargeted] = useState(false);
 
@@ -128,6 +152,7 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
     const rect = event.currentTarget.getBoundingClientRect();
     menu.openAt(rect.right - 200, rect.bottom + 4, [
       { label: "Importer une série (PDF)…", icon: "doc.badge.plus", action: () => actions.importPDF() },
+      { label: "Importer depuis Moodle…", icon: "square.and.arrow.down", action: () => setEditor({ kind: "moodle" }) },
       { label: "Nouvelle série…", icon: "plus", action: () => actions.editSeries(null) },
       { label: "Ajouter de la théorie…", icon: "book", action: () => actions.editTheory(null) },
       { label: "Nouvelle évaluation…", icon: "calendar.badge.clock", action: () => actions.editExam(null) },
@@ -209,6 +234,10 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
       {menu.element}
 
       {editor?.kind === "course" && <CourseDialog course={course} save={persistAll} onClose={() => setEditor(null)} />}
+      {editor?.kind === "moodle" && (
+        <MoodleImportSheet course={course} onClose={() => setEditor(null)}
+          initialDraft={new URLSearchParams(window.location.search).get("import") === "moodle" ? debugDraft() : undefined} />
+      )}
       {editor?.kind === "importPDF" && (
         <SeriesImportSheet course={course} initialFiles={editor.files} initialText={editor.text} onClose={() => setEditor(null)} />
       )}

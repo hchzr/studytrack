@@ -36,6 +36,7 @@ pub fn run() {
         // Réseau côté Rust : les fonctions Supabase et les sites de cours n'envoient pas d'en-têtes CORS.
         .plugin(tauri_plugin_http::init())
         .manage(native::lock::LockState::default())
+        .manage(native::site::SiteState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             native::power::set_keep_awake,
@@ -43,6 +44,10 @@ pub fn run() {
             native::lock::study_lock_start,
             native::lock::study_lock_stop,
             native::mini::mini_set_visible,
+            native::site::site_login_open,
+            native::site::site_login_close,
+            native::site::site_request,
+            native::site::site_download,
         ])
         .setup(|app| {
             // Reprise après plantage : rien du blocage ne doit rester dans `hosts`.
