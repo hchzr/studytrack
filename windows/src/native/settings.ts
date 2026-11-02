@@ -3,6 +3,7 @@
 // Réglages › Chrono les écrit ; un changement prévient la couche native
 // (`NATIVE_SETTINGS_EVENT`) pour qu'il s'applique sans relancer l'app.
 
+import { appStorage } from "./secrets.ts";
 import { keepAwakeModes, type KeepAwakeMode } from "../domain/keepAwakePolicy.ts";
 
 const FLOATING = "win.floatingTimer";
@@ -12,7 +13,7 @@ const BLOCKED_SITES = "win.blockedSites";
 
 function read(key: string): string | null {
   try {
-    return globalThis.localStorage?.getItem(key) ?? null;
+    return appStorage.getItem(key);
   } catch {
     return null;
   }
@@ -20,7 +21,7 @@ function read(key: string): string | null {
 
 function write(key: string, value: string): void {
   try {
-    globalThis.localStorage?.setItem(key, value);
+    appStorage.setItem(key, value);
   } catch {
     // Un stockage refusé ne doit rien casser.
   }
@@ -101,8 +102,8 @@ export function installID(): string {
 
 /**
  * Les réglages de connexion, sous les clés de `SettingsStore` (`settings.todoistToken`…).
- * Ils restent dans le stockage de la webview, en clair, comme les `UserDefaults` du Mac ;
- * un coffre Windows (Credential Manager) serait un changement de décision.
+ * Les jetons vont au coffre du système (secrets.ts : Credential Manager), le reste au
+ * stockage de la webview.
  */
 export const ConnectionKeys = {
   timetableURLString: "settings.timetableURLString",

@@ -5,4 +5,5 @@ pub mod lock;
 pub mod mini;
 pub mod power;
 pub mod procwatch;
+pub mod secrets;
 pub mod site;

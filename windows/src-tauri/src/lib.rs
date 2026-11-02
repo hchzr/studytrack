@@ -48,6 +48,8 @@ pub fn run() {
             native::site::site_login_close,
             native::site::site_request,
             native::site::site_download,
+            native::secrets::secrets_load,
+            native::secrets::secret_set,
         ])
         .setup(|app| {
             // Reprise après plantage : rien du blocage ne doit rester dans `hosts`.

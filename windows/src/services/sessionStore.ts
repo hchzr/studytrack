@@ -9,14 +9,20 @@
 // webview Tauri ; `localStorage` est ce qui s'en rapproche — et ce qu'il garde
 // ne sort pas du profil de l'app.
 
+import { appStorage } from "../native/secrets.ts";
+import { inNative } from "../native/tauri.ts";
 import { StoredSession } from "../domain/supabaseSession.ts";
 import type { Session, SessionStore } from "./supabase.ts";
 
 /** La clé de `localStorage` ; les tests comme l'app la relisent telle quelle. */
 export const SESSION_KEY = "studytrack.supabase.session";
 
-/** `localStorage` s'il existe (la webview de l'app), sinon `null` (tests sous Node). */
+/**
+ * Dans l'app Tauri, le coffre du système (secrets.ts : la session porte le jeton
+ * de rafraîchissement) ; sinon `localStorage` s'il existe, `null` sous Node (tests).
+ */
 export function defaultStorage(): Storage | null {
+  if (inNative()) return appStorage as unknown as Storage;
   try {
     return typeof globalThis.localStorage === "undefined" ? null : globalThis.localStorage;
   } catch {

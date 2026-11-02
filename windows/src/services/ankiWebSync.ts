@@ -6,6 +6,7 @@
 // collection. Le serveur ne reçoit jamais rien d'elle ; la collection d'AnkiWeb n'est jamais
 // écrasée. Le mot de passe ne sert qu'à obtenir la clé d'hôte ; seule la clé est gardée.
 
+import { appStorage } from "../native/secrets.ts";
 import type { AnkiReview } from "../domain/ankiReviewImport.ts";
 import { AnkiWebClient, type Fetcher } from "./ankiWebClient.ts";
 import { diskMirror, type MirrorStore } from "./ankiCollection.ts";
@@ -19,11 +20,12 @@ export interface KeyValue {
 
 export function localKeyValue(): KeyValue {
   return {
-    get: (key) => { try { return globalThis.localStorage?.getItem(key) ?? null; } catch { return null; } },
+    // La clé d'hôte va au coffre (secrets.ts), comme AnkiKeychain sur le Mac.
+    get: (key) => appStorage.getItem(key),
     set: (key, value) => {
       try {
-        if (value === null) globalThis.localStorage?.removeItem(key);
-        else globalThis.localStorage?.setItem(key, value);
+        if (value === null) appStorage.removeItem(key);
+        else appStorage.setItem(key, value);
       } catch { /* stockage refusé */ }
     },
   };

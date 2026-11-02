@@ -13,6 +13,10 @@ async function boot() {
     root.render(<React.StrictMode><MiniTimer /></React.StrictMode>);
     return;
   }
+  // Les secrets (jetons, session) sortent du coffre du système avant le premier
+  // écran : les réglages se lisent ensuite de façon synchrone.
+  const { loadSecrets } = await import("./native/secrets.ts");
+  await loadSecrets();
   // Avant toute lecture d'un cours : fiche de révision et carte décodées en types du domaine.
   await import("./domain/registerCodecs.ts");
   const { default: App } = await import("./App");
