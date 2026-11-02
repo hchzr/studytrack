@@ -290,3 +290,12 @@ textarea.cs-area { width: 100%; min-height: 130px; background: var(--ground); }
 }
 .cs-swatch[aria-pressed="true"] { border-color: var(--sheet); box-shadow: 0 0 0 2px var(--ink); }
 .cs-toolbar .seg button { padding: 4px 11px; }
+/* Un PDF au-dessus du cours : l'encadré pointillé du Mac (`dropTargeted`). */
+.cs-drop {
+  position: fixed; inset: 8px; z-index: 800; pointer-events: none; border-radius: 12px;
+  border: 2px dashed var(--course, var(--ink)); display: flex; align-items: center; justify-content: center;
+}
+.cs-drop > span {
+  display: inline-flex; gap: 8px; align-items: center; padding: 10px 16px; border-radius: 999px;
+  background: var(--sheet); box-shadow: var(--shadow-2); font-weight: 600;
+}

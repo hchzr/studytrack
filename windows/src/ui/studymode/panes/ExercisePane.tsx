@@ -1,6 +1,7 @@
 // La série, au centre : l'exercice visé en entier — l'énoncé, les questions à
-// cocher, la correction d'un toucher, et le suivant (ExercisePane, sans le PDF
-// ni Botafogo natifs : le texte importé, et les liens ouverts au-dehors).
+// cocher, la correction d'un toucher, et le suivant (ExercisePane : le PDF
+// importé de la série quand il est sur l'appareil, sans Botafogo natif — le texte
+// importé, et les liens ouverts au-dehors).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Course } from "../../../models/course.ts";
@@ -14,6 +15,9 @@ import { timerController } from "../../timerController.ts";
 import type { StudyTimerApi } from "../useStudyTimer.ts";
 import { seriesName, solutionAddress } from "../helpers.ts";
 import { openWebURL } from "../openers.ts";
+import { ExercisePDFView } from "../../pdf/PDFPane.tsx";
+import { useSeriesPDF } from "../../pdf/useSeriesPDF.ts";
+import { cropExercise } from "../../pdf/cropExercise.ts";
 import { ExerciseQuickMark, Glyph, InkButton, Kicker, PaperButton, SubQuestionChecklist } from "../parts.tsx";
 
 /** La série du moment : celle de l'exercice suivi, sinon celle de la semaine. */
@@ -337,6 +341,8 @@ export function ExercisePane({ course, timer, save }: {
               </p>
             )}
 
+            <StatementPDF exercise={exercise} />
+
             {exercise.hint !== "" && (
               <details
                 onToggle={(event) => {
@@ -486,6 +492,20 @@ export function ExercisePane({ course, timer, save }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** L'énoncé tel qu'imprimé : la bande du PDF importé qui correspond à l'exercice, s'il est sur l'appareil. */
+function StatementPDF({ exercise }: { exercise: Exercise }) {
+  const bytes = useSeriesPDF(exercise.series?.id ?? null);
+  const crop = useMemo(() => cropExercise(exercise), [exercise]);
+  const following = exercise.series?.sortedExercises[exercise.series.sortedExercises.findIndex((e) => e.id === exercise.id) + 1] ?? null;
+  const cropNext = useMemo(() => (following ? cropExercise(following) : null), [following]);
+  if (bytes === null) return null;
+  return (
+    <div style={{ height: 420, border: "1px solid var(--rule)", borderRadius: 10, overflow: "hidden" }}>
+      <ExercisePDFView bytes={bytes} exercise={crop} next={cropNext} />
     </div>
   );
 }

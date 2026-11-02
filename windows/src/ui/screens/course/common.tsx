@@ -227,6 +227,8 @@ export function MathText({ text }: { text: string }) {
 /** Ce que l'écran du cours sait faire pour un volet : ouvrir un formulaire, lancer le chrono. */
 export interface CourseActions {
   editSeries: (series: ExerciseSeries | null) => void;
+  /** L'import d'une série depuis un PDF (« Réimporter un PDF… »). */
+  importPDF: () => void;
   editTheory: (item: TheoryItem | null) => void;
   editExam: (exam: Exam | null) => void;
   editPastExam: (exam: PastExam | null) => void;

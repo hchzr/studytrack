@@ -14,7 +14,8 @@ import {
   Star, Sun, Target, Timer, Trash2, Upload, User, Users, X, XCircle, Zap, Heart, Layers, Map,
   Repeat, Volume2, VolumeX, Wifi, Battery, Maximize2, Minimize2, PanelRight, Brain, Lightbulb,
   Landmark, ListOrdered, GalleryVerticalEnd, BadgeCheck, MoonStar, FastForward, PictureInPicture2,
-  ListChecks, MonitorPlay, Minus, Equal, CircleHelp,
+  ListChecks, MonitorPlay, Minus, Equal, CircleHelp, ClipboardPaste, FilePlus, FileSearch, ScanSearch,
+  SquareDashed, StarOff, CopyPlus, IndentIncrease, IndentDecrease, AlignLeft, ListPlus, CirclePlus, FileScan,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +52,13 @@ const ICONS = {
   "forward.fill": FastForward, "pip": PictureInPicture2, "books.vertical.fill": Library, "checklist": ListChecks,
   "play.rectangle.fill": MonitorPlay, "graduationcap.fill": GraduationCap, "minus": Minus, "equal": Equal,
   "questionmark": CircleHelp,
+  // Import d'une série (PDF).
+  "doc.badge.plus": FilePlus, "doc.on.clipboard": ClipboardPaste, "doc.text.magnifyingglass": FileSearch,
+  "text.magnifyingglass": ScanSearch, "rectangle.dashed": SquareDashed, "star.slash": StarOff, "star.fill": Star,
+  "plus.rectangle.on.rectangle": CopyPlus, "increase.indent": IndentIncrease, "decrease.indent": IndentDecrease,
+  "text.alignleft": AlignLeft, "text.badge.plus": ListPlus, "plus.circle.fill": CirclePlus,
+  "doc.viewfinder": FileScan, "checkmark.circle.fill": CheckCircle2, "exclamationmark.triangle.fill": AlertTriangle,
+  "checkmark.seal.fill": BadgeCheck,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

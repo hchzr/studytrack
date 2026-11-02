@@ -8,6 +8,7 @@ import { AppearanceSection } from "./settings/AppearanceSection.tsx";
 import { ChronoSection } from "./settings/ChronoSection.tsx";
 import { TermSection } from "./settings/TermSection.tsx";
 import { CoursesSection } from "./settings/CoursesSection.tsx";
+import { AIReadingSection } from "./settings/AIReadingSection.tsx";
 import { SyncSection } from "./settings/SyncSection.tsx";
 import { AccountSection } from "./settings/AccountSection.tsx";
 import "./settings/settings.css";
@@ -20,6 +21,7 @@ export function SettingsScreen() {
       <ChronoSection />
       <TermSection />
       <CoursesSection />
+      <AIReadingSection />
       <SyncSection />
       <AccountSection />
     </div>

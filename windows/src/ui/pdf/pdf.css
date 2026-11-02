@@ -1,0 +1,12 @@
+.pdf-pane { height: 100%; overflow: auto; padding: 12px; background: var(--ground); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pdf-page { position: relative; background: #fff; border-radius: 4px; box-shadow: var(--shadow-1); flex: none; overflow: hidden; }
+.pdf-page canvas { display: block; }
+.pdf-mark { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--review) 10%, transparent); border-block: 1.5px solid color-mix(in srgb, var(--review) 55%, transparent); pointer-events: none; }
+.pdf-note { color: var(--ink-secondary); font-size: 13px; margin: 24px 0; }
+.pdf-exercise { position: relative; height: 100%; min-height: 0; }
+.pdf-toggle { position: absolute; top: 10px; right: 18px; box-shadow: var(--shadow-2); }
+.pdf-overlay { padding-top: 4vh; z-index: 940; }
+.pdf-dialog { width: min(860px, calc(100vw - 48px)); height: 88vh; max-height: 88vh; }
+.pdf-dialog .cs-dialog-head { flex: none; }
+.pdf-dialog .cs-dialog-head .select { width: 180px; }
+.pdf-dialog-body { flex: 1; min-height: 0; }

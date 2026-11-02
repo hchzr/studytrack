@@ -3,11 +3,11 @@
 // cinq volets ; les sous-parties vivent dans `./course/`.
 //
 // Hors du Mac : Progression et Examens (vues de l'iPhone) sont gardés, et les
-// notes du cours (CourseNotesView) ont leur volet. Non portés : l'import d'une
-// série depuis un PDF (service de lecture de PDF) et le glisser-déposer qui s'y
-// rattache.
+// notes du cours (CourseNotesView) ont leur volet. L'import d'une série depuis un
+// PDF (menu Ajouter, « Réimporter un PDF… », PDF déposé sur la page) ouvre
+// `SeriesImportSheet`.
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { Course } from "../../models/index.ts";
 import type { ExerciseSeries } from "../../models/exercise.ts";
 import type { TheoryItem } from "../../models/theoryItem.ts";
@@ -15,7 +15,8 @@ import type { Exam } from "../../models/exam.ts";
 import type { PastExam } from "../../models/pastExam.ts";
 import { useData } from "../../data/dataContext.tsx";
 import { ProgressEngine } from "../../domain/progressEngine.ts";
-import { Button, Segmented, Select, useContextMenu } from "../kit.tsx";
+import { Button, Icon, Segmented, Select, useContextMenu } from "../kit.tsx";
+import { listenForPDFDrops, type PickedFile } from "../../native/files.ts";
 import { timerController } from "../timerController.ts";
 import { fmtNumber, hostOf, openURL, siteName, webURL, ProgressRing, type CourseActions } from "./course/common.tsx";
 import { TheoryTab } from "./course/TheoryTab.tsx";
@@ -23,6 +24,7 @@ import { ExercisesTab } from "./course/ExercisesTab.tsx";
 import { ProgressTab } from "./course/ProgressTab.tsx";
 import { ExamsTab } from "./course/ExamsTab.tsx";
 import { NotesTab } from "./course/NotesTab.tsx";
+import { SeriesImportSheet } from "./course/import/SeriesImportSheet.tsx";
 import { CourseDialog, ExamDialog, PastExamDialog, SeriesDialog, TheoryDialog } from "./course/Dialogs.tsx";
 import "./course/course.css";
 
@@ -32,10 +34,13 @@ const TABS: CourseTab[] = ["theory", "exercises", "progress", "exams", "notes"];
 /** Ce qui est en cours d'édition dans une boîte de dialogue. */
 type Editor =
   | { kind: "course" }
+  | { kind: "importPDF"; files?: PickedFile[]; text?: string }
   | { kind: "series"; series: ExerciseSeries | null }
   | { kind: "theory"; item: TheoryItem | null }
   | { kind: "exam"; exam: Exam | null }
   | { kind: "pastExam"; exam: PastExam };
+
+const DEBUG_TEXT = "Série 3 — Récurrences\nExercice 1 : Tri fusion\n1. Montrer que l'algorithme est en O(n log n).\n2. Conclure.\nExercice 2 (facultatif)\nÉcrire la relation de récurrence.\n\nSérie 4 — Graphes\nExercice 1\nParcours en largeur.";
 
 /** `?tab=` : le volet d'ouverture (captures et essais), sinon les exercices. */
 function initialTab(): CourseTab {
@@ -54,8 +59,23 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
       : focusTarget && course.allExercises.some((e) => e.id === focusTarget) ? "exercises"
       : initialTab());
   const [week, setWeek] = useState(0);
-  const [editor, setEditor] = useState<Editor | null>(null);
+  // `?import=text` : l'import ouvert sur un énoncé d'essai (captures et essais).
+  const [editor, setEditor] = useState<Editor | null>(() =>
+    new URLSearchParams(window.location.search).get("import") === "text" ? { kind: "importPDF", text: DEBUG_TEXT } : null);
   const menu = useContextMenu();
+  const [dropTargeted, setDropTargeted] = useState(false);
+
+  // Un PDF de série glissé sur le cours : l'import, avec sa relecture. L'écoute ne
+  // vit que tant que la page du cours est ouverte, et ne fait rien au repos.
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let alive = true;
+    void listenForPDFDrops({
+      onTarget: setDropTargeted,
+      onDrop: (files) => setEditor({ kind: "importPDF", files: files.slice(0, 1) }),
+    }).then((stop) => { if (alive) off = stop; else stop(); });
+    return () => { alive = false; off?.(); };
+  }, []);
 
   const persistAll = async (objects: object[]) => {
     try {
@@ -69,6 +89,7 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
   };
 
   const actions: CourseActions = {
+    importPDF: () => setEditor({ kind: "importPDF" }),
     editSeries: (series) => setEditor({ kind: "series", series }),
     editTheory: (item) => setEditor({ kind: "theory", item }),
     editExam: (exam) => setEditor({ kind: "exam", exam }),
@@ -106,6 +127,7 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
   const addMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     menu.openAt(rect.right - 200, rect.bottom + 4, [
+      { label: "Importer une série (PDF)…", icon: "doc.badge.plus", action: () => actions.importPDF() },
       { label: "Nouvelle série…", icon: "plus", action: () => actions.editSeries(null) },
       { label: "Ajouter de la théorie…", icon: "book", action: () => actions.editTheory(null) },
       { label: "Nouvelle évaluation…", icon: "calendar.badge.clock", action: () => actions.editExam(null) },
@@ -187,6 +209,14 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
       {menu.element}
 
       {editor?.kind === "course" && <CourseDialog course={course} save={persistAll} onClose={() => setEditor(null)} />}
+      {editor?.kind === "importPDF" && (
+        <SeriesImportSheet course={course} initialFiles={editor.files} initialText={editor.text} onClose={() => setEditor(null)} />
+      )}
+      {dropTargeted && (
+        <div className="cs-drop" aria-hidden="true">
+          <span><Icon name="doc.badge.plus" size={16} /> Déposer le PDF de la série</span>
+        </div>
+      )}
       {editor?.kind === "series" && (
         <SeriesDialog course={course} series={editor.series} save={persistAll} remove={removeOne} onClose={() => setEditor(null)} />
       )}

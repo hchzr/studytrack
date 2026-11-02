@@ -18,6 +18,8 @@ import {
   Pill, ProgressRing, StageMark, exerciseLinks, openURL, seriesLinks, useTimedTarget,
   type CourseActions,
 } from "./common.tsx";
+import { SeriesPDFDialog } from "../../pdf/SeriesPDFDialog.tsx";
+import { useSeriesPDF } from "../../pdf/useSeriesPDF.ts";
 import "./course.css";
 
 interface ExercisesTabProps {
@@ -125,6 +127,7 @@ export function ExercisesTab({ course, week, saveAll, actions, focusID }: Exerci
 
   const seriesMenu = (entry: ExerciseSeries): MenuItem[] => [
     { label: "Modifier la série…", icon: "pencil", action: () => actions.editSeries(entry) },
+    { label: "Réimporter un PDF…", icon: "doc.badge.plus", action: () => actions.importPDF() },
     { label: "Nouvelle série…", icon: "plus", action: () => actions.editSeries(null) },
   ];
 
@@ -218,6 +221,9 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
   onExerciseMenu: (exercise: Exercise) => (event: React.MouseEvent) => void;
 }) {
   const links = seriesLinks(series);
+  // Le PDF importé de la série, s'il est sur l'appareil.
+  const pdf = useSeriesPDF(series.id);
+  const [viewingPDF, setViewingPDF] = useState(false);
   const required = series.requiredExercises;
   const spent = ExerciseFlow.seconds(series);
   const title = series.title === "" ? `Série ${series.seriesNumber}` : series.title;
@@ -245,8 +251,13 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
 
       {!collapsed && (
         <div className="cs-series-body">
-          {links.length > 0 && (
+          {(links.length > 0 || pdf !== null) && (
             <div className="cs-links">
+              {pdf !== null && (
+                <Button size="sm" icon="doc.text" onClick={() => setViewingPDF(true)} title="Lire le PDF importé de la série">
+                  Énoncé PDF
+                </Button>
+              )}
               {links.map((link) => <LinkChip key={link.url} link={link} />)}
             </div>
           )}
@@ -275,6 +286,7 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
           )}
         </div>
       )}
+      {viewingPDF && pdf && <SeriesPDFDialog series={series} bytes={pdf} onClose={() => setViewingPDF(false)} />}
     </Card>
   );
 }

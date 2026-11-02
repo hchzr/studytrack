@@ -105,7 +105,9 @@ export function Shell() {
 
   if (!store) return <div className="shell-loading">Chargement…</div>;
 
-  const current = page.kind === "course" ? store.fetch(Course).find((c) => c.id === page.id) ?? null : null;
+  // `?page=course:first` : le premier cours suivi (les identifiants de l'aperçu changent à chaque chargement).
+  const current = page.kind === "course"
+    ? store.fetch(Course).find((c) => c.id === page.id || (page.id === "first" && c.isTracked)) ?? null : null;
   const activeKey = page.kind === "course" ? `course:${page.id}` : page.kind;
   const openCourse = (id: string, item?: string | null) => setPage({ kind: "course", id, item });
   function openStudy(courseID?: string) { setStudyCourse(courseID); setStudyMode(true); }

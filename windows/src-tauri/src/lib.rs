@@ -30,6 +30,11 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         // Le raccourci global (⌃⌥Espace) s'enregistre côté webview.
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // Choisir un PDF (boîte de dialogue du système) et garder celui d'une série.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        // Réseau côté Rust : les fonctions Supabase et les sites de cours n'envoient pas d'en-têtes CORS.
+        .plugin(tauri_plugin_http::init())
         .manage(native::lock::LockState::default())
         .invoke_handler(tauri::generate_handler![
             greet,

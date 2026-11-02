@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
@@ -14,6 +16,64 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-unminimize",
-    "core:tray:default"
+    "core:tray:default",
+    "dialog:allow-open",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$APPLOCALDATA/SeriesPDF/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/SeriesPDF/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/SeriesPDF"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/SeriesPDF/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/SeriesPDF/**"
+        }
+      ]
+    },
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://*.supabase.co/**"
+        }
+      ]
+    }
   ]
 }

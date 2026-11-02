@@ -77,3 +77,22 @@ export const readBlockedApps = () => readList(BLOCKED_APPS, defaultBlockedApps);
 export const readBlockedSites = () => readList(BLOCKED_SITES, defaultBlockedSites);
 export const writeBlockedApps = (apps: string[]) => write(BLOCKED_APPS, JSON.stringify(apps));
 export const writeBlockedSites = (sites: string[]) => write(BLOCKED_SITES, JSON.stringify(sites));
+
+/** Proposer l'analyse par modèle de langage à l'import d'un PDF (`settings.aiExtractionEnabled`) : actif par défaut. */
+const AI_EXTRACTION = "win.aiExtraction";
+export function readAIExtraction(): boolean {
+  return read(AI_EXTRACTION) !== "false";
+}
+export function writeAIExtraction(value: boolean): void {
+  write(AI_EXTRACTION, value ? "true" : "false");
+}
+
+/** L'identifiant d'installation anonyme (`SupabaseConfig.installID`) : un par appareil, rien ne le relie à une personne. */
+export function installID(): string {
+  const key = "supabase.installID";
+  const saved = read(key);
+  if (saved) return saved;
+  const id = globalThis.crypto?.randomUUID?.().toUpperCase() ?? String(Date.now());
+  write(key, id);
+  return id;
+}
