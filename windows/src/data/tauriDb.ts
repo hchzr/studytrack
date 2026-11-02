@@ -34,6 +34,13 @@ export class TauriDb implements Db {
     return this.opened;
   }
 
+  /** Ferme la connexion (avant de remplacer le fichier de la base). */
+  async close(): Promise<void> {
+    const opened = this.opened;
+    this.opened = null;
+    if (opened) await (await opened).close();
+  }
+
   async execute(sql: string, params: Value[] = []): Promise<void> {
     await (await this.connection()).execute(sql, params);
   }

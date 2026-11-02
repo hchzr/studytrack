@@ -8,10 +8,12 @@
 
 import { inNative } from "./tauri.ts";
 
-export async function nativeFetch(input: string, init?: RequestInit): Promise<Response> {
+/** `maxRedirections: 0` rend la redirection telle quelle (AnkiWeb : l'adresse de redirection est la racine du serveur du compte). */
+export async function nativeFetch(input: string, init?: RequestInit & { maxRedirections?: number }): Promise<Response> {
   if (inNative()) {
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
     return tauriFetch(input, init);
   }
-  return fetch(input, init);
+  const { maxRedirections, ...rest } = init ?? {};
+  return fetch(input, maxRedirections === 0 ? { ...rest, redirect: "manual" } : rest);
 }

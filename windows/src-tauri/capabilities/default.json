@@ -40,6 +40,9 @@
       "allow": [
         {
           "path": "$APPLOCALDATA/SeriesPDF/**"
+        },
+        {
+          "path": "$APPCONFIG/AnkiWeb/**"
         }
       ]
     },
@@ -48,6 +51,9 @@
       "allow": [
         {
           "path": "$APPLOCALDATA/SeriesPDF"
+        },
+        {
+          "path": "$APPCONFIG/AnkiWeb"
         }
       ]
     },
@@ -56,6 +62,9 @@
       "allow": [
         {
           "path": "$APPLOCALDATA/SeriesPDF/**"
+        },
+        {
+          "path": "$APPCONFIG/AnkiWeb/**"
         }
       ]
     },
@@ -64,6 +73,9 @@
       "allow": [
         {
           "path": "$APPLOCALDATA/SeriesPDF/**"
+        },
+        {
+          "path": "$APPCONFIG/AnkiWeb/**"
         }
       ]
     },
@@ -86,6 +98,14 @@
         },
         {
           "path": "$DESKTOP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-rename",
+      "allow": [
+        {
+          "path": "$APPCONFIG/AnkiWeb/**"
         }
       ]
     }

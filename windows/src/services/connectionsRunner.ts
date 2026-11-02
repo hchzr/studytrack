@@ -17,6 +17,8 @@ import { readConnection } from "../native/settings.ts";
 import { AcademicCalendarService, refreshMessage } from "./academicCalendarService.ts";
 import { CalendarSync } from "./calendarService.ts";
 import { TimetableImport, resultMessage } from "./timetableImport.ts";
+import { AnkiReviewSync } from "./ankiReviewSync.ts";
+import { ankiWebSync } from "./ankiWebSync.ts";
 import { readableServices, syncTasks, autoLink } from "./taskService.ts";
 
 export interface Persistence {
@@ -56,6 +58,15 @@ export async function refreshTimetableFeed(p: Persistence, url = readConnection(
   return importTimetableText(p, text);
 }
 
+/** Relève le temps passé dans Anki (révisions depuis AnkiWeb) en sessions « Anki ». */
+export async function syncAnki(p: Persistence, force = true): Promise<string> {
+  const outcome = await AnkiReviewSync.syncIfDue(p.store, { force });
+  if (outcome === null) return ankiWebSync.lastError ?? "Rien à relever.";
+  await p.commit({ save: outcome.sessions, remove: [] });
+  const minutes = Math.round(outcome.seconds / 60);
+  return outcome.sessionsAdded === 0 ? "Aucune nouvelle révision." : `${outcome.sessionsAdded} session(s) relevée(s) · ${minutes} min.`;
+}
+
 /** Relit la page publique du calendrier académique. */
 export function refreshAcademicCalendar(p: Persistence): Promise<string> {
   return persisting(p, async () => refreshMessage(await AcademicCalendarService.refresh(p.store)));
@@ -84,8 +95,10 @@ export async function launchSync(p: Persistence, now = new Date()): Promise<void
   if (now.getTime() - last < HALF_DAY) return;
   const feed = readConnection("timetableURLString");
   const hasTasks = readableServices().length > 0;
-  if (feed === "" && !hasTasks) return;
+  const hasAnki = ankiWebSync.isSignedIn;
+  if (feed === "" && !hasTasks && !hasAnki) return;
   try { globalThis.localStorage?.setItem(LAST, String(now.getTime())); } catch { /* stockage refusé */ }
   if (feed !== "") await refreshTimetableFeed(p, feed).catch(() => undefined);
   if (hasTasks) await syncAllTasks(p).catch(() => undefined);
+  if (hasAnki) await syncAnki(p, false).catch(() => undefined);
 }

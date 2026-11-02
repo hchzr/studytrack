@@ -15,10 +15,13 @@ import { pickTextFile } from "../../../native/files.ts";
 import { readConnection, writeConnection, type ConnectionKey } from "../../../native/settings.ts";
 import { TaskServiceFactory, windowsProviders } from "../../../services/taskService.ts";
 import {
-  importTimetableText, refreshAcademicCalendar, refreshTimetableFeed, syncAllTasks, type Persistence,
+  importTimetableText, refreshAcademicCalendar, refreshTimetableFeed, syncAllTasks, syncAnki, type Persistence,
 } from "../../../services/connectionsRunner.ts";
+import { ankiWebSync } from "../../../services/ankiWebSync.ts";
+import { ankiLastSync } from "../../../services/ankiReviewSync.ts";
 import { MoodleClient } from "../../../services/moodleClient.ts";
 import { siteAvailable } from "../../../services/siteSession.ts";
+import { DateUtils } from "../../../domain/dateUtils.ts";
 import { Institution } from "../../../domain/institution.ts";
 
 /** Les champs de chaque fournisseur, dans l'ordre où la notice les demande. */
@@ -135,6 +138,42 @@ export function ConnectionsSection() {
             </div>
           );
         })}
+        <SettingRow label="AnkiWeb"
+          hint={notes.anki ?? (ankiWebSync.isSignedIn
+            ? `Connecté·e (${ankiWebSync.username}). Le temps de révision est relevé au lancement${ankiLastSync() ? `, dernier relevé ${DateUtils.shortDay(ankiLastSync()!)} ${DateUtils.time(ankiLastSync()!)}` : ""}.`
+            : "Le temps passé dans Anki, relevé sans rien saisir. Lecture seule : l'app n'écrit jamais dans ta collection.")}>
+          {ankiWebSync.isSignedIn ? (
+            <div className="settings-inline">
+              <Button size="sm" disabled={busy !== null} onClick={() => void run("anki", (p) => syncAnki(p, true))}>
+                {busy === "anki" ? "Lecture…" : "Relever maintenant"}
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busy !== null}
+                onClick={async () => { await ankiWebSync.signOut(); setNotes((n) => ({ ...n, anki: "Déconnecté·e." })); bump((v) => v + 1); }}>
+                Se déconnecter
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setOpen(open === "anki" ? null : "anki")}>
+              {open === "anki" ? "Fermer" : "Se connecter"}
+            </Button>
+          )}
+        </SettingRow>
+        {open === "anki" && !ankiWebSync.isSignedIn && (
+          <form className="settings-form" onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            setBusy("anki");
+            const ok = await ankiWebSync.signIn(String(form.get("user") ?? "").trim(), String(form.get("password") ?? ""));
+            setNotes((n) => ({ ...n, anki: ok ? "Connecté·e à AnkiWeb." : ankiWebSync.lastError ?? "Connexion impossible." }));
+            if (ok) setOpen(null);
+            setBusy(null);
+          }}>
+            <Field label="Adresse e-mail AnkiWeb"><input className="field" name="user" type="email" autoComplete="username" required /></Field>
+            <Field label="Mot de passe"><input className="field" name="password" type="password" autoComplete="current-password" required /></Field>
+            <div className="settings-inline"><Button type="submit" variant="primary" size="sm" disabled={busy !== null}>Se connecter</Button></div>
+            <p className="settings-hint">Le mot de passe ne sert qu'à obtenir une clé, seule gardée sur cet appareil.</p>
+          </form>
+        )}
         <SettingRow label="Synchroniser les tâches"
           hint={notes.tasks ?? "Les tâches ouvertes apparaissent dans Aujourd'hui ; les cocher ici les coche chez le fournisseur."}>
           <Button size="sm" disabled={busy !== null || TaskServiceFactory.configuredServices().length === 0}
