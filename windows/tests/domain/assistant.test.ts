@@ -208,6 +208,9 @@ describe("Serveur MCP local (fichiers du Mac)", () => {
         });
       },
       stop() {
+        // Les connexions gardées ouvertes (keep-alive) se ferment aussi : sinon
+        // l'ancienne socket répond encore (vu sur la CI Windows).
+        server?.closeAllConnections();
         server?.close();
         server = null;
       },
@@ -219,12 +222,13 @@ describe("Serveur MCP local (fichiers du Mac)", () => {
 
   const server = new LocalMCPServer(token, new FakeFilesProvider(), nodeHost());
 
-  const send = async (path: string, method = "POST", body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; json: unknown }> => {
-    const port = server.port;
+  const send = async (path: string, method = "POST", body?: unknown, headers: Record<string, string> = {}, atPort?: number): Promise<{ status: number; json: unknown }> => {
+    const port = atPort ?? server.port;
     return new Promise((resolve) => {
       const payload = body === undefined ? undefined : JSON.stringify(body);
       const request = httpRequest({
-        host: "127.0.0.1", port, path, method, headers: {
+        // Une socket neuve à chaque requête : jamais celle d'un serveur arrêté.
+        host: "127.0.0.1", port, path, method, agent: false, headers: {
           ...(payload !== undefined ? { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(payload)) } : {}),
           ...headers,
         },
@@ -327,8 +331,10 @@ describe("Serveur MCP local (fichiers du Mac)", () => {
     && !LocalMCPServer.constantTimeEqual("abc", "ab"), "comparaison du jeton à temps constant");
 
   it("arrêté, plus rien n'écoute", async () => {
+    // Le port où il écoutait : plus personne n'y répond.
+    const port = server.port;
     server.stop();
-    expect((await send(`/${token}`, "POST", { jsonrpc: "2.0", id: 1, method: "ping" })).status).toBe(-1);
+    expect((await send(`/${token}`, "POST", { jsonrpc: "2.0", id: 1, method: "ping" }, {}, port)).status).toBe(-1);
   });
 });
 

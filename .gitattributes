@@ -1,0 +1,4 @@
+# Le port Windows compare des fichiers générés et lit des sources octet pour
+# octet (tests) : fins de ligne LF partout, même sur une copie Windows (CI).
+windows/** text=auto eol=lf
+supabase/** text=auto eol=lf
