@@ -3,11 +3,16 @@
 // (ExerciseStageMark, CorrectionDots) et de `WeekTheoryCard.swift` (pastilles de
 // lien), sans dépendre de SwiftUI.
 
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { timerController } from "../../timerController.ts";
+import { Button, Icon, cx, type IconName } from "../../kit.tsx";
+import "./course.css";
 import { ConfidenceLevel, Correctness, TheoryKind, type Tint } from "../../../models/enums.ts";
 import type { ContentLink, ContentLinkKind } from "../../../models/jsonTypes.ts";
 import type { ExerciseSeries } from "../../../models/exercise.ts";
 import type { TheoryItem } from "../../../models/theoryItem.ts";
+import type { Exam } from "../../../models/exam.ts";
+import type { PastExam } from "../../../models/pastExam.ts";
 import type { ExerciseStage } from "../../../domain/exerciseFlow.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { MathMarkup } from "../../../domain/mathMarkup.ts";
@@ -46,7 +51,7 @@ export function tintColor(tint: Tint): string {
 export interface LinkTarget {
   title: string;
   url: string;
-  icon: string;
+  icon: IconName;
 }
 
 /** `ExerciseLinks.web` : une adresse http(s) seulement. */
@@ -86,15 +91,15 @@ export function hostOf(raw: string): string | null {
   }
 }
 
-/** Le glyphe d'un support, à défaut d'un jeu d'icônes (contrat UI : texte seul). */
-export function linkGlyph(kind: ContentLinkKind): string {
+/** L'icône d'un support (les symboles SF de `ContentLinkKind.icon`). */
+export function linkIcon(kind: ContentLinkKind): IconName {
   switch (kind) {
-    case "video": return "▶";
-    case "slides": return "◫";
-    case "notes": return "✎";
-    case "pdf": return "▤";
-    case "page": return "↗";
-    case "solution": return "✓";
+    case "video": return "play.fill";
+    case "slides": return "square.stack.3d.up";
+    case "notes": return "note.text";
+    case "pdf": return "doc.text";
+    case "page": return "arrow.up.right.square";
+    case "solution": return "checkmark.circle";
   }
 }
 
@@ -125,13 +130,13 @@ export function linkShortLabel(kind: ContentLinkKind): string {
 export function seriesLinks(series: ExerciseSeries, now: Date = new Date()): LinkTarget[] {
   const links: LinkTarget[] = [];
   const statement = webURL(series.urlString);
-  if (statement) links.push({ title: "Énoncé de la série", url: statement, icon: "↗" });
+  if (statement) links.push({ title: "Énoncé de la série", url: statement, icon: "doc.text" });
   const solution = webURL(series.solutionURLString);
   if (solution) {
     if (series.solutionsAt && series.solutionsAt > now) {
-      links.push({ title: `Corrigé (publié le ${DateUtils.shortDay(series.solutionsAt)})`, url: solution, icon: "◷" });
+      links.push({ title: `Corrigé (publié le ${DateUtils.shortDay(series.solutionsAt)})`, url: solution, icon: "lock" });
     } else {
-      links.push({ title: "Corrigé", url: solution, icon: "✓" });
+      links.push({ title: "Corrigé", url: solution, icon: "checkmark.circle" });
     }
   }
   return links;
@@ -145,7 +150,7 @@ export function exerciseLinks(
 ): LinkTarget[] {
   const links: LinkTarget[] = [];
   const statement = webURL(statementURLString);
-  if (statement) links.push({ title: "Énoncé de l'exercice", url: statement, icon: "↗" });
+  if (statement) links.push({ title: "Énoncé de l'exercice", url: statement, icon: "doc.text" });
   if (series) {
     for (const link of seriesLinks(series, now)) {
       if (!links.some((existing) => existing.url === link.url)) links.push(link);
@@ -217,6 +222,21 @@ export function MathText({ text }: { text: string }) {
   );
 }
 
+// MARK: - Actions que l'écran met à disposition des volets
+
+/** Ce que l'écran du cours sait faire pour un volet : ouvrir un formulaire, lancer le chrono. */
+export interface CourseActions {
+  editSeries: (series: ExerciseSeries | null) => void;
+  editTheory: (item: TheoryItem | null) => void;
+  editExam: (exam: Exam | null) => void;
+  editPastExam: (exam: PastExam | null) => void;
+  /** Démarre — ou bascule sans couper — le chrono sur une cible du cours. */
+  time: (targetID: string, type: "exercise" | "theory") => void;
+}
+
+/** Une couleur passée aux feuilles de style (`var(--tone)`). */
+const tone = (color: string): CSSProperties => ({ ["--tone" as string]: color });
+
 // MARK: - Coche et marques
 
 export function CheckCircle({ isOn, tint, label, onToggle, size = 22 }:
@@ -224,71 +244,60 @@ export function CheckCircle({ isOn, tint, label, onToggle, size = 22 }:
   return (
     <button
       type="button"
+      className="cs-check"
       aria-label={label}
+      title={label}
       aria-pressed={isOn}
       onClick={(event) => { event.stopPropagation(); onToggle(); }}
-      style={{
-        width: size, height: size, borderRadius: "50%", flexShrink: 0, padding: 0,
-        border: `1.6px solid ${isOn ? tint : "var(--ink-tertiary)"}`,
-        background: isOn ? tint : "transparent",
-        color: isOn ? "white" : "var(--ink-tertiary)",
-        fontSize: size * 0.55, lineHeight: 1, display: "grid", placeItems: "center",
-      }}
+      style={{ ...tone(tint), width: size, height: size }}
     >
-      {isOn ? "✓" : ""}
+      <Icon name="checkmark" size={Math.round(size * 0.58)} strokeWidth={3} />
     </button>
   );
 }
 
-/** `ExerciseStageMark` : cercle vide, anneau qui se remplit, coche, couleur, ↺. */
+/** `ExerciseStageMark` : cercle vide, anneau qui se remplit, coche, couleur, retour. */
 export function StageMark({ stage, size = 24 }: { stage: ExerciseStage; size?: number }) {
+  const glyph = Math.round(size * 0.55);
   switch (stage.kind) {
     case "toDo":
-      return (
-        <span style={{
-          width: size, height: size, borderRadius: "50%", display: "inline-block",
-          border: "1.8px solid var(--ink-tertiary)",
-        }} />
-      );
+      return <span className="cs-mark blank" style={{ width: size, height: size }} />;
     case "inProgress": {
       const deg = Math.round((stage.done / Math.max(stage.total, 1)) * 360);
       return (
-        <span style={{
-          position: "relative", width: size, height: size, borderRadius: "50%", display: "inline-block",
-          background: `conic-gradient(var(--ink) ${deg}deg, var(--rule) 0deg)`,
-        }}>
-          <span style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "var(--sheet)" }} />
+        <span className="cs-ring-mark" style={{ width: size, height: size,
+          background: `conic-gradient(var(--ink) ${deg}deg, var(--rule) 0deg)` }}>
+          <i style={{ inset: Math.max(2, Math.round(size / 8)) }} />
         </span>
       );
     }
     case "toCorrect":
-      return filledMark("var(--selection)", "✓", size);
+      return <FilledMark color="var(--selection)" icon="checkmark" size={size} glyph={glyph} />;
     case "corrected":
-      return filledMark(CORRECTNESS_COLOR[stage.correctness], correctnessGlyph(stage.correctness), size);
+      return <FilledMark color={CORRECTNESS_COLOR[stage.correctness]} icon={correctnessIcon(stage.correctness)}
+        size={size} glyph={glyph} />;
     case "redo":
       return (
-        <span style={{
-          width: size, height: size, borderRadius: "50%", display: "inline-grid", placeItems: "center",
-          border: "2px solid var(--wrong)", color: "var(--wrong)", fontSize: size * 0.5, fontWeight: 700,
-        }}>↺</span>
+        <span className="cs-mark redo" style={{ width: size, height: size }}>
+          <Icon name="arrow.counterclockwise" size={glyph} strokeWidth={2.5} />
+        </span>
       );
   }
 }
 
-function filledMark(color: string, glyph: string, size: number) {
+function FilledMark({ color, icon, size, glyph }: { color: string; icon: IconName; size: number; glyph: number }) {
   return (
-    <span style={{
-      width: size, height: size, borderRadius: "50%", display: "inline-grid", placeItems: "center",
-      background: color, color: "white", fontSize: size * 0.46, fontWeight: 700,
-    }}>{glyph}</span>
+    <span className="cs-mark" style={{ width: size, height: size, background: color }}>
+      <Icon name={icon} size={glyph} strokeWidth={3} />
+    </span>
   );
 }
 
-export function correctnessGlyph(value: Correctness): string {
+export function correctnessIcon(value: Correctness): IconName {
   switch (value) {
-    case "correct": return "✓";
-    case "partial": return "~";
-    case "wrong": return "✕";
+    case "correct": return "checkmark";
+    case "partial": return "ellipsis";
+    case "wrong": return "xmark";
   }
 }
 
@@ -296,29 +305,22 @@ export function correctnessGlyph(value: Correctness): string {
 export function CorrectionDots({ value, onChange, size = 20 }:
   { value: Correctness | null; onChange: (next: Correctness | null) => void; size?: number }) {
   return (
-    <div style={{ display: "flex", gap: 2, flexShrink: 0 }} role="group" aria-label="Correction">
+    <div className="cs-dots" role="group" aria-label="Correction">
       {Correctness.allCases.map((option) => {
         const isOn = value === option;
-        const color = CORRECTNESS_COLOR[option];
+        const label = `Correction : ${Correctness.label(option)}`;
         return (
           <button
             key={option}
             type="button"
-            title={`Correction : ${Correctness.label(option)}`}
-            aria-label={`Correction : ${Correctness.label(option)}`}
+            className={cx("cs-dot", value !== null && !isOn && "dim")}
+            title={label}
+            aria-label={label}
             aria-pressed={isOn}
             onClick={(event) => { event.stopPropagation(); onChange(isOn ? null : option); }}
-            style={{
-              width: size, height: size, borderRadius: "50%", padding: 0,
-              border: `1.5px solid ${color}`,
-              background: isOn ? color : "transparent",
-              color: isOn ? "white" : color,
-              fontSize: size * 0.48, fontWeight: 700, lineHeight: 1,
-              opacity: value === null || isOn ? 1 : 0.45,
-              display: "grid", placeItems: "center",
-            }}
+            style={{ ...tone(CORRECTNESS_COLOR[option]), width: size, height: size }}
           >
-            {correctnessGlyph(option)}
+            <Icon name={correctnessIcon(option)} size={Math.round(size * 0.55)} strokeWidth={3} />
           </button>
         );
       })}
@@ -326,12 +328,12 @@ export function CorrectionDots({ value, onChange, size = 20 }:
   );
 }
 
-/** Le glyphe de la pastille : ✓, =, ? (les noms Swift sont des symboles SF, pas des caractères). */
-export function confidenceGlyph(level: ConfidenceLevel): string {
+/** Le symbole de la pastille de sûreté : coche, points de suspension, drapeau (pas de « = » ni de « ? » dans le jeu d'icônes). */
+export function confidenceIcon(level: ConfidenceLevel): IconName {
   switch (level) {
-    case "green": return "✓";
-    case "orange": return "=";
-    case "red": return "?";
+    case "green": return "checkmark";
+    case "orange": return "ellipsis";
+    case "red": return "flag";
   }
 }
 
@@ -339,15 +341,12 @@ export function ConfidenceDot({ level, size = 14 }: { level: ConfidenceLevel; si
   return (
     <span
       role="img"
+      className="cs-conf"
       aria-label={ConfidenceLevel.label(level)}
       title={ConfidenceLevel.label(level)}
-      style={{
-        width: size, height: size, borderRadius: "50%", background: CONFIDENCE_COLOR[level],
-        color: "white", fontSize: size * 0.62, fontWeight: 700, lineHeight: 1,
-        display: "inline-grid", placeItems: "center", flexShrink: 0,
-      }}
+      style={{ width: size, height: size, background: CONFIDENCE_COLOR[level] }}
     >
-      {confidenceGlyph(level)}
+      <Icon name={confidenceIcon(level)} size={Math.round(size * 0.66)} strokeWidth={3} />
     </span>
   );
 }
@@ -356,29 +355,21 @@ export function ConfidenceDot({ level, size = 14 }: { level: ConfidenceLevel; si
 export function ConfidencePicker({ value, onChange, size = 20 }:
   { value: ConfidenceLevel | null; onChange: (next: ConfidenceLevel | null) => void; size?: number }) {
   return (
-    <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Sûreté">
+    <div className="cs-dots" role="group" aria-label="Sûreté">
       {ConfidenceLevel.allCases.map((option) => {
         const isOn = value === option;
-        const color = CONFIDENCE_COLOR[option];
         return (
           <button
             key={option}
             type="button"
+            className={cx("cs-dot", value !== null && !isOn && "dim")}
             title={ConfidenceLevel.label(option)}
             aria-label={ConfidenceLevel.label(option)}
             aria-pressed={isOn}
             onClick={(event) => { event.stopPropagation(); onChange(isOn ? null : option); }}
-            style={{
-              width: size, height: size, borderRadius: "50%", padding: 0,
-              border: `1.5px solid ${color}`,
-              background: isOn ? color : "transparent",
-              color: isOn ? "white" : color,
-              fontSize: size * 0.48, fontWeight: 700,
-              opacity: value === null || isOn ? 1 : 0.45,
-              display: "grid", placeItems: "center",
-            }}
+            style={{ ...tone(CONFIDENCE_COLOR[option]), width: size, height: size }}
           >
-            {confidenceGlyph(option)}
+            <Icon name={confidenceIcon(option)} size={Math.round(size * 0.55)} strokeWidth={3} />
           </button>
         );
       })}
@@ -386,65 +377,41 @@ export function ConfidencePicker({ value, onChange, size = 20 }:
   );
 }
 
-// MARK: - Barres et pastilles
-
-export function Bar({ value, tint, height = 4 }: { value: number; tint: string; height?: number }) {
-  const ratio = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
-  return (
-    <div aria-hidden style={{ height, borderRadius: height, background: "var(--rule)", overflow: "hidden" }}>
-      <div style={{ width: `${ratio * 100}%`, height: "100%", background: tint, borderRadius: height }} />
-    </div>
-  );
-}
+// MARK: - Anneau et pastilles
 
 export function ProgressRing({ value, tint, size = 28, lineWidth = 4 }:
   { value: number; tint: string; size?: number; lineWidth?: number }) {
   const ratio = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
   return (
-    <span style={{
-      position: "relative", width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: `conic-gradient(${tint} ${ratio * 360}deg, var(--rule) 0deg)`,
-    }}>
-      <span style={{ position: "absolute", inset: lineWidth, borderRadius: "50%", background: "var(--sheet)" }} />
+    <span className="cs-ring-mark" aria-hidden
+      style={{ width: size, height: size, background: `conic-gradient(${tint} ${ratio * 360}deg, var(--rule) 0deg)` }}>
+      <i style={{ inset: lineWidth }} />
     </span>
   );
 }
 
-export function Pill({ children, color, icon }: { children: ReactNode; color?: string; icon?: string }) {
+/** Une petite pastille d'état (« bonus », « à refaire »), contour de la teinte. */
+export function Pill({ children, color, icon }: { children: ReactNode; color?: string; icon?: IconName }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4, borderRadius: 999,
-      border: `1px solid ${color ?? "var(--rule)"}`, color: color ?? "var(--ink-secondary)",
-      padding: "1px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
-    }}>
-      {icon && <span aria-hidden>{icon}</span>}
+    <span className="cs-pill" style={color ? tone(color) : undefined}>
+      {icon && <Icon name={icon} size={11} strokeWidth={2.25} />}
       {children}
     </span>
   );
 }
 
+/** Un lien (énoncé, corrigé) : un bouton discret du kit qui ouvre la page. */
 export function LinkChip({ link }: { link: LinkTarget }) {
   return (
-    <button
-      type="button"
-      onClick={(event) => { event.stopPropagation(); openURL(link.url); }}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999,
-        border: "1px solid var(--rule)", background: "var(--sheet-raised)", color: "var(--ink)",
-        padding: "4px 10px", fontSize: 12,
-      }}
-    >
-      <span aria-hidden style={{ color: "var(--ink-secondary)" }}>{link.icon}</span>
+    <Button size="sm" icon={link.icon} trailingIcon="arrow.up.right"
+      onClick={(event) => { event.stopPropagation(); openURL(link.url); }}>
       {link.title}
-    </button>
+    </Button>
   );
 }
 
-export function EmptyState({ title, message }: { title: string; message: string }) {
-  return (
-    <div className="card" style={{ color: "var(--ink-secondary)" }}>
-      <strong className="serif" style={{ color: "var(--ink)", fontSize: 17 }}>{title}</strong>
-      <p style={{ margin: "4px 0 0" }}>{message}</p>
-    </div>
-  );
+/** L'élément que le chrono vise en ce moment (l'icône « en cours » des lignes). */
+export function useTimedTarget(): string | undefined {
+  const snap = useSyncExternalStore(timerController.subscribe, timerController.snapshot);
+  return snap.state ? snap.state.targetID : undefined;
 }

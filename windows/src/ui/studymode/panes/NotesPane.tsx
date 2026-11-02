@@ -71,6 +71,7 @@ export function NotesPane({ course, save }: {
           <span style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>Markdown</span>
         </div>
         <textarea
+          className="field"
           value={text}
           onChange={(event) => onChange(event.target.value)}
           onBlur={() => {
@@ -85,7 +86,7 @@ export function NotesPane({ course, save }: {
           style={{
             width: "100%", minHeight: "60vh", resize: "vertical", padding: 16, borderRadius: 14,
             border: "1px solid var(--rule)", background: "var(--sheet)", color: "var(--ink)",
-            font: "inherit", fontSize: 14, lineHeight: 1.6, outline: "none",
+            font: "inherit", fontSize: 14, lineHeight: 1.6,
           }}
         />
         {/* Sur le Mac, les cahiers de la série se lisent ici (GoodNotes, via

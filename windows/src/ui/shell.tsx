@@ -29,7 +29,7 @@ const CommandPalette = lazy(() => import("./palette/CommandPalette.tsx").then((m
 export type Page =
   | { kind: "today" } | { kind: "courses" } | { kind: "focus" }
   | { kind: "agenda" } | { kind: "stats" } | { kind: "settings" }
-  | { kind: "course"; id: string };
+  | { kind: "course"; id: string; item?: string | null };
 
 type TabKind = Exclude<Page["kind"], "course">;
 const TABS: { kind: TabKind; label: string; icon: IconName }[] = [
@@ -107,7 +107,7 @@ export function Shell() {
 
   const current = page.kind === "course" ? store.fetch(Course).find((c) => c.id === page.id) ?? null : null;
   const activeKey = page.kind === "course" ? `course:${page.id}` : page.kind;
-  const openCourse = (id: string) => setPage({ kind: "course", id });
+  const openCourse = (id: string, item?: string | null) => setPage({ kind: "course", id, item });
   function openStudy(courseID?: string) { setStudyCourse(courseID); setStudyMode(true); }
 
   const courseMenu = (course: Course) => menu.open([
@@ -175,13 +175,15 @@ export function Shell() {
       <main className="shell-main">
         {page.kind === "today" && (courses.length === 0
           ? <NoCourses onAdd={() => setPage({ kind: "courses" })} />
-          : <TodayScreen onOpenCourse={openCourse} />)}
+          : <TodayScreen onOpenCourse={openCourse} onOpenFocus={() => setPage({ kind: "focus" })}
+              onEnterStudyMode={(courseID) => openStudy(courseID)} />)}
         {page.kind === "courses" && <CoursesScreen onOpenCourse={openCourse} />}
         {page.kind === "focus" && <FocusScreen onEnterStudyMode={() => openStudy()} />}
-        {page.kind === "agenda" && <AgendaScreen />}
+        {page.kind === "agenda" && <AgendaScreen onOpenCourse={openCourse} />}
         {page.kind === "stats" && <StatsScreen />}
         {page.kind === "settings" && <SettingsScreen />}
-        {page.kind === "course" && current && <CourseScreen key={current.id} course={current} />}
+        {page.kind === "course" && current && <CourseScreen key={`${current.id}:${page.kind === "course" ? page.item ?? "" : ""}`} course={current}
+          focusTarget={page.kind === "course" ? page.item : null} />}
         {page.kind === "course" && !current && <EmptyState icon="books.vertical" title="Cours introuvable" />}
       </main>
 
@@ -190,7 +192,7 @@ export function Shell() {
         <Suspense fallback={null}>
           <CommandPalette
             onClose={() => setPalette(false)}
-            onOpenCourse={(id) => { setPalette(false); openCourse(id); }}
+            onOpenCourse={(id, item) => { setPalette(false); openCourse(id, item); }}
             onNavigate={(kind) => { setPalette(false); setPage({ kind }); }}
             onStudyMode={() => { setPalette(false); openStudy(); }}
           />

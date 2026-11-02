@@ -14,9 +14,9 @@ import { Plural } from "../../../domain/plural.ts";
 import { ExerciseStage } from "../../../domain/exerciseFlow.ts";
 import { ProgressEngine, type WeeklyProgress } from "../../../domain/progressEngine.ts";
 import { WorkloadEngine } from "../../../domain/workloadEngine.ts";
-import {
-  Bar, CheckCircle, EmptyState, HOURS_PER_CREDIT, theoryDetail,
-} from "./common.tsx";
+import { Button, Card, EmptyState, Icon, ProgressBar, Section, cx } from "../../kit.tsx";
+import { CheckCircle, HOURS_PER_CREDIT, theoryDetail } from "./common.tsx";
+import "./course.css";
 import {
   changeSummary, isEmptyChange, markWeeks, undoWeeks,
   type WeekChange, type WeekScope,
@@ -102,170 +102,153 @@ export function ProgressTab({ course, saveAll }: ProgressTabProps) {
   const shownWeeks = weeks.filter((week) => week.hasItems || week.week === current);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+    <div className="cs-col">
       {/* Où tu en es */}
-      <div className="card">
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700,
-          color: "var(--ink-secondary)", marginBottom: 6 }}>
+      <Card className="cs-where" flat>
+        <div className="caps" style={{ marginBottom: 6 }}>
           {current > 0 ? `Semaine ${current} sur ${course.term?.totalWeeks ?? 14}` : "Semestre"}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span aria-hidden style={{ color: late > 0 ? "var(--review)" : "var(--correct)", fontSize: 16 }}>
-            {late > 0 ? "!" : "✓"}
-          </span>
-          <span className="serif" style={{ fontSize: 21 }}>{sentence}</span>
+        <div className="big">
+          <Icon name={late > 0 ? "exclamationmark.triangle" : "checkmark.circle"} size={20}
+            color={late > 0 ? "var(--review)" : "var(--correct)"} />
+          <span className="serif">{sentence}</span>
         </div>
         {late > 0 && (
-          <p style={{ margin: "5px 0 0", color: "var(--ink-secondary)", fontSize: 13 }}>
+          <p className="muted" style={{ margin: "5px 0 0", fontSize: 13 }}>
             Des semaines passées : {lateDetail(lateTheory.length, lateExercises.length)}.
           </p>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, marginTop: 14 }}>
-          <Axis title="Théorie" done={progress.watchedCount} total={progress.videoCount} tint={course.colorHex} />
-          <Axis title="Séries" done={progress.doneCount} total={progress.exerciseCount} tint={course.colorHex} />
-          <Axis title="Corrigés" done={progress.correctedCount} total={progress.doneCount} tint={course.colorHex} />
+        <div className="cs-axes">
+          <Axis title="Théorie" done={progress.watchedCount} total={progress.videoCount} />
+          <Axis title="Séries" done={progress.doneCount} total={progress.exerciseCount} />
+          <Axis title="Corrigés" done={progress.correctedCount} total={progress.doneCount} />
         </div>
 
         {progress.wrongOrRedoCount > 0 && (
-          <div style={{ marginTop: 12, color: "var(--wrong)", fontSize: 12, fontWeight: 600 }}>
-            ↺ {Plural.count(progress.wrongOrRedoCount,
+          <div className="cs-redo">
+            <Icon name="arrow.counterclockwise" size={14} strokeWidth={2.25} />
+            {Plural.count(progress.wrongOrRedoCount,
               `${progress.wrongOrRedoCount} exercice`, `${progress.wrongOrRedoCount} exercices`)} à refaire
           </div>
         )}
-      </div>
+      </Card>
 
       {/* À rattraper */}
       {(lateTheory.length > 0 || lateExercises.length > 0) && (
-        <section>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-            <h2 style={sectionTitle}>À rattraper</h2>
-            <span style={{ flex: 1 }} />
-            <span style={{ display: "flex", gap: 4 }}>
-              <SmallButton onClick={() => void completeLate("all")}>Tout faire</SmallButton>
-              <SmallButton onClick={() => void completeLate("allCorrected")}>Fait + corrigé</SmallButton>
-              <SmallButton onClick={() => void completeLate("theoryOnly")}>Théorie</SmallButton>
+        <Section
+          title="À rattraper"
+          style={{ marginBottom: 0 }}
+          action={
+            <span className="hstack" style={{ gap: 4 }}>
+              <Button size="sm" onClick={() => void completeLate("all")}>Tout faire</Button>
+              <Button size="sm" onClick={() => void completeLate("allCorrected")}>Fait + corrigé</Button>
+              <Button size="sm" onClick={() => void completeLate("theoryOnly")}>Théorie</Button>
             </span>
-          </div>
-          <div className="card" style={{ padding: "4px 14px" }}>
-            {lateRows.slice(0, 12).map((row, index) => (
-              <div key={row.kind === "theory" ? row.item.id : row.exercise.id}
-                style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)" }}>
-                {row.kind === "theory" ? (
-                  <LateLine
-                    done={row.item.isWatched}
-                    week={row.item.plannedWeek}
-                    title={row.item.title === "" ? row.item.number : row.item.title}
-                    detail={theoryDetail(row.item)}
-                    onToggle={() => void toggleTheory(row.item)}
-                  />
-                ) : (
-                  <LateLine
-                    done={row.exercise.isDone}
-                    week={row.exercise.series?.plannedWeek ?? 0}
-                    title={row.exercise.displayNumber + (row.exercise.title === "" ? "" : ` · ${row.exercise.title}`)}
-                    detail={row.exercise.series ? `Série ${row.exercise.series.seriesNumber}` : ""}
-                    onToggle={() => void toggleExercise(row.exercise)}
-                  />
-                )}
-              </div>
+          }
+        >
+          <Card className="cs-list" flat>
+            {lateRows.slice(0, 12).map((row) => row.kind === "theory" ? (
+              <LateLine
+                key={row.item.id}
+                done={row.item.isWatched}
+                week={row.item.plannedWeek}
+                title={row.item.title === "" ? row.item.number : row.item.title}
+                detail={theoryDetail(row.item)}
+                onToggle={() => void toggleTheory(row.item)}
+              />
+            ) : (
+              <LateLine
+                key={row.exercise.id}
+                done={row.exercise.isDone}
+                week={row.exercise.series?.plannedWeek ?? 0}
+                title={row.exercise.displayNumber + (row.exercise.title === "" ? "" : ` · ${row.exercise.title}`)}
+                detail={row.exercise.series ? `Série ${row.exercise.series.seriesNumber}` : ""}
+                onToggle={() => void toggleExercise(row.exercise)}
+              />
             ))}
             {lateRows.length > 12 && (
-              <div style={{ color: "var(--ink-secondary)", fontSize: 12, padding: "10px 0" }}>
-                + {lateRows.length - 12} autres
-              </div>
+              <div className="muted small" style={{ padding: "10px 0" }}>+ {lateRows.length - 12} autres</div>
             )}
-          </div>
+          </Card>
           {undo && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, padding: "0 4px" }}>
-              <span style={{ color: "var(--ink-secondary)", fontSize: 12 }}>Coché : {changeSummary(undo)}.</span>
-              <span style={{ flex: 1 }} />
-              <button type="button" onClick={() => void undoLate()} style={{ border: "none", background: "none",
-                color: "var(--ink)", fontSize: 12, fontWeight: 600 }}>
-                Annuler
-              </button>
+            <div className="cs-undo">
+              <span>Coché : {changeSummary(undo)}.</span>
+              <span className="spacer" />
+              <Button size="sm" variant="ghost" icon="arrow.counterclockwise" onClick={() => void undoLate()}>Annuler</Button>
             </div>
           )}
-        </section>
+        </Section>
       )}
 
       {/* Semaine par semaine */}
-      <section>
-        <h2 style={{ ...sectionTitle, marginBottom: 10 }}>Semaine par semaine</h2>
+      <Section title="Semaine par semaine" style={{ marginBottom: 0 }}>
         {weeks.every((week) => !week.hasItems) ? (
-          <EmptyState title="Rien de planifié" message="Importe la théorie et les séries du cours." />
+          <EmptyState icon="calendar" title="Rien de planifié">Importe la théorie et les séries du cours.</EmptyState>
         ) : (
-          <div className="card" style={{ padding: "2px 14px" }}>
-            {shownWeeks.map((week, index) => (
-              <div key={week.week} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)" }}>
-                <WeekRow
-                  week={week}
-                  current={current}
-                  tint={course.colorHex}
-                  isOpen={expanded.has(week.week)}
-                  onToggle={() => toggleWeek(week.week)}
-                  theory={course.sortedTheoryItems.filter((item) => item.plannedWeek === week.week)}
-                  exercises={course.sortedSeries
-                    .filter((series) => series.plannedWeek === week.week)
-                    .flatMap((series) => series.sortedExercises)}
-                  onToggleTheory={(item) => void toggleTheory(item)}
-                  onToggleExercise={(exercise) => void toggleExercise(exercise)}
-                />
-              </div>
+          <Card className="cs-list" flat>
+            {shownWeeks.map((week) => (
+              <WeekRow
+                key={week.week}
+                week={week}
+                current={current}
+                isOpen={expanded.has(week.week)}
+                onToggle={() => toggleWeek(week.week)}
+                theory={course.sortedTheoryItems.filter((item) => item.plannedWeek === week.week)}
+                exercises={course.sortedSeries
+                  .filter((series) => series.plannedWeek === week.week)
+                  .flatMap((series) => series.sortedExercises)}
+                onToggleTheory={(item) => void toggleTheory(item)}
+                onToggleExercise={(exercise) => void toggleExercise(exercise)}
+              />
             ))}
-          </div>
+          </Card>
         )}
-      </section>
+      </Section>
 
       {/* Sans semaine */}
       {unplanned.length > 0 && (
-        <section>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-            <h2 style={sectionTitle}>Sans semaine</h2>
-            <span className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>{ProgressEngine.unplannedTheory(course).length}</span>
-          </div>
-          <div className="card" style={{ padding: "2px 14px" }}>
-            {unplanned.map((item, index) => (
-              <div key={item.id} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)" }}>
-                <LateLine
-                  done={item.isWatched}
-                  week={0}
-                  title={item.title === "" ? item.number : item.title}
-                  detail="Ouvre-le pour lui donner une semaine"
-                  onToggle={() => void toggleTheory(item)}
-                />
-              </div>
+        <Section title={`Sans semaine · ${ProgressEngine.unplannedTheory(course).length}`} style={{ marginBottom: 0 }}>
+          <Card className="cs-list" flat>
+            {unplanned.map((item) => (
+              <LateLine
+                key={item.id}
+                done={item.isWatched}
+                week={0}
+                title={item.title === "" ? item.number : item.title}
+                detail="Ouvre-le pour lui donner une semaine"
+                onToggle={() => void toggleTheory(item)}
+              />
             ))}
-          </div>
-        </section>
+          </Card>
+        </Section>
       )}
 
       {/* Ton temps cette semaine */}
-      <section>
-        <h2 style={{ ...sectionTitle, marginBottom: 10 }}>Ton temps cette semaine</h2>
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+      <Section title="Ton temps cette semaine" style={{ marginBottom: 0 }}>
+        <Card flat>
+          <div className="hstack" style={{ alignItems: "baseline", flexWrap: "wrap" }}>
             <span className="serif" style={{ fontSize: 21 }}>{weekly.actualLabel}</span>
-            <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>sur {weekly.expectedLabel} attendues</span>
+            <span className="muted" style={{ fontSize: 13 }}>sur {weekly.expectedLabel} attendues</span>
           </div>
           <div style={{ marginTop: 10 }}>
-            <Bar value={weekly.completion} tint={weekly.isBehind ? "var(--review)" : course.colorHex} height={5} />
+            <ProgressBar value={weekly.completion} color={weekly.isBehind ? "var(--review)" : "var(--course)"} />
           </div>
           {byType.size > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginTop: 12 }}>
+            <div className="cs-time">
               {TaskType.reportCategories.filter((type) => byType.has(type)).map((type) => (
                 <div key={type}>
-                  <div style={{ color: "var(--ink-secondary)", fontSize: 11 }}>{TaskType.shortLabel(type)}</div>
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{DateUtils.durationLabel(byType.get(type) ?? 0)}</div>
+                  <small>{TaskType.shortLabel(type)}</small>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{DateUtils.durationLabel(byType.get(type) ?? 0)}</span>
                 </div>
               ))}
             </div>
           )}
-          <p style={{ color: "var(--ink-secondary)", fontSize: 11, margin: "12px 0 0" }}>
+          <p className="muted" style={{ fontSize: 11, margin: "12px 0 0" }}>
             Attendu : {Math.trunc(HOURS_PER_CREDIT)} h par crédit ECTS, amphi compris.
           </p>
-        </div>
-      </section>
+        </Card>
+      </Section>
     </div>
   );
 }
@@ -281,18 +264,16 @@ function lateDetail(theory: number, exercises: number): string {
   return parts.join(" et ");
 }
 
-function Axis({ title, done, total, tint }: { title: string; done: number; total: number; tint: string }) {
+function Axis({ title, done, total }: { title: string; done: number; total: number }) {
   return (
-    <div>
-      <div style={{ color: "var(--ink-secondary)", fontSize: 11 }}>{title}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-        <span className="serif" style={{ fontSize: 19, color: total > 0 && done === total ? "var(--correct)" : "var(--ink)" }}>
-          {total === 0 ? "—" : done}
-        </span>
-        {total > 0 && <span style={{ color: "var(--ink-secondary)", fontSize: 12 }}>/{total}</span>}
+    <div className="cs-axis">
+      <small>{title}</small>
+      <div className="v">
+        <b style={total > 0 && done === total ? { color: "var(--correct)" } : undefined}>{total === 0 ? "—" : done}</b>
+        {total > 0 && <i>/{total}</i>}
       </div>
-      <div style={{ marginTop: 4, opacity: total === 0 ? 0.3 : 1 }}>
-        <Bar value={total === 0 ? 0 : done / total} tint={tint} />
+      <div style={{ opacity: total === 0 ? 0.3 : 1 }}>
+        <ProgressBar value={total === 0 ? 0 : done / total} color="var(--course)" />
       </div>
     </div>
   );
@@ -301,24 +282,20 @@ function Axis({ title, done, total, tint }: { title: string; done: number; total
 function LateLine({ done, week, title, detail, onToggle }:
   { done: boolean; week: number; title: string; detail: string; onToggle: () => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0" }}>
-      <CheckCircle isOn={done} tint="var(--selection)" label={`Marquer ${title} fait`} onToggle={onToggle} size={20} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: done ? "var(--ink-secondary)" : "var(--ink)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "var(--ink-secondary)", overflow: "hidden",
-          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {week > 0 ? `S${week} · ${detail}` : detail}
-        </div>
+    <div className={cx("cs-late", done && "done")}>
+      <CheckCircle isOn={done} tint="var(--course)" label={done ? `Marquer ${title} à faire` : `Marquer ${title} fait`}
+        onToggle={onToggle} size={20} />
+      <div className="grow">
+        <div className="t">{title}</div>
+        <div className="d">{week > 0 ? `S${week} · ${detail}` : detail}</div>
       </div>
     </div>
   );
 }
 
-function WeekRow({ week, current, tint, isOpen, onToggle, theory, exercises, onToggleTheory, onToggleExercise }: {
+function WeekRow({ week, current, isOpen, onToggle, theory, exercises, onToggleTheory, onToggleExercise }: {
   week: WeeklyProgress;
   current: number;
-  tint: string;
   isOpen: boolean;
   onToggle: () => void;
   theory: TheoryItem[];
@@ -332,42 +309,32 @@ function WeekRow({ week, current, tint, isOpen, onToggle, theory, exercises, onT
   const done = week.watchedCount + week.doneCount;
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => { if (week.hasItems) onToggle(); }}
-        style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-          border: "none", background: "transparent", padding: "9px 0" }}
-      >
-        <span className="mono" style={{
-          width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center",
-          background: isCurrent ? tint : "var(--sheet-raised)",
-          color: isCurrent ? "var(--sheet)" : "var(--ink)", fontSize: 12, fontWeight: 700, flexShrink: 0,
-        }}>S{week.week}</span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 13, flex: 1 }}>{weekSummary(week)}</span>
+    <div className="cs-wk">
+      <button type="button" className="cs-wk-head" disabled={!week.hasItems} onClick={onToggle}
+        aria-expanded={week.hasItems ? isOpen : undefined}>
+        <span className={cx("cs-wk-badge", isCurrent && "current")}>S{week.week}</span>
+        <span className="cs-wk-info">
+          <span className="cs-wk-line">
+            <span className="grow">{weekSummary(week)}</span>
             {week.isComplete ? (
-              <span style={{ color: "var(--correct)", fontSize: 11, fontWeight: 700 }}>✓</span>
+              <span className="tag ok"><Icon name="checkmark" size={12} strokeWidth={3} /></span>
             ) : isLate ? (
-              <span style={{ color: "var(--review)", fontSize: 11, fontWeight: 600 }}>
+              <span className="tag late">
                 {Plural.count(week.remainingCount, `${week.remainingCount} restant`, `${week.remainingCount} restants`)}
               </span>
             ) : isCurrent ? (
-              <span style={{ color: "var(--ink-secondary)", fontSize: 11, fontWeight: 600 }}>en cours</span>
+              <span className="tag">en cours</span>
             ) : null}
           </span>
-          <span style={{ display: "block", marginTop: 5, opacity: total === 0 ? 0.3 : 1 }}>
-            <Bar value={total === 0 ? 0 : done / total} tint={week.isComplete ? "var(--correct)" : tint} />
+          <span style={{ display: "block", opacity: total === 0 ? 0.3 : 1 }}>
+            <ProgressBar value={total === 0 ? 0 : done / total} color={week.isComplete ? "var(--correct)" : "var(--course)"} />
           </span>
         </span>
-        <span aria-hidden style={{ color: "var(--ink-tertiary)", fontSize: 10, transform: isOpen ? "rotate(90deg)" : "none" }}>
-          ▸
-        </span>
+        {week.hasItems && <Icon name="chevron.right" size={14} className={cx("cs-wk-chev", isOpen && "open")} />}
       </button>
 
       {isOpen && (
-        <div style={{ padding: "0 0 8px 48px" }}>
+        <div className="cs-wk-body">
           {theory.map((item) => (
             <LateLine
               key={item.id}
@@ -396,6 +363,7 @@ function WeekRow({ week, current, tint, isOpen, onToggle, theory, exercises, onT
   );
 }
 
+
 /** « Théorie 1/1 · Série 4 : 3/5 ». */
 function weekSummary(week: WeeklyProgress): string {
   if (!week.hasItems) return "Rien de prévu";
@@ -406,23 +374,4 @@ function weekSummary(week: WeeklyProgress): string {
     parts.push(`${name} : ${week.doneCount}/${week.exerciseCount}`);
   }
   return parts.join(" · ");
-}
-
-const sectionTitle = {
-  fontSize: 13,
-  textTransform: "uppercase",
-  letterSpacing: 0.6,
-  color: "var(--ink-tertiary)",
-  margin: 0,
-} as const;
-
-function SmallButton({ children, onClick }: { children: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      border: "1px solid var(--rule)", background: "var(--sheet-raised)", color: "var(--ink)",
-      borderRadius: 999, padding: "3px 9px", fontSize: 11,
-    }}>
-      {children}
-    </button>
-  );
 }

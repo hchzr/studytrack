@@ -2,9 +2,12 @@
 // cocher, la correction d'un toucher, et le suivant (ExercisePane, sans le PDF
 // ni Botafogo natifs : le texte importé, et les liens ouverts au-dehors).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Course } from "../../../models/course.ts";
 import type { Exercise, ExerciseSeries } from "../../../models/exercise.ts";
+import { ConfidenceLevel } from "../../../models/enums.ts";
+import { DateUtils } from "../../../domain/dateUtils.ts";
+import { Checkbox, CONFIDENCE_COLOR, IconButton, Select } from "../../kit.tsx";
 import { ExerciseFlow, ExerciseStage } from "../../../domain/exerciseFlow.ts";
 import { CORRECTNESS_COLOR, MathText } from "../../screens/course/common.tsx";
 import { timerController } from "../../timerController.ts";
@@ -43,16 +46,16 @@ function ExerciseChip({ exercise, isCurrent, tint, onClick }: {
       style={{
         display: "inline-flex", alignItems: "center", gap: 4, height: 28, minWidth: 34, padding: "0 8px",
         borderRadius: 8, fontSize: 14, fontWeight: isCurrent ? 600 : 500, fontVariantNumeric: "tabular-nums",
-        border: `1.5px solid ${isCurrent ? tint : "var(--rule)"}`, cursor: "pointer",
+        border: `1.5px solid ${isCurrent ? tint : "var(--rule)"}`, cursor: "pointer", flexShrink: 0,
         background: isCurrent ? `color-mix(in srgb, ${tint} 22%, transparent)` : "var(--sheet)",
         color: isCurrent ? "var(--ink)" : "var(--ink-secondary)",
       }}
     >
       {number}
       {stage.kind === "inProgress" && <ThinRing fraction={stage.done / Math.max(stage.total, 1)} tint={tint} />}
-      {stage.kind === "toCorrect" && <span aria-hidden style={{ color: tint, fontSize: 11 }}>✓</span>}
+      {stage.kind === "toCorrect" && <span aria-hidden style={{ color: tint, display: "grid" }}><Glyph name="checkmark" size={11} /></span>}
       {stage.kind === "corrected" && <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: color }} />}
-      {stage.kind === "redo" && <span aria-hidden style={{ color: "var(--wrong)", fontSize: 11 }}>↺</span>}
+      {stage.kind === "redo" && <span aria-hidden style={{ color: "var(--wrong)", display: "grid" }}><Glyph name="arrow.counterclockwise" size={11} /></span>}
     </button>
   );
 }
@@ -64,6 +67,130 @@ function ThinRing({ fraction, tint }: { fraction: number; tint: string }) {
       width: 9, height: 9, borderRadius: "50%", display: "inline-block",
       background: `conic-gradient(${tint} ${deg}deg, var(--rule) 0deg)`,
     }} />
+  );
+}
+
+/** « J'ai fini » : les questions faites, puis la sûreté (demandée, jamais
+ *  supposée) — choisir marque l'exercice fait et passe au suivant. Fait, le
+ *  bouton le dit, et un clic rouvre le choix (DoneControl). */
+function DoneControl({ exercise, tint, next, onSelect, onPersist }: {
+  exercise: Exercise;
+  tint: string;
+  next: Exercise | null;
+  onSelect: (exercise: Exercise) => void;
+  onPersist: (objects: object[]) => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!asking) return;
+    const close = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setAsking(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [asking]);
+
+  // Ctrl+Maj+Entrée : « J'ai fini » (⇧⌘↩ sur le Mac).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Enter" && event.shiftKey && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        setAsking((value) => !value);
+      } else if (event.key === "Escape") {
+        setAsking(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const finish = (level: ConfidenceLevel | null) => {
+    const wasDone = exercise.isDone;
+    if (level !== null) exercise.confidence = level;
+    if (!wasDone) exercise.setDone(true);
+    onPersist([exercise, ...exercise.subQuestions]);
+    setAsking(false);
+    // Fini : on passe au suivant (pas quand on corrige seulement la sûreté).
+    if (!wasDone && next) setTimeout(() => onSelect(next), 250);
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        title={exercise.isDone ? "Fait — modifier" : "J'ai fini cet exercice (Ctrl+Maj+Entrée)"}
+        aria-expanded={asking}
+        onClick={() => setAsking(!asking)}
+        style={exercise.isDone ? {
+          background: "color-mix(in srgb, var(--correct) 14%, transparent)", borderColor: "transparent",
+          color: "var(--correct)", fontWeight: 600,
+        } : { background: "var(--ink)", borderColor: "var(--ink)", color: "var(--ground)", fontWeight: 600 }}
+      >
+        <Glyph name="checkmark.circle" size={14} />
+        {exercise.isDone ? "Fait" : "J'ai fini"}
+      </button>
+      {asking && (
+        <div className="study-popover" role="dialog" aria-label="J'ai fini" style={{
+          top: "100%", right: 0, marginTop: 8, width: 420, padding: 18, gap: 14, borderRadius: 16,
+          background: "var(--sheet)",
+        }}>
+          <h3 className="serif" style={{ margin: 0, fontSize: 22, color: "var(--ink)" }}>{exercise.displayNumber}</h3>
+          {exercise.hasSubQuestions && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Kicker>Les questions faites</Kicker>
+              <SubQuestionChecklist
+                exercise={exercise}
+                tint={tint}
+                onToggle={(question) => {
+                  question.toggle();
+                  onPersist([exercise, ...exercise.subQuestions]);
+                }}
+              />
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <Kicker>Tu es sûr·e de toi ?</Kicker>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {ConfidenceLevel.allCases.map((level) => {
+                const color = CONFIDENCE_COLOR[level];
+                const selected = exercise.confidence === level;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    className="btn"
+                    onClick={() => finish(level)}
+                    style={{
+                      borderColor: "transparent",
+                      background: selected ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
+                      color: selected ? "var(--ground)" : color,
+                    }}
+                  >
+                    {ConfidenceLevel.label(level)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {exercise.isDone ? (
+              <PaperButton onClick={() => {
+                exercise.setDone(false);
+                onPersist([exercise, ...exercise.subQuestions]);
+                setAsking(false);
+              }}>Marquer à faire</PaperButton>
+            ) : (
+              <PaperButton onClick={() => finish(null)}>Fait, sans le dire</PaperButton>
+            )}
+            <div style={{ flex: 1 }} />
+            {next && <span style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>{`ensuite ${next.displayNumber}`}</span>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -97,6 +224,30 @@ export function ExercisePane({ course, timer, save }: {
     if (course) timerController.retarget(course.id, "exercise", target.id);
   };
 
+  // Le précédent et le suivant ; sans exercice ouvert, la reprise (ExercisePane.neighbours).
+  const ordered = series?.sortedExercises ?? [];
+  const index = exercise ? ordered.findIndex((item) => item.id === exercise.id) : -1;
+  const neighbours: { previous: Exercise | null; next: Exercise | null } = index < 0
+    ? { previous: null, next: ExerciseFlow.resumePoint(ordered) ?? ordered[0] ?? null }
+    : { previous: ordered[index - 1] ?? null, next: ordered[index + 1] ?? null };
+
+  // Ctrl+Alt+← / → : l'exercice d'à côté (⌥⌘← / ⌥⌘→ sur le Mac).
+  const latest = useRef({ neighbours, select });
+  latest.current = { neighbours, select };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.altKey) return;
+      const target = event.key === "ArrowLeft" ? latest.current.neighbours.previous
+        : event.key === "ArrowRight" ? latest.current.neighbours.next : null;
+      if (target) {
+        event.preventDefault();
+        latest.current.select(target);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!course) {
     return (
       <Empty icon="doc.text" title="Pas de série">
@@ -119,21 +270,22 @@ export function ExercisePane({ course, timer, save }: {
         display: "flex", alignItems: "center", gap: 10, padding: "8px 16px",
         borderBottom: "1px solid var(--rule)", background: "var(--sheet)", flexShrink: 0,
       }}>
-        <select
-          aria-label="Changer de série"
+        <Select
+          ariaLabel="Changer de série"
           value={series.id}
-          onChange={(event) => setSeriesID(event.target.value)}
-          style={{
-            appearance: "none", border: "none", background: "transparent", font: "inherit",
-            fontSize: 15, fontWeight: 500, color: "var(--ink)", padding: "4px 22px 4px 0", cursor: "pointer",
-          }}
-        >
-          {allSeries.map((item) => (
-            <option key={item.id} value={item.id}>
-              {`${seriesName(item)} · ${item.doneCount}/${item.requiredExercises.length} faits`}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => setSeriesID(value)}
+          style={{ maxWidth: 260, fontWeight: 500 }}
+          options={allSeries.map((item) => ({
+            value: item.id,
+            label: `${seriesName(item)} · ${item.doneCount}/${item.requiredExercises.length} faits`,
+          }))}
+        />
+        <IconButton
+          icon="square.stack.3d.up"
+          label="Vue d'ensemble de la série"
+          onClick={() => timerController.retarget(course.id, "exercise", undefined)}
+          style={exercise === null ? { color: tint } : undefined}
+        />
         <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 2, flex: 1 }}>
           {series.sortedExercises.map((item) => (
             <ExerciseChip
@@ -145,6 +297,19 @@ export function ExercisePane({ course, timer, save }: {
             />
           ))}
         </div>
+        <div style={{ display: "flex", gap: 2 }}>
+          <IconButton icon="chevron.left" label="Exercice précédent (Ctrl+Alt+←)" disabled={neighbours.previous === null}
+            onClick={() => neighbours.previous && select(neighbours.previous)} />
+          <IconButton icon="chevron.right" label="Exercice suivant (Ctrl+Alt+→)" disabled={neighbours.next === null}
+            onClick={() => neighbours.next && select(neighbours.next)} />
+        </div>
+        {exercise && <DoneControl key={exercise.id} exercise={exercise} tint={tint} next={neighbours.next}
+          onSelect={select} onPersist={persist} />}
+        {series.dueDate && (
+          <span style={{ fontSize: 12, whiteSpace: "nowrap", color: series.dueDate < timer.now ? "var(--wrong)" : "var(--ink-secondary)" }}>
+            {`à rendre ${DateUtils.countdownLabel(series.dueDate)}`}
+          </span>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto" }}>
@@ -219,18 +384,14 @@ export function ExercisePane({ course, timer, save }: {
                   persist([target, ...target.subQuestions]);
                 }}
               />
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={exercise.redoRequired}
-                  onChange={(event) => {
-                    exercise.redoRequired = event.target.checked;
-                    persist([exercise]);
-                  }}
-                  style={{ width: 15, height: 15, accentColor: "var(--ink)" }}
-                />
-                À refaire
-              </label>
+              <Checkbox
+                checked={exercise.redoRequired}
+                label="À refaire"
+                onChange={(checked) => {
+                  exercise.redoRequired = checked;
+                  persist([exercise]);
+                }}
+              />
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -260,7 +421,7 @@ export function ExercisePane({ course, timer, save }: {
               const resume = ExerciseFlow.resumePoint(series.sortedExercises);
               if (!resume) {
                 return (
-                  <span style={{ display: "inline-flex", gap: 8, alignItems: "center", color: "var(--correct)", fontSize: 18 }}>
+                  <span className="serif" style={{ display: "inline-flex", gap: 8, alignItems: "center", color: "var(--correct)", fontSize: 22 }}>
                     <Glyph name="checkmark.seal" /> Toute la série est corrigée.
                   </span>
                 );

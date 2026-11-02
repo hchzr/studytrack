@@ -1,0 +1,126 @@
+/* Le mode étude : le verre pour ce qui flotte (barre du haut, colonne d'outils,
+   cartes, voiles), le papier pour ce qu'on lit — le « Carnet de verre » du Mac
+   (MacGlass.deskGlass). Les variables du papier de nuit sont posées sur
+   `.study-root` (studyPalette) : rien ici n'écrit de couleur en dur, sauf le
+   blanc des reflets du verre. */
+
+.study-root {
+  color-scheme: dark;
+  font-family: var(--sans);
+}
+
+/* MARK: Verre */
+
+/* Une plaque de verre teintée du papier de nuit : flou, saturation, filet
+   clair, reflet intérieur. Le fond derrière est la lueur du cours. */
+.desk-glass {
+  background: color-mix(in srgb, var(--ground) 62%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 10px 30px rgba(0, 0, 0, 0.26);
+}
+/* Une barre : le verre sans ombre portée, un filet du côté du contenu. */
+.desk-chrome {
+  background: color-mix(in srgb, var(--ground) 62%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.desk-chrome.edge-bottom { border-bottom: 1px solid var(--rule); }
+.desk-chrome.edge-right { border-right: 1px solid var(--rule); }
+.desk-chrome.edge-left { border-left: 1px solid var(--rule); }
+
+/* MARK: Colonne d'outils */
+
+.rail-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 64px; padding: 4px 0; border: 0; background: transparent; border-radius: 12px;
+  color: var(--ink-secondary); position: relative;
+}
+.rail-btn .rail-icon {
+  display: grid; place-items: center; width: 44px; height: 34px; border-radius: 10px;
+  color: var(--ink); transition: background var(--t-fast), color var(--t-fast);
+}
+.rail-btn:hover .rail-icon { background: var(--sheet-raised); }
+.rail-btn[aria-pressed="true"] { color: var(--ink); }
+.rail-btn[aria-pressed="true"] .rail-icon { background: var(--ink); color: var(--ground); }
+.rail-btn .rail-label { font-size: 10.5px; font-weight: 400; }
+.rail-btn[aria-pressed="true"] .rail-label { font-weight: 600; }
+.rail-rule { width: 34px; height: 1px; background: var(--rule); margin: 4px 0; }
+
+/* MARK: Pastilles et cartes */
+
+.study-pill {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px;
+  border-radius: 999px; border: 1px solid var(--rule); background: var(--sheet-raised);
+  color: var(--ink-secondary); font-size: 12px; font-weight: 500;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.study-pill:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.study-pill:disabled { opacity: 0.5; cursor: default; }
+
+.study-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 8px; border-radius: 10px; border: 0; background: transparent; color: var(--ink);
+  transition: background var(--t-fast);
+}
+.study-row:hover { background: var(--hover); }
+.study-row:active { background: var(--sheet-raised); }
+.study-row .row-icon {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+  background: var(--sheet-raised); flex-shrink: 0;
+}
+
+/* « Suivre le cours » : le gros bouton de la couleur du cours. */
+.study-follow {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 14px; border-radius: 14px; border: 0; color: var(--ground);
+  transition: filter var(--t-fast), transform var(--t-fast);
+}
+.study-follow:hover { filter: brightness(1.08); }
+.study-follow:active { transform: scale(0.992); }
+
+/* Une durée proposée (durationChip du Mac) : plus grande qu'une pastille. */
+.study-duration {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px;
+  border-radius: 999px; border: 0; background: var(--sheet-raised); color: var(--ink); font-size: 15px;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.study-duration:hover { background: var(--hover); }
+.study-duration[aria-pressed="true"] { background: var(--ink); color: var(--ground); font-weight: 600; }
+
+/* Le bouton tenu : le remplissage monte sous le doigt. */
+.hold-btn { position: relative; overflow: hidden; user-select: none; }
+.hold-btn .hold-fill { position: absolute; inset: 0 auto 0 0; opacity: 0.5; pointer-events: none; }
+.hold-btn > :not(.hold-fill) { position: relative; }
+
+/* Le cercle de la barre : pause / reprise. */
+.bar-play {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
+  background: var(--ink); color: var(--ground); transition: transform var(--t-fast), filter var(--t-fast);
+}
+.bar-play:hover { filter: brightness(1.1); }
+.bar-play:active { transform: scale(0.94); }
+
+/* MARK: Voiles */
+
+.takeover-scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade var(--t-med) ease-out; }
+.takeover-card { animation: pop var(--t-med) ease-out; }
+
+@keyframes study-spin { to { transform: rotate(360deg); } }
+
+.study-menu, .study-popover {
+  position: absolute; z-index: 50; padding: 5px; min-width: 200px; border-radius: 12px;
+  display: flex; flex-direction: column; gap: 1px; animation: pop var(--t-med) ease-out;
+  background: color-mix(in srgb, var(--sheet) 88%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid var(--rule-strong); box-shadow: var(--shadow-3);
+}
+.study-menu button {
+  display: flex; align-items: center; gap: 9px; border: 0; background: transparent; color: var(--ink);
+  font-size: 13px; padding: 7px 9px; text-align: left; border-radius: 8px;
+}
+.study-menu button:hover, .study-menu button:focus-visible { background: var(--selection); outline: none; }
+.study-menu button.danger { color: var(--wrong); }
+.study-menu hr { border: 0; height: 1px; background: var(--rule); margin: 4px 2px; }

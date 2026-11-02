@@ -108,16 +108,39 @@ export function visibleWeekDays(days: Date[], entries: WeekEntry[], deadlines: D
   });
 }
 
-/** Position verticale d'un instant : heures depuis 8 h, minutes en fraction. */
-export function yFor(date: Date): number {
-  const hours = date.getHours() - FIRST_HOUR + date.getMinutes() / 60;
+/** Position verticale d'un instant : heures depuis `firstHour`, minutes en fraction. */
+export function yFor(date: Date, firstHour: number = FIRST_HOUR): number {
+  const hours = date.getHours() - firstHour + date.getMinutes() / 60;
   return Math.max(0, hours) * HOUR_HEIGHT;
 }
 
 /** Position et hauteur d'une entrée ; 18 px au minimum pour rester lisible. */
-export function entryLayout(entry: WeekEntry): { top: number; height: number } {
-  const top = yFor(entry.start);
-  return { top, height: Math.max(18, yFor(entry.end) - top - 2) };
+export function entryLayout(entry: WeekEntry, firstHour: number = FIRST_HOUR): { top: number; height: number } {
+  const top = yFor(entry.start, firstHour);
+  return { top, height: Math.max(18, yFor(entry.end, firstHour) - top - 2) };
+}
+
+/**
+ * Les heures réellement montrées : la bande utile de la semaine (première heure
+ * de cours → dernière), une heure de marge, six heures au moins. Le Mac fige
+ * 8 h–19 h ; ici une semaine qui commence à 13 h ne gaspille pas cinq heures
+ * vides. `null` quand rien n'est horodaté : la grille n'a alors rien à montrer.
+ */
+export function hourRange(entries: WeekEntry[]): { first: number; last: number } | null {
+  if (entries.length === 0) return null;
+  let first = Math.min(...entries.map((entry) => entry.start.getHours()));
+  let last = Math.max(...entries.map((entry) => {
+    const end = entry.end.getHours() + (entry.end.getMinutes() > 0 ? 1 : 0);
+    // Une entrée qui passe minuit s'arrête à la dernière heure du jour.
+    return DateUtils.isSameDay(entry.start, entry.end) ? end : 23;
+  }));
+  first = Math.max(6, first - 1);
+  last = Math.min(23, last + 1);
+  while (last - first < 6) {
+    if (first > 6 && (last >= 23 || (last - first) % 2 === 0)) first -= 1;
+    else last += 1;
+  }
+  return { first, last };
 }
 
 /** La couleur d'une entrée : celle du cours, sinon celle de son type. */

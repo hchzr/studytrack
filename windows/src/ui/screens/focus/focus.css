@@ -1,0 +1,100 @@
+/* Page Chrono : cadran, gestes, cartes. Les couleurs viennent de tokens.css ;
+   la teinte du cours (donnée) arrive par la variable --tint. */
+
+.f-page { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 540px); gap: 40px; align-items: start; max-width: 1060px; margin: 0 auto; }
+@media (max-width: 1180px) { .f-page { grid-template-columns: minmax(0, 540px); justify-content: center; gap: 28px; } }
+.f-dial-col { display: flex; flex-direction: column; align-items: center; gap: 26px; padding-top: 8px; }
+.f-cards { display: flex; flex-direction: column; gap: 16px; min-width: 0; width: 100%; }
+.f-goal { width: 100%; max-width: 380px; }
+
+/* MARK: Cadran */
+
+.f-dial { position: relative; width: 300px; height: 300px; flex-shrink: 0; }
+.f-dial svg { display: block; }
+.f-dial-ring-track { stroke: var(--rule); }
+.f-dial-tick { stroke: var(--ink-tertiary); }
+.f-dial-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 8px; padding: 44px; text-align: center; pointer-events: none;
+}
+.f-dial-status { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; max-width: 190px; }
+.f-dial-clock { font-size: 66px; line-height: 1; font-variant-numeric: tabular-nums; }
+.f-dial-clock.muted { color: var(--ink-secondary); }
+.f-dial-headline { font-size: 13px; color: var(--ink-secondary); max-width: 210px; }
+.f-dots { display: flex; gap: 5px; margin-top: 4px; }
+.f-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--rule-strong); }
+.f-dots span.on { background: var(--tint); }
+
+/* MARK: Gestes */
+
+.f-controls { display: flex; align-items: center; gap: 20px; }
+.f-side { width: 45px; height: 45px; }
+.f-round {
+  --size: 45px;
+  width: var(--size); height: var(--size); border-radius: 50%; padding: 0;
+  display: inline-grid; place-items: center;
+  border: 1px solid var(--rule); background: var(--sheet-raised); color: var(--ink);
+  transition: background var(--t-fast), transform var(--t-fast), filter var(--t-fast);
+}
+.f-round:hover { background: var(--rule); }
+.f-round:active { transform: scale(0.95); }
+.f-round.prominent { --size: 64px; background: var(--tint, var(--ink)); border-color: transparent; color: var(--ground); box-shadow: var(--shadow-2); }
+.f-round.prominent:hover { filter: brightness(1.08); background: var(--tint, var(--ink)); }
+.f-round.prominent svg { fill: currentColor; }
+
+/* MARK: Cartes */
+
+.f-card { display: flex; flex-direction: column; gap: 12px; }
+.f-card-title { display: flex; align-items: center; gap: 12px; min-height: 28px; }
+.f-card-title h2 { margin: 0; font-size: 18px; font-weight: 500; }
+.f-setup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.select.pill { border-radius: 999px; background-color: var(--sheet-raised); border-color: transparent; font-weight: 500; max-width: 100%; min-height: 30px; }
+.select.pill:hover { border-color: var(--rule-strong); }
+
+.f-study { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+.f-study-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; background: var(--sheet-raised); color: var(--ink); }
+.f-study-body { flex: 1; min-width: 0; }
+.f-study-title { font-size: 16px; }
+
+.f-line { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ink-secondary); }
+.f-line .mono { color: var(--ink); }
+
+.f-next { display: flex; flex-direction: column; gap: 2px; }
+.f-next-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-size: 13px;
+  padding: 6px 8px; border: 0; border-radius: 8px; background: transparent;
+  transition: background var(--t-fast);
+}
+.f-next-row:hover { background: var(--sheet-raised); }
+.f-next-row:focus-visible { outline-offset: -2px; }
+.f-next-row .go { margin-left: auto; font-size: 12px; color: var(--ink-secondary); display: inline-flex; align-items: center; gap: 4px; }
+.f-next-row:hover .go { color: var(--ink); }
+
+.f-part { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.f-part-bar { width: 3px; height: 15px; border-radius: 2px; flex-shrink: 0; }
+.f-part-time { margin-left: auto; color: var(--ink-secondary); }
+
+.f-q {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 13px;
+  padding: 5px 8px; border: 0; border-radius: 8px; background: transparent;
+  transition: background var(--t-fast);
+}
+.f-q:hover { background: var(--hover); }
+.f-q.next { background: var(--marker); }
+.f-q svg { align-self: center; flex-shrink: 0; }
+.f-q.done { color: var(--ink-secondary); }
+.f-q.done .f-q-text { text-decoration: line-through; color: var(--ink-tertiary); }
+.f-q-path { color: var(--ink-secondary); font-size: 12px; }
+.f-q-text { min-width: 0; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.f-recap-head { display: flex; align-items: center; gap: 10px; }
+.f-recap-head h2 { margin: 0; font-size: 18px; font-weight: 500; }
+.f-recap-total { margin-left: auto; font-size: 17px; font-variant-numeric: tabular-nums; }
+.f-recap-actions { display: flex; align-items: center; gap: 8px; }
+
+.f-goalbar { display: flex; flex-direction: column; gap: 6px; padding: 0 2px; }
+.f-goalbar-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: var(--ink-secondary); }
+.f-goalbar-head .done { color: var(--correct); }
+.f-goalbar .progress > span { min-width: 4px; }
+
+.f-together { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }

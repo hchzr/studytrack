@@ -7,8 +7,8 @@ import { useMemo, useState } from "react";
 import { useData } from "../../../data/dataContext.tsx";
 import { AcademicTerm, Course, EPFLCatalog, TermSeason } from "../../../models/index.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
-import { Section, Card } from "../../kit.tsx";
-import { SettingRow, Stepper } from "./controls.tsx";
+import { Section, Card, Select, Stepper } from "../../kit.tsx";
+import { SettingRow } from "./controls.tsx";
 import { readSectionCode, writeSectionCode } from "./preferences.ts";
 
 const seasons = TermSeason.allCases;
@@ -64,26 +64,24 @@ export function TermSection() {
     <Section title="Section et semestre">
       <Card>
         <SettingRow label="Section EPFL" hint="Recopiée sur les cours qui n'ont pas encore de section.">
-          <select
-            className="settings-select"
+          <Select
             value={sectionCode}
-            aria-label="Section EPFL"
-            onChange={(event) => void changeSection(event.target.value)}
-          >
-            <option value="">Non renseignée</option>
-            {EPFLCatalog.sections.map((section) => (
-              <option key={section.code} value={section.code}>
-                {section.name} ({section.code})
-              </option>
-            ))}
-          </select>
+            ariaLabel="Section EPFL"
+            onChange={(code) => void changeSection(code)}
+            options={[
+              { value: "", label: "Non renseignée" },
+              ...EPFLCatalog.sections.map((section) => ({
+                value: section.code, label: `${section.name} (${section.code})`,
+              })),
+            ]}
+          />
         </SettingRow>
 
         {term ? (
           <>
             <SettingRow label="Début (semaine 1)">
               <input
-                className="settings-input"
+                className="field"
                 type="date"
                 value={DateUtils.dateOnly(term.startDate)}
                 aria-label="Début du semestre"
@@ -103,16 +101,12 @@ export function TermSection() {
             </SettingRow>
 
             <SettingRow label="Semestre" hint={term.displayName}>
-              <select
-                className="settings-select"
-                value={term.season}
-                aria-label="Semestre"
-                onChange={(event) => void changeSeason(event.target.value)}
-              >
-                {seasons.map((season) => (
-                  <option key={season} value={season}>{TermSeason.label(season)}</option>
-                ))}
-              </select>
+              <Select
+                value={term.season as string}
+                ariaLabel="Semestre"
+                onChange={(season) => void changeSeason(season)}
+                options={seasons.map((season) => ({ value: season as string, label: TermSeason.label(season) }))}
+              />
             </SettingRow>
 
             <SettingRow label="Fin estimée">

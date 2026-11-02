@@ -6,7 +6,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { AcademicTerm, Course, EPFLCatalog } from "../../../models/index.ts";
 import { useData } from "../../../data/dataContext.tsx";
-import { Switch, Stepper } from "./controls.tsx";
+import { Button, Select, Stepper, Switch } from "../../kit.tsx";
 
 interface CourseFormProps {
   /** `null` : création. */
@@ -99,19 +99,19 @@ export function CourseForm({ course, terms, defaultSectionCode, onClose }: Cours
 
       <div className="settings-form-grid">
         <Field label="Code (ex : CS-250)">
-          <input className="settings-input" value={code} autoFocus
+          <input className="field" value={code} autoFocus
             onChange={(event) => setCode(event.target.value)} />
         </Field>
         <Field label="Nom du cours">
-          <input className="settings-input" value={name}
+          <input className="field" value={name}
             onChange={(event) => setName(event.target.value)} />
         </Field>
         <Field label="Abréviation (ex : ALGO)">
-          <input className="settings-input" value={shortName}
+          <input className="field" value={shortName}
             onChange={(event) => setShortName(event.target.value)} />
         </Field>
         <Field label="Enseignant (optionnel)">
-          <input className="settings-input" value={lecturer}
+          <input className="field" value={lecturer}
             onChange={(event) => setLecturer(event.target.value)} />
         </Field>
       </div>
@@ -144,26 +144,20 @@ export function CourseForm({ course, terms, defaultSectionCode, onClose }: Cours
 
       <div className="settings-form-grid">
         <Field label="Section EPFL">
-          <select className="settings-select" value={sectionCode}
-            onChange={(event) => setSectionCode(event.target.value)}>
-            <option value="">Non renseignée</option>
-            {EPFLCatalog.sections.map((section) => (
-              <option key={section.code} value={section.code}>
-                {section.name} ({section.code})
-              </option>
-            ))}
-          </select>
+          <Select value={sectionCode} ariaLabel="Section EPFL" onChange={setSectionCode}
+            options={[
+              { value: "", label: "Non renseignée" },
+              ...EPFLCatalog.sections.map((section) => ({
+                value: section.code, label: `${section.name} (${section.code})`,
+              })),
+            ]} />
         </Field>
         <Field label="Semestre">
           {terms.length === 0
             ? <span className="settings-value">Aucun semestre</span>
             : (
-              <select className="settings-select" value={selectedTermId}
-                onChange={(event) => setSelectedTermId(event.target.value)}>
-                {terms.map((term) => (
-                  <option key={term.id} value={term.id}>{term.displayName}</option>
-                ))}
-              </select>
+              <Select value={selectedTermId} ariaLabel="Semestre" onChange={setSelectedTermId}
+                options={terms.map((term) => ({ value: term.id, label: term.displayName }))} />
             )}
         </Field>
         <Field label="Couleur">
@@ -172,17 +166,16 @@ export function CourseForm({ course, terms, defaultSectionCode, onClose }: Cours
             onChange={(event) => setColorHex(event.target.value)} />
         </Field>
         <Field label="Lien (optionnel)">
-          <input className="settings-input" type="text" inputMode="url" placeholder="https://…" value={link}
+          <input className="field" type="text" inputMode="url" placeholder="https://…" value={link}
             onChange={(event) => setLink(event.target.value)} />
         </Field>
       </div>
 
       <div className="settings-actions">
-        <button type="button" className="settings-button" onClick={onClose}>Annuler</button>
-        <button type="submit" className="settings-button settings-button--primary"
-          disabled={code.trim() === "" || saving}>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button type="submit" variant="primary" disabled={code.trim() === "" || saving}>
           {course ? "Enregistrer" : "Créer"}
-        </button>
+        </Button>
       </div>
     </form>
   );

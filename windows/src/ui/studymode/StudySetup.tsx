@@ -2,7 +2,8 @@
 // à quel rythme, et le blocage. La carte grandit avec les cours à l'horaire —
 // défilable, jamais hors cadre.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { studyLockNote } from "../../native/studyLock.ts";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Course } from "../../models/course.ts";
 import { LinkedCalendarEvent } from "../../models/linkedCalendarEvent.ts";
 import { TaskType } from "../../models/enums.ts";
@@ -15,6 +16,7 @@ import { targetOptionsFor } from "../screens/focus/timerView.ts";
 import { durationChipLabel, endLabel } from "./helpers.ts";
 import { studyDuration, studyOpenEnded, studyPomodoro } from "./studyPalette.ts";
 import type { StudyTimerApi } from "./useStudyTimer.ts";
+import { Icon, Select, Stepper, Switch, type IconName } from "../kit.tsx";
 import { CourseChip, Glyph, InkButton, Kicker, PaperButton } from "./parts.tsx";
 
 /** Ce que le choix retient (StudyModeController.Screen, les champs du choix). */
@@ -90,10 +92,45 @@ export function StudySetup({ screen, onScreen, courses, timer, onBegin, onCancel
     onBegin(openEnded ? null : minutes, pomodoro);
   };
 
+  // Entrée commence, Échap annule (.defaultAction / .cancelAction du Mac).
+  const latest = useRef({ begin, onCancel });
+  latest.current = { begin, onCancel };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") latest.current.onCancel();
+      else if (event.key === "Enter" && !event.shiftKey) {
+        const target = event.target as HTMLElement | null;
+        // Un bouton, une liste ou un champ qui a le focus garde son Entrée.
+        if (target && (target.closest("button, select, textarea, a") || target.tagName === "INPUT")) return;
+        latest.current.begin();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // L'heure de fin, éditable : « jusqu'à » (le DatePicker du Mac).
+  const endTime = new Date(timer.now.getTime() + minutes * 60_000);
+  const endValue = `${String(endTime.getHours()).padStart(2, "0")}:${String(endTime.getMinutes()).padStart(2, "0")}`;
+  const setEndValue = (value: string) => {
+    const [hours, mins] = value.split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(mins)) return;
+    const until = new Date(timer.now);
+    until.setHours(hours, mins, 0, 0);
+    setMinutesField(StudyMode.minutes(until, timer.now));
+  };
+
+  // Les outils ouverts quand le blocage est choisi (StudyToolStrip) : les sites.
+  const tools = screen.locks
+    ? StudyMode.tools(course?.name ?? null,
+      course ? [course.moodleURLString, ...course.contentSources].filter((link) => link !== "") : [])
+      .filter((tool) => tool.kind.type === "web")
+    : [];
+
   return (
-    <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
-      <div style={{
-        maxWidth: 720, margin: "0 auto", padding: "24px 32px 40px",
+    <div style={{ position: "absolute", inset: 0, overflowY: "auto", display: "flex" }}>
+      <div className="desk-glass" style={{
+        width: 720, maxWidth: "calc(100% - 48px)", margin: "auto", padding: 32, borderRadius: 28,
         display: "flex", flexDirection: "column", gap: 20,
       }}>
         <header style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -110,16 +147,13 @@ export function StudySetup({ screen, onScreen, courses, timer, onBegin, onCancel
           // Un cours à l'horaire, maintenant : le suivre, jusqu'à sa fin.
           <button
             type="button"
+            className="study-follow"
             onClick={followClass}
-            style={{
-              display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-              padding: 14, borderRadius: 14, border: "none", cursor: "pointer",
-              background: currentClass.colorHex, color: "var(--ground)",
-            }}
+            style={{ background: currentClass.colorHex }}
           >
-            <Glyph name="person.wave.2" />
+            <Glyph name="person.wave.2" size={20} />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontWeight: 600 }}>Suivre le cours · {currentClass.slot.courseCode}</span>
+              <span style={{ display: "block", fontWeight: 600, fontSize: 15 }}>Suivre le cours · {currentClass.slot.courseCode}</span>
               <span style={{ display: "block", fontSize: 12, opacity: 0.8 }}>
                 {`${kindLabelOf(currentClass.slot)}${currentClass.location === "" ? "" : ` · ${currentClass.location}`} · jusqu'à ${DateUtils.time(currentClass.slot.end)}`}
               </span>
@@ -149,39 +183,18 @@ export function StudySetup({ screen, onScreen, courses, timer, onBegin, onCancel
               ))}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <Pill>
-                <select
-                  aria-label="Travail"
-                  value={screen.taskType}
-                  style={selectStyle}
-                  onChange={(event) => onScreen({ taskType: event.target.value as TaskType, targetID: undefined })}
-                >
-                  {setupTaskTypes.map((choice) => (
-                    <option key={choice} value={choice}>{TaskType.label(choice)}</option>
-                  ))}
-                </select>
-              </Pill>
+              <Select
+                ariaLabel="Travail"
+                value={screen.taskType}
+                options={setupTaskTypes.map((choice) => ({ value: choice, label: TaskType.label(choice) }))}
+                onChange={(value) => onScreen({ taskType: value, targetID: undefined })}
+              />
               {course && options && (
-                <Pill>
-                  <select
-                    aria-label="Cible"
-                    value={screen.targetID ?? ""}
-                    style={selectStyle}
-                    onChange={(event) => onScreen({ targetID: event.target.value === "" ? undefined : event.target.value })}
-                  >
-                    <option value="">Tout le cours</option>
-                    {options.upNext.length > 0 && (
-                      <optgroup label="À faire">
-                        {options.upNext.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                      </optgroup>
-                    )}
-                    {options.done.length > 0 && (
-                      <optgroup label={options.doneLabel}>
-                        {options.done.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                      </optgroup>
-                    )}
-                  </select>
-                </Pill>
+                <TargetSelect
+                  options={options}
+                  value={screen.targetID}
+                  onChange={(value) => onScreen({ targetID: value })}
+                />
               )}
             </div>
           </div>
@@ -200,91 +213,99 @@ export function StudySetup({ screen, onScreen, courses, timer, onBegin, onCancel
               ))}
               <DurationChip
                 title="Sans fin"
-                glyph="infinity"
+                icon="repeat"
                 selected={openEnded}
-                titleText="Pas d'heure de fin : tu termines quand tu as fini."
+                help="Pas d'heure de fin : tu termines quand tu as fini."
                 onClick={() => setOpenEnded(true)}
               />
             </div>
-            {/* Une durée libre, en minutes. Le Mac propose aussi une heure de fin
-                par son sélecteur ; ici le champ et le pas-à-pas, avec l'heure
-                de fin qui en résulte. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: openEnded ? 0.45 : 1 }}>
-              <input
-                type="number"
-                aria-label="Minutes"
+            {/* Une durée libre, en minutes, ou une heure de fin. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, opacity: openEnded ? 0.45 : 1, flexWrap: "wrap" }}>
+              <Stepper
+                label="la durée"
                 value={minutes}
                 min={StudyMode.minuteRange.lowerBound}
                 max={StudyMode.minuteRange.upperBound}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  if (Number.isFinite(value)) setMinutesField(value);
-                }}
-                style={{
-                  width: 64, padding: "5px 8px", borderRadius: 8, fontSize: 14,
-                  border: "1px solid var(--rule)", background: "var(--sheet-raised)", color: "var(--ink)",
-                }}
+                step={5}
+                format={(value) => `${value} min`}
+                onChange={setMinutesField}
               />
-              <span aria-hidden style={{ display: "flex", gap: 2 }}>
-                <Stepper onClick={() => setMinutesField(minutes - 5)}>−</Stepper>
-                <Stepper onClick={() => setMinutesField(minutes + 5)}>+</Stepper>
-              </span>
-              <span style={{ fontSize: 14, color: "var(--ink-secondary)" }}>
-                min, jusqu'à {endLabel(0, false, new Date(timer.now.getTime() + minutes * 60_000)).replace("jusqu'à ", "")}
-              </span>
+              <span style={{ fontSize: 14, color: "var(--ink-secondary)" }}>jusqu'à</span>
+              <input
+                type="time"
+                className="field"
+                aria-label="Heure de fin"
+                value={endValue}
+                disabled={openEnded}
+                onChange={(event) => setEndValue(event.target.value)}
+              />
             </div>
           </div>
         </Field>
 
         <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
           <Field title="Rythme">
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1 }}>
-              <input
-                type="checkbox"
+            <div style={{ opacity: running ? 0.5 : 1 }}>
+              <Switch
                 checked={pomodoro}
                 disabled={running}
-                onChange={(event) => setPomodoro(event.target.checked)}
-                style={{ width: 16, height: 16, marginTop: 2, accentColor: "var(--correct)" }}
+                onChange={setPomodoro}
+                label={
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ color: "var(--ink)", fontSize: 14 }}>Pomodoro</span>
+                    <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
+                      {`${timer.settings.cycle.focusMinutes} min de travail, ${timer.settings.cycle.shortBreakMinutes} min de pause.`}
+                    </span>
+                  </span>
+                }
               />
-              <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ color: "var(--ink)" }}>Pomodoro</span>
-                <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
-                  {`${timer.settings.cycle.focusMinutes} min de travail, ${timer.settings.cycle.shortBreakMinutes} min de pause.`}
-                </span>
-              </span>
-            </label>
+            </div>
           </Field>
 
           <Field title="Blocage">
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={screen.locks}
-                  onChange={(event) => onScreen({ locks: event.target.checked })}
-                  style={{ width: 16, height: 16, accentColor: "var(--correct)" }}
-                />
-                <span style={{ color: "var(--ink)" }}>Bloquer le reste</span>
-              </label>
-              {/* Sur Windows, rien n'est encore fermé : apps et sites restent
-                  ouverts. Le choix est retenu pour quand le blocage natif
-                  existera — le reste de l'écran reste honnête là-dessus. */}
-              <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
-                Sur Windows, le blocage des apps et des sites n'est pas encore disponible — le choix est retenu pour quand il le sera.
+              <Switch
+                checked={screen.locks}
+                onChange={(value) => onScreen({ locks: value })}
+                label={<span style={{ color: "var(--ink)", fontSize: 14 }}>Bloquer le reste</span>}
+              />
+              {/* Blocage natif au mieux (src/native/studyLock.ts) : le texte dit
+                  ce qui sera réellement tenu sur ce poste. */}
+              <span style={{ fontSize: 12, color: "var(--ink-secondary)", maxWidth: 380 }}>
+                {studyLockNote()}
               </span>
             </div>
           </Field>
         </div>
 
-        <footer style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
-          <PaperButton onClick={onCancel}>Annuler</PaperButton>
+        {screen.locks && tools.length > 0 && (
+          <Field title="Ouverts">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {tools.map((tool) => (
+                <span key={tool.id} title={tool.title} style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: 64,
+                }}>
+                  <span aria-hidden className="row-icon" style={{
+                    display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 8,
+                    background: "var(--sheet-raised)", color: "var(--ink)",
+                  }}><Glyph name={tool.icon} size={16} /></span>
+                  <span style={{
+                    fontSize: 11, color: "var(--ink-secondary)", maxWidth: "100%",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{tool.title}</span>
+                </span>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <footer style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+          <PaperButton large onClick={onCancel}>Annuler</PaperButton>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 14, color: "var(--ink-secondary)" }}>{endLabel(minutes, openEnded, timer.now)}</span>
-          <InkButton onClick={begin}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-              <Glyph name="lock.fill" />
-              {running ? "Verrouiller la session" : "Commencer"}
-            </span>
+          <InkButton large onClick={begin}>
+            <Glyph name="lock.fill" size={15} />
+            {running ? "Verrouiller la session" : "Commencer"}
           </InkButton>
         </footer>
       </div>
@@ -301,74 +322,47 @@ function Field({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const selectStyle = {
-  appearance: "none",
-  WebkitAppearance: "none",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  font: "inherit",
-  fontSize: 13,
-  fontWeight: 500,
-  color: "inherit",
-  padding: "6px 26px 6px 12px",
-  cursor: "pointer",
-  maxWidth: 260,
-} as const;
-
-/** Une pastille qui ouvre un menu (la forme des menus du Mac, PillLabel). */
-function Pill({ children }: { children: ReactNode }) {
+/** Le choix de la cible : tout le cours, ce qui reste, ce qui est fait (TargetMenu). */
+function TargetSelect({ options, value, onChange }: {
+  options: NonNullable<ReturnType<typeof targetOptionsFor>>;
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
   return (
-    <span style={{
-      position: "relative", display: "inline-flex", alignItems: "center", color: "var(--ink)",
-      background: "var(--sheet-raised)", borderRadius: 999,
-    }}>
-      {children}
-      <span aria-hidden style={{
-        position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-        fontSize: 9, color: "var(--ink-tertiary)", pointerEvents: "none",
-      }}>▾</span>
-    </span>
+    <select
+      className="select"
+      aria-label="Cible"
+      value={value ?? ""}
+      style={{ maxWidth: 280 }}
+      onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
+    >
+      <option value="">Tout le cours</option>
+      {options.upNext.length > 0 && (
+        <optgroup label="À faire">
+          {options.upNext.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </optgroup>
+      )}
+      {options.done.length > 0 && (
+        <optgroup label={options.doneLabel}>
+          {options.done.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </optgroup>
+      )}
+    </select>
   );
 }
 
-function DurationChip({ title, glyph, selected, titleText, onClick }: {
+/** Une durée proposée (durationChip du Mac). */
+function DurationChip({ title, icon, selected, help, onClick }: {
   title: string;
-  glyph?: string;
+  icon?: IconName;
   selected: boolean;
-  titleText?: string;
+  help?: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      title={titleText ?? title}
-      aria-pressed={selected}
-      onClick={onClick}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 999, height: 36,
-        padding: "0 16px", fontSize: 15, fontWeight: selected ? 600 : 400, border: "none",
-        background: selected ? "var(--ink)" : "var(--sheet-raised)",
-        color: selected ? "var(--ground)" : "var(--ink)",
-      }}
-    >
-      {glyph && <Glyph name={glyph} />}
+    <button type="button" className="study-duration" title={help ?? title} aria-pressed={selected} onClick={onClick}>
+      {icon && <Icon name={icon} size={16} />}
       {title}
-    </button>
-  );
-}
-
-function Stepper({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        width: 28, height: 28, borderRadius: 8, border: "1px solid var(--rule)",
-        background: "var(--sheet-raised)", color: "var(--ink)", fontSize: 15, lineHeight: 1,
-      }}
-    >
-      {children}
     </button>
   );
 }

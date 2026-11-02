@@ -1,14 +1,18 @@
-// La grille de la semaine : une colonne par jour, les heures de 8 h à 19 h, les
-// cours et les sessions posés à leur heure. Le week-end disparaît s'il est vide.
+// La grille de la semaine : une colonne par jour, les heures utiles de la
+// semaine, les cours et les sessions posés à leur heure. Le week-end disparaît
+// s'il est vide, et sans aucun cours la grille cède la place à un état vide.
 //
 // Le clic sur un cours terminé marque « manqué » (ou le rétablit), le seul geste
 // de présence que l'agenda Swift autorise (`isSkipped.toggle()` + `save()`).
 
+import { useOpenCourse } from "./openCourse.ts";
+import type { CSSProperties } from "react";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import type { Deadline } from "../../../domain/deadline.ts";
 import type { LinkedCalendarEvent } from "../../../models/linkedCalendarEvent.ts";
+import { EmptyState, Icon, cx, type IconName } from "../../kit.tsx";
 import {
-  GRID_HEIGHT, HOURS, HOUR_HEIGHT, deadlineGlyph, entryColor, entryLayout, weekdayAbbrev, withAlpha,
+  HOUR_HEIGHT, entryColor, entryLayout, hourRange, weekdayAbbrev,
 } from "./weekModel.ts";
 import type { WeekEntry } from "./weekModel.ts";
 
@@ -20,13 +24,23 @@ interface WeekGridProps {
   onToggleSkipped: (event: LinkedCalendarEvent) => void;
 }
 
+/** Les icônes des échéances (`Deadline.icon` côté Swift), dans le jeu d'icônes de l'app. */
+export function deadlineIcon(kind: Deadline["kind"]): IconName {
+  switch (kind) {
+    case "exam": return "graduationcap";
+    case "due": return "tray";
+    case "solutions": return "checkmark.circle";
+  }
+}
+
 export function WeekGrid({ days, entries, deadlines, now, onToggleSkipped }: WeekGridProps) {
   const columns = `48px repeat(${days.length}, minmax(0, 1fr))`;
+  const range = hourRange(entries);
 
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: columns, borderBottom: "1px solid var(--rule)" }}>
-        <div />
+    <div className="card wk">
+      <div className="wk-head" style={{ gridTemplateColumns: columns }}>
+        <div className="wk-corner" />
         {days.map((day) => (
           <DayHeader
             key={day.toISOString()}
@@ -37,112 +51,124 @@ export function WeekGrid({ days, entries, deadlines, now, onToggleSkipped }: Wee
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: columns, padding: "8px 0" }}>
-        <div style={{ position: "relative", height: GRID_HEIGHT }}>
-          {HOURS.map((hour, index) => (
-            <div key={hour} className="mono" style={{
-              position: "absolute", top: index * HOUR_HEIGHT, right: 6, transform: "translateY(-50%)",
-              fontSize: 11, color: "var(--ink-tertiary)",
-            }}>
-              {hour} h
-            </div>
-          ))}
+      {range === null ? (
+        <div className="wk-empty">
+          <EmptyState icon="calendar" title="Aucun cours cette semaine">
+            Les cours de l'horaire EPFL et les sessions planifiées apparaîtront ici.
+          </EmptyState>
         </div>
-
-        {days.map((day, index) => (
-          <DayColumn
-            key={day.toISOString()}
-            day={day}
-            first={index === 0}
-            entries={entries.filter((entry) => DateUtils.isSameDay(entry.start, day))}
-            now={now}
-            onToggleSkipped={onToggleSkipped}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DayHeader({ day, now, deadlines }: { day: Date; now: Date; deadlines: Deadline[] }) {
-  const today = DateUtils.isSameDay(day, now);
-  return (
-    <div style={{ padding: 8, minWidth: 0, background: today ? "var(--marker)" : "transparent" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: today ? "var(--ink)" : "var(--ink-secondary)" }}>
-          {weekdayAbbrev(day)}
-        </span>
-        <span className="serif" style={{ fontSize: 18, fontWeight: today ? 600 : 400 }}>
-          {day.getDate()}
-        </span>
-        {today && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--wrong)" }} />}
-      </div>
-
-      {deadlines.map((item) => (
-        <div
-          key={item.id}
-          title={`${item.courseCode} · ${item.detail}`}
-          style={{
-            display: "flex", alignItems: "center", gap: 4, marginTop: 4, padding: "3px 6px",
-            borderRadius: 5, minWidth: 0, fontSize: 11, lineHeight: 1.25,
-            background: item.kind === "exam" ? "var(--wrong)" : withAlpha(item.colorHex, 0.14),
-            color: item.kind === "exam" ? "var(--ground)" : "var(--ink)",
-          }}
-        >
-          <span style={{ flexShrink: 0 }}>{deadlineGlyph(item.kind)}</span>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DayColumn({ day, first, entries, now, onToggleSkipped }: {
-  day: Date;
-  first: boolean;
-  entries: WeekEntry[];
-  now: Date;
-  onToggleSkipped: (event: LinkedCalendarEvent) => void;
-}) {
-  const today = DateUtils.isSameDay(day, now);
-  const nowTop = today ? (now.getHours() - 8 + now.getMinutes() / 60) * HOUR_HEIGHT : null;
-  const showNow = nowTop !== null && nowTop > 0 && nowTop < GRID_HEIGHT;
-
-  return (
-    <div style={{
-      position: "relative", height: GRID_HEIGHT, minWidth: 0,
-      borderLeft: first ? "none" : "1px solid var(--rule)",
-    }}>
-      {HOURS.map((hour, index) => (
-        <div key={hour} style={{
-          position: "absolute", top: index * HOUR_HEIGHT, left: 0, right: 0, height: 1,
-          background: "var(--rule)", opacity: 0.6,
-        }} />
-      ))}
-
-      {entries.map((entry) => (
-        <EntryTile key={entry.id} entry={entry} now={now} onToggleSkipped={onToggleSkipped} />
-      ))}
-
-      {showNow && (
-        <div style={{
-          position: "absolute", top: nowTop, left: 0, right: 0, height: 1.5,
-          background: "var(--wrong)", zIndex: 3, pointerEvents: "none",
-        }} />
+      ) : (
+        <Body days={days} entries={entries} now={now} range={range} columns={columns} onToggleSkipped={onToggleSkipped} />
       )}
     </div>
   );
 }
 
-function EntryTile({ entry, now, onToggleSkipped }: {
-  entry: WeekEntry;
+function Body({ days, entries, now, range, columns, onToggleSkipped }: {
+  days: Date[];
+  entries: WeekEntry[];
+  now: Date;
+  range: { first: number; last: number };
+  columns: string;
+  onToggleSkipped: (event: LinkedCalendarEvent) => void;
+}) {
+  const hours = Array.from({ length: range.last - range.first + 1 }, (_, index) => range.first + index);
+  const height = hours.length * HOUR_HEIGHT;
+
+  return (
+    <div className="wk-body" style={{ gridTemplateColumns: columns }}>
+      <div className="wk-hours" style={{ height }}>
+        {hours.map((hour, index) => (
+          <div key={hour} className="wk-hour mono" style={{ top: index * HOUR_HEIGHT }}>{hour} h</div>
+        ))}
+      </div>
+
+      {days.map((day) => (
+        <DayColumn
+          key={day.toISOString()}
+          day={day}
+          hours={hours}
+          height={height}
+          firstHour={range.first}
+          entries={entries.filter((entry) => DateUtils.isSameDay(entry.start, day))}
+          now={now}
+          onToggleSkipped={onToggleSkipped}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DayHeader({ day, now, deadlines }: { day: Date; now: Date; deadlines: Deadline[] }) {
+  const open = useOpenCourse();
+  const today = DateUtils.isSameDay(day, now);
+  return (
+    <div className={cx("wk-day", today && "today")}>
+      <div className="wk-dayname">
+        <small>{weekdayAbbrev(day)}</small>
+        <b className="serif">{day.getDate()}</b>
+        {today && <span className="wk-dot" />}
+      </div>
+
+      {deadlines.map((item) => (
+        <div
+          key={item.id}
+          role={open ? "button" : undefined}
+          tabIndex={open ? 0 : undefined}
+          onClick={open ? () => open(item.courseID, item.targetID) : undefined}
+          className={cx("wk-deadline", item.kind === "exam" && "exam")}
+          style={{ "--dl": item.colorHex } as CSSProperties}
+          title={`${item.courseCode} · ${item.detail}`}
+        >
+          <Icon name={deadlineIcon(item.kind)} size={12} />
+          <span>{item.title}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DayColumn({ day, hours, height, firstHour, entries, now, onToggleSkipped }: {
+  day: Date;
+  hours: number[];
+  height: number;
+  firstHour: number;
+  entries: WeekEntry[];
   now: Date;
   onToggleSkipped: (event: LinkedCalendarEvent) => void;
 }) {
-  const { top, height } = entryLayout(entry);
+  const today = DateUtils.isSameDay(day, now);
+  const nowTop = today ? (now.getHours() - firstHour + now.getMinutes() / 60) * HOUR_HEIGHT : null;
+  const showNow = nowTop !== null && nowTop > 0 && nowTop < height;
+
+  return (
+    <div className="wk-col" style={{ height }}>
+      {hours.map((hour, index) => (
+        <div key={hour} className="wk-line" style={{ top: index * HOUR_HEIGHT }} />
+      ))}
+
+      {entries.map((entry) => (
+        <EntryTile key={entry.id} entry={entry} firstHour={firstHour} now={now} onToggleSkipped={onToggleSkipped} />
+      ))}
+
+      {showNow && <div className="wk-now" style={{ top: nowTop }} />}
+    </div>
+  );
+}
+
+function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
+  entry: WeekEntry;
+  firstHour: number;
+  now: Date;
+  onToggleSkipped: (event: LinkedCalendarEvent) => void;
+}) {
+  const { top, height } = entryLayout(entry, firstHour);
   const tint = entryColor(entry);
   const past = entry.end.getTime() < now.getTime();
   const event = entry.event;
+  // Un clic ouvre le cours de l'entrée (la grille du Mac fait pareil).
+  const open = useOpenCourse();
+  const courseID = event?.course?.id ?? entry.session?.course?.id ?? null;
   // Un cours magistral terminé se marque manqué — une séance d'exercices se
   // chronomètre, elle ne se coche pas ici.
   const canToggle = event !== null && event.isLecture && event.course !== null
@@ -157,49 +183,30 @@ function EntryTile({ entry, now, onToggleSkipped }: {
   const detail = details.filter((part): part is string => part !== null && part !== "").join(" · ");
   const tooltip = `${event?.title ?? entry.title}\n${DateUtils.time(entry.start)} – ${DateUtils.time(entry.end)}`
     + (detail === "" ? "" : `\n${detail}`);
+  const toggleLabel = event === null ? ""
+    : event.isSkipped ? `Compter ${event.title} comme suivi` : `Marquer ${event.title} manqué`;
 
   return (
     <div
       title={tooltip}
-      style={{
-        position: "absolute", top, left: 3, right: 3, height, padding: "4px 6px", overflow: "hidden",
-        borderRadius: 6, borderLeft: `3px solid ${tint}`,
-        background: withAlpha(tint, entry.isLecture ? 0.16 : 0.09),
-        opacity: entry.isSkipped || past ? 0.55 : 1,
-      }}
+      onClick={open && courseID ? () => open(courseID, null) : undefined}
+      className={cx("wk-tile", open && courseID && "openable", (entry.isSkipped || past) && "dim", entry.isSkipped && "skipped")}
+      style={{ top, height, "--tint": tint, "--fill": entry.isLecture ? 0.16 : 0.09 } as CSSProperties}
     >
-      <div style={{
-        fontSize: 11, fontWeight: 600, lineHeight: 1.2, paddingRight: canToggle ? 18 : 0,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
-        {title}
-      </div>
+      <div className={cx("wk-tile-title", canToggle && "padded")}>{title}</div>
 
-      {height > 34 && detail !== "" && (
-        <div style={{
-          marginTop: 1, fontSize: 10, lineHeight: 1.2, color: "var(--ink-secondary)",
-          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-        }}>
-          {detail}
-        </div>
-      )}
+      {height > 34 && detail !== "" && <div className="wk-tile-detail">{detail}</div>}
 
       {canToggle && event !== null && (
         <button
           type="button"
+          className={cx("wk-skip", event.isSkipped && "off")}
           aria-pressed={!event.isSkipped}
-          aria-label={event.isSkipped ? `Compter ${event.title} comme suivi` : `Marquer ${event.title} manqué`}
-          title={event.isSkipped ? `Compter ${event.title} comme suivi` : `Marquer ${event.title} manqué`}
-          onClick={() => onToggleSkipped(event)}
-          style={{
-            position: "absolute", top: 3, right: 3, width: 16, height: 16, padding: 0,
-            display: "grid", placeItems: "center", borderRadius: "50%", lineHeight: 1, fontSize: 10,
-            border: event.isSkipped ? "1px solid var(--ink-secondary)" : "none",
-            background: event.isSkipped ? "transparent" : tint,
-            color: event.isSkipped ? "var(--ink-secondary)" : "var(--ground)",
-          }}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          onClick={(e) => { e.stopPropagation(); onToggleSkipped(event); }}
         >
-          {event.isSkipped ? "" : "✓"}
+          <Icon name="checkmark" size={11} />
         </button>
       )}
     </div>

@@ -6,8 +6,8 @@
 import { useMemo, useState } from "react";
 import { useData } from "../../../data/dataContext.tsx";
 import { AcademicTerm, Course } from "../../../models/index.ts";
-import { Section, Card } from "../../kit.tsx";
-import { Stat, Switch } from "./controls.tsx";
+import { Badge, Button, Section, Card, Switch } from "../../kit.tsx";
+import { Stat } from "./controls.tsx";
 import { CourseForm } from "./CourseForm.tsx";
 import { readSectionCode } from "./preferences.ts";
 
@@ -64,7 +64,7 @@ export function CoursesSection() {
                 <div className="settings-course-main">
                   <span className="settings-course-code mono">{course.displayCode}</span>
                   <span className="settings-course-name">{course.name}</span>
-                  {!course.isTracked && <span className="settings-course-badge">archivé</span>}
+                  {!course.isTracked && <Badge>archivé</Badge>}
                 </div>
                 <div className="settings-course-actions">
                   <Switch checked={course.isTracked} label="Suivi"
@@ -73,10 +73,10 @@ export function CoursesSection() {
                   <Switch checked={course.hasLectures} label="Amphi"
                     ariaLabel={`${course.code} a des heures de cours`}
                     onChange={(value) => void setHasLectures(course, value)} />
-                  <button type="button" className="settings-button settings-button--small"
+                  <Button size="sm" icon="pencil"
                     onClick={() => { setAdding(false); setEditingId(course.id); }}>
                     Modifier
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -87,10 +87,10 @@ export function CoursesSection() {
           <p className="settings-hint">
             « Suivi » compte le cours ce semestre ; « Amphi » lui donne des heures de cours.
           </p>
-          <button type="button" className="settings-button settings-button--primary"
+          <Button variant="primary" icon="plus"
             onClick={() => { setEditingId(null); setAdding(true); }}>
             Ajouter un cours
-          </button>
+          </Button>
         </div>
 
         {formOpen && (

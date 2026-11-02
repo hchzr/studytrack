@@ -1,0 +1,292 @@
+/* L'écran d'un cours. Tout passe par `--course` (la couleur du cours, posée en
+   ligne sur .cs) ; le reste vient des tokens et de kit.css. */
+
+.cs { --course: var(--ink-secondary); }
+
+/* MARK: En-tête */
+
+.cs-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; }
+.cs-head-top { display: flex; align-items: flex-start; gap: 16px; }
+.cs-head-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.cs-title { margin: 0; font-size: 30px; line-height: 1.15; overflow-wrap: anywhere; }
+.cs-tag {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--course) 16%, transparent);
+  color: color-mix(in srgb, var(--course) 70%, var(--ink));
+  border: 1px solid color-mix(in srgb, var(--course) 30%, transparent);
+}
+.cs-sites { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ink-secondary); }
+.cs-sub .late { color: var(--wrong); font-weight: 600; }
+.cs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 22px; }
+.cs-summary .grow { flex: 1; min-width: 12px; }
+.cs-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.cs-stat b { font-family: var(--serif); font-weight: 500; font-size: 19px; font-variant-numeric: tabular-nums; }
+.cs-stat span { font-size: 11px; color: var(--ink-secondary); }
+.cs-ring { position: relative; width: 46px; height: 46px; flex-shrink: 0; display: grid; place-items: center; }
+.cs-ring .ring { position: absolute; inset: 0; }
+.cs-ring b { position: relative; font-family: var(--serif); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cs-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 18px; }
+
+/* MARK: Volets à droite (inspecteur) */
+
+.cs-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.cs-split.has-aside { grid-template-columns: minmax(0, 1fr) 340px; }
+.cs-aside {
+  position: sticky; top: 0; max-height: calc(100vh - 56px); overflow-y: auto;
+  padding: 16px; display: flex; flex-direction: column; gap: 14px;
+}
+.cs-aside h3 { margin: 0; font-size: 20px; line-height: 1.2; }
+.cs-aside-head { display: flex; align-items: center; gap: 8px; }
+.cs-kicker {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--course) 70%, var(--ink));
+}
+.cs-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-tertiary); margin-bottom: 6px; }
+.cs-block { display: flex; flex-direction: column; }
+.cs-statement { margin: 0; white-space: pre-wrap; line-height: 1.55; font-size: 14px; user-select: text; }
+.cs-note { margin: 0; font-size: 13px; color: var(--ink-secondary); user-select: text; }
+.cs-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.cs-dl dt { color: var(--ink-secondary); }
+.cs-dl dd { margin: 0; }
+.cs-foot { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--rule); padding-top: 10px; font-size: 12px; color: var(--ink-secondary); }
+.cs-details summary { cursor: pointer; font-size: 13px; color: var(--ink-secondary); padding: 2px 0; border-radius: 4px; }
+.cs-details summary:hover { color: var(--ink); }
+.cs-details p { margin: 6px 0 0; font-size: 13px; white-space: pre-wrap; }
+
+@media (max-width: 1180px) {
+  .cs-split.has-aside { grid-template-columns: minmax(0, 1fr); }
+  .cs-aside {
+    position: fixed; z-index: 60; top: 12px; right: 12px; bottom: 12px; width: 360px; max-height: none;
+    box-shadow: var(--shadow-3); border-color: var(--rule-strong);
+  }
+}
+
+/* MARK: Séries */
+
+.cs-series { padding: 0; overflow: hidden; }
+.cs-series + .cs-series { margin-top: 12px; }
+.cs-series-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 8px 10px 14px; transition: background var(--t-fast);
+}
+.cs-series-head:hover { background: var(--hover); }
+.cs-series-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left;
+  background: none; border: 0; padding: 0; border-radius: 8px;
+}
+.cs-series-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cs-series-title { font-family: var(--serif); font-size: 16px; font-weight: 500; }
+.cs-series-sub { font-size: 12px; color: var(--ink-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-series-sub .late { color: var(--wrong); }
+.cs-count { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+.cs-count.done { color: var(--correct); }
+.cs-series-body { border-top: 1px solid var(--rule); padding: 6px 14px 10px; }
+.cs-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.cs-seal {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  background: var(--correct); color: var(--sheet);
+}
+.cs-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; padding: 0 2px; }
+.cs-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-secondary); }
+
+/* MARK: Lignes (exercices, théorie, retard) */
+
+.cs-ex { border-top: 1px solid var(--rule); }
+.cs-ex:first-child { border-top: 0; }
+.cs-ex-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 6px 6px 4px; margin: 0 -6px 0 -4px; border-radius: 10px; transition: background var(--t-fast); }
+.cs-ex-row:hover { background: var(--hover); }
+.cs-ex-row.selected { background: var(--sheet-raised); }
+.cs-hit {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: none; border: 0; padding: 2px; border-radius: 50%;
+}
+.cs-pick {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  background: none; border: 0; padding: 2px 0; text-align: left; border-radius: 6px;
+}
+.cs-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 22px; }
+.cs-num { font-family: var(--mono); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cs-small { font-family: var(--mono); font-size: 11px; color: var(--ink-secondary); }
+.cs-ellipsis { color: var(--ink-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-chev { color: var(--ink-tertiary); margin-top: 3px; flex-shrink: 0; }
+.cs-subs { margin-left: 34px; padding-bottom: 4px; }
+.cs-sub-row {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 3px 4px; border-radius: 6px; margin-left: -4px;
+}
+.cs-sub-row:hover { background: var(--hover); }
+.cs-sub-row.child { padding-left: 26px; }
+.cs-sub-row .mark { flex-shrink: 0; margin-top: 2px; color: var(--ink-tertiary); }
+.cs-sub-row.done .mark { color: var(--correct); }
+.cs-sub-row b { font-size: 12px; font-weight: 600; color: var(--ink-secondary); }
+.cs-sub-row span.text { flex: 1; font-size: 12px; color: var(--ink-secondary); }
+.cs-sub-row.done span.text { color: var(--ink-tertiary); }
+.cs-fold {
+  display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 3px 4px; margin-left: -4px;
+  border-radius: 6px; font-size: 11px; color: var(--ink-secondary);
+}
+.cs-fold:hover { color: var(--ink); }
+
+.cs-dots { display: flex; gap: 3px; flex-shrink: 0; }
+.cs-dot {
+  display: grid; place-items: center; padding: 0; border-radius: 50%;
+  border: 1.5px solid var(--tone); background: transparent; color: var(--tone);
+  transition: background var(--t-fast), opacity var(--t-fast);
+}
+.cs-dot:hover { background: color-mix(in srgb, var(--tone) 18%, transparent); }
+.cs-dot[aria-pressed="true"] { background: var(--tone); color: #fff; }
+.cs-dot.dim { opacity: 0.45; }
+.cs-dot.dim:hover { opacity: 1; }
+
+.cs-mark {
+  display: inline-grid; place-items: center; border-radius: 50%; flex-shrink: 0; color: #fff;
+}
+.cs-mark.blank { border: 1.8px solid var(--ink-tertiary); color: transparent; }
+.cs-mark.redo { border: 2px solid var(--wrong); color: var(--wrong); }
+.cs-ring-mark { position: relative; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.cs-ring-mark > i { position: absolute; border-radius: 50%; background: var(--sheet); }
+
+.cs-check {
+  display: grid; place-items: center; padding: 0; border-radius: 50%; flex-shrink: 0;
+  border: 1.6px solid var(--ink-tertiary); background: transparent; color: transparent;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.cs-check:hover { border-color: var(--ink-secondary); }
+.cs-check[aria-pressed="true"] { background: var(--tone); border-color: var(--tone); color: #fff; }
+
+.cs-pill {
+  display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 7px; border-radius: 999px;
+  border: 1px solid var(--tone, var(--rule-strong)); color: var(--tone, var(--ink-secondary));
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.cs-conf { display: inline-grid; place-items: center; border-radius: 50%; flex-shrink: 0; color: #fff; }
+
+/* MARK: Théorie */
+
+.cs-week { padding: 0; overflow: hidden; border-left: 4px solid var(--course); }
+.cs-week-head { padding: 12px 14px 10px; }
+.cs-week-head .top { display: flex; align-items: baseline; gap: 10px; }
+.cs-week-head strong { font-family: var(--serif); font-weight: 500; font-size: 19px; }
+.cs-week-sub { margin-top: 6px; font-size: 12px; color: var(--ink-secondary); }
+.cs-item { border-top: 1px solid var(--rule); }
+.cs-item-head { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px 8px 10px; }
+.cs-item-head:hover { background: var(--hover); }
+.cs-item-title { font-family: var(--serif); font-size: 17px; line-height: 1.3; }
+.cs-item.watched .cs-item-title { color: var(--ink-secondary); }
+.cs-res { display: flex; flex-direction: column; gap: 6px; padding: 7px 14px 7px 18px; border-top: 1px solid var(--rule); }
+.cs-res-main { display: flex; align-items: flex-start; gap: 10px; }
+.cs-res-open { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; background: none; border: 0; padding: 0; border-radius: 4px; }
+.cs-res-open:hover .t { text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+.cs-res .t { font-size: 13px; }
+.cs-res .d { font-size: 11px; color: var(--ink-tertiary); }
+.cs-res-ico { width: 20px; flex-shrink: 0; margin-top: 2px; color: var(--ink-secondary); }
+.cs-res-ico.video { color: var(--course); }
+.cs-more {
+  width: 100%; display: block; border: 0; border-top: 1px solid var(--rule); background: transparent;
+  color: var(--ink-secondary); padding: 9px 14px; font-size: 12px;
+}
+.cs-more:hover { background: var(--hover); color: var(--ink); }
+.cs-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 30px; }
+.cs-chapter { padding: 14px 14px 8px; }
+.cs-chapter + .cs-chapter { margin-top: 12px; }
+.cs-chapter-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.cs-chapter-head strong { flex: 1; font-family: var(--serif); font-weight: 500; font-size: 16px; }
+.cs-th-row { display: flex; align-items: center; gap: 10px; padding: 7px 6px 7px 4px; margin: 0 -6px 0 -4px; transition: background var(--t-fast); }
+.cs-th-row + .cs-th-row { border-top: 1px solid var(--rule); }
+.cs-th-row:hover { background: var(--hover); }
+.cs-th-row.selected { background: var(--sheet-raised); }
+.cs-th-row.watched .name { color: var(--ink-secondary); }
+.cs-th-row .name { font-size: 14px; }
+.cs-th-ico { color: var(--course); flex-shrink: 0; }
+textarea.cs-area { width: 100%; min-height: 130px; background: var(--ground); }
+
+/* MARK: Progression */
+
+.cs-col { display: flex; flex-direction: column; gap: 26px; }
+.cs-where .big { display: flex; align-items: center; gap: 8px; }
+.cs-where .big span.serif { font-size: 21px; }
+.cs-axes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.cs-axis small { display: block; color: var(--ink-secondary); font-size: 11px; margin-bottom: 1px; }
+.cs-axis .v { display: flex; align-items: baseline; gap: 2px; margin-bottom: 5px; }
+.cs-axis .v b { font-family: var(--serif); font-weight: 500; font-size: 20px; }
+.cs-axis .v i { font-style: normal; color: var(--ink-secondary); font-size: 12px; }
+.cs-redo { margin-top: 12px; display: flex; align-items: center; gap: 6px; color: var(--wrong); font-size: 12px; font-weight: 600; }
+.cs-list { padding: 2px 14px; }
+.cs-late { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.cs-late + .cs-late { border-top: 1px solid var(--rule); }
+.cs-wk-body .cs-late + .cs-late { border-top: 0; }
+.cs-late .grow { flex: 1; min-width: 0; }
+.cs-late .t { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-late.done .t { color: var(--ink-secondary); }
+.cs-late .d { font-size: 11px; color: var(--ink-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-undo { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 0 4px; font-size: 12px; color: var(--ink-secondary); }
+.cs-wk { border-top: 1px solid var(--rule); }
+.cs-wk:first-child { border-top: 0; }
+.cs-wk-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 9px 0; border-radius: 8px;
+}
+.cs-wk-head:disabled { cursor: default; }
+.cs-wk-badge {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+  font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--sheet-raised); color: var(--ink);
+}
+.cs-wk-badge.current { background: var(--course); color: #fff; }
+.cs-wk-info { flex: 1; min-width: 0; }
+.cs-wk-line { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; font-size: 13px; }
+.cs-wk-line .grow { flex: 1; }
+.cs-wk-line .tag { font-size: 11px; font-weight: 600; color: var(--ink-secondary); display: inline-flex; align-items: center; gap: 3px; }
+.cs-wk-line .tag.ok { color: var(--correct); }
+.cs-wk-line .tag.late { color: var(--review); }
+.cs-wk-chev { color: var(--ink-tertiary); transition: transform var(--t-fast); }
+.cs-wk-chev.open { transform: rotate(90deg); }
+.cs-wk-body { padding: 0 0 8px 48px; }
+.cs-time { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px; }
+.cs-time small { display: block; font-size: 11px; color: var(--ink-secondary); }
+
+/* MARK: Examens */
+
+.cs-exams { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; align-items: start; }
+.cs-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cs-panel-head h2 { flex: 1; margin: 0; font-size: 19px; }
+.cs-exam-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; }
+.cs-exam-row + .cs-exam-row { border-top: 1px solid var(--rule); }
+.cs-exam-row .grow { flex: 1; min-width: 0; }
+.cs-exam-row .title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.cs-exam-row .when { font-size: 12px; color: var(--ink-secondary); margin-top: 2px; }
+.cs-exam-row .right { text-align: right; flex-shrink: 0; }
+.cs-exam-row .count { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.cs-exam-row .weight { font-size: 11px; color: var(--ink-secondary); }
+.cs-past-ico { margin-top: 2px; flex-shrink: 0; }
+.cs-priority { display: flex; align-items: center; gap: 5px; color: var(--review); font-size: 12px; margin-bottom: 4px; }
+.cs-foot-note { margin: 12px 0 0; font-size: 11px; color: var(--ink-secondary); }
+.cs-past-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
+/* MARK: Notes */
+
+.cs-notes { max-width: 760px; }
+.cs-notes-body { padding: 16px 18px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; user-select: text; }
+.cs-notes-body.empty { color: var(--ink-secondary); white-space: normal; cursor: text; }
+.cs-notes textarea.field { width: 100%; min-height: 280px; font-size: 14px; line-height: 1.6; }
+
+/* MARK: Dialogues */
+
+.cs-dialog { width: min(520px, calc(100vw - 48px)); max-height: 80vh; }
+.cs-dialog-head { display: flex; align-items: center; gap: 8px; padding: 16px 18px 12px; border-bottom: 1px solid var(--rule); }
+.cs-dialog-head h2 { flex: 1; margin: 0; font-size: 18px; }
+.cs-dialog-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.cs-dialog-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--rule); background: var(--sheet-raised); }
+.cs-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cs-field > span { font-size: 12px; font-weight: 600; color: var(--ink-secondary); }
+.cs-field .field, .cs-field .select { width: 100%; }
+.cs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cs-swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cs-swatch {
+  width: 24px; height: 24px; border-radius: 50%; padding: 0; border: 2px solid transparent;
+  background: var(--sw); box-shadow: 0 0 0 1px var(--rule-strong);
+}
+.cs-swatch[aria-pressed="true"] { border-color: var(--sheet); box-shadow: 0 0 0 2px var(--ink); }
+.cs-toolbar .seg button { padding: 4px 11px; }

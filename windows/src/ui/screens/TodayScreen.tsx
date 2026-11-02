@@ -6,20 +6,27 @@
 // les corrigés, `Deadline` pour les échéances. L'écran ne recompte rien.
 
 import { useData } from "../../data/dataContext.tsx";
-import { Course } from "../../models/index.ts";
+import { Course, LinkedTask } from "../../models/index.ts";
 import { DateUtils } from "../../domain/dateUtils.ts";
-import { PageHeader, Section, Card } from "../kit.tsx";
+import { PageHeader, Section, Card, EmptyState } from "../kit.tsx";
 import { buildHomeData } from "./home/todayModel.ts";
 import { WeekTimeCard, WeekCourseRow } from "./home/weekCard.tsx";
-import { DeadlineRow, GoalRing, NextActionCard, PlanRow, SessionRow } from "./home/todayParts.tsx";
+import { DeadlineRow, GoalRing, NextActionCard, PlanRow, SessionRow, TaskRow } from "./home/todayParts.tsx";
+import { RunningNowCard } from "./home/runningNow.tsx";
+import { timerController } from "../timerController.ts";
+import { useSyncExternalStore } from "react";
+import "./home/today.css";
 
-const rowStyle = (first: boolean) => ({
-  borderTop: first ? "none" : "1px solid var(--rule)",
-  padding: "0 4px",
-});
+const subscribeTimer = timerController.subscribe;
+const timerRunning = () => timerController.snapshot().state !== null;
 
-export function TodayScreen({ onOpenCourse }: { onOpenCourse: (id: string) => void }) {
+export function TodayScreen({ onOpenCourse, onOpenFocus, onEnterStudyMode }: {
+  onOpenCourse: (id: string) => void;
+  onOpenFocus?: () => void;
+  onEnterStudyMode?: (courseID?: string) => void;
+}) {
   const { store } = useData();
+  const timing = useSyncExternalStore(subscribeTimer, timerRunning);
   const now = new Date();
   if (!store) return null;
 
@@ -30,6 +37,13 @@ export function TodayScreen({ onOpenCourse }: { onOpenCourse: (id: string) => vo
     weeklyGoal, dailyGoal, todayTotal, todaySessions, todayItems, deadlines, nextAction,
   } = data;
 
+  // Les tâches ouvertes des fournisseurs reliés, dues dans la semaine ou en retard (8 au plus).
+  const soon = DateUtils.addDays(7, DateUtils.startOfDay(now));
+  const tasks = store.fetch(LinkedTask)
+    .filter((task) => !task.isDone && task.dueDate !== null && task.dueDate.getTime() < soon.getTime())
+    .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime())
+    .slice(0, 8);
+
   const termLine = term
     ? term.hasEnded
       ? "semestre terminé"
@@ -37,15 +51,14 @@ export function TodayScreen({ onOpenCourse }: { onOpenCourse: (id: string) => vo
         ? "semestre à venir"
         : `semaine ${term.currentWeek} sur ${term.totalWeeks}`
     : null;
-  const dateLabel = DateUtils.fullDayLabel(now);
   const weekTitle = term?.isRunning ? `Semaine ${term.currentWeek}` : "Cette semaine";
   const sessionsTotal = todaySessions.reduce((sum, session) => sum + session.durationSeconds, 0);
 
   const headerActions = (
-    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ textAlign: "right" }}>
-        <div className="mono" style={{ fontSize: 24 }}>{DateUtils.hoursLabel(todayTotal)}</div>
-        <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
+    <div className="t-total">
+      <div className="t-total-text">
+        <div className="mono t-total-value">{DateUtils.hoursLabel(todayTotal)}</div>
+        <div className="t-total-sub">
           sur {DateUtils.hoursLabel(dailyGoal)} · {DateUtils.hoursLabel(weekTotal)} cette semaine
         </div>
       </div>
@@ -57,99 +70,91 @@ export function TodayScreen({ onOpenCourse }: { onOpenCourse: (id: string) => vo
     <>
       <PageHeader
         title="Aujourd'hui"
-        subtitle={[dateLabel, termLine].filter((part): part is string => part !== null).join(" · ")}
+        subtitle={[DateUtils.fullDayLabel(now), termLine].filter((part): part is string => part !== null).join(" · ")}
         actions={headerActions}
       />
 
       {summaries.length === 0 ? (
         <Card>
-          <div className="serif" style={{ fontSize: 20 }}>Aucun cours suivi</div>
-          <div style={{ color: "var(--ink-secondary)", marginTop: 6 }}>
+          <EmptyState icon="books.vertical" title="Aucun cours suivi">
             Séries, vidéos et échéances, lues sur Moodle. Ajoute un cours depuis l'écran Cours.
-          </div>
+          </EmptyState>
         </Card>
       ) : (
         <>
-          <Section title={weekTitle}>
-            <WeekTimeCard
-              days={days}
-              weekStart={weekStart}
-              theory={theory}
-              series={series}
-              corrections={corrections}
-              late={late}
-              goal={weeklyGoal}
-              now={now}
-            />
-          </Section>
-
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: 24, alignItems: "start", marginBottom: 28,
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
+          {timing && <div style={{ marginBottom: 28 }}><RunningNowCard onOpenFocus={onOpenFocus} onEnterStudyMode={() => onEnterStudyMode?.()} /></div>}
+          <div className="t-grid">
+            <div className="t-col">
               <NextActionCard action={nextAction} onOpen={onOpenCourse} />
 
-              <Section title="Horaire du jour">
-                <Card>
-                  {todayItems.length === 0 ? (
-                    <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>Rien à l'horaire.</span>
-                  ) : (
-                    <>
-                      {todayItems.slice(0, 8).map((item, index) => (
-                        <div key={item.id} style={rowStyle(index === 0)}>
-                          <PlanRow item={item} now={now} onOpen={onOpenCourse} />
-                        </div>
-                      ))}
-                      {todayItems.length > 8 && (
-                        <div style={{
-                          color: "var(--ink-secondary)", fontSize: 12, padding: "8px 6px 4px",
-                        }}>+ {todayItems.length - 8} autres</div>
-                      )}
-                    </>
-                  )}
-                </Card>
+              <Section title={weekTitle}>
+                <WeekTimeCard
+                  days={days}
+                  weekStart={weekStart}
+                  theory={theory}
+                  series={series}
+                  corrections={corrections}
+                  late={late}
+                  goal={weeklyGoal}
+                  now={now}
+                />
               </Section>
-            </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
-              <Section title={todaySessions.length > 0
-                ? `Sessions du jour · ${DateUtils.hoursLabel(sessionsTotal)}`
-                : "Sessions du jour"}>
-                <Card>
-                  {todaySessions.length === 0 ? (
-                    <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>Pas encore de session.</span>
-                  ) : todaySessions.map((session, index) => (
-                    <div key={session.id} style={rowStyle(index === 0)}>
-                      <SessionRow session={session} />
-                    </div>
+              <Section title={`${weekTitle} · cours suivis`}>
+                <div className="t-cards">
+                  {summaries.map((summary) => (
+                    <WeekCourseRow key={summary.course.id} summary={summary} onOpen={onOpenCourse} />
                   ))}
-                </Card>
+                </div>
               </Section>
 
-              {deadlines.length > 0 && (
-                <Section title="Échéances · 14 jours">
-                  <Card>
-                    {deadlines.map((deadline, index) => (
-                      <div key={deadline.id} style={rowStyle(index === 0)}>
-                        <DeadlineRow item={deadline} onOpen={onOpenCourse} />
-                      </div>
-                    ))}
+              {tasks.length > 0 && (
+                <Section title="Tâches">
+                  <Card className="t-list">
+                    {tasks.map((task) => <TaskRow key={task.id} task={task} />)}
                   </Card>
                 </Section>
               )}
             </div>
-          </div>
 
-          <Section title={`${weekTitle} · cours suivis`}>
-            <Card>
-              {summaries.map((summary, index) => (
-                <div key={summary.course.id} style={rowStyle(index === 0)}>
-                  <WeekCourseRow summary={summary} onOpen={onOpenCourse} />
-                </div>
-              ))}
-            </Card>
-          </Section>
+            <div className="t-col">
+              <Section title="Horaire du jour">
+                <Card className="t-list">
+                  {todayItems.length === 0 ? (
+                    <div className="t-empty">Rien à l'horaire.</div>
+                  ) : (
+                    <>
+                      {todayItems.slice(0, 8).map((item) => (
+                        <PlanRow key={item.id} item={item} now={now} onOpen={onOpenCourse} />
+                      ))}
+                      {todayItems.length > 8 && <div className="t-more">+ {todayItems.length - 8} autres</div>}
+                    </>
+                  )}
+                </Card>
+              </Section>
+
+              {deadlines.length > 0 && (
+                <Section title="Échéances" action={<span className="faint" style={{ fontSize: 11 }}>14 jours</span>}>
+                  <Card className="t-list">
+                    {deadlines.map((deadline) => (
+                      <DeadlineRow key={deadline.id} item={deadline} onOpen={onOpenCourse} />
+                    ))}
+                  </Card>
+                </Section>
+              )}
+
+              <Section title="Sessions du jour"
+                action={todaySessions.length > 0
+                  ? <span className="mono muted" style={{ fontSize: 12 }}>{DateUtils.hoursLabel(sessionsTotal)}</span>
+                  : undefined}>
+                <Card className="t-list">
+                  {todaySessions.length === 0 ? (
+                    <div className="t-empty">{timing ? "Session en cours." : "Pas encore de session."}</div>
+                  ) : todaySessions.map((session) => <SessionRow key={session.id} session={session} />)}
+                </Card>
+              </Section>
+            </div>
+          </div>
         </>
       )}
     </>

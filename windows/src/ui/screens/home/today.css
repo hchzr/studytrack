@@ -1,0 +1,170 @@
+/* « Aujourd'hui » et « Cours » : la mise en page et les rangées.
+   Tout vient de tokens.css ; seules les couleurs de cours (données) restent en ligne. */
+
+.t-kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-tertiary); }
+
+/* MARK: En-tête */
+
+.t-total { display: flex; align-items: center; gap: 14px; }
+.t-total-text { text-align: right; }
+.t-total-value { font-size: 26px; line-height: 1.1; }
+.t-total-sub { font-size: 12px; color: var(--ink-secondary); margin-top: 2px; }
+
+.t-ring {
+  width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0; position: relative;
+  display: grid; place-items: center;
+}
+.t-ring-hole {
+  width: 42px; height: 42px; border-radius: 50%; background: var(--ground);
+  display: grid; place-items: center; color: var(--correct);
+}
+
+/* MARK: Grille de la page */
+
+.t-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 340px); gap: 28px; align-items: start; }
+.t-col { display: flex; flex-direction: column; min-width: 0; }
+.t-col > .card { margin-bottom: 28px; }
+@media (max-width: 1180px) { .t-grid { grid-template-columns: minmax(0, 1fr); row-gap: 0; } }
+
+.t-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+
+/* MARK: Cartes à rangées */
+
+.t-list { padding: 6px; }
+.t-list.flush { padding: 6px 6px; }
+.t-empty { padding: 10px; font-size: 13px; color: var(--ink-secondary); }
+.t-more { padding: 6px 10px 8px; font-size: 12px; color: var(--ink-secondary); }
+
+.t-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; text-align: left;
+  padding: 9px 10px; border: 0; border-radius: 10px; background: transparent; color: inherit;
+  transition: background var(--t-fast);
+}
+button.t-row:hover { background: var(--hover); }
+button.t-row:focus-visible { outline-offset: -2px; }
+.t-row + .t-row { position: relative; }
+.t-row + .t-row::before {
+  content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--rule);
+}
+button.t-row:hover::before, button.t-row:hover + .t-row::before { opacity: 0; }
+
+.t-dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+.t-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.t-sub { font-size: 12px; color: var(--ink-secondary); }
+.t-sub-xs { font-size: 11px; color: var(--ink-secondary); }
+.t-chev { color: var(--ink-tertiary); flex-shrink: 0; }
+
+.t-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* Planning */
+.t-plan-time { width: 46px; flex-shrink: 0; text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.t-plan-time .mono { font-size: 12px; }
+.t-plan-time .end { font-size: 10px; color: var(--ink-tertiary); }
+.t-plan-bar { width: 3px; height: 32px; border-radius: 2px; flex-shrink: 0; }
+.t-plan-title { font-size: 14px; }
+.t-plan-title.ongoing { font-weight: 600; }
+.t-plan-title.past { text-decoration: line-through; color: var(--ink-tertiary); }
+.t-plan-live {
+  font-size: 10px; font-weight: 600; color: var(--ground); background: var(--ink);
+  border-radius: 999px; padding: 1px 7px; flex-shrink: 0;
+}
+
+/* Sessions */
+.t-session-icon { width: 20px; display: inline-flex; justify-content: center; flex-shrink: 0; }
+.t-session-code { font-size: 13px; font-weight: 500; white-space: nowrap; }
+.t-session-time { font-size: 12px; color: var(--ink-secondary); }
+.t-session-dur { font-size: 12px; min-width: 56px; text-align: right; }
+
+/* Échéances, tâches */
+.t-count { font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--ink-secondary); }
+.t-count.urgent, .urgent { color: var(--wrong); }
+
+/* MARK: Prochain geste */
+
+.t-next { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; }
+.t-next-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.t-next-title { font-size: 22px; line-height: 1.2; }
+.t-next-title.small { font-size: 21px; margin-top: 2px; }
+.t-next-actions { margin-top: 4px; }
+
+/* MARK: Semaine */
+
+.t-week { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; }
+.t-week-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.t-week-main { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.t-week-total { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.t-week-total .big { font-size: 32px; line-height: 1.1; }
+.t-week-axes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.t-late { font-size: 12px; color: var(--wrong); display: flex; gap: 6px; align-items: center; }
+
+.t-days { display: flex; align-items: flex-end; gap: 6px; width: 220px; max-width: 100%; }
+.t-day { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.t-day-track { height: 44px; display: flex; align-items: flex-end; border-radius: 4px; background: var(--sheet-raised); overflow: hidden; }
+.t-day-track.future { opacity: 0.55; }
+.t-day-fill { width: 100%; border-radius: 4px; background: var(--ink-tertiary); }
+.t-day-fill.today { background: var(--ink); }
+.t-day-label { text-align: center; font-size: 10px; color: var(--ink-tertiary); }
+.t-day-label.today { font-weight: 700; color: var(--ink); }
+
+.t-axis-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 5px; }
+.t-axis-label { color: var(--ink-secondary); font-size: 12px; }
+.t-axis-count { font-weight: 500; font-size: 12px; }
+.t-axis-count.complete { color: var(--correct); }
+.t-axis.empty-axis .progress { opacity: 0.35; }
+.t-axis.small .t-axis-label, .t-axis.small .t-axis-count { font-size: 11px; }
+
+/* MARK: Carte de cours dans la semaine */
+
+.t-course {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; text-align: left; width: 100%;
+  border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--sheet);
+  box-shadow: var(--shadow-1); color: inherit; min-width: 0;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.t-course:hover { border-color: var(--course-tint, var(--rule-strong)); box-shadow: var(--shadow-2); }
+.t-course-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.t-course-name { font-size: 18px; line-height: 1.25; min-height: 45px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.t-course-axes { display: flex; gap: 14px; }
+.t-course-axes > * { flex: 1; min-width: 0; }
+.t-standing { font-size: 11px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.t-standing.ok { color: var(--correct); }
+.t-standing.late { color: var(--wrong); }
+.t-standing.quiet { color: var(--ink-secondary); font-weight: 400; }
+.t-tag { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; letter-spacing: 0.3px; }
+.t-tag i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* MARK: En cours */
+
+.t-running { display: flex; align-items: center; gap: 18px; padding: 18px 20px; flex-wrap: wrap; }
+.t-running-ring { width: 56px; height: 56px; flex-shrink: 0; }
+.t-running-body { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 3px; }
+.t-running-title { font-size: 22px; line-height: 1.2; }
+.t-running-clock { font-size: 34px; font-variant-numeric: tabular-nums; }
+.t-running-actions { display: flex; align-items: center; gap: 8px; }
+
+/* MARK: Mes cours */
+
+.c-term-meta { font-size: 12px; color: var(--ink-secondary); margin: -4px 2px 12px; }
+.c-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.c-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-width: 0; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.c-card:hover { border-color: var(--rule-strong); box-shadow: var(--shadow-2); }
+.c-card-band { height: 5px; flex-shrink: 0; }
+.c-card-open {
+  flex: 1; text-align: left; border: 0; background: none; color: inherit;
+  padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.c-card-open:focus-visible { outline-offset: -3px; border-radius: 12px; }
+.c-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.c-card-name { font-size: 18px; line-height: 1.25; min-height: 45px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.c-card-percent { display: flex; align-items: baseline; gap: 2px; }
+.c-card-foot { border-top: 1px solid var(--rule); padding: 8px 14px 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; }
+.c-card-source { font-size: 11px; color: var(--ink-tertiary); }
+.c-archived { margin-top: 18px; }
+.c-archived .t-list { padding: 4px 6px; }
+
+.c-form { display: flex; flex-direction: column; gap: 14px; }
+.c-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.c-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-secondary); }
+.c-label .field, .c-label .select { width: 100%; }
+.c-color { padding: 3px; height: 32px; cursor: pointer; }
+.c-error { color: var(--wrong); font-size: 12px; }

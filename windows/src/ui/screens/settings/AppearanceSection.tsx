@@ -3,7 +3,7 @@
 // `<html data-theme>` pour que tokens.css bascule toute la palette.
 
 import { useEffect, useState } from "react";
-import { Section, Card } from "../../kit.tsx";
+import { Section, Card, Segmented } from "../../kit.tsx";
 import { SettingRow } from "./controls.tsx";
 import {
   applyAppearance, readAppearance, writePreference, PREFERENCE_KEYS, type Appearance,
@@ -35,18 +35,7 @@ export function AppearanceSection() {
           label="Thème"
           hint="« Système » suit le réglage de Windows ; le choix reste sur cet appareil."
         >
-          <div className="settings-segmented" role="group" aria-label="Thème">
-            {CHOICES.map((choice) => (
-              <button
-                key={choice.value}
-                type="button"
-                aria-pressed={appearance === choice.value}
-                onClick={() => choose(choice.value)}
-              >
-                {choice.label}
-              </button>
-            ))}
-          </div>
+          <Segmented ariaLabel="Thème" value={appearance} options={[...CHOICES]} onChange={choose} />
         </SettingRow>
 
         <div className="settings-preview" aria-hidden="true">

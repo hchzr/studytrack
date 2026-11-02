@@ -5,18 +5,23 @@
 import type { Course } from "../../../models/course.ts";
 import type { PastExam } from "../../../models/pastExam.ts";
 import { PastExamProgress } from "../../../models/pastExam.ts";
+import type { Exam } from "../../../models/exam.ts";
 import { ExamKind, type ConfidenceLevel } from "../../../models/enums.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
+import { Button, Card, Icon, IconButton, useContextMenu } from "../../kit.tsx";
 import {
-  ConfidenceDot, ConfidencePicker, Pill, openURL, tintColor, webURL,
+  ConfidenceDot, ConfidencePicker, Pill, openURL, tintColor, webURL, type CourseActions,
 } from "./common.tsx";
+import "./course.css";
 
 interface ExamsTabProps {
   course: Course;
   saveAll: (objects: object[]) => Promise<void>;
+  actions: CourseActions;
 }
 
-export function ExamsTab({ course, saveAll }: ExamsTabProps) {
+export function ExamsTab({ course, saveAll, actions }: ExamsTabProps) {
+  const menu = useContextMenu();
   const exams = course.sortedExams;
   const past = course.sortedPastExams;
   const summary = PastExamProgress.summary(past.map((exam) => ({ year: exam.year, worked: exam.isWorked })));
@@ -32,118 +37,100 @@ export function ExamsTab({ course, saveAll }: ExamsTabProps) {
     await saveAll([exam]);
   };
 
+  const examMenu = (exam: Exam) => menu.open([
+    { label: "Modifier…", icon: "pencil", action: () => actions.editExam(exam) },
+  ]);
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 18, alignItems: "start" }}>
-      <section className="card">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-          <h2 className="serif" style={{ fontSize: 19, margin: 0, flex: 1 }}>Évaluations</h2>
-          {exams.length > 0 && <span className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>{exams.length}</span>}
+    <div className="cs-exams">
+      <Card flat>
+        <div className="cs-panel-head">
+          <h2 className="serif">Évaluations</h2>
+          {exams.length > 0 && <span className="mono small muted">{exams.length}</span>}
+          <Button size="sm" icon="plus" onClick={() => actions.editExam(null)}>Nouvelle</Button>
         </div>
         {exams.length === 0 ? (
-          <p style={{ margin: 0, color: "var(--ink-secondary)", fontSize: 13 }}>Aucune évaluation.</p>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>Aucune évaluation.</p>
         ) : (
-          <div>
-            {exams.map((exam, index) => (
-              <div key={exam.id} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)", padding: "9px 0" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                      <strong style={{ fontSize: 14 }}>{exam.title}</strong>
-                      <Pill color={tintColor(ExamKind.color(exam.kind))}>{ExamKind.label(exam.kind)}</Pill>
-                    </span>
-                    <span style={{ display: "block", color: "var(--ink-secondary)", fontSize: 12, marginTop: 2 }}>
-                      {[DateUtils.fullDayLabel(exam.date), exam.location].filter((part) => part !== "").join(" · ")}
-                    </span>
-                  </span>
-                  <span style={{ textAlign: "right", flexShrink: 0 }}>
-                    <span className="mono" style={{ display: "block", fontSize: 12, fontWeight: 600,
-                      color: exam.isPast ? "var(--ink-secondary)" : tintColor(ExamKind.color(exam.kind)) }}>
-                      {DateUtils.countdownLabel(exam.date)}
-                    </span>
-                    {exam.weightLabel && (
-                      <span style={{ display: "block", color: "var(--ink-secondary)", fontSize: 11 }}>{exam.weightLabel}</span>
-                    )}
-                  </span>
+          exams.map((exam) => {
+            const color = tintColor(ExamKind.color(exam.kind));
+            return (
+              <div key={exam.id} className="cs-exam-row" onContextMenu={examMenu(exam)}>
+                <div className="grow">
+                  <div className="title">
+                    {exam.title}
+                    <Pill color={color}>{ExamKind.label(exam.kind)}</Pill>
+                  </div>
+                  <div className="when">
+                    {[DateUtils.fullDayLabel(exam.date), exam.location].filter((part) => part !== "").join(" · ")}
+                  </div>
                 </div>
+                <div className="right">
+                  <div className="count" style={{ color: exam.isPast ? "var(--ink-secondary)" : color }}>
+                    {DateUtils.countdownLabel(exam.date)}
+                  </div>
+                  {exam.weightLabel && <div className="weight">{exam.weightLabel}</div>}
+                </div>
+                <IconButton icon="pencil" label={`Modifier ${exam.title}`} size="sm" onClick={() => actions.editExam(exam)} />
               </div>
-            ))}
-          </div>
+            );
+          })
         )}
         {course.nextSitting && (
-          <p style={{ margin: "12px 0 0", color: "var(--ink-secondary)", fontSize: 11 }}>
+          <p className="cs-foot-note">
             Prochaine épreuve : {course.nextSitting.title} · {DateUtils.fullDayLabel(course.nextSitting.date)}
           </p>
         )}
-      </section>
+      </Card>
 
-      <section className="card">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-          <h2 className="serif" style={{ fontSize: 19, margin: 0, flex: 1 }}>Annales</h2>
-          {past.length > 0 && <span style={{ color: "var(--ink-secondary)", fontSize: 12 }}>{summary.label}</span>}
+      <Card flat>
+        <div className="cs-panel-head">
+          <h2 className="serif">Annales</h2>
+          {past.length > 0 && <span className="muted small">{summary.label}</span>}
         </div>
 
         {past.length === 0 ? (
-          <p style={{ margin: 0, color: "var(--ink-secondary)", fontSize: 13 }}>Aucun sujet passé.</p>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>Aucun sujet passé.</p>
         ) : (
-          <div>
+          <>
             {priority.length > 0 && (
-              <div style={{ color: "var(--review)", fontSize: 11, marginBottom: 6 }}>
-                ↗ À travailler en priorité : {priority[0]}
+              <div className="cs-priority">
+                <Icon name="arrow.up.right" size={13} strokeWidth={2.25} />
+                À travailler en priorité : {priority[0]}
               </div>
             )}
-            {past.map((exam, index) => {
+            {past.map((exam) => {
               const url = webURL(exam.urlString);
               return (
-                <div key={exam.id} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)", padding: "9px 0" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                    <span style={{ color: tintColor(ExamKind.color(exam.kind)), fontSize: 11, width: 18, paddingTop: 2 }}
-                      aria-hidden>▣</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis",
-                          whiteSpace: "nowrap" }}>{exam.title}</span>
-                        {exam.confidence && <ConfidenceDot level={exam.confidence} />}
-                      </div>
-                      <div style={{ color: "var(--ink-secondary)", fontSize: 11, marginTop: 1 }}>{exam.statusLabel}</div>
+                <div key={exam.id} className="cs-exam-row"
+                  onContextMenu={menu.open([{ label: "Modifier…", icon: "pencil", action: () => actions.editPastExam(exam) }])}>
+                  <Icon name="doc.text" size={16} className="cs-past-ico" color={tintColor(ExamKind.color(exam.kind))} />
+                  <div className="grow">
+                    <div className="title" style={{ fontSize: 13 }}>
+                      {exam.title}
+                      {exam.confidence && <ConfidenceDot level={exam.confidence} />}
                     </div>
-                    {url && (
-                      <button type="button" onClick={() => openURL(url)} aria-label="Ouvrir le sujet"
-                        style={{ border: "none", background: "none", color: "var(--ink-secondary)", padding: 2, fontSize: 12 }}>
-                        ↗
-                      </button>
-                    )}
+                    <div className="when" style={{ fontSize: 11 }}>{exam.statusLabel}</div>
+                    <div className="cs-past-actions">
+                      <Button size="sm" icon={exam.isWorked ? "arrow.counterclockwise" : "checkmark"}
+                        onClick={() => void toggleWorked(exam)}>
+                        {exam.isWorked ? "Pas encore travaillée" : "Travaillée"}
+                      </Button>
+                      <ConfidencePicker value={exam.confidence} onChange={(value) => void setConfidence(exam, value)} size={18} />
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                    <button type="button" onClick={() => void toggleWorked(exam)} style={smallButton}>
-                      {exam.isWorked ? "↺ Pas encore travaillée" : "✓ Travaillée"}
-                    </button>
-                    <ConfidencePicker
-                      value={exam.confidence}
-                      onChange={(value) => void setConfidence(exam, value)}
-                      size={16}
-                    />
-                  </div>
+                  {url && <IconButton icon="arrow.up.right.square" label="Ouvrir le sujet" size="sm" onClick={() => openURL(url)} />}
                 </div>
               );
             })}
-          </div>
+          </>
         )}
 
         {past.length > 0 && summary.pendingYears.length > 0 && (
-          <p style={{ margin: "12px 0 0", color: "var(--ink-secondary)", fontSize: 11 }}>
-            Reste : {summary.pendingYears.join(", ")}.
-          </p>
+          <p className="cs-foot-note">Reste : {summary.pendingYears.join(", ")}.</p>
         )}
-      </section>
+      </Card>
+      {menu.element}
     </div>
   );
 }
-
-const smallButton = {
-  border: "1px solid var(--rule)",
-  background: "var(--sheet-raised)",
-  color: "var(--ink)",
-  borderRadius: 999,
-  padding: "2px 8px",
-  fontSize: 11,
-} as const;

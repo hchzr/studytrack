@@ -13,6 +13,8 @@ import type { FocusTimerState } from "../../domain/focusTimerState.ts";
 import type { PomodoroSettings } from "../../domain/pomodoroEngine.ts";
 import { displaySecondsOf, statusLabelOf } from "../screens/focus/timerView.ts";
 import { MathText } from "../screens/course/common.tsx";
+import { Button, Chip, Icon, type IconName, type MenuItem } from "../kit.tsx";
+import "./studymode.css";
 
 // MARK: Petites formes
 
@@ -36,7 +38,7 @@ export function CourseTag({ code, tint }: { code: string; tint: string }) {
   );
 }
 
-/** Une pastille de cours choisissable (CourseChip) : point, code, sélection teintée. */
+/** Une pastille de cours choisissable (CourseChip) : point de couleur, code. */
 export function CourseChip({ title, color, selected, help, onClick }: {
   title: string;
   color: string;
@@ -45,125 +47,128 @@ export function CourseChip({ title, color, selected, help, onClick }: {
   help?: string;
   onClick: () => void;
 }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
-      title={help ?? title}
-      aria-pressed={selected}
-      onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 999,
-        padding: "4px 12px", fontSize: 14, fontWeight: selected ? 600 : 400,
-        color: "var(--ink)", border: `1px solid ${selected ? color : "transparent"}`,
-        background: selected ? `color-mix(in srgb, ${color} 14%, transparent)`
-          : hovering ? "var(--rule)" : "var(--sheet-raised)",
-      }}
-    >
-      <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: color }} />
-      {title}
-    </button>
+    <span title={help ?? title} style={{ display: "inline-flex" }}>
+      <Chip selected={selected} dot={color} onClick={onClick}>{title}</Chip>
+    </span>
   );
 }
 
 /** Le bouton encre : le geste principal (InkButtonStyle). */
-export function InkButton({ onClick, children, wide, tint }: {
+export function InkButton({ onClick, children, wide, tint, large }: {
   onClick: () => void;
   children: ReactNode;
   wide?: boolean;
   tint?: string;
+  large?: boolean;
 }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
+    <Button
+      variant="primary"
+      size={large ? "lg" : "md"}
       onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
       style={{
-        border: "none", borderRadius: 999, padding: "9px 18px", fontSize: 14, fontWeight: 600,
-        background: tint ?? "var(--ink)", color: "var(--ground)",
-        filter: hovering ? "brightness(1.08)" : undefined,
         width: wide ? "100%" : undefined,
+        ...(tint ? { background: tint, borderColor: tint, color: "var(--ground)" } : { color: "var(--ground)" }),
       }}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
 /** Le bouton papier : le geste secondaire (PaperButtonStyle). */
-export function PaperButton({ onClick, children, wide }: {
+export function PaperButton({ onClick, children, wide, large }: {
   onClick: () => void;
   children: ReactNode;
   wide?: boolean;
+  large?: boolean;
 }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        borderRadius: 999, padding: "9px 16px", fontSize: 14,
-        border: "1px solid var(--rule)", background: hovering ? "var(--rule)" : "var(--sheet-raised)",
-        color: "var(--ink)", width: wide ? "100%" : undefined,
-      }}
-    >
+    <Button size={large ? "lg" : "md"} onClick={onClick} style={{ width: wide ? "100%" : undefined, background: "var(--sheet-raised)" }}>
       {children}
-    </button>
+    </Button>
   );
 }
 
-// MARK: Glyphes
+// MARK: Icônes
 
-/** Les quelques symboles SF dont l'écran a besoin, en caractères de texte. */
-export function Glyph({ name }: { name: string }): ReactNode {
-  switch (name) {
-    case "play": return "▶";
-    case "pause": return "❙❙";
-    case "forward": return "⏭";
-    case "checkmark": return "✓";
-    case "checkmark.seal": return "✓";
-    case "checkmark.circle": return "◎";
-    case "checkmark.circle.fill": return "✓";
-    case "circle": return "○";
-    case "plus": return "+";
-    case "infinity": return "∞";
-    case "ellipsis": return "⋯";
-    case "lock.fill": return "🔒";
-    case "exclamationmark.triangle": return "⚠";
-    case "timer": return "◷";
-    case "cup.and.saucer": return "☕";
-    case "hourglass": return "⏳";
-    case "person.wave.2": return "☺";
-    case "pause.circle": return "❙❙";
-    case "arrow.right": return "→";
-    case "arrow.counterclockwise": return "↺";
-    case "sidebar.right": return "▤";
-    case "sparkle": return "✦";
-    case "doc.text": return "▤";
-    case "text.alignleft": return "≡";
-    case "list.bullet.rectangle": return "☰";
-    case "mappin": return "◉";
-    case "person.2": return "❥❥";
-    case "checklist": return "☑";
-    case "graduationcap": return "◈";
-    case "play.rectangle": return "▶";
-    case "book.pages": return "▤";
-    case "video": return "▶";
-    case "text.bubble": return "❝";
-    case "globe": return "◉";
-    case "sparkles": return "✦";
-    case "pencil.and.scribble": return "✎";
-    case "pin": return "★";
-    case "bookmark": return "⚐";
-    case "square.grid.2x2": return "▦";
-    default: return "•";
-  }
+/** Les symboles SF de l'écran, ramenés aux icônes du kit (le plus proche quand
+ *  le nom exact n'existe pas : `infinity`, `lock.fill`, `mappin`… ). */
+const SF_TO_ICON: Record<string, IconName> = {
+  "play": "play.fill", "pause": "pause.fill", "forward": "forward.end.fill",
+  "checkmark.seal": "checkmark.circle", "checkmark.circle.fill": "checkmark.circle",
+  "infinity": "repeat", "lock.fill": "lock", "pause.circle": "pause.fill",
+  "person.wave.2": "person.2", "text.alignleft": "note.text", "list.bullet.rectangle": "list.bullet",
+  "mappin": "map", "checklist": "checkmark.square", "play.rectangle": "play.fill", "video": "play.fill",
+  "book.pages": "book", "text.bubble": "quote.opening", "globe": "link", "pencil.and.scribble": "pencil",
+  "pin": "bookmark", "square.grid.2x2": "square.stack.3d.up",
+};
+
+/** Une icône à partir du nom SF que le Swift emploie. */
+export function Glyph({ name, size = 15 }: { name: string; size?: number }): ReactNode {
+  const mapped = SF_TO_ICON[name] ?? name;
+  return <Icon name={mapped as IconName} size={size} />;
+}
+
+// MARK: Menus
+
+/**
+ * Un menu déroulant sous son bouton (le `Menu` de SwiftUI), dans le papier de
+ * nuit : le menu du kit passe par un portail hors de la racine sombre, et
+ * lirait donc les couleurs claires de l'app. Se ferme au clic dehors, à Échap ;
+ * flèches haut/bas.
+ */
+export function DropMenu({ trigger, items, align = "left" }: {
+  trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
+  items: MenuItem[];
+  align?: "left" | "right";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    ref.current?.querySelector<HTMLButtonElement>(".study-menu button:not(:disabled)")?.focus();
+    const down = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setOpen(false); return; }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>(".study-menu button:not(:disabled)") ?? [])];
+      const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const next = event.key === "ArrowDown" ? (at + 1) % buttons.length : (at - 1 + buttons.length) % buttons.length;
+      buttons[next]?.focus();
+    };
+    document.addEventListener("mousedown", down);
+    window.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", down);
+      window.removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      {trigger({ open, toggle: () => setOpen((value) => !value) })}
+      {open && (
+        <div className="study-menu" role="menu" style={{ top: "100%", marginTop: 6, [align]: 0 }}>
+          {items.map((item, index) => item === "divider"
+            ? <hr key={index} />
+            : (
+              <button key={index} type="button" role="menuitem" disabled={item.disabled}
+                className={item.danger ? "danger" : undefined}
+                onClick={() => { setOpen(false); item.action(); }}>
+                {item.icon && <Icon name={item.icon} size={14} />}
+                {item.label}
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // MARK: Le fond
@@ -177,12 +182,12 @@ export function StudyBackground({ tint }: { tint: string }) {
   return (
     <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
       <div style={{
-        position: "absolute", inset: 0, opacity: 0.14,
-        background: `radial-gradient(900px circle at top left, ${tint}, transparent 75%)`,
+        position: "absolute", inset: 0, opacity: 0.22,
+        background: `radial-gradient(1000px circle at 8% 0%, ${tint}, transparent 72%)`,
       }} />
       <div style={{
-        position: "absolute", inset: 0, opacity: 0.06,
-        background: `radial-gradient(700px circle at bottom right, ${tint}, transparent 75%)`,
+        position: "absolute", inset: 0, opacity: 0.1,
+        background: `radial-gradient(800px circle at 100% 100%, ${tint}, transparent 72%)`,
       }} />
     </div>
   );
@@ -316,28 +321,32 @@ export function HoldButton({ title, glyph, hold, onAct, tint }: {
   return (
     <button
       type="button"
+      className="btn hold-btn"
       title={hold > 0 ? `Maintiens ${Math.trunc(hold)} s` : title}
       onMouseDown={begin}
       onMouseUp={stop}
       onMouseLeave={stop}
+      onBlur={stop}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
+          event.preventDefault();
+          begin();
+        }
+      }}
+      onKeyUp={stop}
       onTouchStart={(event) => { event.preventDefault(); begin(); }}
       onTouchEnd={stop}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 7, borderRadius: 999,
-        padding: "8px 18px", fontSize: 14, fontWeight: 600,
-        border: `1px solid ${tint ? `color-mix(in srgb, ${tint} 60%, transparent)` : "var(--rule)"}`,
         background: "var(--sheet-raised)",
-        color: "var(--ink)", position: "relative", overflow: "hidden", userSelect: "none",
+        borderColor: tint ? `color-mix(in srgb, ${tint} 60%, transparent)` : undefined,
+        color: tint ?? undefined,
       }}
     >
       {hold > 0 && progress > 0 && (
-        <span aria-hidden style={{
-          position: "absolute", inset: 0, width: `${progress * 100}%`,
-          background: tint ?? "var(--selection)", opacity: 0.5,
-        }} />
+        <span aria-hidden className="hold-fill" style={{ width: `${progress * 100}%`, background: tint ?? "var(--selection)" }} />
       )}
-      <span aria-hidden><Glyph name={glyph} /></span>
-      <span style={{ position: "relative" }}>{pressing ? "Maintiens…" : title}</span>
+      <Glyph name={glyph} size={15} />
+      <span>{pressing ? "Maintiens…" : title}</span>
     </button>
   );
 }
@@ -376,8 +385,8 @@ export function SubQuestionChecklist({ exercise, tint, onToggle }: {
             color: "var(--ink)",
           }}
         >
-          <span aria-hidden style={{ color: question.isDone ? tint : "var(--ink-tertiary)", lineHeight: 1.4 }}>
-            {question.isDone ? "◉" : "○"}
+          <span aria-hidden style={{ color: question.isDone ? tint : "var(--ink-tertiary)", display: "grid", paddingTop: 2 }}>
+            <Icon name={question.isDone ? "checkmark.circle" : "circle"} size={15} />
           </span>
           <span className="mono" style={{ fontSize: 13, color: "var(--ink-secondary)" }}>{question.path}</span>
           <span style={{ flex: 1, lineHeight: 1.35, color: question.isDone ? "var(--ink-tertiary)" : "var(--ink)" }}>
@@ -396,21 +405,19 @@ export function ExerciseQuickMark({ exercise, onToggleDone, onCorrect }: {
   onCorrect: (exercise: Exercise, result: Correctness | null) => void;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-      <button
-        type="button"
-        onClick={() => onToggleDone(exercise)}
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", maxWidth: 440 }}>
+      <Button
+        size="sm"
+        icon={exercise.isDone ? "checkmark.circle" : "circle"}
         aria-pressed={exercise.isDone}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999,
-          padding: "5px 12px", fontSize: 14, fontWeight: 600, border: "none",
-          background: exercise.isDone ? "color-mix(in srgb, var(--correct) 14%, transparent)" : "var(--sheet-raised)",
-          color: exercise.isDone ? "var(--correct)" : "var(--ink)",
-        }}
+        onClick={() => onToggleDone(exercise)}
+        style={exercise.isDone ? {
+          background: "color-mix(in srgb, var(--correct) 14%, transparent)",
+          borderColor: "transparent", color: "var(--correct)", fontWeight: 600,
+        } : { fontWeight: 600 }}
       >
-        <Glyph name={exercise.isDone ? "checkmark.circle.fill" : "checkmark.circle"} />
         {exercise.isDone ? "Fait" : "Fait ?"}
-      </button>
+      </Button>
       <div style={{ flex: 1 }} />
       {Correctness.allCases.map((result) => {
         const selected = exercise.correctness === result;
@@ -419,12 +426,12 @@ export function ExerciseQuickMark({ exercise, onToggleDone, onCorrect }: {
           <button
             key={result}
             type="button"
+            className="btn btn-sm"
             title={Correctness.label(result)}
             aria-pressed={selected}
             onClick={() => onCorrect(exercise, selected ? null : result)}
             style={{
-              borderRadius: 999, padding: "3px 9px", fontSize: 12, fontWeight: 500,
-              border: "none",
+              borderColor: "transparent", fontWeight: 600,
               background: selected ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
               color: selected ? "var(--ground)" : color,
             }}
@@ -437,13 +444,10 @@ export function ExerciseQuickMark({ exercise, onToggleDone, onCorrect }: {
   );
 }
 
-/** Une carte du bureau : du verre sur le papier de nuit (glassCard). */
+/** Une carte du bureau : du verre sur la lueur du cours (glassCard). */
 export function GlassCard({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <div style={{
-      padding: 16, borderRadius: 20, background: "var(--sheet)", border: "1px solid var(--rule)",
-      ...style,
-    }}>{children}</div>
+    <div className="desk-glass" style={{ padding: 16, borderRadius: 20, ...style }}>{children}</div>
   );
 }
 

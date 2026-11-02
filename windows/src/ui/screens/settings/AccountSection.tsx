@@ -3,7 +3,7 @@
 // l'état réel (base locale, aucun compte) et on ne propose aucun bouton qui
 // ferait semblant de se connecter.
 
-import { Section, Card } from "../../kit.tsx";
+import { Badge, Section, Card } from "../../kit.tsx";
 import { SettingRow } from "./controls.tsx";
 
 const CONNECTIONS: readonly { title: string; purpose: string; status: string }[] = [
@@ -17,14 +17,11 @@ const CONNECTIONS: readonly { title: string; purpose: string; status: string }[]
 
 function ConnectionCard({ title, purpose, status }: { title: string; purpose: string; status: string }) {
   return (
-    <div className="settings-connection">
+    <Card className="settings-connection">
       <h3>{title}</h3>
       <p>{purpose}</p>
-      <span className="settings-status">
-        <span className="settings-status-dot" aria-hidden="true" />
-        {status}
-      </span>
-    </div>
+      <Badge>{status}</Badge>
+    </Card>
   );
 }
 

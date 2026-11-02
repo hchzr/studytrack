@@ -54,13 +54,16 @@ export function useFocusTimer(): FocusTimerApi {
   const { store, save, remove } = useData();
   const snap = useSyncExternalStore(timerController.subscribe, timerController.snapshot);
 
-  // L'horloge d'affichage : un peu plus fine que la seconde, pour qu'elle
-  // change à la seconde et non jusqu'à une seconde en retard.
+  // L'horloge d'affichage : un battement de 250 ms seulement tant qu'un chrono
+  // existe — au repos, aucun minuteur ne tourne (le coût au repos compte).
   const [now, setNow] = useState(() => new Date());
+  const active = snap.state !== null;
   useEffect(() => {
+    setNow(new Date());
+    if (!active) return;
     const id = window.setInterval(() => setNow(new Date()), 250);
     return () => window.clearInterval(id);
-  }, []);
+  }, [active]);
 
   // Les sessions s'écrivent par la source de données de l'app, dès qu'elle existe.
   useEffect(() => {

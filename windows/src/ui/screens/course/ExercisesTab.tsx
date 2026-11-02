@@ -1,36 +1,59 @@
-// Exercices d'un cours (ExercisesTabView.swift + ExerciseStatementView.swift).
+// Exercices d'un cours (ExercisesTabView.swift + ExerciseStatementView.swift ;
+// Mac : la liste de MacCourseView et son inspecteur).
 //
 // Tout le suivi se fait dans la liste : cocher un exercice ou ses questions, puis
 // le corriger d'un toucher — vert, orange, rouge. La fiche à droite sert à lire
 // (énoncé, questions, indication, solution) et à poser la sûreté.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Course } from "../../../models/course.ts";
 import type { Exercise, ExerciseSeries, SubQuestion } from "../../../models/exercise.ts";
 import { ConfidenceLevel, Correctness } from "../../../models/enums.ts";
 import { ExerciseFlow, ExerciseStage } from "../../../domain/exerciseFlow.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { Plural } from "../../../domain/plural.ts";
+import { Button, Card, EmptyState, Icon, IconButton, Section, cx, useContextMenu, type MenuItem } from "../../kit.tsx";
 import {
-  ConfidenceDot, ConfidencePicker, CorrectionDots, EmptyState, LinkChip, MathText,
-  Pill, ProgressRing, StageMark, exerciseLinks, seriesLinks,
+  ConfidenceDot, ConfidencePicker, CorrectionDots, LinkChip, MathText,
+  Pill, ProgressRing, StageMark, exerciseLinks, openURL, seriesLinks, useTimedTarget,
+  type CourseActions,
 } from "./common.tsx";
+import "./course.css";
 
 interface ExercisesTabProps {
   course: Course;
   week: number;
   saveAll: (objects: object[]) => Promise<void>;
+  actions: CourseActions;
 }
 
-export function ExercisesTab({ course, week, saveAll }: ExercisesTabProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function ExercisesTab({ course, week, saveAll, actions, focusID }: ExercisesTabProps & { focusID?: string | null }) {
+  const [selectedId, setSelectedId] = useState<string | null>(focusID ?? null);
   const [toggledSeries, setToggledSeries] = useState<Set<string>>(new Set());
   const [toggledQuestions, setToggledQuestions] = useState<Set<string>>(new Set());
+  const menu = useContextMenu();
+  const timedId = useTimedTarget();
+  const root = useRef<HTMLDivElement>(null);
 
   const series = course.sortedSeries.filter((entry) => week === 0 || entry.plannedWeek === week);
   const selected = selectedId === null
     ? null
     : course.allExercises.find((exercise) => exercise.id === selectedId) ?? null;
+
+  // On arrive sur la semaine en cours, pas sur la série 1.
+  // Ou sur l'exercice demandé (palette, lien d'un autre écran : focusTarget du Mac).
+  useEffect(() => {
+    if (focusID) {
+      root.current?.querySelector(`[data-item="${focusID}"]`)?.scrollIntoView({ block: "center" });
+      return;
+    }
+    if (week !== 0 || course.currentWeek <= 0) return;
+    const current = course.sortedSeries.find((entry) => entry.plannedWeek >= course.currentWeek && entry.exercises.length > 0);
+    if (!current) return;
+    root.current?.querySelector(`[data-series="${current.id}"]`)?.scrollIntoView({ block: "start" });
+    // Une seule fois, à l'ouverture du volet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const persistExercise = (exercise: Exercise) => saveAll([exercise, ...exercise.subQuestions]);
 
@@ -60,59 +83,88 @@ export function ExercisesTab({ course, week, saveAll }: ExercisesTabProps) {
     await saveAll([exercise]);
   };
 
-  const flipSeries = (id: string) => {
-    setToggledSeries((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  const setNote = async (exercise: Exercise, note: string) => {
+    const next = note.trim() === "" ? null : note;
+    if (next === exercise.correctionNote) return;
+    exercise.correctionNote = next;
+    await saveAll([exercise]);
   };
 
-  const flipQuestions = (id: string) => {
-    setToggledQuestions((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  const flip = (set: typeof toggledSeries, update: typeof setToggledSeries, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    update(next);
   };
+
+  /** Le `.contextMenu` d'une ligne d'exercice du Mac. */
+  const exerciseMenu = (exercise: Exercise): MenuItem[] => {
+    const statement = exerciseLinks(exercise.statementURLString, exercise.series)[0];
+    return [
+      { label: exercise.isDone ? "Marquer à faire" : "Marquer comme fait",
+        icon: exercise.isDone ? "arrow.counterclockwise" : "checkmark", action: () => void toggleDone(exercise) },
+      ...Correctness.allCases.map((result): MenuItem => ({
+        label: `Correction : ${Correctness.label(result)}`,
+        icon: exercise.correctness === result ? "checkmark.circle" : "circle",
+        action: () => void correct(exercise, result),
+      })),
+      ...(exercise.correctness !== null
+        ? [{ label: "Retirer la correction", icon: "xmark.circle", action: () => void correct(exercise, null) } as MenuItem]
+        : []),
+      { label: exercise.redoRequired ? "Retirer de « à refaire »" : "À refaire", icon: "repeat",
+        action: () => void toggleRedo(exercise) },
+      "divider",
+      { label: "Chronométrer", icon: "timer", action: () => actions.time(exercise.id, "exercise") },
+      ...(exercise.series
+        ? [{ label: "Modifier la série…", icon: "pencil", action: () => actions.editSeries(exercise.series) } as MenuItem]
+        : []),
+      ...(statement
+        ? [{ label: "Ouvrir l'énoncé", icon: "arrow.up.right.square", action: () => openURL(statement.url) } as MenuItem]
+        : []),
+    ];
+  };
+
+  const seriesMenu = (entry: ExerciseSeries): MenuItem[] => [
+    { label: "Modifier la série…", icon: "pencil", action: () => actions.editSeries(entry) },
+    { label: "Nouvelle série…", icon: "plus", action: () => actions.editSeries(null) },
+  ];
 
   if (course.series.length === 0) {
-    return <EmptyState title="Aucune série" message="Depuis Moodle, ou le PDF d'une série." />;
+    return (
+      <EmptyState icon="doc.text" title="Aucune série"
+        action={<Button icon="plus" onClick={() => actions.editSeries(null)}>Nouvelle série</Button>}>
+        Ajoute une série à la main, ou importe-la depuis Moodle.
+      </EmptyState>
+    );
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) 370px" : "minmax(0, 1fr)", gap: 18, alignItems: "start" }}>
+    <div className={cx("cs-split", selected && "has-aside")} ref={root}>
       <div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
-          <h2 style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6,
-            color: "var(--ink-tertiary)", margin: 0 }}>
-            Séries
-          </h2>
-          <span className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>{series.length}</span>
-        </div>
-
-        {series.length === 0 ? (
-          <EmptyState title="Pas de série" message={`Rien en semaine ${week}.`} />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {series.map((entry) => (
+        <Section title={`Séries · ${series.length}`}>
+          {series.length === 0 ? (
+            <EmptyState icon="doc.text" title="Pas de série">{`Rien en semaine ${week}.`}</EmptyState>
+          ) : (
+            series.map((entry) => (
               <SeriesCard
                 key={entry.id}
                 series={entry}
                 collapsed={isCollapsed(entry, toggledSeries)}
-                onToggleCollapse={() => flipSeries(entry.id)}
+                onToggleCollapse={() => flip(toggledSeries, setToggledSeries, entry.id)}
+                onMenu={(event) => menu.open(seriesMenu(entry))(event)}
+                onMenuAt={(x, y) => menu.openAt(x, y, seriesMenu(entry))}
                 selectedId={selectedId}
+                timedId={timedId}
                 showsQuestions={(exercise) => showsQuestions(exercise, toggledQuestions)}
-                onToggleQuestions={(exercise) => flipQuestions(exercise.id)}
+                onToggleQuestions={(exercise) => flip(toggledQuestions, setToggledQuestions, exercise.id)}
                 onToggleDone={(exercise) => void toggleDone(exercise)}
                 onCorrect={(exercise, result) => void correct(exercise, result)}
                 onToggleQuestion={(exercise, question) => void toggleQuestion(exercise, question)}
                 onSelect={(exercise) => setSelectedId(exercise.id)}
+                onExerciseMenu={(exercise) => menu.open(exerciseMenu(exercise))}
               />
-            ))}
-          </div>
-        )}
-
+            ))
+          )}
+        </Section>
         <Legend />
       </div>
 
@@ -120,14 +172,18 @@ export function ExercisesTab({ course, week, saveAll }: ExercisesTabProps) {
         <ExerciseDetail
           key={selected.id}
           exercise={selected}
+          timed={timedId === selected.id}
           onClose={() => setSelectedId(null)}
+          onTime={() => actions.time(selected.id, "exercise")}
           onToggleDone={() => void toggleDone(selected)}
           onCorrect={(result) => void correct(selected, result)}
           onToggleQuestion={(question) => void toggleQuestion(selected, question)}
           onConfidence={(value) => void setConfidence(selected, value)}
           onToggleRedo={() => void toggleRedo(selected)}
+          onNote={(note) => void setNote(selected, note)}
         />
       )}
+      {menu.element}
     </div>
   );
 }
@@ -145,104 +201,108 @@ function showsQuestions(exercise: Exercise, toggled: Set<string>): boolean {
 
 // MARK: - Série
 
-function SeriesCard({ series, collapsed, onToggleCollapse, selectedId, showsQuestions: showQuestions, onToggleQuestions, onToggleDone, onCorrect, onToggleQuestion, onSelect }: {
+function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, selectedId, timedId, showsQuestions: showQuestions, onToggleQuestions, onToggleDone, onCorrect, onToggleQuestion, onSelect, onExerciseMenu }: {
   series: ExerciseSeries;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onMenu: (event: React.MouseEvent) => void;
+  onMenuAt: (x: number, y: number) => void;
   selectedId: string | null;
+  timedId: string | undefined;
   showsQuestions: (exercise: Exercise) => boolean;
   onToggleQuestions: (exercise: Exercise) => void;
   onToggleDone: (exercise: Exercise) => void;
   onCorrect: (exercise: Exercise, result: Correctness | null) => void;
   onToggleQuestion: (exercise: Exercise, question: SubQuestion) => void;
   onSelect: (exercise: Exercise) => void;
+  onExerciseMenu: (exercise: Exercise) => (event: React.MouseEvent) => void;
 }) {
   const links = seriesLinks(series);
   const required = series.requiredExercises;
   const spent = ExerciseFlow.seconds(series);
+  const title = series.title === "" ? `Série ${series.seriesNumber}` : series.title;
 
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      <button
-        type="button"
-        onClick={onToggleCollapse}
-        style={{
-          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-          border: "none", background: "transparent", padding: "10px 12px",
-        }}
-      >
-        {series.isComplete ? (
-          <span style={{
-            width: 28, height: 28, borderRadius: "50%", background: "var(--correct)", color: "var(--sheet)",
-            display: "grid", placeItems: "center", fontSize: 14, fontWeight: 700, flexShrink: 0,
-          }}>✓</span>
-        ) : (
-          <ProgressRing value={series.progress} tint="var(--selection)" size={28} lineWidth={4} />
-        )}
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: "block", fontWeight: 600 }}>{series.title}</span>
-          <span style={{ display: "block", fontSize: 12, color: "var(--ink-secondary)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {seriesSubtitle(series, spent)}
+    <Card className="cs-series" flat>
+      <div className="cs-series-head" data-series={series.id} onContextMenu={onMenu}>
+        <button type="button" className="cs-series-main" onClick={onToggleCollapse}
+          aria-expanded={!collapsed} aria-label={`${title}, ${collapsed ? "déplier" : "replier"}`}>
+          {series.isComplete ? (
+            <span className="cs-seal"><Icon name="checkmark" size={16} strokeWidth={3} /></span>
+          ) : (
+            <ProgressRing value={series.progress} tint="var(--course)" size={28} lineWidth={4} />
+          )}
+          <span className="cs-series-text">
+            <span className="cs-series-title">{title}</span>
+            <SeriesSubtitle series={series} spent={spent} />
           </span>
-        </span>
-        <span className="mono" style={{ fontSize: 13, color: "var(--ink-secondary)", fontWeight: 600 }}>
-          {series.doneCount}/{required.length}
-        </span>
-        <span aria-hidden style={{ color: "var(--ink-tertiary)", fontSize: 11 }}>{collapsed ? "▾" : "▴"}</span>
-      </button>
+          <span className={cx("cs-count", series.isComplete && "done")}>{series.doneCount}/{required.length}</span>
+          <Icon name={collapsed ? "chevron.down" : "chevron.up"} size={14} className="cs-chev" style={{ marginTop: 0 }} />
+        </button>
+        <IconButton icon="ellipsis" label="Actions de la série" size="sm"
+          onClick={(event) => { const r = event.currentTarget.getBoundingClientRect(); onMenuAt(r.right - 190, r.bottom + 4); }} />
+      </div>
 
       {!collapsed && (
-        <div style={{ borderTop: "1px solid var(--rule)", padding: "8px 12px 12px" }}>
+        <div className="cs-series-body">
           {links.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            <div className="cs-links">
               {links.map((link) => <LinkChip key={link.url} link={link} />)}
             </div>
           )}
 
           {series.sortedExercises.length === 0 ? (
-            <div style={{ color: "var(--ink-secondary)", fontSize: 13, padding: "8px 2px" }}>
+            <div className="muted" style={{ fontSize: 13, padding: "8px 2px" }}>
               Exercices pas encore lus
             </div>
           ) : (
-            <div>
-              {series.sortedExercises.map((exercise) => (
-                <div key={exercise.id} style={{ borderTop: "1px solid var(--rule)" }}>
-                  <ExerciseRow
-                    exercise={exercise}
-                    selected={selectedId === exercise.id}
-                    showsQuestions={showQuestions(exercise)}
-                    onToggleDone={() => onToggleDone(exercise)}
-                    onCorrect={(result) => onCorrect(exercise, result)}
-                    onToggleQuestions={() => onToggleQuestions(exercise)}
-                    onToggleQuestion={(question) => onToggleQuestion(exercise, question)}
-                    onSelect={() => onSelect(exercise)}
-                  />
-                </div>
-              ))}
-            </div>
+            series.sortedExercises.map((exercise) => (
+              <div key={exercise.id} className="cs-ex">
+                <ExerciseRow
+                  exercise={exercise}
+                  selected={selectedId === exercise.id}
+                  timed={timedId === exercise.id}
+                  showsQuestions={showQuestions(exercise)}
+                  onContextMenu={onExerciseMenu(exercise)}
+                  onToggleDone={() => onToggleDone(exercise)}
+                  onCorrect={(result) => onCorrect(exercise, result)}
+                  onToggleQuestions={() => onToggleQuestions(exercise)}
+                  onToggleQuestion={(question) => onToggleQuestion(exercise, question)}
+                  onSelect={() => onSelect(exercise)}
+                />
+              </div>
+            ))
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
-function seriesSubtitle(series: ExerciseSeries, spent: number): string {
-  const parts: string[] = [series.plannedWeek > 0 ? `Semaine ${series.plannedWeek}` : "Sans semaine"];
+function SeriesSubtitle({ series, spent }: { series: ExerciseSeries; spent: number }) {
+  const overdue = series.dueDate !== null && series.dueDate.getTime() < Date.now() && !series.isComplete;
+  const parts: React.ReactNode[] = [series.plannedWeek > 0 ? `Semaine ${series.plannedWeek}` : "Sans semaine"];
   if (series.exercises.length === 0) parts.push("exercices à importer");
-  if (series.dueDate) parts.push(`à rendre le ${DateUtils.shortDay(series.dueDate)}`);
+  if (series.dueDate) {
+    parts.push(<span key="due" className={overdue ? "late" : undefined}>à rendre le {DateUtils.shortDay(series.dueDate)}</span>);
+  }
   if (series.bonusExercises.length > 0) parts.push(`${series.bonusExercises.length} bonus`);
   if (spent >= 60) parts.push(DateUtils.hoursLabel(spent));
-  return parts.join(" · ");
+  return (
+    <span className="cs-series-sub">
+      {parts.map((part, index) => <span key={index}>{index > 0 ? " · " : ""}{part}</span>)}
+    </span>
+  );
 }
 
 // MARK: - Ligne d'exercice
 
-function ExerciseRow({ exercise, selected, showsQuestions: show, onToggleDone, onCorrect, onToggleQuestions, onToggleQuestion, onSelect }: {
+function ExerciseRow({ exercise, selected, timed, showsQuestions: show, onContextMenu, onToggleDone, onCorrect, onToggleQuestions, onToggleQuestion, onSelect }: {
   exercise: Exercise;
   selected: boolean;
+  timed: boolean;
   showsQuestions: boolean;
+  onContextMenu: (event: React.MouseEvent) => void;
   onToggleDone: () => void;
   onCorrect: (result: Correctness | null) => void;
   onToggleQuestions: () => void;
@@ -255,72 +315,52 @@ function ExerciseRow({ exercise, selected, showsQuestions: show, onToggleDone, o
   const correctionShown = exercise.isDone || exercise.isCorrected;
 
   return (
-    <div style={{ background: selected ? "var(--sheet-raised)" : "transparent", borderRadius: 8, padding: "7px 2px" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
+    <div onContextMenu={onContextMenu} data-item={exercise.id}>
+      <div className={cx("cs-ex-row", selected && "selected")}>
         <button
           type="button"
+          className="cs-hit"
           onClick={(event) => { event.stopPropagation(); onToggleDone(); }}
+          title={exercise.isDone ? "Marquer à faire" : "Marquer comme fait"}
           aria-label={exercise.isDone ? `Marquer ${exercise.displayNumber} à faire` : `Marquer ${exercise.displayNumber} fait`}
           aria-pressed={exercise.isDone}
-          style={{ border: "none", background: "none", padding: 2, flexShrink: 0 }}
         >
           <StageMark stage={stage} size={24} />
         </button>
 
-        <button
-          type="button"
-          onClick={onSelect}
-          style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "none", padding: 0 }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-            <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{exercise.exerciseNumber}</span>
-            {exercise.isBonus && <Pill color="var(--ink-secondary)" icon="★">bonus</Pill>}
-            {exercise.redoRequired && <Pill color="var(--wrong)" icon="↺">à refaire</Pill>}
+        <button type="button" className="cs-pick" onClick={onSelect} aria-current={selected || undefined}>
+          <span className="cs-meta">
+            <span className="cs-num">{exercise.exerciseNumber}</span>
+            {exercise.isBonus && <Pill icon="star">bonus</Pill>}
+            {exercise.redoRequired && <Pill color="var(--wrong)" icon="arrow.counterclockwise">à refaire</Pill>}
             {exercise.confidence && <ConfidenceDot level={exercise.confidence} />}
-            {exercise.subQuestionLabel && (
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-secondary)" }}>{exercise.subQuestionLabel}</span>
-            )}
-            {seconds >= 60 && (
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>{DateUtils.durationLabel(seconds)}</span>
-            )}
-          </div>
+            {exercise.subQuestionLabel && <span className="cs-small">{exercise.subQuestionLabel}</span>}
+            {seconds >= 60 && <span className="cs-small faint">{DateUtils.durationLabel(seconds)}</span>}
+            {timed && <Icon name="timer" size={13} className="muted" label="Chrono en cours" />}
+          </span>
           {summary !== "" && (
-            <div style={{
-              color: "var(--ink-secondary)", fontSize: 13, marginTop: 2,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              <MathText text={summary} />
-            </div>
+            <span className="cs-ellipsis"><MathText text={summary} /></span>
           )}
         </button>
 
         {correctionShown && <CorrectionDots value={exercise.correctness} onChange={onCorrect} />}
-        <span aria-hidden style={{ color: "var(--ink-tertiary)", fontSize: 11, paddingTop: 2 }}>›</span>
+        <Icon name="chevron.right" size={14} className="cs-chev" />
       </div>
 
       {exercise.hasSubQuestions && (
-        <div style={{ marginLeft: 34 }}>
-          {show && (
-            <div>
-              {exercise.sortedSubQuestions.map((question) => (
-                <div key={question.id}>
-                  <SubQuestionRow question={question} onToggle={() => onToggleQuestion(question)} />
-                  {question.sortedChildren.map((child) => (
-                    <SubQuestionRow key={child.id} question={child} onToggle={() => onToggleQuestion(child)} />
-                  ))}
-                </div>
+        <div className="cs-subs">
+          {show && exercise.sortedSubQuestions.map((question) => (
+            <div key={question.id}>
+              <SubQuestionRow question={question} onToggle={() => onToggleQuestion(question)} />
+              {question.sortedChildren.map((child) => (
+                <SubQuestionRow key={child.id} question={child} onToggle={() => onToggleQuestion(child)} />
               ))}
             </div>
-          )}
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onToggleQuestions(); }}
-            style={{
-              border: "none", background: "none", color: "var(--ink-secondary)", fontSize: 11,
-              padding: "3px 0", display: "flex", alignItems: "center", gap: 4,
-            }}
-          >
-            {show ? "▴ Replier" : `▾ ${exercise.subQuestionDoneCount}/${exercise.leafSubQuestions.length} questions`}
+          ))}
+          <button type="button" className="cs-fold" aria-expanded={show}
+            onClick={(event) => { event.stopPropagation(); onToggleQuestions(); }}>
+            <Icon name={show ? "chevron.up" : "chevron.down"} size={12} />
+            {show ? "Replier" : `${exercise.subQuestionDoneCount}/${exercise.leafSubQuestions.length} questions`}
           </button>
         </div>
       )}
@@ -333,24 +373,13 @@ function SubQuestionRow({ question, onToggle }: { question: SubQuestion; onToggl
   return (
     <button
       type="button"
+      className={cx("cs-sub-row", question.isDone && "done", question.parent && "child")}
+      aria-pressed={question.isDone}
       onClick={(event) => { event.stopPropagation(); onToggle(); }}
-      style={{
-        display: "flex", alignItems: "flex-start", gap: 7, width: "100%", textAlign: "left",
-        border: "none", background: "transparent", padding: question.parent ? "3px 0 3px 24px" : "4px 0",
-      }}
     >
-      <span aria-hidden style={{
-        color: question.isDone ? "var(--correct)" : "var(--ink-tertiary)",
-        fontSize: question.parent ? 12 : 14, lineHeight: 1.3,
-      }}>
-        {question.isDone ? "●" : "○"}
-      </span>
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)" }}>{label}</span>
-      {question.text !== "" && (
-        <span style={{ fontSize: 12, color: question.isDone ? "var(--ink-tertiary)" : "var(--ink-secondary)", flex: 1 }}>
-          <MathText text={question.text} />
-        </span>
-      )}
+      <Icon name={question.isDone ? "checkmark.circle" : "circle"} size={question.parent ? 13 : 15} className="mark" />
+      <b>{label}</b>
+      {question.text !== "" && <span className="text"><MathText text={question.text} /></span>}
     </button>
   );
 }
@@ -366,61 +395,63 @@ function subQuestionLabel(question: SubQuestion): string {
 
 // MARK: - Fiche d'un exercice
 
-function ExerciseDetail({ exercise, onClose, onToggleDone, onCorrect, onToggleQuestion, onConfidence, onToggleRedo }: {
+function ExerciseDetail({ exercise, timed, onClose, onTime, onToggleDone, onCorrect, onToggleQuestion, onConfidence, onToggleRedo, onNote }: {
   exercise: Exercise;
+  timed: boolean;
   onClose: () => void;
+  onTime: () => void;
   onToggleDone: () => void;
   onCorrect: (result: Correctness | null) => void;
   onToggleQuestion: (question: SubQuestion) => void;
   onConfidence: (value: ConfidenceLevel | null) => void;
   onToggleRedo: () => void;
+  onNote: (note: string) => void;
 }) {
   const links = exerciseLinks(exercise.statementURLString, exercise.series);
   const solutionVisible = exercise.series?.solutionsAt
     ? exercise.series.solutionsAt.getTime() <= Date.now()
     : true;
+  const [note, setNote] = useState(exercise.correctionNote ?? "");
 
   return (
-    <aside className="card" style={{ position: "sticky", top: 0, padding: 16, maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700, color: "var(--ink-secondary)" }}>
-          {exercise.displayNumber}{exercise.series ? ` · ${exercise.series.title}` : ""}
+    <Card className="cs-aside" flat>
+      <div className="cs-aside-head">
+        <span className="cs-kicker">
+          {exercise.displayNumber}{exercise.series ? ` · ${exercise.series.title === "" ? `Série ${exercise.series.seriesNumber}` : exercise.series.title}` : ""}
         </span>
-        <span style={{ flex: 1 }} />
-        <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: "none", background: "none", color: "var(--ink-secondary)", fontSize: 16 }}>✕</button>
+        <span className="spacer" />
+        <IconButton icon="xmark" label="Fermer" size="sm" onClick={onClose} />
       </div>
-      <h3 className="serif" style={{ margin: "6px 0", fontSize: 19 }}>
-        {exercise.title === "" ? exercise.displayNumber : exercise.title}
-      </h3>
+      <h3 className="serif">{exercise.title === "" ? exercise.displayNumber : exercise.title}</h3>
 
       {exercise.statement !== "" ? (
-        <p className="serif" style={{ margin: "8px 0 12px", whiteSpace: "pre-wrap", lineHeight: 1.55, fontSize: 14 }}>
-          <MathText text={exercise.statement} />
-        </p>
+        <p className="serif cs-statement"><MathText text={exercise.statement} /></p>
       ) : (
-        <p style={{ color: "var(--ink-secondary)", fontSize: 13, margin: "8px 0 12px" }}>
-          Pas d'énoncé lisible ici pour cet exercice.
-        </p>
+        <p className="cs-note">Pas d'énoncé lisible ici pour cet exercice.</p>
       )}
 
       {links.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+        <div className="cs-links" style={{ margin: 0 }}>
           {links.map((link) => <LinkChip key={link.url} link={link} />)}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        <button type="button" onClick={onToggleDone} style={buttonStyle}>
-          {exercise.isDone ? "↺ Marquer à faire" : "✓ Marquer comme fait"}
-        </button>
-        <button type="button" onClick={onToggleRedo} style={buttonStyle}>
-          {exercise.redoRequired ? "✓ Retirer de « à refaire »" : "↺ À refaire"}
-        </button>
+      <div className="cs-actions">
+        <Button size="sm" variant={exercise.isDone ? "default" : "primary"}
+          icon={exercise.isDone ? "arrow.counterclockwise" : "checkmark"} onClick={onToggleDone}>
+          {exercise.isDone ? "Marquer à faire" : "Marquer comme fait"}
+        </Button>
+        <Button size="sm" icon="repeat" aria-pressed={exercise.redoRequired} onClick={onToggleRedo}>
+          {exercise.redoRequired ? "Retirer de « à refaire »" : "À refaire"}
+        </Button>
+        <Button size="sm" icon="timer" onClick={onTime} disabled={timed}>
+          {timed ? "Chrono en cours" : "Chronométrer"}
+        </Button>
       </div>
 
       {exercise.hasSubQuestions && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>Questions · {exercise.subQuestionLabel ?? ""}</div>
+        <div className="cs-block">
+          <div className="cs-label">Questions · {exercise.subQuestionLabel ?? ""}</div>
           {exercise.sortedSubQuestions.map((question) => (
             <div key={question.id}>
               <SubQuestionRow question={question} onToggle={() => onToggleQuestion(question)} />
@@ -432,60 +463,62 @@ function ExerciseDetail({ exercise, onClose, onToggleDone, onCorrect, onToggleQu
         </div>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <div style={labelStyle}>Correction</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="cs-block">
+        <div className="cs-label">Correction</div>
+        <div className="hstack">
           <CorrectionDots value={exercise.correctness} onChange={onCorrect} size={24} />
-          <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
+          <span className="muted small">
             {exercise.correctness ? Correctness.label(exercise.correctness) : "Pas encore corrigé"}
           </span>
         </div>
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <div style={labelStyle}>Sûreté</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="cs-block">
+        <div className="cs-label">Sûreté</div>
+        <div className="hstack">
           <ConfidencePicker value={exercise.confidence} onChange={onConfidence} size={24} />
-          <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
+          <span className="muted small">
             {exercise.confidence ? ConfidenceLevel.label(exercise.confidence) : "Non renseignée"}
           </span>
         </div>
       </div>
 
-      {exercise.correctionNote !== null && exercise.correctionNote !== "" && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={labelStyle}>Remarque</div>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)" }}>{exercise.correctionNote}</p>
-        </div>
-      )}
+      <div className="cs-block">
+        <label className="cs-label" htmlFor={`note-${exercise.id}`}>Remarque</label>
+        <textarea id={`note-${exercise.id}`} className="field" rows={2} value={note} placeholder="Une erreur à retenir…"
+          onChange={(event) => setNote(event.target.value)} onBlur={() => onNote(note)} />
+      </div>
 
       {exercise.hint !== "" && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={labelStyle}>Indication</div>
-          <p style={{ margin: 0, fontSize: 13 }}>{exercise.hint}</p>
+        <div className="cs-block">
+          <div className="cs-label">Indication</div>
+          <p className="cs-note" style={{ color: "var(--ink)" }}>{exercise.hint}</p>
         </div>
       )}
 
       {exercise.solution !== "" && solutionVisible && (
-        <details style={{ marginBottom: 12 }}>
-          <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--ink-secondary)" }}>Afficher la solution</summary>
-          <p style={{ margin: "6px 0 0", fontSize: 13, whiteSpace: "pre-wrap" }}>{exercise.solution}</p>
+        <details className="cs-details">
+          <summary>Afficher la solution</summary>
+          <p>{exercise.solution}</p>
         </details>
       )}
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, borderTop: "1px solid var(--rule)", paddingTop: 10 }}>
-        <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>Temps passé</span>
-        <span className="mono" style={{ fontSize: 13 }}>{DateUtils.hoursLabel(ExerciseFlow.seconds(exercise))}</span>
+      <div className="cs-foot">
+        <span>Temps passé</span>
+        <span className="mono" style={{ color: "var(--ink)", fontSize: 13 }}>{DateUtils.hoursLabel(ExerciseFlow.seconds(exercise))}</span>
+        {exercise.series && exercise.series.exercises.length > 0 && (
+          <>
+            <span className="spacer" />
+            <span className="faint">
+              {Plural.count(exercise.series.requiredExercises.length,
+                `${exercise.series.requiredExercises.length} exercice requis`,
+                `${exercise.series.requiredExercises.length} exercices requis`)}
+              {exercise.series.topic !== "" ? ` · ${exercise.series.topic}` : ""}
+            </span>
+          </>
+        )}
       </div>
-      {exercise.series && exercise.series.exercises.length > 0 && (
-        <div style={{ fontSize: 11, color: "var(--ink-tertiary)", marginTop: 4 }}>
-          {Plural.count(exercise.series.requiredExercises.length,
-            `${exercise.series.requiredExercises.length} exercice requis`,
-            `${exercise.series.requiredExercises.length} exercices requis`)}
-          {exercise.series.topic !== "" ? ` · ${exercise.series.topic}` : ""}
-        </div>
-      )}
-    </aside>
+    </Card>
   );
 }
 
@@ -501,9 +534,9 @@ function Legend() {
     { label: "faux", stage: { kind: "corrected", correctness: "wrong" } },
   ];
   return (
-    <div aria-hidden style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 14, padding: "0 2px" }}>
+    <div aria-hidden className="cs-legend">
       {items.map((item) => (
-        <span key={item.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-secondary)" }}>
+        <span key={item.label}>
           <StageMark stage={item.stage} size={14} />
           {item.label}
         </span>
@@ -511,20 +544,3 @@ function Legend() {
     </div>
   );
 }
-
-const buttonStyle = {
-  border: "1px solid var(--rule)",
-  background: "var(--sheet-raised)",
-  color: "var(--ink)",
-  borderRadius: 999,
-  padding: "5px 11px",
-  fontSize: 12,
-} as const;
-
-const labelStyle = {
-  fontSize: 10,
-  textTransform: "uppercase",
-  letterSpacing: 0.7,
-  color: "var(--ink-tertiary)",
-  marginBottom: 6,
-} as const;

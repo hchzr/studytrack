@@ -2,9 +2,8 @@
 // session — sur quoi, la suite, le temps par exercice, le récapitulatif.
 //
 // Portée de `MacFocusView` : le cadran, les trois gestes, le choix du cours et
-// du travail, le cycle Pomodoro, le récapitulatif et l'objectif du jour. Le mode
-// étude du Mac (fenêtre verrouillée, sites filtrés) n'est pas ici : il n'a pas
-// d'équivalent Windows dans cette app.
+// du travail, le cycle Pomodoro, le récapitulatif et l'objectif du jour ; le
+// mode étude s'ouvre par `onEnterStudyMode` (le bureau immersif a son écran).
 
 import { useMemo } from "react";
 import { useData } from "../../data/dataContext.tsx";
@@ -12,7 +11,10 @@ import { Course, StudySession } from "../../models/index.ts";
 import { DateUtils } from "../../domain/dateUtils.ts";
 import { StudyGoal } from "../../domain/studyGoal.ts";
 import { StudyMode } from "../../domain/studyMode.ts";
-import { PageHeader } from "../kit.tsx";
+import { PageHeader, Button, Card, Icon, Section } from "../kit.tsx";
+import { timerController } from "../timerController.ts";
+import { SessionRow } from "./home/todayParts.tsx";
+import "./focus/focus.css";
 import { FocusDial, FocusControls, PomodoroDots } from "./focus/FocusDial.tsx";
 import {
   FocusGoalBar,
@@ -83,19 +85,19 @@ export function FocusScreen({ onEnterStudyMode }: { onEnterStudyMode?: () => voi
   // L'objectif du jour compte la session en cours, à la minute (TodayStudyText).
   const liveSeconds = savedSeconds + (timer.state ? Math.trunc(timer.elapsedNow) : 0);
 
+  // Les sessions d'aujourd'hui, la plus récente d'abord (rappel au repos).
+  const todaySessions = useMemo(
+    () => sessions
+      .filter((session) => session.startedAt.getTime() >= dayStart.getTime())
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
+    [sessions, dayStart.getTime()],
+  );
+
   return (
     <>
       <PageHeader title="Chrono" />
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-        gap: 32,
-        alignItems: "start",
-        justifyItems: "center",
-        maxWidth: 920,
-        margin: "0 auto",
-      }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, width: "100%" }}>
+      <div className="f-page">
+        <div className="f-dial-col">
           {timer.state?.groupSession && <TogetherLabel name={timer.state.groupSession.groupName} />}
           <FocusDial
             status={status}
@@ -110,35 +112,19 @@ export function FocusScreen({ onEnterStudyMode }: { onEnterStudyMode?: () => voi
           <FocusControls
             phase={timer.phase}
             hasSession={timer.state !== null}
+            locked={timer.state !== null && timerController.isLocked}
             tint={tint}
             onToggle={timer.toggle}
             onSkipBreak={timer.skipBreak}
             onFinish={() => { void timer.finish(); }}
             onDiscard={timer.discard}
           />
-          <div style={{ width: "100%", maxWidth: 380 }}>
+          <div className="f-goal">
             <FocusGoalBar seconds={liveSeconds} goal={goal} />
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", maxWidth: 560 }}>
-          {onEnterStudyMode && (timer.state
-            ? (StudyMode.isActive(timer.state, timer.now) ? (
-              // En session de mode étude : ce qui reste, et la porte du bureau.
-              <StudyModeCard
-                title={StudyMode.isOpenEnded(timer.state)
-                  ? "Mode étude · sans fin"
-                  : `Mode étude · reste ${minutesLabel(StudyMode.remaining(timer.state, timer.now))}`}
-                button="Ouvrir"
-                locked
-                onOpen={onEnterStudyMode}
-              />
-            ) : (
-              <StudyModeCard button={timer.phase.type === "idle" ? "Entrer…" : "Verrouiller…"} onOpen={onEnterStudyMode} />
-            ))
-            : (
-              <StudyModeCard button="Entrer…" onOpen={onEnterStudyMode} />
-            ))}
+        <div className="f-cards">
           {!timer.state && timer.recap && (
             <FocusRecapCard
               recap={timer.recap}
@@ -148,8 +134,28 @@ export function FocusScreen({ onEnterStudyMode }: { onEnterStudyMode?: () => voi
             />
           )}
           {!timer.state && <FocusSetupCard api={timer} courses={courses} />}
+          {onEnterStudyMode && (timer.state && StudyMode.isActive(timer.state, timer.now) ? (
+            // En session de mode étude : ce qui reste, et la porte du bureau.
+            <StudyModeCard
+              title={StudyMode.isOpenEnded(timer.state)
+                ? "Mode étude · sans fin"
+                : `Mode étude · reste ${minutesLabel(StudyMode.remaining(timer.state, timer.now))}`}
+              button="Ouvrir"
+              locked
+              onOpen={onEnterStudyMode}
+            />
+          ) : (
+            <StudyModeCard button={timer.phase.type === "idle" ? "Entrer…" : "Verrouiller…"} onOpen={onEnterStudyMode} />
+          ))}
           {timer.state && <FocusSessionCard api={timer} courses={courses} />}
           {timer.state && <FocusSegmentsCard api={timer} courses={courses} />}
+          {!timer.state && todaySessions.length > 0 && (
+            <Section title="Sessions du jour" style={{ marginBottom: 0 }}>
+              <Card className="t-list">
+                {todaySessions.slice(0, 5).map((session) => <SessionRow key={session.id} session={session} />)}
+              </Card>
+            </Section>
+          )}
         </div>
       </div>
     </>
@@ -173,19 +179,13 @@ function minutesLabel(seconds: number): string {
 function StudyModeCard({ title, button, locked, onOpen }:
   { title?: string; button: string; locked?: boolean; onOpen: () => void }) {
   return (
-    <div className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: 14 }}>
-      <span aria-hidden style={{
-        width: 40, height: 40, flexShrink: 0, borderRadius: 12, display: "grid", placeItems: "center",
-        background: "var(--sheet-raised)", fontSize: 18,
-      }}>{locked ? "🔒" : "🌙"}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="serif" style={{ fontSize: 16 }}>{title ?? "Mode étude"}</div>
-        {!title && <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>Seulement tes outils de cours.</div>}
+    <Card className="f-study">
+      <span className="f-study-icon"><Icon name={locked ? "lock" : "moon"} size={20} /></span>
+      <div className="f-study-body">
+        <div className="serif f-study-title">{title ?? "Mode étude"}</div>
+        {!title && <div className="t-sub">Seulement tes outils de cours.</div>}
       </div>
-      <button onClick={onOpen} style={{
-        border: "none", borderRadius: 9, padding: "7px 14px",
-        background: "var(--ink)", color: "var(--ground)", fontWeight: 600,
-      }}>{button}</button>
-    </div>
+      <Button variant="primary" onClick={onOpen}>{button}</Button>
+    </Card>
   );
 }

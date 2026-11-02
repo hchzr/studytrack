@@ -10,6 +10,7 @@ import { timerController } from "../timerController.ts";
 import { StudySetup, type SetupScreen } from "./StudySetup.tsx";
 import { StudyWorkspace } from "./StudyWorkspace.tsx";
 import { LectureDoneView, StudyDoneView } from "./doneViews.tsx";
+import "./studymode.css";
 import { StudyBackground, tintOfCourse } from "./parts.tsx";
 import { readStudyLocks, studyPalette, writeStudyLocks } from "./studyPalette.ts";
 import { useStudyTimer } from "./useStudyTimer.ts";
@@ -82,7 +83,7 @@ export function StudyModeView({ onExit, initialCourseID }: { onExit?: () => void
   const lectureFollowed = timer.taskType === "lecture";
 
   return (
-    <div style={{
+    <div className="study-root" style={{
       position: "fixed", inset: 0, zIndex: 100, ...studyPalette,
       background: "var(--ground)", color: "var(--ink)", overflow: "hidden",
     }}>
@@ -119,7 +120,6 @@ export function StudyModeView({ onExit, initialCourseID }: { onExit?: () => void
           )
         )}
       </div>
-      <style>{`@keyframes study-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { elapsed } from "../../domain/focusTimerState.ts";
 import { FocusTargets } from "../../domain/focusTargets.ts";
 import type { StudyTimerApi } from "./useStudyTimer.ts";
 import { timerController } from "../timerController.ts";
+import { Icon } from "../kit.tsx";
 import { Glyph, InkButton, PaperButton } from "./parts.tsx";
 /** La fin d'un mode étude : prolonger, continuer sans le plein écran, terminer. */
 export function StudyDoneView({ timer }: { timer: StudyTimerApi }) {
@@ -18,21 +19,21 @@ export function StudyDoneView({ timer }: { timer: StudyTimerApi }) {
       alignItems: "center", justifyContent: "center", gap: 22, padding: 60, textAlign: "center",
     }}>
       <span aria-hidden style={{
-        display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%",
-        border: "1.5px solid var(--correct)", color: "var(--correct)", fontSize: 26, fontWeight: 300,
-      }}>✓</span>
+        display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%",
+        border: "1.5px solid var(--correct)", color: "var(--correct)",
+      }}><Icon name="checkmark" size={28} strokeWidth={1.5} /></span>
       <h1 className="serif" style={{ fontSize: 60, margin: 0, color: "var(--ink)" }}>C'est fait.</h1>
       <p style={{ margin: 0, fontSize: 20, color: "var(--ink-secondary)" }}>
         {DateUtils.durationLabel(work)} de travail.
       </p>
       <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", justifyContent: "center" }}>
-        <PaperButton onClick={() => timerController.leaveStudy()}>Continuer sans</PaperButton>
-        <PaperButton onClick={() => timerController.extendStudy(25)}>
+        <PaperButton large onClick={() => timerController.leaveStudy()}>Continuer sans</PaperButton>
+        <PaperButton large onClick={() => timerController.extendStudy(25)}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Glyph name="plus" /> Encore 25 min
           </span>
         </PaperButton>
-        <InkButton onClick={() => { void timerController.finish(); }}>
+        <InkButton large onClick={() => { void timerController.finish(); }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Glyph name="checkmark" /> Terminer
           </span>
@@ -65,25 +66,25 @@ export function LectureDoneView({ course, onOpenExercise }: {
       alignItems: "center", justifyContent: "center", gap: 20, padding: 60, textAlign: "center",
     }}>
       <span aria-hidden style={{
-        display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%",
-        border: "1.5px solid var(--correct)", color: "var(--correct)", fontSize: 26, fontWeight: 300,
-      }}>✓</span>
+        display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%",
+        border: "1.5px solid var(--correct)", color: "var(--correct)",
+      }}><Icon name="checkmark" size={28} strokeWidth={1.5} /></span>
       <h1 className="serif" style={{ fontSize: 56, margin: 0, color: "var(--ink)" }}>Le cours est fini.</h1>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4, alignItems: "center" }}>
         {hasSeries && (
-          <InkButton onClick={startSeries}>
+          <InkButton large onClick={startSeries}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               <Glyph name="doc.text" /> Enchaîner sur la série
             </span>
           </InkButton>
         )}
         <div style={{ display: "flex", gap: 10 }}>
-          <PaperButton onClick={() => timerController.extendStudy(25)}>
+          <PaperButton large onClick={() => timerController.extendStudy(25)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               <Glyph name="plus" /> Encore 25 min
             </span>
           </PaperButton>
-          <PaperButton onClick={() => { void timerController.finish(); }}>
+          <PaperButton large onClick={() => { void timerController.finish(); }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               <Glyph name="checkmark" /> Terminer
             </span>

@@ -1,543 +1,73 @@
-/* L'écran Réglages : des rangées calmes dans les cartes « Carnet », avec des
-   contrôles natifs habillés par les tokens. Aucune couleur en dur : le thème
-   clair/sombre vient de tokens.css. */
+/* L'écran Réglages : seulement la mise en page propre à l'écran. Boutons,
+   interrupteurs, pas-à-pas, segments et menus viennent du kit (kit.css). */
 
-.settings-screen {
-  max-width: 900px;
-  padding-bottom: 40px;
-}
+.settings-screen { max-width: 900px; padding-bottom: 40px; }
 
-/* MARK: Rangées */
+/* Rangées « libellé à gauche, contrôle à droite » */
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; }
+.settings-row + .settings-row { border-top: 1px solid var(--rule); }
+.settings-row-text { min-width: 0; }
+.settings-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+.settings-hint { margin: 3px 0 0; color: var(--ink-secondary); font-size: 12px; line-height: 1.45; }
+.settings-value { color: var(--ink-secondary); font-size: 13px; text-align: right; }
+.settings-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.settings-footnote { margin: 8px 2px 0; color: var(--ink-secondary); font-size: 12px; line-height: 1.5; }
+.settings-error { margin: 8px 0 0; color: var(--wrong); font-size: 12px; }
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 13px 0;
-}
-
-.settings-row + .settings-row {
-  border-top: 1px solid var(--rule);
-}
-
-.settings-row-text {
-  min-width: 0;
-}
-
-.settings-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.settings-hint {
-  margin: 3px 0 0;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.settings-value {
-  color: var(--ink-secondary);
-  font-size: 13px;
-  text-align: right;
-}
-
-.settings-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.settings-footnote {
-  margin: 8px 2px 0;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-/* MARK: Champs */
-
-.settings-input,
-.settings-select,
-.settings-color {
-  font: inherit;
-  color: var(--ink);
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: 9px;
-  min-height: 34px;
-  padding: 6px 9px;
-}
-
-.settings-select {
-  padding-right: 24px;
-  max-width: 280px;
-}
-
-.settings-input[type="date"] {
-  min-width: 150px;
-}
-
-.settings-color {
-  width: 48px;
-  padding: 3px;
-  cursor: pointer;
-}
-
-.settings-input:focus-visible,
-.settings-select:focus-visible,
-.settings-color:focus-visible {
-  outline: 2px solid var(--selection);
-  outline-offset: 1px;
-}
-
-/* MARK: Choix du thème */
-
-.settings-segmented {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-}
-
-.settings-segmented button {
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-secondary);
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 13px;
-}
-
-.settings-segmented button:hover {
-  color: var(--ink);
-}
-
-.settings-segmented button[aria-pressed="true"] {
-  background: var(--sheet);
-  border-color: var(--rule);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.settings-segmented button:focus-visible {
-  outline: 2px solid var(--selection);
-  outline-offset: 1px;
-}
-
-.settings-preview {
-  margin-top: 14px;
-  padding: 12px;
-  background: var(--ground);
-  border: 1px dashed var(--rule);
-  border-radius: 12px;
-}
-
+/* Aperçu du thème */
+.settings-preview { margin-top: 12px; padding: 12px; background: var(--ground); border: 1px dashed var(--rule); border-radius: 12px; }
 .settings-preview-sheet {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px;
 }
 
-/* MARK: Interrupteur */
-
-.settings-switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.settings-switch input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
-.settings-switch-track {
-  position: relative;
-  flex: none;
-  width: 36px;
-  height: 21px;
-  border-radius: 999px;
-  background: var(--rule);
-  transition: background 0.15s ease;
-}
-
-.settings-switch-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--sheet);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 24%, transparent);
-  transition: transform 0.15s ease;
-}
-
-.settings-switch input:checked + .settings-switch-track {
-  background: var(--selection);
-}
-
-.settings-switch input:checked + .settings-switch-track .settings-switch-thumb {
-  transform: translateX(15px);
-}
-
-.settings-switch input:focus-visible + .settings-switch-track {
-  outline: 2px solid var(--selection);
-  outline-offset: 2px;
-}
-
-.settings-switch input:disabled + .settings-switch-track {
-  opacity: 0.5;
-}
-
-.settings-switch-label {
-  font-size: 12px;
-  color: var(--ink-secondary);
-}
-
-/* MARK: Pas-à-pas */
-
-.settings-stepper {
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: 9px;
-}
-
-.settings-stepper button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  font-size: 16px;
-  line-height: 1;
-}
-
-.settings-stepper button:hover:not(:disabled) {
-  background: var(--sheet-raised);
-}
-
-.settings-stepper button:disabled {
-  color: var(--ink-tertiary);
-  opacity: 0.45;
-  cursor: default;
-}
-
-.settings-stepper button:focus-visible {
-  outline: 2px solid var(--selection);
-  outline-offset: -2px;
-}
-
-.settings-stepper-value {
-  min-width: 64px;
-  text-align: center;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-/* MARK: Récapitulatif et cours */
-
-.settings-stats {
-  display: flex;
-  align-items: baseline;
-  gap: 28px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--rule);
-}
-
-.settings-stat {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.settings-stat strong {
-  color: var(--ink);
-  font-size: 20px;
-}
-
-.settings-stat span {
-  color: var(--ink-secondary);
-  font-size: 12px;
-}
-
-.settings-courses {
-  display: flex;
-  flex-direction: column;
-}
-
-.settings-course-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 0;
-}
-
-.settings-course-row + .settings-course-row {
-  border-top: 1px solid var(--rule);
-}
-
-.settings-course-color {
-  flex: none;
-  width: 4px;
-  height: 34px;
-  border-radius: 3px;
-}
-
-.settings-course-main {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  min-width: 0;
-  flex: 1;
-}
-
-.settings-course-code {
-  flex: none;
-  color: var(--ink-secondary);
-  font-size: 12px;
-}
-
-.settings-course-name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings-course-badge {
-  flex: none;
-  padding: 1px 6px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  color: var(--ink-tertiary);
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.settings-course-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
+/* Cours */
+.settings-stats { display: flex; align-items: baseline; gap: 28px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+.settings-stat { display: flex; align-items: baseline; gap: 7px; }
+.settings-stat strong { color: var(--ink); font-size: 20px; }
+.settings-stat span { color: var(--ink-secondary); font-size: 12px; }
+.settings-course-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.settings-course-row + .settings-course-row { border-top: 1px solid var(--rule); }
+.settings-course-color { flex: none; width: 4px; height: 32px; border-radius: 3px; }
+.settings-course-main { display: flex; align-items: baseline; gap: 9px; min-width: 0; flex: 1; }
+.settings-course-code { flex: none; color: var(--ink-secondary); font-size: 12px; }
+.settings-course-name { min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.settings-course-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 14px; }
 .settings-course-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 4px;
-  padding-top: 14px;
-  border-top: 1px solid var(--rule);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--rule);
 }
+.settings-course-footer .settings-hint { margin: 0; }
+.settings-empty { margin: 10px 0; color: var(--ink-secondary); font-size: 13px; }
 
-.settings-course-footer .settings-hint {
-  margin: 0;
+/* Formulaires */
+.settings-form { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.settings-form-head h3 { margin: 0; font-size: 20px; }
+.settings-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.settings-form-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.settings-form-field > span { color: var(--ink-secondary); font-size: 12px; }
+.settings-form-field .field, .settings-form-field .select { width: 100%; }
+.settings-form-field .stepper { align-self: flex-start; }
+.settings-form-switches { display: flex; flex-wrap: wrap; gap: 24px; }
+.settings-color {
+  width: 52px; height: 32px; padding: 3px; background: var(--sheet);
+  border: 1px solid var(--rule-strong); border-radius: 9px; cursor: pointer;
 }
+.settings-color:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.settings-empty {
-  margin: 10px 0;
-  color: var(--ink-secondary);
-  font-size: 13px;
-}
-
-/* MARK: Boutons */
-
-.settings-button {
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: 9px;
-  padding: 7px 12px;
-}
-
-.settings-button:hover:not(:disabled) {
-  background: var(--sheet-raised);
-}
-
-.settings-button--primary {
-  color: var(--ground);
-  background: var(--ink);
-  border-color: var(--ink);
-}
-
-.settings-button--primary:hover:not(:disabled) {
-  background: var(--ink);
-  opacity: 0.9;
-}
-
-.settings-button--small {
-  padding: 5px 9px;
-  font-size: 12px;
-}
-
-.settings-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.settings-button:focus-visible {
-  outline: 2px solid var(--selection);
-  outline-offset: 1px;
-}
-
-/* MARK: Formulaire d'un cours */
-
-.settings-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--rule);
-}
-
-.settings-form-head h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.settings-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.settings-form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.settings-form-field > span {
-  color: var(--ink-secondary);
-  font-size: 12px;
-}
-
-.settings-form-field .settings-input,
-.settings-form-field .settings-select {
-  width: 100%;
-  max-width: none;
-}
-
-.settings-form-field .settings-color {
-  width: 52px;
-}
-
-.settings-form-switches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-
-.settings-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-/* MARK: Connexions */
-
-.settings-connections {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
-}
-
-.settings-connection {
-  padding: 14px;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-}
-
-.settings-connection h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.settings-connection p {
-  margin: 4px 0 10px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.settings-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-secondary);
-  font-size: 12px;
-}
-
-.settings-status-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--ink-tertiary);
-}
-
-/* MARK: Fenêtre étroite */
+/* Connexions */
+.settings-connections { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.settings-connection { padding: 14px; }
+.settings-connection h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.settings-connection p { margin: 4px 0 10px; color: var(--ink-secondary); font-size: 12px; line-height: 1.45; }
 
 @media (max-width: 760px) {
-  .settings-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .settings-control {
-    max-width: 100%;
-  }
-
-  .settings-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-course-row {
-    flex-wrap: wrap;
-  }
-
-  .settings-course-actions {
-    width: 100%;
-    justify-content: flex-start;
-    padding-left: 16px;
-  }
-
-  .settings-course-footer {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+  .settings-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .settings-control { max-width: 100%; }
+  .settings-form-grid { grid-template-columns: 1fr; }
+  .settings-course-row { flex-wrap: wrap; }
+  .settings-course-actions { width: 100%; justify-content: flex-start; padding-left: 16px; }
+  .settings-course-footer { flex-direction: column; align-items: flex-start; }
 }
+.card > .settings-form:first-child { margin-top: 0; padding-top: 0; border-top: 0; }

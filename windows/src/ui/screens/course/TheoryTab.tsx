@@ -1,28 +1,54 @@
-// Théorie d'un cours (TheoryTabView.swift + WeekTheoryCard.swift).
+// Théorie d'un cours (TheoryTabView.swift + WeekTheoryCard.swift ; Mac : la
+// liste de MacCourseView et son inspecteur).
 //
 // Tout support — vidéo, lecture, section de polycopié, diapos — est de la
-// théorie ; son type n'est qu'un glyphe. Un chapitre porte son titre
+// théorie ; son type n'est qu'une icône. Un chapitre porte son titre
 // (« Suites réelles »), pas « Section 3 ». La carte de la semaine nomme chaque
 // vidéo et chaque support ; la liste complète garde les chapitres repliés.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Course } from "../../../models/course.ts";
 import type { TheoryItem } from "../../../models/theoryItem.ts";
 import { TheoryKind } from "../../../models/enums.ts";
 import type { ContentLink } from "../../../models/jsonTypes.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { ContentDraftBuilder } from "../../../domain/courseContentImport.ts";
-import { Bar, CheckCircle, EmptyState, MathText, Pill, theoryLinks, linkChipLabel, linkShortLabel, siteName, hostOf, webURL, openURL } from "./common.tsx";
+import {
+  Button, Card, EmptyState, Icon, IconButton, ProgressBar, Section, cx, useContextMenu,
+  type IconName, type MenuItem,
+} from "../../kit.tsx";
+import {
+  CheckCircle, MathText, Pill, hostOf, linkChipLabel, linkIcon, linkShortLabel, openURL, siteName,
+  theoryLinks, useTimedTarget, webURL, type CourseActions,
+} from "./common.tsx";
+import "./course.css";
 
 interface TheoryTabProps {
   course: Course;
   week: number;
   saveAll: (objects: object[]) => Promise<void>;
+  actions: CourseActions;
 }
 
-export function TheoryTab({ course, week, saveAll }: TheoryTabProps) {
+/** L'icône du type de support (`TheoryKind.icon`). */
+function kindIcon(kind: TheoryKind): IconName {
+  switch (kind) {
+    case "video": return "play.fill";
+    case "reading": return "book";
+    case "chapter": return "doc.text";
+    case "slides": return "square.stack.3d.up";
+  }
+}
+
+export function TheoryTab({ course, week, saveAll, actions, focusID }: TheoryTabProps & { focusID?: string | null }) {
   const [showsDone, setShowsDone] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(focusID ?? null);
+  // L'élément demandé (palette, lien d'un autre écran) : amené au milieu.
+  useEffect(() => {
+    if (focusID) document.querySelector(`[data-item="${focusID}"]`)?.scrollIntoView({ block: "center" });
+  }, [focusID]);
+  const menu = useContextMenu();
+  const timedId = useTimedTarget();
   const currentWeek = course.currentWeek;
 
   const all = course.sortedTheoryItems;
@@ -32,7 +58,12 @@ export function TheoryTab({ course, week, saveAll }: TheoryTabProps) {
   const selected = selectedId === null ? null : all.find((item) => item.id === selectedId) ?? null;
 
   if (all.length === 0) {
-    return <EmptyState title="Aucune théorie" message="Depuis Moodle, Courseware ou Botafogo." />;
+    return (
+      <EmptyState icon="book" title="Aucune théorie"
+        action={<Button icon="plus" onClick={() => actions.editTheory(null)}>Ajouter de la théorie</Button>}>
+        Importe-la depuis Moodle, Courseware ou Botafogo, ou ajoute-la à la main.
+      </EmptyState>
+    );
   }
 
   const toggleWatched = async (item: TheoryItem) => {
@@ -45,55 +76,56 @@ export function TheoryTab({ course, week, saveAll }: TheoryTabProps) {
     await saveAll([item]);
   };
 
+  /** Le `.contextMenu` d'une ligne de théorie du Mac. */
+  const itemMenu = (item: TheoryItem) => {
+    const link = theoryLinks(item)[0];
+    const items: MenuItem[] = [
+      { label: item.isWatched ? "Marquer non vu" : "Marquer comme vu",
+        icon: item.isWatched ? "arrow.counterclockwise" : "checkmark", action: () => void toggleWatched(item) },
+      { label: "Chronométrer", icon: "timer", action: () => actions.time(item.id, "theory") },
+      ...(link ? [{ label: "Ouvrir", icon: "arrow.up.right.square", action: () => openURL(link.url) } as MenuItem] : []),
+      "divider",
+      { label: "Modifier…", icon: "pencil", action: () => actions.editTheory(item) },
+    ];
+    return menu.open(items);
+  };
+
   const sections = [...new Set(visible.map((item) => item.sectionNumber))].sort((a, b) => a - b);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) 360px" : "minmax(0, 1fr)", gap: 18, alignItems: "start" }}>
+    <div className={cx("cs-split", selected && "has-aside")}>
       <div>
         {week === 0 && (
-          <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6,
-              color: "var(--ink-tertiary)", margin: "0 0 10px" }}>
-              {course.isTermRunning ? `Cette semaine · S${currentWeek}` : "Hors semestre"}
-            </h2>
+          <Section title={course.isTermRunning ? `Cette semaine · S${currentWeek}` : "Hors semestre"}>
             {weekItems.length === 0 ? (
-              <div className="card" style={{ color: "var(--ink-secondary)", fontSize: 13 }}>
+              <Card flat className="muted" >
                 {course.isTermRunning
                   ? "Aucune théorie planifiée cette semaine."
                   : "Le semestre n'est pas en cours : le plan hebdomadaire est en pause."}
-              </div>
+              </Card>
             ) : (
               <WeekTheoryPanel
                 course={course}
                 items={weekItems}
+                selectedId={selectedId}
+                itemMenu={itemMenu}
                 onToggleWatched={(item) => void toggleWatched(item)}
                 onSelect={(item) => setSelectedId(item.id)}
               />
             )}
-          </section>
+          </Section>
         )}
 
-        <section>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-            <h2 style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6,
-              color: "var(--ink-tertiary)", margin: 0 }}>
-              {week === 0 ? "Tout le cours" : `Semaine ${week}`}
-            </h2>
-            <span className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>
-              {visible.filter((item) => item.isWatched).length}/{visible.length}
-            </span>
-            <span style={{ flex: 1 }} />
-            <button
-              type="button"
-              onClick={() => setShowsDone((value) => !value)}
-              style={{ border: "none", background: "none", color: "var(--ink-secondary)", fontSize: 12, padding: 0 }}
-            >
+        <Section
+          title={`${week === 0 ? "Tout le cours" : `Semaine ${week}`} · ${visible.filter((item) => item.isWatched).length}/${visible.length}`}
+          action={
+            <Button variant="ghost" size="sm" icon={showsDone ? "eye.slash" : "eye"} onClick={() => setShowsDone((value) => !value)}>
               {showsDone ? "Masquer le fait" : "Tout afficher"}
-            </button>
-          </div>
-
+            </Button>
+          }
+        >
           {visible.length === 0 ? (
-            <EmptyState title="Pas de théorie" message={`Rien en semaine ${week}.`} />
+            <EmptyState icon="book" title="Pas de théorie">{`Rien en semaine ${week}.`}</EmptyState>
           ) : (
             sections.map((section) => {
               const sectionItems = visible.filter((item) => item.sectionNumber === section);
@@ -102,39 +134,44 @@ export function TheoryTab({ course, week, saveAll }: TheoryTabProps) {
               const title = sectionItems.find((item) => item.sectionTitle !== "")?.sectionTitle ?? `Chapitre ${section}`;
               const watched = sectionItems.filter((item) => item.isWatched).length;
               return (
-                <div key={section} className="card" style={{ padding: 14, marginBottom: 12 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
-                    <strong className="serif" style={{ fontSize: 16, flex: 1 }}>{title}</strong>
-                    <span className="mono" style={{ fontSize: 12, color: watched === sectionItems.length ? "var(--correct)" : "var(--ink-secondary)" }}>
+                <Card key={section} className="cs-chapter" flat>
+                  <div className="cs-chapter-head">
+                    <strong>{title}</strong>
+                    <span className="mono small" style={{ color: watched === sectionItems.length ? "var(--correct)" : "var(--ink-secondary)" }}>
                       {watched}/{sectionItems.length}
                     </span>
                   </div>
-                  {shown.map((item, index) => (
-                    <div key={item.id} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)" }}>
-                      <TheoryRow
-                        item={item}
-                        isCurrentWeek={item.plannedWeek === currentWeek && course.isTermRunning}
-                        selected={selectedId === item.id}
-                        onToggleWatched={() => void toggleWatched(item)}
-                        onSelect={() => setSelectedId(item.id)}
-                      />
-                    </div>
+                  {shown.map((item) => (
+                    <TheoryRow
+                      key={item.id}
+                      item={item}
+                      isCurrentWeek={item.plannedWeek === currentWeek && course.isTermRunning}
+                      selected={selectedId === item.id}
+                      timed={timedId === item.id}
+                      onContextMenu={itemMenu(item)}
+                      onToggleWatched={() => void toggleWatched(item)}
+                      onSelect={() => setSelectedId(item.id)}
+                    />
                   ))}
-                </div>
+                </Card>
               );
             })
           )}
-        </section>
+        </Section>
       </div>
 
       {selected && (
         <TheoryDetail
           key={selected.id}
           item={selected}
+          timed={timedId === selected.id}
           onClose={() => setSelectedId(null)}
+          onTime={() => actions.time(selected.id, "theory")}
+          onEdit={() => actions.editTheory(selected)}
           saveAll={saveAll}
         />
       )}
+      {menu.element}
     </div>
   );
 }
@@ -150,29 +187,29 @@ function compareWeekItems(lhs: TheoryItem, rhs: TheoryItem): number {
 
 // MARK: - La carte de la semaine
 
-function WeekTheoryPanel({ course, items, onToggleWatched, onSelect }:
-  { course: Course; items: TheoryItem[]; onToggleWatched: (item: TheoryItem) => void; onSelect: (item: TheoryItem) => void }) {
+function WeekTheoryPanel({ course, items, selectedId, itemMenu, onToggleWatched, onSelect }: {
+  course: Course; items: TheoryItem[]; selectedId: string | null;
+  itemMenu: (item: TheoryItem) => (event: React.MouseEvent) => void;
+  onToggleWatched: (item: TheoryItem) => void; onSelect: (item: TheoryItem) => void;
+}) {
   const done = items.filter((item) => item.isWatched).length;
   const remainingSeconds = items.filter((item) => !item.isWatched)
     .reduce((sum, item) => sum + item.durationSeconds, 0);
   const videos = items.reduce((sum, item) => sum + item.videoCount, 0);
-  const tint = course.colorHex;
 
   return (
-    <div className="card" style={{ padding: 0, borderLeft: `4px solid ${tint}`, overflow: "hidden" }}>
-      <div style={{ padding: "12px 14px 8px" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <strong className="serif" style={{ fontSize: 19 }}>
-            {course.isTermRunning ? `Semaine ${course.currentWeek}` : "Hors semestre"}
-          </strong>
-          <span style={{ flex: 1 }} />
-          <span className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>{done}/{items.length}</span>
+    <Card className="cs-week" flat>
+      <div className="cs-week-head">
+        <div className="top">
+          <strong>{course.isTermRunning ? `Semaine ${course.currentWeek}` : "Hors semestre"}</strong>
+          <span className="spacer" />
+          <span className="mono small muted">{done}/{items.length}</span>
         </div>
         <div style={{ marginTop: 8 }}>
-          <Bar value={done / Math.max(items.length, 1)} tint={tint} />
+          <ProgressBar value={done / Math.max(items.length, 1)} color="var(--course)" />
         </div>
         {(videos > 0 || remainingSeconds > 0) && (
-          <div style={{ marginTop: 6, color: "var(--ink-secondary)", fontSize: 12 }}>
+          <div className="cs-week-sub">
             {[
               videos > 0 ? `${videos} ${videos > 1 ? "vidéos" : "vidéo"}` : null,
               remainingSeconds > 0 ? `${DateUtils.durationLabel(remainingSeconds)} à regarder` : null,
@@ -180,25 +217,25 @@ function WeekTheoryPanel({ course, items, onToggleWatched, onSelect }:
           </div>
         )}
       </div>
-      <div>
-        {items.map((item, index) => (
-          <div key={item.id} style={{ borderTop: index === 0 ? "1px solid var(--rule)" : "none" }}>
-            <WeekTheoryCard
-              item={item}
-              tint={tint}
-              onToggleWatched={() => onToggleWatched(item)}
-              onSelect={() => onSelect(item)}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
+      {items.map((item) => (
+        <WeekTheoryCard
+          key={item.id}
+          item={item}
+          selected={selectedId === item.id}
+          onContextMenu={itemMenu(item)}
+          onToggleWatched={() => onToggleWatched(item)}
+          onSelect={() => onSelect(item)}
+        />
+      ))}
+    </Card>
   );
 }
 
 /** Un élément de la semaine avec tout ce qu'il faut regarder, nommé ligne à ligne. */
-function WeekTheoryCard({ item, tint, onToggleWatched, onSelect }:
-  { item: TheoryItem; tint: string; onToggleWatched: () => void; onSelect: () => void }) {
+function WeekTheoryCard({ item, selected, onContextMenu, onToggleWatched, onSelect }: {
+  item: TheoryItem; selected: boolean; onContextMenu: (event: React.MouseEvent) => void;
+  onToggleWatched: () => void; onSelect: () => void;
+}) {
   const [showsAll, setShowsAll] = useState(false);
   const links = theoryLinks(item);
   const rows = buildRows(links);
@@ -207,49 +244,26 @@ function WeekTheoryCard({ item, tint, onToggleWatched, onSelect }:
   const shown = showsAll ? rows : rows.slice(0, 5);
 
   return (
-    <div style={{ borderTop: "1px solid var(--rule)" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 14px 8px 10px" }}>
+    <div className={cx("cs-item", item.isWatched && "watched")} onContextMenu={onContextMenu}>
+      <div className="cs-item-head" style={selected ? { background: "var(--sheet-raised)" } : undefined}>
         <CheckCircle
           isOn={item.isWatched}
-          tint={tint}
-          label={`Marquer ${title} vu`}
+          tint="var(--course)"
+          label={item.isWatched ? `Marquer ${title} non vu` : `Marquer ${title} vu`}
           onToggle={onToggleWatched}
         />
-        <button
-          type="button"
-          onClick={onSelect}
-          style={{ flex: 1, textAlign: "left", border: "none", background: "none", padding: 0 }}
-        >
-          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, color: tint, fontWeight: 700 }}>
-            {kicker(item, links)}
-          </div>
-          <div className="serif" style={{ fontSize: 17, color: item.isWatched ? "var(--ink-secondary)" : "var(--ink)" }}>
-            <MathText text={title} />
-          </div>
-          <div style={{ color: "var(--ink-secondary)", fontSize: 12, marginTop: 2 }}>{summary}</div>
+        <button type="button" className="cs-pick" onClick={onSelect} aria-current={selected || undefined}>
+          <span className="cs-kicker">{kicker(item, links)}</span>
+          <span className="cs-item-title"><MathText text={title} /></span>
+          <span className="muted small">{summary}</span>
         </button>
       </div>
 
-      {shown.length > 0 && (
-        <div style={{ borderTop: "1px solid var(--rule)" }}>
-          {shown.map((row, index) => (
-            <div key={row.id} style={{ borderTop: index === 0 ? "none" : "1px solid var(--rule)" }}>
-              <ResourceRow row={row} tint={tint} />
-            </div>
-          ))}
-          {rows.length > 5 && (
-            <button
-              type="button"
-              onClick={() => setShowsAll((value) => !value)}
-              style={{
-                width: "100%", border: "none", borderTop: "1px solid var(--rule)", background: "transparent",
-                color: "var(--ink-secondary)", padding: "9px 14px", fontSize: 12,
-              }}
-            >
-              {showsAll ? "Moins" : `Voir les ${rows.length} lignes`}
-            </button>
-          )}
-        </div>
+      {shown.map((row) => <ResourceRow key={row.id} row={row} />)}
+      {rows.length > 5 && (
+        <button type="button" className="cs-more" onClick={() => setShowsAll((value) => !value)} aria-expanded={showsAll}>
+          {showsAll ? "Moins" : `Voir les ${rows.length} lignes`}
+        </button>
       )}
     </div>
   );
@@ -262,7 +276,7 @@ interface Row {
   title: string;
   kind: ContentLink["kind"];
   links: ContentLink[];
-  icon?: string;
+  icon?: IconName;
   detail?: string;
 }
 
@@ -294,7 +308,7 @@ function buildRows(links: ContentLink[]): Row[] {
           title: name === "" ? "Quiz du chapitre" : name,
           kind: link.kind,
           links: [link],
-          icon: "☑",
+          icon: "checkmark.square",
           detail: count ? `Quiz · ${count[1]} questions · Courseware` : "Quiz · Courseware",
         });
       } else {
@@ -320,49 +334,36 @@ function buildRows(links: ContentLink[]): Row[] {
       title: extras.length === 1 ? names[0] : names.join(", "),
       kind: "page",
       links: extras,
-      icon: "▤",
+      icon: "doc.text",
       detail: extras.length === 1 ? "Page · Courseware" : `${extras.length} pages · Courseware`,
     });
   }
   return result;
 }
 
-function ResourceRow({ row, tint }: { row: Row; tint: string }) {
+function ResourceRow({ row }: { row: Row }) {
   const first = row.links[0];
   const open = (link: ContentLink) => {
     const url = webURL(link.url);
     if (url) openURL(url);
   };
   return (
-    <div style={{ padding: "7px 14px 7px 18px" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span aria-hidden style={{ width: 20, color: row.kind === "video" ? tint : "var(--ink-secondary)", fontSize: 14 }}>
-          {row.icon ?? (row.kind === "video" ? "▶" : "▤")}
-        </span>
-        <button
-          type="button"
-          onClick={() => first && open(first)}
-          style={{ flex: 1, textAlign: "left", border: "none", background: "none", padding: 0 }}
-        >
-          <div style={{ fontSize: 13 }}><MathText text={row.title} /></div>
-          <div style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>{rowDetail(row)}</div>
+    <div className="cs-res">
+      <div className="cs-res-main">
+        <Icon name={row.icon ?? (row.kind === "video" ? "play.fill" : linkIcon(row.kind))} size={15}
+          className={cx("cs-res-ico", row.kind === "video" && "video")} />
+        <button type="button" className="cs-res-open" onClick={() => first && open(first)}>
+          <span className="t"><MathText text={row.title} /></span>
+          <span className="d">{rowDetail(row)}</span>
         </button>
-        <span aria-hidden style={{ color: "var(--ink-tertiary)", fontSize: 11 }}>{row.links.length > 1 ? "▾" : "›"}</span>
+        <Icon name="arrow.up.right" size={13} className="cs-chev" />
       </div>
       {row.links.length > 1 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 0 30px" }}>
+        <div className="cs-parts">
           {row.links.map((link, index) => (
-            <button
-              key={`${link.url}-${index}`}
-              type="button"
-              onClick={() => open(link)}
-              style={{
-                border: "1px solid var(--rule)", background: "var(--sheet-raised)", color: "var(--ink)",
-                borderRadius: 999, padding: "2px 8px", fontSize: 11,
-              }}
-            >
+            <Button key={`${link.url}-${index}`} size="sm" icon={linkIcon(link.kind)} onClick={() => open(link)}>
               {link.kind === "video" ? videoName(link, index) : rowTitle(link)}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -426,44 +427,35 @@ function videoName(link: ContentLink, index: number): string {
 
 // MARK: - Ligne de la liste complète
 
-function TheoryRow({ item, isCurrentWeek, selected, onToggleWatched, onSelect }:
-  { item: TheoryItem; isCurrentWeek: boolean; selected: boolean; onToggleWatched: () => void; onSelect: () => void }) {
+function TheoryRow({ item, isCurrentWeek, selected, timed, onContextMenu, onToggleWatched, onSelect }: {
+  item: TheoryItem; isCurrentWeek: boolean; selected: boolean; timed: boolean;
+  onContextMenu: (event: React.MouseEvent) => void; onToggleWatched: () => void; onSelect: () => void;
+}) {
   const link = theoryLinks(item)[0];
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10, padding: "8px 2px",
-      background: selected ? "var(--sheet-raised)" : "transparent", borderRadius: 8,
-    }}>
+    <div className={cx("cs-th-row", selected && "selected", item.isWatched && "watched")} onContextMenu={onContextMenu}
+      data-item={item.id}>
       <CheckCircle
         isOn={item.isWatched}
-        tint="var(--selection)"
-        label={`Marquer ${item.displayNumber} comme faite`}
+        tint="var(--course)"
+        label={item.isWatched ? `Marquer ${item.displayNumber} non faite` : `Marquer ${item.displayNumber} comme faite`}
         onToggle={onToggleWatched}
         size={20}
       />
-      <button
-        type="button"
-        onClick={onSelect}
-        style={{ flex: 1, textAlign: "left", border: "none", background: "none", padding: 0 }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ color: item.isWatched ? "var(--ink-secondary)" : "var(--ink)", fontSize: 14 }}>
-            <MathText text={item.numberAndTitle} />
-          </span>
-          {isCurrentWeek && <Pill color="var(--ink-secondary)">S{item.plannedWeek}</Pill>}
-          {item.isSummarized && <Pill color="var(--ink-secondary)">résumé</Pill>}
-        </div>
-        <div style={{ color: "var(--ink-secondary)", fontSize: 12, marginTop: 2 }}>{videoMeta(item, isCurrentWeek)}</div>
+      <Icon name={kindIcon(item.kind)} size={15} className="cs-th-ico" />
+      <button type="button" className="cs-pick" onClick={onSelect} aria-current={selected || undefined}>
+        <span className="cs-meta">
+          <span className="name"><MathText text={item.numberAndTitle} /></span>
+          {isCurrentWeek && <Pill>S{item.plannedWeek}</Pill>}
+          {item.isSummarized && <Pill icon="note.text">résumé</Pill>}
+          {timed && <Icon name="timer" size={13} className="muted" label="Chrono en cours" />}
+        </span>
+        <span className="muted small">{videoMeta(item, isCurrentWeek)}</span>
       </button>
       {link && (
-        <button
-          type="button"
-          aria-label={item.kind === "video" ? "Regarder" : "Ouvrir"}
-          onClick={(event) => { event.stopPropagation(); const url = webURL(link.url); if (url) openURL(url); }}
-          style={{ border: "none", background: "none", color: "var(--ink-secondary)", padding: 4 }}
-        >
-          {item.kind === "video" ? "▶" : "↗"}
-        </button>
+        <IconButton icon={item.kind === "video" ? "play.fill" : "arrow.up.right.square"}
+          label={item.kind === "video" ? "Regarder" : "Ouvrir"} size="sm"
+          onClick={() => { const url = webURL(link.url); if (url) openURL(url); }} />
       )}
     </div>
   );
@@ -483,8 +475,10 @@ function videoMeta(item: TheoryItem, isCurrentWeek: boolean): string {
 
 // MARK: - Détail d'un élément
 
-function TheoryDetail({ item, onClose, saveAll }:
-  { item: TheoryItem; onClose: () => void; saveAll: (objects: object[]) => Promise<void> }) {
+function TheoryDetail({ item, timed, onClose, onTime, onEdit, saveAll }: {
+  item: TheoryItem; timed: boolean; onClose: () => void; onTime: () => void; onEdit: () => void;
+  saveAll: (objects: object[]) => Promise<void>;
+}) {
   const [summary, setSummary] = useState(item.summaryText ?? "");
   const [busy, setBusy] = useState(false);
   const links = theoryLinks(item);
@@ -516,101 +510,72 @@ function TheoryDetail({ item, onClose, saveAll }:
   };
 
   return (
-    <aside className="card" style={{ position: "sticky", top: 0, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700, color: "var(--ink-secondary)" }}>
-          {TheoryKind.label(item.kind)} {item.number}
-        </span>
-        <span style={{ flex: 1 }} />
-        <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: "none", background: "none", color: "var(--ink-secondary)", fontSize: 16 }}>✕</button>
+    <Card className="cs-aside" flat>
+      <div className="cs-aside-head">
+        <span className="cs-kicker">{[TheoryKind.label(item.kind), item.number].filter((part) => part !== "").join(" ")}</span>
+        <span className="spacer" />
+        <IconButton icon="pencil" label="Modifier" size="sm" onClick={onEdit} />
+        <IconButton icon="xmark" label="Fermer" size="sm" onClick={onClose} />
       </div>
-      <h3 className="serif" style={{ margin: "6px 0", fontSize: 20 }}>{item.title === "" ? item.number : item.title}</h3>
-      {item.plannedWeek > 0 && (
-        <div className="mono" style={{ color: "var(--ink-secondary)", fontSize: 12 }}>Semaine {item.plannedWeek}</div>
-      )}
+      <h3 className="serif">{item.title === "" ? item.number : item.title}</h3>
+      {item.plannedWeek > 0 && <div className="mono small muted">Semaine {item.plannedWeek}</div>}
 
-      <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", margin: "14px 0", fontSize: 13 }}>
-        <dt style={{ color: "var(--ink-secondary)" }}>Support</dt>
-        <dd style={{ margin: 0 }}>{item.videoCount > 1 ? `${item.videoCount} vidéos` : TheoryKind.label(item.kind)}</dd>
+      <dl className="cs-dl">
+        <dt>Support</dt>
+        <dd>{item.videoCount > 1 ? `${item.videoCount} vidéos` : TheoryKind.label(item.kind)}</dd>
         {item.hasDuration && (<>
-          <dt style={{ color: "var(--ink-secondary)" }}>Durée</dt>
-          <dd className="mono" style={{ margin: 0 }}>{item.durationLabel}</dd>
+          <dt>Durée</dt>
+          <dd className="mono">{item.durationLabel}</dd>
         </>)}
-        <dt style={{ color: "var(--ink-secondary)" }}>Faite le</dt>
-        <dd style={{ margin: 0 }}>{item.watchedAt ? DateUtils.shortDay(item.watchedAt) : "—"}</dd>
-        <dt style={{ color: "var(--ink-secondary)" }}>Résumé le</dt>
-        <dd style={{ margin: 0 }}>{item.summarizedAt ? DateUtils.shortDay(item.summarizedAt) : "—"}</dd>
+        <dt>Faite le</dt>
+        <dd>{item.watchedAt ? DateUtils.shortDay(item.watchedAt) : "—"}</dd>
+        <dt>Résumé le</dt>
+        <dd>{item.summarizedAt ? DateUtils.shortDay(item.summarizedAt) : "—"}</dd>
       </dl>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        <button type="button" onClick={() => void toggleWatched()} style={buttonStyle}>
-          {item.isWatched ? "↺ Marquer à faire" : "✓ Marquer comme faite"}
-        </button>
-        <button type="button" onClick={() => void toggleSummarized()} style={buttonStyle}>
-          {item.isSummarized ? "↺ Retirer le résumé" : "✎ Marquer résumé"}
-        </button>
+      <div className="cs-actions">
+        <Button size="sm" variant={item.isWatched ? "default" : "primary"}
+          icon={item.isWatched ? "arrow.counterclockwise" : "checkmark"} onClick={() => void toggleWatched()}>
+          {item.isWatched ? "Marquer à faire" : "Marquer comme faite"}
+        </Button>
+        <Button size="sm" icon={item.isSummarized ? "arrow.counterclockwise" : "note.text"} onClick={() => void toggleSummarized()}>
+          {item.isSummarized ? "Retirer le résumé" : "Marquer résumé"}
+        </Button>
+        <Button size="sm" icon="timer" onClick={onTime} disabled={timed}>
+          {timed ? "Chrono en cours" : "Chronométrer"}
+        </Button>
       </div>
 
       {links.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>Supports</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div className="cs-block">
+          <div className="cs-label">Supports</div>
+          <div className="cs-links" style={{ margin: 0 }}>
             {links.map((link, index) => (
-              <button
-                key={`${link.url}-${index}`}
-                type="button"
-                onClick={() => { const url = webURL(link.url); if (url) openURL(url); }}
-                style={buttonStyle}
-              >
-                {link.title === "" ? linkChipLabel(link.kind) : link.title} ↗
-              </button>
+              <Button key={`${link.url}-${index}`} size="sm" icon={linkIcon(link.kind)} trailingIcon="arrow.up.right"
+                onClick={() => { const url = webURL(link.url); if (url) openURL(url); }}>
+                {link.title === "" ? linkChipLabel(link.kind) : link.title}
+              </Button>
             ))}
           </div>
         </div>
       )}
 
-      <div style={labelStyle}>Résumé</div>
-      <textarea
-        value={summary}
-        onChange={(event) => setSummary(event.target.value)}
-        rows={6}
-        placeholder="Ce qu'il faut retenir…"
-        style={{
-          width: "100%", resize: "vertical", borderRadius: 10, border: "1px solid var(--rule)",
-          background: "var(--ground)", color: "var(--ink)", padding: 10, font: "inherit",
-        }}
-      />
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void saveSummary()}
-        style={{ ...buttonStyle, marginTop: 8, borderColor: "var(--ink)", fontWeight: 600 }}
-      >
-        ✓ Enregistrer le résumé
-      </button>
-      {item.summaryText && item.summaryText !== summary && (
-        <div style={{ color: "var(--ink-secondary)", fontSize: 11, marginTop: 6 }}>
-          Un résumé est déjà enregistré. « Enregistrer » le remplace.
+      <div className="cs-block">
+        <label className="cs-label" htmlFor={`summary-${item.id}`}>Résumé</label>
+        <textarea id={`summary-${item.id}`} className="field cs-area" value={summary}
+          onChange={(event) => setSummary(event.target.value)} rows={6} placeholder="Ce qu'il faut retenir…" />
+        <div className="hstack" style={{ marginTop: 8 }}>
+          <Button size="sm" variant="primary" icon="checkmark" disabled={busy || summary.trim() === (item.summaryText ?? "").trim()}
+            onClick={() => void saveSummary()}>
+            Enregistrer le résumé
+          </Button>
         </div>
-      )}
-    </aside>
+        {item.summaryText && item.summaryText !== summary && (
+          <div className="faint small" style={{ marginTop: 6 }}>
+            Un résumé est déjà enregistré. « Enregistrer » le remplace.
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
-
-const buttonStyle = {
-  border: "1px solid var(--rule)",
-  background: "var(--sheet-raised)",
-  color: "var(--ink)",
-  borderRadius: 999,
-  padding: "5px 11px",
-  fontSize: 12,
-} as const;
-
-const labelStyle = {
-  fontSize: 10,
-  textTransform: "uppercase",
-  letterSpacing: 0.7,
-  color: "var(--ink-tertiary)",
-  marginBottom: 6,
-} as const;
-

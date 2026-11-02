@@ -7,8 +7,8 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useData } from "../../../data/dataContext.tsx";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { Plural } from "../../../domain/plural.ts";
-import { Section, Card } from "../../kit.tsx";
-import { SettingRow, Switch } from "./controls.tsx";
+import { Button, Section, Card, Switch } from "../../kit.tsx";
+import { SettingRow } from "./controls.tsx";
 import { syncService, type SyncStatus } from "../../../services/syncService.ts";
 
 /** Un champ « libellé au-dessus, contrôle dessous », comme le formulaire de cours. */
@@ -134,29 +134,28 @@ export function SyncSection() {
 
             <div className="settings-form-grid">
               <Field label="Adresse e-mail">
-                <input className="settings-input" type="email" required value={email} autoComplete="email"
+                <input className="field" type="email" required value={email} autoComplete="email"
                   aria-label="Adresse e-mail" onChange={(event) => setEmail(event.target.value)} />
               </Field>
               <Field label="Mot de passe">
-                <input className="settings-input" type="password" required value={password}
+                <input className="field" type="password" required value={password}
                   autoComplete="current-password" aria-label="Mot de passe"
                   onChange={(event) => setPassword(event.target.value)} />
               </Field>
             </div>
 
             {error && (
-              <p className="settings-hint" style={{ color: "var(--wrong)" }} role="alert">{error}</p>
+              <p className="settings-error" role="alert">{error}</p>
             )}
 
             <div className="settings-actions">
-              <button type="button" className="settings-button" disabled={busy !== null}
-                onClick={() => void authenticate("up")}>
+              <Button disabled={busy !== null} onClick={() => void authenticate("up")}>
                 {busy === "up" ? "Création…" : "Créer un compte"}
-              </button>
-              <button type="submit" className="settings-button settings-button--primary"
+              </Button>
+              <Button type="submit" variant="primary"
                 disabled={busy !== null || email.trim() === "" || password === ""}>
                 {busy === "in" ? "Connexion…" : "Se connecter"}
-              </button>
+              </Button>
             </div>
           </form>
         </Card>
@@ -196,20 +195,17 @@ export function SyncSection() {
         </SettingRow>
 
         {status.lastError && (
-          <p className="settings-hint" style={{ color: "var(--wrong)" }} role="alert">
-            {status.lastError}
-          </p>
+          <p className="settings-error" role="alert">{status.lastError}</p>
         )}
 
         <div className="settings-actions">
-          <button type="button" className="settings-button" disabled={busy !== null}
-            onClick={() => void signOut()}>
+          <Button icon="rectangle.portrait.and.arrow.right" disabled={busy !== null} onClick={() => void signOut()}>
             Se déconnecter
-          </button>
-          <button type="button" className="settings-button settings-button--primary"
+          </Button>
+          <Button variant="primary" icon="arrow.clockwise"
             disabled={!status.enabled || busy !== null} onClick={() => void syncNow()}>
             {busy === "sync" ? "Synchronisation…" : "Synchroniser maintenant"}
-          </button>
+          </Button>
         </div>
       </Card>
       <p className="settings-footnote">

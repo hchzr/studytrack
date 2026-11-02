@@ -3,7 +3,8 @@
 // l'horaire, la révision avant l'examen. Les cartes que le Mac réarrange à la
 // main (DeskWidgets) sont ici en grille fixe, les mêmes pour chacun.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Icon } from "../../kit.tsx";
 import type { Course } from "../../../models/course.ts";
 import type { TheoryItem } from "../../../models/theoryItem.ts";
 import { TaskType } from "../../../models/enums.ts";
@@ -27,19 +28,9 @@ import {
 
 /** Une ligne « ensuite » : y passer sans couper le chrono (UpNextList). */
 function UpNextRow({ title, tint, onPick }: { title: string; tint: string; onPick: () => void }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-        padding: "5px 8px", borderRadius: 8, border: "none", fontSize: 14,
-        background: hovering ? "var(--sheet-raised)" : "transparent", color: "var(--ink)",
-      }}
-    >
+    <button type="button" className="study-row" onClick={onPick}
+      style={{ gap: 8, padding: "5px 8px", borderRadius: 8, fontSize: 14 }}>
       <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: tint, flexShrink: 0 }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
       <div style={{ flex: 1 }} />
@@ -124,8 +115,8 @@ function TheoryTick({ item, onToggle }: { item: TheoryItem; onToggle: () => void
         padding: "6px 0", border: "none", background: "transparent", fontSize: 14, color: "var(--ink)",
       }}
     >
-      <span aria-hidden style={{ color: item.isWatched ? "var(--correct)" : "var(--ink-tertiary)" }}>
-        {item.isWatched ? "◉" : "○"}
+      <span aria-hidden style={{ display: "grid", color: item.isWatched ? "var(--correct)" : "var(--ink-tertiary)" }}>
+        <Icon name={item.isWatched ? "checkmark.circle" : "circle"} size={16} />
       </span>
       <span style={{ flex: 1 }}>{item.numberAndTitle}</span>
     </button>
@@ -167,7 +158,7 @@ export function DeskHome({ course, courses, classes, timer, save, onOpenPane }: 
   );
 
   const header = (
-    <h1 className="serif" style={{ fontSize: 24, margin: 0, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+    <h1 className="serif" style={{ fontSize: 28, margin: 0, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       {course?.name ?? "Ta session"}
     </h1>
   );

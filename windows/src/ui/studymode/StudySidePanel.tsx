@@ -4,16 +4,17 @@
 // volet porte des onglets (cahiers, PDF, Botafogo) ; ici, tout ce qui est du
 // web s'ouvre dans le navigateur du système, et le reste mène au centre.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Course } from "../../models/course.ts";
 import type { ExerciseSeries } from "../../models/exercise.ts";
 import { StudyMode, type StudyTool } from "../../domain/studyMode.ts";
 import { seriesName, solutionAddress } from "./helpers.ts";
 import { openWebURL } from "./openers.ts";
 import type { StudyPane } from "./paneKind.ts";
+import { IconButton } from "../kit.tsx";
 import { Glyph, Kicker, tintOfCourse } from "./parts.tsx";
 
-/** Une ligne du volet : icône, titre, détail — et où elle mène. */
+/** Une ligne du volet : icône, titre, détail — et où elle mène (DeskRowStyle). */
 function Row({ icon, title, detail, onClick, tint }: {
   icon: string;
   title: string;
@@ -21,24 +22,10 @@ function Row({ icon, title, detail, onClick, tint }: {
   onClick: () => void;
   tint: string;
 }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-        padding: 8, borderRadius: 10, border: "none", cursor: "pointer", fontSize: 14,
-        background: hovering ? "var(--sheet-raised)" : "transparent", color: "var(--ink)",
-      }}
-    >
-      <span aria-hidden style={{
-        display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 8,
-        background: "var(--sheet-raised)", color: tint, fontSize: 15, flexShrink: 0,
-      }}>
-        <Glyph name={icon} />
+    <button type="button" className="study-row" onClick={onClick} style={{ fontSize: 14 }}>
+      <span aria-hidden className="row-icon" style={{ color: tint }}>
+        <Glyph name={icon} size={16} />
       </span>
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -83,32 +70,20 @@ export function StudySidePanel({ course, series, now, onOpenPane, onClose }: {
   const solution = series ? solutionAddress(series, now) : null;
 
   return (
-    <aside style={{
-      width: 300, flexShrink: 0, borderLeft: "1px solid var(--rule)", background: "var(--sheet)",
-      display: "flex", flexDirection: "column", minHeight: 0,
+    <aside aria-label="À côté" className="desk-chrome edge-left" style={{
+      width: 300, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0,
     }}>
       <div style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "10px 10px 10px 16",
+        display: "flex", alignItems: "center", gap: 8, padding: "10px 10px 10px 16px",
         borderBottom: "1px solid var(--rule)",
       }}>
         <div style={{ flex: 1 }}>
-          <span className="serif" style={{ fontSize: 18, color: "var(--ink)" }}>À côté</span>
+          <span className="serif" style={{ fontSize: 20, color: "var(--ink)" }}>À côté</span>
           <span style={{ display: "block", fontSize: 12, color: "var(--ink-secondary)", lineHeight: 1.3 }}>
             Ce que tu veux garder sous les yeux.
           </span>
         </div>
-        <button
-          type="button"
-          title="Fermer le volet d'à côté"
-          aria-label="Fermer le volet d'à côté"
-          onClick={onClose}
-          style={{
-            border: "none", background: "transparent", color: "var(--ink-secondary)",
-            fontSize: 15, padding: "4px 8px", borderRadius: 8, cursor: "pointer",
-          }}
-        >
-          ✕
-        </button>
+        <IconButton icon="xmark" label="Fermer le volet d'à côté (Ctrl+\\)" onClick={onClose} />
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 10px 20px", display: "flex", flexDirection: "column", gap: 18 }}>

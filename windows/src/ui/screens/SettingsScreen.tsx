@@ -5,6 +5,7 @@
 
 import { PageHeader } from "../kit.tsx";
 import { AppearanceSection } from "./settings/AppearanceSection.tsx";
+import { ChronoSection } from "./settings/ChronoSection.tsx";
 import { TermSection } from "./settings/TermSection.tsx";
 import { CoursesSection } from "./settings/CoursesSection.tsx";
 import { SyncSection } from "./settings/SyncSection.tsx";
@@ -14,8 +15,9 @@ import "./settings/settings.css";
 export function SettingsScreen() {
   return (
     <div className="settings-screen">
-      <PageHeader title="Réglages" subtitle="Apparence, semestre, cours et comptes." />
+      <PageHeader title="Réglages" subtitle="Apparence, chrono, semestre, cours et comptes." />
       <AppearanceSection />
+      <ChronoSection />
       <TermSection />
       <CoursesSection />
       <SyncSection />

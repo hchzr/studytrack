@@ -1,0 +1,39 @@
+/* La palette Ctrl+K : 620 pt de large, liste de 360 pt, ligne choisie en encre pleine. */
+.palette { width: min(620px, calc(100vw - 48px)); max-height: none; }
+.palette-field {
+  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid var(--rule); color: var(--ink-secondary);
+}
+.palette-field input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font-size: 20px; color: var(--ink); font-family: inherit;
+}
+.palette-field input::placeholder { color: var(--ink-tertiary); }
+.palette-list { height: 360px; overflow-y: auto; padding: 0 8px 8px; }
+.palette-empty { padding: 18px; color: var(--ink-secondary); }
+.palette-section {
+  font-size: 11px; font-weight: 600; color: var(--ink-tertiary);
+  padding: 10px 12px 3px;
+}
+.palette-section.first { padding-top: 8px; }
+.palette-row {
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
+  border-radius: 9px; color: var(--ink); cursor: default; font-size: 14px;
+}
+.palette-row.selected { background: var(--ink); color: var(--ground); }
+.palette-icon { width: 22px; display: inline-flex; justify-content: center; color: var(--ink-secondary); flex: none; }
+.palette-row.selected .palette-icon { color: var(--ground); }
+.palette-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+.palette-sub {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 100 auto;
+  color: var(--ink-secondary);
+}
+.palette-row.selected .palette-sub, .palette-row.selected .palette-shortcut { color: var(--ground); opacity: 0.75; }
+.palette-spacer { flex: 1; }
+.palette-shortcut { font-size: 12px; color: var(--ink-tertiary); flex: none; }
+.palette-hints {
+  display: flex; align-items: center; gap: 14px; padding: 8px 18px;
+  border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-secondary);
+}
+.palette-hint { display: inline-flex; align-items: center; gap: 4px; }
+.palette-hint kbd { background: var(--sheet-raised); border-bottom-width: 1px; color: var(--ink-secondary); font-weight: 500; }

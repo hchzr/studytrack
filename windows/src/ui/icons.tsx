@@ -13,6 +13,8 @@ import {
   RefreshCw, RotateCcw, Search, Settings, Share, Sidebar, SkipForward, Smile, Sparkles, Square,
   Star, Sun, Target, Timer, Trash2, Upload, User, Users, X, XCircle, Zap, Heart, Layers, Map,
   Repeat, Volume2, VolumeX, Wifi, Battery, Maximize2, Minimize2, PanelRight, Brain, Lightbulb,
+  Landmark, ListOrdered, GalleryVerticalEnd, BadgeCheck, MoonStar, FastForward, PictureInPicture2,
+  ListChecks, MonitorPlay, Minus, Equal, CircleHelp,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +45,12 @@ const ICONS = {
   "checkmark.circle": CheckCircle2, "checkmark.square": CheckSquare, "circle": Circle, "xmark.circle": XCircle,
   "exclamationmark.triangle": AlertTriangle, "info.circle": Info, "bell": Bell,
   "eye": Eye, "eye.slash": EyeOff, "icloud": Cloud, "icloud.slash": CloudOff,
+  // Noms remontés par les ports (variantes .fill : même dessin au trait).
+  "building.columns": Landmark, "list.number": ListOrdered, "rectangle.stack": GalleryVerticalEnd,
+  "checkmark.seal": BadgeCheck, "moon.stars": MoonStar, "moon.stars.fill": MoonStar, "person.2.fill": Users,
+  "forward.fill": FastForward, "pip": PictureInPicture2, "books.vertical.fill": Library, "checklist": ListChecks,
+  "play.rectangle.fill": MonitorPlay, "graduationcap.fill": GraduationCap, "minus": Minus, "equal": Equal,
+  "questionmark": CircleHelp,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

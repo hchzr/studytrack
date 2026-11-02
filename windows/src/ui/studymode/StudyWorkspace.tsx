@@ -57,29 +57,10 @@ function RailButton({ label, icon, selected, help, onClick }: {
   help: string;
   onClick: () => void;
 }) {
-  const [hovering, setHovering] = useState(false);
   return (
-    <button
-      type="button"
-      title={help}
-      aria-pressed={selected}
-      onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-        padding: "5px 0", border: "none", background: "transparent", cursor: "pointer",
-        color: selected ? "var(--ink)" : "var(--ink-secondary)",
-      }}
-    >
-      <span aria-hidden style={{
-        display: "grid", placeItems: "center", width: 44, height: 34, borderRadius: 10,
-        background: selected ? "var(--ink)" : hovering ? "var(--sheet-raised)" : "transparent",
-        color: selected ? "var(--ground)" : "inherit", fontSize: 16,
-      }}>
-        <Glyph name={icon} />
-      </span>
-      <span style={{ fontSize: 10.5, fontWeight: selected ? 600 : 400 }}>{label}</span>
+    <button type="button" className="rail-btn" title={help} aria-pressed={selected} onClick={onClick}>
+      <span aria-hidden className="rail-icon"><Glyph name={icon} size={18} /></span>
+      <span className="rail-label">{label}</span>
     </button>
   );
 }
@@ -169,6 +150,28 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
     setSideOpen(!sideOpen);
   };
 
+  // Les raccourcis du Mac (⌘1…⌘4 : l'outil du centre ; ⌘\ : le volet d'à côté),
+  // sur Ctrl : Ctrl+1…4 et Ctrl+\.
+  const shortcuts = useRef({ openPane, toggleSide });
+  shortcuts.current = { openPane, toggleSide };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key === "\\") {
+        event.preventDefault();
+        shortcuts.current.toggleSide();
+        return;
+      }
+      const index = Number(event.key) - 1;
+      if (Number.isInteger(index) && index >= 0 && index < STUDY_PANES.length) {
+        event.preventDefault();
+        shortcuts.current.openPane(STUDY_PANES[index].kind);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!state) return null;
   const takeover = DeskArrangement.layout(context).takeover;
 
@@ -186,23 +189,23 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {/* La colonne d'outils : le centre, un outil à la fois (StudyRail,
             sans Claude ni apps permises — rien à lancer hors du navigateur). */}
-        <nav style={{
-          width: 84, flexShrink: 0, borderRight: "1px solid var(--rule)", background: "var(--ground)",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 0",
+        <nav aria-label="Outils" className="desk-chrome edge-right" style={{
+          width: 76, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 6, padding: "14px 0",
         }}>
           {STUDY_PANES.map((entry) => (
             <RailButton
               key={entry.kind}
               label={entry.label}
               icon={entry.icon}
-              help={entry.help}
+              help={`${entry.help} (Ctrl+${STUDY_PANES.indexOf(entry) + 1})`}
               selected={pane === entry.kind}
               onClick={() => openPane(entry.kind)}
             />
           ))}
         </nav>
 
-        <main style={{ flex: 1, minWidth: 0, position: "relative", background: "var(--ground)" }}>
+        <main style={{ flex: 1, minWidth: 0, position: "relative" }}>
           {pane === "desk" && (
             <DeskHome
               course={course}

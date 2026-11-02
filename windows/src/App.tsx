@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { DataProvider, useData } from "./data/dataContext.tsx";
 import { SqliteSource, type DataSource } from "./data/source.ts";
@@ -6,6 +6,8 @@ import { pickSource } from "./data/appSource.ts";
 import { syncService } from "./services/syncService.ts";
 import { setupShellExtras } from "./ui/shellExtras.ts";
 import { Shell } from "./ui/shell.tsx";
+import { startNative } from "./native/index.ts";
+import { Course } from "./models/index.ts";
 
 // Dans l'app Tauri : la base SQLite locale (tauri-plugin-sql), relue et
 // écrite par le Repository de la synchronisation. Dans le navigateur (`npm
@@ -24,6 +26,7 @@ export default function App() {
   return (
     <DataProvider source={source}>
       <SyncWiring source={source} />
+      <NativeWiring />
       <Shell />
     </DataProvider>
   );
@@ -56,5 +59,24 @@ function SyncWiring({ source }: { source: DataSource }) {
     syncService.attach({ local: source.localStore, reload });
     syncService.startAutoSync();
   }, [source, store, reload]);
+  return null;
+}
+
+/**
+ * La couche native (veille, blocage d'étude, chrono flottant) suit le chrono de
+ * l'app. Le chrono flottant retrouve le cours (code, couleur) dans les données
+ * ouvertes. Rien hors de Tauri.
+ */
+function NativeWiring() {
+  const { store } = useData();
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void startNative((id) => (id ? storeRef.current?.fetch(Course).find((course) => course.id === id) ?? null : null))
+      .then((cleanup) => { if (cancelled) cleanup(); else stop = cleanup; });
+    return () => { cancelled = true; stop?.(); };
+  }, []);
   return null;
 }

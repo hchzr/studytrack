@@ -11,24 +11,14 @@ import { TimerText } from "../../domain/timerText.ts";
 import type { DeskTakeover } from "../../domain/deskArrangement.ts";
 import { CONFIDENCE_COLOR } from "../kit.tsx";
 import { displaySecondsOf } from "../screens/focus/timerView.ts";
-import { InkButton, PaperButton } from "./parts.tsx";
-
-/** L'icône du voile, en caractère (les noms SF ne portent pas ici). */
-function glyphOf(icon: string): string {
-  switch (icon) {
-    case "cup.and.saucer": return "☕";
-    case "pause.circle": return "❙❙";
-    case "person.wave.2": return "☺";
-    case "hourglass": return "⏳";
-    default: return "•";
-  }
-}
+import { useEffect } from "react";
+import { Glyph, InkButton, PaperButton } from "./parts.tsx";
 
 /** La pause en cours, ce qui reste (TimerClockText sur la pause qui s'écoule). */
 function BreakClock({ state, cycle, now }: { state: FocusTimerState; cycle: PomodoroSettings; now: Date }) {
   return (
     <div className="mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 22, color: "var(--ink)" }}>
-      <span aria-hidden>{glyphOf("cup.and.saucer")}</span>
+      <Glyph name="cup.and.saucer" size={20} />
       {TimerText.clock(displaySecondsOf(state, cycle, now))}
     </div>
   );
@@ -50,12 +40,12 @@ function ConfidenceRow({ exercise, onConfidence }: {
             <button
               key={level}
               type="button"
+              className="btn"
               title={ConfidenceLevel.label(level)}
               aria-pressed={selected}
               onClick={() => onConfidence(level)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 999,
-                padding: "5px 10px", fontSize: 14, fontWeight: 500, border: "none",
+                borderColor: "transparent", fontWeight: 500,
                 background: selected ? color : `color-mix(in srgb, ${color} 14%, transparent)`,
                 color: selected ? "var(--ground)" : color,
               }}
@@ -84,6 +74,14 @@ export function TakeoverOverlay({ kind, state, cycle, now, exercise, onDismiss, 
   /** La sûreté posée sur l'exercice visé (enregistrée par l'appelant). */
   onConfidence: (level: ConfidenceLevel) => void;
 }) {
+  // Échap écarte le voile (le Mac : toucher le fond).
+  useEffect(() => {
+    if (kind === "none") return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onDismiss(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [kind, onDismiss]);
+
   if (kind === "none") return null;
   const openEnded = StudyMode.isOpenEnded(state);
   const minutes = Math.max(0, Math.trunc(StudyMode.remaining(state, now) / 60));
@@ -126,17 +124,14 @@ export function TakeoverOverlay({ kind, state, cycle, now, exercise, onDismiss, 
     }}>
       {kind !== "wrapUp" && (
         // Le voile se ferme d'un toucher ; le bilan, en bas, ne couvre rien.
-        <div aria-hidden onClick={onDismiss} style={{
-          position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
-        }} />
+        <div aria-hidden onClick={onDismiss} className="takeover-scrim" />
       )}
-      <div style={{
-        display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center",
-        padding: 28, borderRadius: 26, maxWidth: 380, width: "100%",
-        background: "var(--sheet)", border: "1px solid var(--rule)",
+      <div role="dialog" aria-label={title} className="desk-glass takeover-card" style={{
+        position: "relative", display: "flex", flexDirection: "column", gap: 14, alignItems: "center",
+        textAlign: "center", padding: 28, borderRadius: 26, maxWidth: 380, width: "100%",
       }}>
-        <span aria-hidden style={{ fontSize: 34, color: "var(--ink-secondary)", lineHeight: 1 }}>
-          {glyphOf(icon)}
+        <span aria-hidden style={{ color: "var(--ink-secondary)", display: "grid" }}>
+          <Glyph name={icon} size={34} />
         </span>
         <h2 className="serif" style={{ fontSize: 26, margin: 0, color: "var(--ink)" }}>{title}</h2>
         <p style={{ margin: 0, fontSize: 15, color: "var(--ink-secondary)" }}>{detail}</p>

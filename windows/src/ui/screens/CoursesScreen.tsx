@@ -8,7 +8,8 @@
 import { useState } from "react";
 import { useData } from "../../data/dataContext.tsx";
 import { AcademicTerm, Course } from "../../models/index.ts";
-import { PageHeader, Section, Card } from "../kit.tsx";
+import { PageHeader, Section, Card, Button, EmptyState } from "../kit.tsx";
+import "./home/today.css";
 import { AddCourseForm, ArchivedCourseRow, CourseCard } from "./home/courseCards.tsx";
 
 interface CourseGroup {
@@ -64,10 +65,9 @@ export function CoursesScreen({ onOpenCourse }: { onOpenCourse: (id: string) => 
   };
 
   const headerActions = (
-    <button onClick={() => setShowAdd((value) => !value)} style={{
-      border: "1px solid var(--rule)", background: "var(--sheet-raised)",
-      borderRadius: 10, padding: "7px 12px", fontSize: 13, color: "var(--ink)",
-    }}>+ Ajouter un cours</button>
+    <Button icon="plus" aria-expanded={showAdd} onClick={() => setShowAdd((value) => !value)}>
+      Ajouter un cours
+    </Button>
   );
 
   return (
@@ -75,7 +75,7 @@ export function CoursesScreen({ onOpenCourse }: { onOpenCourse: (id: string) => 
       <PageHeader title="Cours" subtitle={subtitleParts.join(" · ")} actions={headerActions} />
 
       {showAdd && (
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 28 }}>
           <AddCourseForm
             terms={terms}
             defaultTerm={defaultTerm}
@@ -90,14 +90,10 @@ export function CoursesScreen({ onOpenCourse }: { onOpenCourse: (id: string) => 
 
       {courses.length === 0 ? (
         <Card>
-          <div className="serif" style={{ fontSize: 20 }}>Aucun cours</div>
-          <div style={{ color: "var(--ink-secondary)", margin: "6px 0 12px" }}>
+          <EmptyState icon="books.vertical" title="Aucun cours"
+            action={<Button variant="primary" icon="plus" onClick={() => setShowAdd(true)}>Ajouter un cours</Button>}>
             Depuis Moodle ou ton horaire IS-Academia — ou à la main.
-          </div>
-          <button onClick={() => setShowAdd(true)} style={{
-            border: "none", background: "var(--ink)", color: "var(--ground)",
-            borderRadius: 10, padding: "8px 14px", fontSize: 13,
-          }}>Ajouter un cours</button>
+          </EmptyState>
         </Card>
       ) : groups.map((group) => {
         const groupTracked = group.courses
@@ -111,21 +107,19 @@ export function CoursesScreen({ onOpenCourse }: { onOpenCourse: (id: string) => 
         const label = group.term?.displayName ?? "Sans semestre";
         return (
           <Section key={group.term?.id ?? "none"} title={label}>
-            <div style={{ fontSize: 12, color: "var(--ink-secondary)", marginBottom: 10 }}>
+            <div className="c-term-meta">
               {status} · {groupTracked.length} {groupTracked.length === 1 ? "cours suivi" : "cours suivis"}
               {groupCredits > 0 ? ` · ${groupCredits} ECTS` : ""}
             </div>
 
             {groupTracked.length === 0 ? (
               <Card>
-                <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>
+                <span className="muted" style={{ fontSize: 13 }}>
                   Aucun cours suivi dans ce semestre.
                 </span>
               </Card>
             ) : (
-              <div style={{
-                display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12,
-              }}>
+              <div className="c-grid">
                 {groupTracked.map((course) => (
                   <CourseCard
                     key={course.id}
@@ -138,18 +132,11 @@ export function CoursesScreen({ onOpenCourse }: { onOpenCourse: (id: string) => 
             )}
 
             {groupArchived.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{
-                  fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6,
-                  color: "var(--ink-tertiary)", marginBottom: 6,
-                }}>Archivés · {groupArchived.length}</div>
-                <Card>
-                  {groupArchived.map((course, index) => (
-                    <div key={course.id} style={{
-                      borderTop: index === 0 ? "none" : "1px solid var(--rule)", padding: "0 4px",
-                    }}>
-                      <ArchivedCourseRow course={course} onOpen={onOpenCourse} onToggle={toggleTracked} />
-                    </div>
+              <div className="c-archived">
+                <div className="caps" style={{ margin: "0 2px 8px" }}>Archivés · {groupArchived.length}</div>
+                <Card className="t-list">
+                  {groupArchived.map((course) => (
+                    <ArchivedCourseRow key={course.id} course={course} onOpen={onOpenCourse} onToggle={toggleTracked} />
                   ))}
                 </Card>
               </div>

@@ -6,8 +6,50 @@
 // prévu. Le clic remplace le glissement du doigt.
 
 import { useId, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
+import { DateUtils } from "../../../domain/dateUtils.ts";
 import type { CategoryStyle } from "./statsData.ts";
+import "./stats.css";
+
+// MARK: - Infobulle au survol
+
+/**
+ * L'infobulle des graphiques : le Mac montre la valeur sous le doigt (la
+ * sélection de Swift Charts) ; ici le survol la remplace, le clic épingle
+ * toujours. Portée dans `body` pour ne jamais être rognée par une carte.
+ */
+function useTip() {
+  const [tip, setTip] = useState<{ x: number; y: number; content: ReactNode } | null>(null);
+  const show = (content: ReactNode) => (event: ReactPointerEvent) =>
+    setTip({ x: event.clientX, y: event.clientY, content });
+  const hide = (): void => setTip(null);
+  const element = tip
+    ? createPortal(
+      <div className="chart-tip" style={{
+        left: Math.min(tip.x + 14, window.innerWidth - 240), top: tip.y + 16,
+      }}>
+        {tip.content}
+      </div>,
+      document.body,
+    )
+    : null;
+  return { show, hide, element };
+}
+
+function TipRow({ color, opacity = 1, label, value }: { color?: string; opacity?: number; label: string; value: string }) {
+  return (
+    <div className="chart-tip-row">
+      {color && <span className="sw" style={{ background: color, opacity }} />}
+      <span>{label}</span>
+      <b className="mono">{value}</b>
+    </div>
+  );
+}
+
+function pct(part: number, total: number): string {
+  return total <= 0 ? "0 %" : `${Math.round((part / total) * 100)} %`;
+}
 
 // MARK: - Échelles
 
@@ -121,9 +163,12 @@ export function SplitBar({ slices, selected, onSelect }: {
   onSelect: (name: string) => void;
 }) {
   const uid = useId().replace(/:/g, "");
+  const tip = useTip();
   const total = slices.reduce((sum, slice) => sum + slice.seconds, 0);
   let cursor = 0;
   return (
+    <>
+    {tip.element}
     <svg viewBox="0 0 1000 26" width="100%" height={26} role="img"
       aria-label="Répartition du temps par nature de travail"
       style={{ display: "block", width: "100%", height: 26, borderRadius: 6, overflow: "hidden" }}>
@@ -148,13 +193,17 @@ export function SplitBar({ slices, selected, onSelect }: {
               data-testid={`split-${slice.name}`}
               style={{ fill: slice.color, fillOpacity: (selected === null || selected === slice.name ? 1 : 0.35) * slice.opacity }}
               onClick={() => onSelect(slice.name)}
-            >
-              <title>{slice.name}</title>
-            </rect>
+              onPointerMove={tip.show(
+                <TipRow color={slice.color} opacity={slice.opacity}
+                  label={slice.name} value={`${DateUtils.durationLabel(slice.seconds)} · ${pct(slice.seconds, total)}`} />,
+              )}
+              onPointerLeave={tip.hide}
+            />
           );
         })}
       </g>
     </svg>
+    </>
   );
 }
 
@@ -167,7 +216,7 @@ export interface DonutSlice {
   opacity?: number;
 }
 
-export function Donut({ slices, total, selected, onSelect, innerRatio, inset, size = 150, children }: {
+export function Donut({ slices, total, selected, onSelect, innerRatio, inset, size = 150, children, formatValue }: {
   slices: DonutSlice[];
   total: number;
   selected: string | null;
@@ -177,11 +226,16 @@ export function Donut({ slices, total, selected, onSelect, innerRatio, inset, si
   inset: number;
   size?: number;
   children?: ReactNode;
+  /** La valeur de l'infobulle (par défaut une durée). */
+  formatValue?: (value: number) => string;
 }) {
+  const tip = useTip();
+  const format = formatValue ?? ((value: number) => DateUtils.durationLabel(value));
   const inner = innerRatio * 50;
   let offset = 0;
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      {tip.element}
       <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label="Répartition du temps">
         {slices.map((slice) => {
           const fraction = total === 0 ? 0 : slice.seconds / total;
@@ -213,9 +267,12 @@ export function Donut({ slices, total, selected, onSelect, innerRatio, inset, si
               strokeDashoffset={dashOffset}
               transform="rotate(-90 50 50)"
               onClick={() => onSelect(slice.name)}
-            >
-              <title>{slice.name}</title>
-            </circle>
+              onPointerMove={tip.show(
+                <TipRow color={slice.color} opacity={slice.opacity ?? 1} label={slice.name}
+                  value={`${format(slice.seconds)} · ${pct(slice.seconds, total)}`} />,
+              )}
+              onPointerLeave={tip.hide}
+            />
           );
         })}
       </svg>
@@ -237,7 +294,7 @@ export interface TimeBarPoint {
   seconds: number;
 }
 
-export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin, onSelect, axisLabel, xStride }: {
+export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin, onSelect, axisLabel, xStride, tipTitle, goalHours }: {
   bars: TimeBarPoint[];
   bins: Date[];
   range: { start: Date; end: Date };
@@ -247,8 +304,14 @@ export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin
   onSelect: (bin: Date) => void;
   axisLabel: (date: Date) => string;
   xStride: number;
+  /** Le titre de l'infobulle d'une barre (jour ou semaine en toutes lettres). */
+  tipTitle?: (date: Date) => string;
+  /** La ligne pointillée « objectif », en heures (le `RuleMark` du Mac). */
+  goalHours?: number;
 }) {
   const [container, width] = useMeasuredWidth();
+  const tip = useTip();
+  const [hover, setHover] = useState<number | null>(null);
   const left = 38;
   const right = 12;
   const top = 10;
@@ -265,7 +328,7 @@ export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin
     byBin.set(key, [...(byBin.get(key) ?? []), bar]);
   }
   const rawMax = Math.max(0, ...[...totalsByBin.values()].map((seconds) => seconds / 3600));
-  const scale = niceScale(rawMax, 3);
+  const scale = niceScale(Math.max(rawMax, goalHours ?? 0), 3);
 
   const span = Math.max(1, range.end.getTime() - range.start.getTime());
   const binStep = bins.length > 1
@@ -273,13 +336,15 @@ export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin
     : span;
   const slot = (plotWidth * binStep) / span;
   const barWidth = Math.max(3, Math.min(26, slot * 0.62));
+  // Le centre de la case du jour (le `unit: .day` de Swift Charts), pas son début.
   const xFor = (date: Date): number =>
-    left + ((date.getTime() - range.start.getTime()) / span) * plotWidth;
+    left + ((date.getTime() - range.start.getTime()) / span) * plotWidth + slot / 2;
   const yFor = (hours: number): number =>
     top + plotHeight - (hours / scale.max) * plotHeight;
 
   return (
     <div ref={container} style={{ width: "100%" }}>
+    {tip.element}
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img"
       aria-label="Temps par jour et par catégorie" style={{ display: "block", overflow: "visible" }}>
       {scale.ticks.map((tick) => (
@@ -293,14 +358,15 @@ export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin
         </g>
       ))}
 
-      {selectedBin && (() => {
+      {[selectedBin, hover === null ? null : bins[hover]].map((bin, index) => {
+        if (!bin) return null;
         const band = Math.max(6, slot * 0.9);
-        const x = xFor(selectedBin) - band / 2;
+        const x = xFor(bin) - band / 2;
         return (
-          <rect x={x} y={top} width={band} height={plotHeight}
-            style={{ fill: "var(--ink)", opacity: 0.08 }} />
+          <rect key={index} x={x} y={top} width={band} height={plotHeight} rx={4}
+            style={{ fill: "var(--ink)", opacity: index === 0 ? 0.08 : 0.05 }} />
         );
-      })()}
+      })}
 
       {bins.map((bin) => {
         const list = [...(byBin.get(bin.getTime()) ?? [])].sort(
@@ -337,13 +403,44 @@ export function TimeBars({ bars, bins, range, categoryOrder, styles, selectedBin
         );
       })}
 
-      {bins.map((bin, index) => (
-        <rect key={`hit-${bin.getTime()}`} x={xFor(bin) - slot / 2} y={top}
-          width={Math.max(3, slot)} height={plotHeight} fill="transparent"
-          className="stats-hit" data-testid={`time-bin-${index}`} onClick={() => onSelect(bin)}>
-          <title>{axisLabel(bin)}</title>
-        </rect>
-      ))}
+      {goalHours !== undefined && goalHours > 0 && (
+        <g pointerEvents="none">
+          <line x1={left} y1={yFor(goalHours)} x2={width - right} y2={yFor(goalHours)}
+            strokeDasharray="3 3" style={{ stroke: "var(--correct)", strokeWidth: 1 }} />
+          <text x={width - right} y={yFor(goalHours) - 4} textAnchor="end"
+            style={{ fill: "var(--ink-secondary)", fontSize: 10 }}>
+            objectif
+          </text>
+        </g>
+      )}
+
+      {bins.map((bin, index) => {
+        const list = byBin.get(bin.getTime()) ?? [];
+        const total = totalsByBin.get(bin.getTime()) ?? 0;
+        const rows = [...list].sort((a, b) => b.seconds - a.seconds);
+        return (
+          <rect key={`hit-${bin.getTime()}`} x={xFor(bin) - slot / 2} y={top}
+            width={Math.max(3, slot)} height={plotHeight} fill="transparent"
+            className="stats-hit" data-testid={`time-bin-${index}`} onClick={() => onSelect(bin)}
+            onPointerMove={(event) => {
+              setHover(index);
+              tip.show(
+                <>
+                  <div className="chart-tip-title">{(tipTitle ?? axisLabel)(bin)}</div>
+                  {rows.length === 0
+                    ? <div className="chart-tip-empty">Rien</div>
+                    : rows.map((bar) => {
+                      const style = styles[bar.category] ?? { color: "var(--ink-secondary)", opacity: 1 };
+                      return <TipRow key={bar.category} color={style.color} opacity={style.opacity}
+                        label={bar.category} value={DateUtils.durationLabel(bar.seconds)} />;
+                    })}
+                  {rows.length > 1 && <TipRow label="Total" value={DateUtils.durationLabel(total)} />}
+                </>,
+              )(event);
+            }}
+            onPointerLeave={() => { setHover(null); tip.hide(); }} />
+        );
+      })}
     </svg>
     </div>
   );
@@ -375,6 +472,8 @@ export function LineChart({ weeks, series, xLabel, formatY, average, selectedInd
   integerAxis?: boolean;
 }) {
   const [container, width] = useMeasuredWidth();
+  const tip = useTip();
+  const [hover, setHover] = useState<number | null>(null);
   const left = 40;
   const right = 14;
   const top = 12;
@@ -399,6 +498,7 @@ export function LineChart({ weeks, series, xLabel, formatY, average, selectedInd
 
   return (
     <div ref={container} style={{ width: "100%" }}>
+    {tip.element}
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img"
       aria-label="Évolution par semaine" style={{ display: "block", overflow: "visible" }}>
       {scale.ticks.map((tick) => (
@@ -437,16 +537,18 @@ export function LineChart({ weeks, series, xLabel, formatY, average, selectedInd
           style={{ stroke: "var(--ink-tertiary)", strokeWidth: 1 }} />
       )}
 
-      {selectedIndex !== null && selectedIndex >= 0 && selectedIndex < count && (
-        <>
-          <line x1={xFor(selectedIndex)} y1={top} x2={xFor(selectedIndex)} y2={top + plotHeight}
-            style={{ stroke: "var(--ink)", opacity: 0.25, strokeWidth: 1 }} />
-          {series.map((item) => (
-            <circle key={`sel-${item.name}`} cx={xFor(selectedIndex)} cy={yFor(item.values[selectedIndex] ?? 0)}
-              r={4} style={{ fill: item.color, stroke: "var(--sheet)", strokeWidth: 1.5 }} />
-          ))}
-        </>
-      )}
+      {[selectedIndex, hover].map((active, slot) => (
+        active !== null && active >= 0 && active < count && (
+          <g key={slot}>
+            <line x1={xFor(active)} y1={top} x2={xFor(active)} y2={top + plotHeight}
+              style={{ stroke: "var(--ink)", opacity: slot === 0 ? 0.25 : 0.15, strokeWidth: 1 }} />
+            {series.map((item) => (
+              <circle key={`sel-${item.name}`} cx={xFor(active)} cy={yFor(item.values[active] ?? 0)}
+                r={4} style={{ fill: item.color, stroke: "var(--sheet)", strokeWidth: 1.5 }} />
+            ))}
+          </g>
+        )
+      ))}
 
       {weeks.map((week, index) => {
         if (index % Math.max(1, xStride) !== 0) return null;
@@ -461,9 +563,20 @@ export function LineChart({ weeks, series, xLabel, formatY, average, selectedInd
       {weeks.map((week, index) => (
         <rect key={`hit-${week.getTime()}`} x={edges[index]} y={top}
           width={Math.max(2, edges[index + 1] - edges[index])} height={plotHeight}
-          fill="transparent" className="stats-hit" data-testid={`week-${index}`} onClick={() => onSelect(index)}>
-          <title>{xLabel(week)}</title>
-        </rect>
+          fill="transparent" className="stats-hit" data-testid={`week-${index}`} onClick={() => onSelect(index)}
+          onPointerMove={(event) => {
+            setHover(index);
+            tip.show(
+              <>
+                <div className="chart-tip-title">{`Semaine du ${DateUtils.shortDay(week)}`}</div>
+                {series.map((item) => (
+                  <TipRow key={item.name} color={item.color} label={item.name}
+                    value={formatY(item.values[index] ?? 0)} />
+                ))}
+              </>,
+            )(event);
+          }}
+          onPointerLeave={() => { setHover(null); tip.hide(); }} />
       ))}
     </svg>
     </div>
@@ -481,6 +594,7 @@ export interface PaceBarRow {
 
 export function PaceBars({ rows, emptyLabel }: { rows: PaceBarRow[]; emptyLabel: string }) {
   const [container, width] = useMeasuredWidth();
+  const tip = useTip();
   if (rows.length === 0) {
     return <div ref={container} style={{ color: "var(--ink-secondary)", fontSize: 13 }}>{emptyLabel}</div>;
   }
@@ -496,6 +610,7 @@ export function PaceBars({ rows, emptyLabel }: { rows: PaceBarRow[]; emptyLabel:
 
   return (
     <div ref={container} style={{ width: "100%" }}>
+    {tip.element}
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img"
       aria-label="Part faite et part prévue à ce jour, par cours"
       style={{ display: "block", overflow: "visible" }}>
@@ -540,6 +655,15 @@ export function PaceBars({ rows, emptyLabel }: { rows: PaceBarRow[]; emptyLabel:
             >
               {Math.round(donePercent)} %
             </text>
+            <rect x={0} y={center - rowHeight / 2} width={width} height={rowHeight} fill="transparent"
+              onPointerMove={tip.show(
+                <>
+                  <div className="chart-tip-title">{row.code}</div>
+                  <TipRow color={row.color} label="Fait" value={`${Math.round(donePercent)} %`} />
+                  <TipRow label="Prévu à ce jour" value={`${Math.round(expectedPercent)} %`} />
+                </>,
+              )}
+              onPointerLeave={tip.hide} />
           </g>
         );
       })}

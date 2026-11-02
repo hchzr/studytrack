@@ -8,18 +8,24 @@
 import { useMemo, useState } from "react";
 import { useData } from "../../data/dataContext.tsx";
 import { DateUtils, capitalizedFirst } from "../../domain/dateUtils.ts";
+import { StudyGoal } from "../../domain/studyGoal.ts";
 import { Correctness, StudySession, TaskType } from "../../models/index.ts";
-import { PageHeader } from "../kit.tsx";
+import { Button, Icon, IconButton, PageHeader, ProgressBar, Segmented } from "../kit.tsx";
 import {
   Donut, LineChart, PaceBars, SplitBar, TimeBars,
   type LineSeries,
 } from "./stats/charts.tsx";
 import {
-  activeDaysLabel, coursesCount, exercisesCount, hoursValue, lineLabel, percent, sessionsCount,
+  coursesCount, exercisesCount, hoursValue, lineLabel, percent, sessionsCount,
 } from "./stats/format.ts";
 import { carnetTint, correctnessColor, taskColor, useDarkMode } from "./stats/palette.ts";
-import { Chip, LegendChip, LegendDot, RoundButton, StatCard } from "./stats/parts.tsx";
+import { LegendChip, LegendDot, StatCard } from "./stats/parts.tsx";
 import { SessionEditor } from "./stats/SessionEditor.tsx";
+import "./stats/stats.css";
+import { readFocusSettings } from "./focus/focusSettings.ts";
+
+/** L'objectif réglé sur ce poste (le même que celui du chrono). */
+const goalSettings = () => readFocusSettings();
 import {
   LECTURE_CATEGORY, PERIOD_LABELS, buildStats, journalGroups, journalSessions, weekLabel,
   type Period, type StatsSnapshot,
@@ -75,61 +81,28 @@ export function StatsScreen() {
 
   return (
     <>
-      <style>{`
-        .stats-chip:hover { border-color: var(--ink) !important; }
-        .stats-round:hover:not(:disabled) { background: var(--sheet-raised) !important; }
-        .stats-hit { cursor: pointer; }
-        .stats-session:hover, .stats-history:hover { background: var(--sheet-raised); }
-        .stats-add:hover { opacity: .88; }
-        .stats-clear:hover { color: var(--ink) !important; }
-        .stats-top, .stats-wide {
-          display: grid; grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.4fr);
-          gap: 18px; align-items: start;
-        }
-        .stats-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-        @media (max-width: 1120px) {
-          .stats-top, .stats-wide { grid-template-columns: minmax(0, 1fr); }
-        }
-      `}</style>
-
       <PageHeader
         title="Bilan"
         subtitle={snapshot.rangeLabel}
         actions={(
-          <button
-            type="button"
-            className="stats-add"
-            onClick={addManual}
-            title="Ajouter une session passée"
-            style={{
-              padding: "8px 14px", borderRadius: 999, border: "1px solid var(--ink)",
-              background: "var(--ink)", color: "var(--sheet)", fontSize: 13, fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            + Ajouter
-          </button>
+          <Button variant="primary" icon="plus" onClick={addManual} title="Ajouter une session passée">
+            Ajouter
+          </Button>
         )}
       />
 
-      <div style={{
-        display: "flex", flexWrap: "wrap", alignItems: "center",
-        justifyContent: "space-between", gap: 12, marginBottom: 20,
-      }}>
-        <div role="group" aria-label="Période" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {PERIODS.map((value) => (
-            <Chip
-              key={value}
-              label={PERIOD_LABELS[value]}
-              selected={period === value}
-              onClick={() => choosePeriod(value)}
-            />
-          ))}
-        </div>
+      <div className="stats-toolbar">
+        <Segmented
+          ariaLabel="Période"
+          value={period}
+          options={PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }))}
+          onChange={choosePeriod}
+        />
         {period === "week" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <RoundButton label="Semaine précédente" onClick={() => shiftWeek(-1)}>‹</RoundButton>
-            <RoundButton label="Semaine suivante" onClick={() => shiftWeek(1)} disabled={weekOffset >= 0}>›</RoundButton>
+          <div className="hstack">
+            <IconButton icon="chevron.left" label="Semaine précédente" bordered onClick={() => shiftWeek(-1)} />
+            <IconButton icon="chevron.right" label="Semaine suivante" bordered
+              onClick={() => shiftWeek(1)} disabled={weekOffset >= 0} />
           </div>
         )}
       </div>
@@ -206,34 +179,43 @@ export function StatsScreen() {
 
 function Totals({ snapshot }: { snapshot: StatsSnapshot }) {
   const hasLecture = snapshot.lectureSeconds > 0;
+  const total = snapshot.studySeconds + snapshot.lectureSeconds;
+  const days = snapshot.activeDays;
+
+  // L'objectif du jour (comme `settings.dailyGoalSeconds` du Mac) : seulement
+  // quand les barres sont des jours — une barre de semaine ne se compare pas.
+  const weekly = StudyGoal.weeklySeconds(goalSettings().weeklyGoalMinutes, snapshot.tracked, goalSettings().hoursPerCredit);
+  const dailyGoal = StudyGoal.dailySeconds(weekly);
+  const dayTotals = new Map<number, number>();
+  for (const bar of snapshot.timeBars) {
+    dayTotals.set(bar.bin.getTime(), (dayTotals.get(bar.bin.getTime()) ?? 0) + bar.seconds);
+  }
+  const goalDays = [...dayTotals.values()].filter((seconds) => seconds >= dailyGoal).length;
+
   return (
-    <div className="card" style={{ padding: 0, display: "flex", alignItems: "stretch" }}>
+    <div className="card stats-figures">
       <Figure
         title="Étude"
         value={DateUtils.hoursLabel(snapshot.studySeconds)}
         detail={sessionsCount(snapshot.studySessions.length)}
       />
-      <span style={{ width: 1, background: "var(--rule)", margin: "16px 0" }} />
-      {hasLecture ? (
+      {hasLecture && (
         <>
           <Figure
             title="Amphi"
             value={DateUtils.hoursLabel(snapshot.lectureSeconds)}
             detail={coursesCount(snapshot.lectures.length)}
           />
-          <span style={{ width: 1, background: "var(--rule)", margin: "16px 0" }} />
-          <Figure
-            title="Total"
-            value={DateUtils.hoursLabel(snapshot.studySeconds + snapshot.lectureSeconds)}
-            detail={activeDaysLabel(snapshot.activeDays)}
-          />
+          <Figure title="Total" value={DateUtils.hoursLabel(total)} detail="étude + amphi" />
         </>
-      ) : (
-        <Figure
-          title="Jours actifs"
-          value={`${snapshot.activeDays}`}
-          detail="sur la période"
-        />
+      )}
+      <Figure
+        title="Jours actifs"
+        value={`${days}`}
+        detail={days > 0 ? `${DateUtils.hoursLabel(Math.trunc(total / days))} par jour actif` : "sur la période"}
+      />
+      {!snapshot.binsByWeek && (
+        <Figure title="Objectif atteint" value={`${goalDays}`} detail={`≥ ${DateUtils.hoursLabel(dailyGoal)} par jour`} />
       )}
     </div>
   );
@@ -241,20 +223,10 @@ function Totals({ snapshot }: { snapshot: StatsSnapshot }) {
 
 function Figure({ title, value, detail }: { title: string; value: string; detail: string }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, textAlign: "center", padding: "14px 10px" }}>
-      <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{title}</div>
-      <div className="serif" style={{
-        fontSize: 22, margin: "3px 0", whiteSpace: "nowrap",
-        overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {value}
-      </div>
-      <div style={{
-        fontSize: 11, color: "var(--ink-tertiary)",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {detail}
-      </div>
+    <div className="stats-figure">
+      <div className="t">{title}</div>
+      <div className="v serif">{value}</div>
+      <div className="d">{detail}</div>
     </div>
   );
 }
@@ -386,9 +358,15 @@ function TimeChartCard({ snapshot, pinnedBin, onPin, onClear }: {
 
   const axisLabel = (date: Date): string => {
     if (snapshot.binsByWeek) return weekLabel(snapshot.term, date);
-    if (snapshot.period === "week") return DateUtils.weekdayInitial(date);
+    if (snapshot.period === "week") return weekdayShort(date);
     return `${date.getDate()}`;
   };
+  const tipTitle = (date: Date): string => (snapshot.binsByWeek
+    ? `Semaine du ${DateUtils.shortDay(date)}`
+    : capitalizedFirst(DateUtils.fullDayLabel(date)));
+  // La ligne « objectif » du Mac, sur les barres de jours seulement.
+  const goalHours = snapshot.binsByWeek ? undefined
+    : StudyGoal.dailySeconds(StudyGoal.weeklySeconds(goalSettings().weeklyGoalMinutes, snapshot.tracked, goalSettings().hoursPerCredit)) / 3600;
 
   const title = snapshot.binsByWeek ? "Semaine par semaine" : "Jour par jour";
 
@@ -396,17 +374,7 @@ function TimeChartCard({ snapshot, pinnedBin, onPin, onClear }: {
     <StatCard
       title={title}
       accessory={pinnedBin ? (
-        <button
-          type="button"
-          className="stats-clear"
-          onClick={onClear}
-          style={{
-            border: "none", background: "none", padding: 0, cursor: "pointer",
-            color: "var(--ink-secondary)", fontSize: 12,
-          }}
-        >
-          Revenir à toute la période
-        </button>
+        <Button variant="ghost" size="sm" onClick={onClear}>Revenir à toute la période</Button>
       ) : undefined}
     >
       {pinnedBin ? (
@@ -457,6 +425,8 @@ function TimeChartCard({ snapshot, pinnedBin, onPin, onClear }: {
         onSelect={onPin}
         axisLabel={axisLabel}
         xStride={snapshot.period === "month" ? 5 : 1}
+        tipTitle={tipTitle}
+        goalHours={goalHours}
       />
     </StatCard>
   );
@@ -705,19 +675,16 @@ function ProgressAxis({ title, done, total, color }: {
 }) {
   const ratio = total <= 0 ? 0 : done / total;
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-        <span style={{ fontSize: 11, color: "var(--ink-secondary)", whiteSpace: "nowrap" }}>{title}</span>
-        <span style={{ flex: 1 }} />
+    <div className="stats-progress-axis">
+      <div className="row">
+        <span className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{title}</span>
+        <span className="spacer" />
         <span className="mono" style={{ fontSize: 11, fontWeight: 500 }}>
           {total === 0 ? "—" : `${done}/${total}`}
         </span>
       </div>
-      <div style={{
-        height: 4, borderRadius: 999, background: "var(--rule)", marginTop: 5,
-        overflow: "hidden", opacity: total === 0 ? 0.3 : 1,
-      }}>
-        <div style={{ width: `${ratio * 100}%`, height: "100%", background: color }} />
+      <div style={{ marginTop: 5, opacity: total === 0 ? 0.3 : 1 }}>
+        <ProgressBar value={ratio} color={color} height={4} />
       </div>
     </div>
   );
@@ -750,61 +717,31 @@ function JournalCard({ snapshot, dark, pinnedBin, onClearPin, showHistory, onTog
 
   return (
     <section>
-      <div style={{
-        display: "flex", alignItems: "baseline", justifyContent: "space-between",
-        gap: 12, marginBottom: 10, minHeight: 18,
-      }}>
-        <h2 style={{
-          fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6,
-          color: "var(--ink-tertiary)", margin: 0,
-        }}>
-          Sessions
-        </h2>
+      <div className="stat-card-head">
+        <h2 className="caps" style={{ margin: 0 }}>Sessions</h2>
         {pinnedBin && pinnedLabel ? (
-          <button
-            type="button"
-            onClick={onClearPin}
-            aria-label="Revenir à toute la période"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px",
-              borderRadius: 8, border: "1px solid var(--rule)", background: "var(--sheet)",
-              color: "var(--ink-secondary)", fontSize: 12, cursor: "pointer",
-            }}
-          >
-            {pinnedLabel} <span aria-hidden="true">×</span>
-          </button>
+          <Button size="sm" trailingIcon="xmark" aria-label="Revenir à toute la période" onClick={onClearPin}>
+            {pinnedLabel}
+          </Button>
         ) : shown.length > 0 ? (
-          <span style={{ fontSize: 13, color: "var(--ink-secondary)" }}>{shown.length}</span>
+          <span className="acc">{shown.length}</span>
         ) : undefined}
       </div>
 
       <div className="card" style={{ padding: visible.length === 0 ? 16 : 0, overflow: "hidden" }}>
         {visible.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 13, color: "var(--ink-secondary)" }}>
+          <div className="hstack" style={{ gap: 12 }}>
+            <span className="muted" style={{ fontSize: 13 }}>
               {pinnedBin === null ? "Aucune session sur la période." : "Aucune session ce jour-là."}
             </span>
-            <span style={{ flex: 1 }} />
-            <button
-              type="button"
-              onClick={onAdd}
-              style={{
-                border: "none", background: "none", padding: 0, color: "var(--ink)",
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Ajouter
-            </button>
+            <span className="spacer" />
+            <Button size="sm" icon="plus" onClick={onAdd}>Ajouter</Button>
           </div>
         ) : (
           <>
             {visible.map((group, groupIndex) => (
               <div key={group.day.getTime()}>
-                <div style={{
-                  display: "flex", alignItems: "baseline", justifyContent: "space-between",
-                  gap: 10, padding: `14px 16px 4px`, fontSize: 12, fontWeight: 600,
-                  color: "var(--ink-secondary)",
-                }}>
+                <div className="stats-day">
                   <span>{dayLabel(group.day)}</span>
                   <span className="mono">{DateUtils.hoursLabel(group.totalSeconds)}</span>
                 </div>
@@ -814,7 +751,6 @@ function JournalCard({ snapshot, dark, pinnedBin, onClearPin, showHistory, onTog
                     session={session}
                     dark={dark}
                     testId={`session-${groupIndex}-${sessionIndex}`}
-                    divider={sessionIndex > 0}
                     onEdit={() => onEdit(session)}
                   />
                 ))}
@@ -822,22 +758,14 @@ function JournalCard({ snapshot, dark, pinnedBin, onClearPin, showHistory, onTog
             ))}
 
             {(canExpand || canCollapse) && (
-              <>
-                <div style={{ height: 1, background: "var(--rule)" }} />
-                <button
-                  type="button"
-                  className="stats-history"
-                  onClick={onToggleHistory}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    width: "100%", padding: "12px 16px", border: "none", background: "transparent",
-                    color: "var(--ink)", fontSize: 13, cursor: "pointer",
-                  }}
-                >
-                  <span>{canCollapse ? "Réduire" : "Tout l'historique"}</span>
-                  <span style={{ color: "var(--ink-tertiary)", fontSize: 13 }}>{canCollapse ? "︿" : "›"}</span>
-                </button>
-              </>
+              <button
+                type="button"
+                className="stats-history"
+                onClick={onToggleHistory}
+              >
+                <span>{canCollapse ? "Réduire" : "Tout l'historique"}</span>
+                <Icon name={canCollapse ? "chevron.up" : "chevron.right"} size={14} />
+              </button>
             )}
           </>
         )}
@@ -846,11 +774,10 @@ function JournalCard({ snapshot, dark, pinnedBin, onClearPin, showHistory, onTog
   );
 }
 
-function SessionRow({ session, dark, testId, divider, onEdit }: {
+function SessionRow({ session, dark, testId, onEdit }: {
   session: StudySession;
   dark: boolean;
   testId: string;
-  divider: boolean;
   onEdit: () => void;
 }) {
   const subtitle = [
@@ -866,30 +793,26 @@ function SessionRow({ session, dark, testId, divider, onEdit }: {
       data-testid={testId}
       onClick={onEdit}
       title="Modifier la session"
-      style={{
-        display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-        padding: "9px 16px", border: "none", background: "transparent",
-        borderTop: divider ? "1px solid var(--rule)" : "none", cursor: "pointer",
-      }}
     >
       <span style={{
         width: 8, height: 8, borderRadius: 3, flexShrink: 0,
         background: session.course ? carnetTint(session.course.colorHex, dark) : "var(--ink-secondary)",
       }} />
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="ttl">
           {session.course?.displayCode ?? "Sans cours"} · {TaskType.label(session.taskType)}
         </span>
-        <span style={{
-          display: "block", fontSize: 12, color: "var(--ink-secondary)", marginTop: 1,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {subtitle}
-        </span>
+        <span className="sub">{subtitle}</span>
       </span>
       <span className="mono" style={{ fontSize: 13, flexShrink: 0 }}>{session.durationLabel}</span>
     </button>
   );
+}
+
+/** « Lun. » : l'abréviation du jour, comme l'axe du Mac (`weekday(.abbreviated)`). */
+function weekdayShort(date: Date): string {
+  const label = new Intl.DateTimeFormat("fr-CH", { weekday: "short" }).format(date);
+  return capitalizedFirst(label);
 }
 
 /** « Aujourd'hui », « Hier », sinon la date complète (initiale en capitale). */

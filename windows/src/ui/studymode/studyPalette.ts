@@ -22,6 +22,15 @@ export const studyPalette = {
   "--review": "#E0B04E",
   "--wrong": "#E7836F",
   "--selection": "#463E31",
+  // Les jetons du kit (kit.css) : sans eux, un bouton lirait le clair de l'app.
+  "--rule-strong": "#463F33",
+  "--hover": "rgba(237, 230, 214, 0.06)",
+  "--focus": "#A89F8D",
+  "--scrim": "rgba(0, 0, 0, 0.5)",
+  "--shadow-1": "none",
+  "--shadow-2": "0 2px 12px rgba(0, 0, 0, 0.35)",
+  "--shadow-3": "0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03)",
+  "--chevron": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A89F8D' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
 } as CSSProperties;
 
 /** La clé où le choix « Bloquer le reste » est retenu (le blocage natif Windows
