@@ -5,6 +5,7 @@
 // web s'ouvre dans le navigateur du système, et le reste mène au centre.
 
 import { hasCourseSite } from "../coursesite/courseSites.ts";
+import { openQuickNote } from "../quicknote/QuickNote.tsx";
 import type { ReactNode } from "react";
 import type { Course } from "../../models/course.ts";
 import type { ExerciseSeries } from "../../models/exercise.ts";
@@ -119,6 +120,13 @@ export function StudySidePanel({ course, series, now, onOpenPane, onClose }: {
               onClick={() => onOpenPane("course")}
             />
           )}
+          <Row
+            icon="note.text"
+            title="Note rapide"
+            detail="Une ligne datée, rangée dans le cours"
+            tint={tint}
+            onClick={() => openQuickNote()}
+          />
           <Row
             icon="text.alignleft"
             title="Notes du cours"

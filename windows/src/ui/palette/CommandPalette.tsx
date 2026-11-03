@@ -2,6 +2,7 @@
 // clavier. Taper un cours, une série, un exercice, une action ; ↩ ouvre,
 // Ctrl+↩ chronomètre, Échap ferme.
 
+import { openQuickNote } from "../quicknote/QuickNote.tsx";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useData } from "../../data/dataContext.tsx";
 import { Course } from "../../models/index.ts";
@@ -71,6 +72,7 @@ export function CommandPalette({ onClose, onOpenCourse, onNavigate, onStudyMode 
       id: "a.study", title: "Mode étude…", subtitle: "Plein écran", icon: "moon", section: "Actions",
       shortcut: "Ctrl+Maj+E", run: onStudyMode,
     });
+    action({ id: "a.quicknote", title: "Note rapide…", subtitle: "Une ligne datée dans les notes d'un cours", icon: "note.text", section: "Actions", run: () => openQuickNote() });
     action({ id: "a.settings", title: "Réglages…", icon: "gearshape", section: "Aller à", run: () => onNavigate("settings") });
 
     const needle = query.trim();

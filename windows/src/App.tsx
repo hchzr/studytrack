@@ -6,6 +6,7 @@ import { pickSource } from "./data/appSource.ts";
 import { syncService } from "./services/syncService.ts";
 import { setupShellExtras } from "./ui/shellExtras.ts";
 import { Shell } from "./ui/shell.tsx";
+import { QuickNoteHost } from "./ui/quicknote/QuickNote.tsx";
 import { startNative } from "./native/index.ts";
 import { Course } from "./models/index.ts";
 
@@ -29,6 +30,7 @@ export default function App() {
       <SyncWiring source={base} />
       <NativeWiring />
       <Shell />
+      <QuickNoteHost />
     </DataProvider>
   );
 }
