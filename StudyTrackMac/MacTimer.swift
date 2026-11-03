@@ -57,6 +57,8 @@ final class MacTimer: TimerEngineHost {
 
     func timerDidChange(_ change: TimerEngine.Change) {
         if change == .saved { return }
+        // Les groupes : la session ensemble suit, la présence s'annonce.
+        MacGroups.shared.timerDidChange(change)
         syncSelection()
         scheduleNotifications()
         if case .boundary(let events, let studyEnded) = change, settings.sounds {

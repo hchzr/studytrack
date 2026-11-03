@@ -157,3 +157,12 @@ final class AppContainer {
         SpotlightIndexer.schedule(container: modelContainer)
     }
 }
+
+/// La session de groupe passe par le chrono de l'iPhone.
+extension AppContainer: GroupSessionHost {
+    var groupTimerEngine: TimerEngine { focus.engine }
+    var groupTimerLocked: Bool { focus.isLocked }
+    var groupPomodoroDefault: Bool { settings.pomodoroDefault }
+    var groupPomodoroCycle: PomodoroSettings { settings.pomodoro }
+    func groupFinishTimer() { _ = focus.finish() }
+}

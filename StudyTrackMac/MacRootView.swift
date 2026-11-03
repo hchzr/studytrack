@@ -7,7 +7,7 @@ import SwiftData
 /// chercher, ouvrir, chronométrer. ⇧⌘E entre en mode étude.
 struct MacRootView: View {
     enum Page: Hashable {
-        case today, focus, agenda, stats, claude
+        case today, focus, agenda, stats, groups, claude
         case course(UUID)
     }
 
@@ -47,6 +47,7 @@ struct MacRootView: View {
                     .tag(Page.focus)
                     SidebarLabel(title: "Agenda", icon: "calendar").tag(Page.agenda)
                     SidebarLabel(title: "Bilan", icon: "chart.bar.xaxis").tag(Page.stats)
+                    SidebarLabel(title: "Groupes", icon: "person.2").tag(Page.groups)
                     // La conversation « EPFL » (brief, semaine, revue…), quand le
                     // projet Claude a des commandes pour le système.
                     if settings.claudeProject {
@@ -101,6 +102,8 @@ struct MacRootView: View {
                     MacAgendaView(open: open).pausedWhenHidden()
                 case .stats:
                     MacStatsView().pausedWhenHidden()
+                case .groups:
+                    MacGroupsView().background(Carnet.ground)
                 case .claude:
                     ClaudePane(course: nil, courses: courses, desk: StudyModeController.shared.desk, onlySystem: true)
                         .background(Carnet.ground)
@@ -227,6 +230,7 @@ struct MacRootView: View {
         case .stats?: return "stats"
         case .focus?: return "focus"
         case .agenda?: return "agenda"
+        case .groups?: return "groups"
         case .claude?: return "claude"
         case .course(let id)?: return id.uuidString
         default: return "today"
@@ -237,6 +241,7 @@ struct MacRootView: View {
         if raw == "stats" { return .stats }
         if raw == "focus" { return .focus }
         if raw == "agenda" { return .agenda }
+        if raw == "groups" { return .groups }
         if raw == "claude" { return .claude }
         if let id = UUID(uuidString: raw) { return .course(id) }
         return .today

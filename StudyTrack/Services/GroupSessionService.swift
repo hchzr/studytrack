@@ -11,6 +11,23 @@ import Observation
 ///
 /// Mon Mac suit aussi : il reçoit l'état de mon chrono par le relais
 /// (`CloudRelay`), et ses gestes reviennent ici, qui les pousse au groupe.
+/// Ce dont la session de groupe a besoin de l'app : le compte, le chrono, les réglages du
+/// Pomodoro. L'iPhone (`AppContainer`) et le Mac (`MacGroups`) le fournissent.
+@MainActor
+protocol GroupSessionHost: AnyObject {
+    var social: SocialService { get }
+    var groupTimerEngine: TimerEngine { get }
+    var groupTimerLocked: Bool { get }
+    var groupPomodoroDefault: Bool { get }
+    var groupPomodoroCycle: PomodoroSettings { get }
+    func groupFinishTimer()
+}
+
+extension GroupSessionHost {
+    var groupTimerState: FocusTimerState? { groupTimerEngine.state }
+    var groupTimerHasSession: Bool { groupTimerEngine.hasSession }
+}
+
 @MainActor
 @Observable
 final class GroupSessionService {
@@ -20,7 +37,7 @@ final class GroupSessionService {
     private(set) var lastError: String?
     private(set) var isWorking = false
 
-    @ObservationIgnored weak var app: AppContainer?
+    @ObservationIgnored weak var app: (any GroupSessionHost)?
     @ObservationIgnored private var subscriptions: [String: UUID] = [:]
     @ObservationIgnored private var lastPushed: GroupClock?
     /// La session que ce chrono suivait, pour la quitter à sa fermeture.
@@ -64,33 +81,33 @@ final class GroupSessionService {
 
     /// Retour au premier plan : la session liée a pu bouger pendant la veille.
     func resume() {
-        guard let groupID = app?.focus.state?.groupSession?.groupID else { return }
+        guard let groupID = app?.groupTimerState?.groupSession?.groupID else { return }
         watch(groupID: groupID)
         Task { await refresh(groupID: groupID) }
     }
 
     private func apply(_ session: RemoteGroupSession?, groupID: String) {
-        guard let app, let link = app.focus.state?.groupSession, link.groupID == groupID else { return }
+        guard let app, let link = app.groupTimerState?.groupSession, link.groupID == groupID else { return }
         guard let session, session.id == link.sessionID, session.isLive else {
             // La session est finie (ou en a remplacé une autre) : chacun
             // enregistre son temps.
             closingFromGroup = true
-            if app.focus.isLocked {
+            if app.groupTimerLocked {
                 // Le verrou tient : on quitte le groupe, la session continue.
-                app.focus.engine.detachGroup()
+                app.groupTimerEngine.detachGroup()
                 let left = linked
                 linked = nil
                 lastPushed = nil
                 if let left { Task { try? await app.social.leaveGroupSession(sessionID: left.sessionID) } }
             } else {
-                app.focus.finish()
+                app.groupFinishTimer()
             }
             closingFromGroup = false
             return
         }
         guard session.updated_by != app.social.userID, session.clock != lastPushed else { return }
         lastPushed = session.clock
-        app.focus.engine.applyGroupClock(session.clock)
+        app.groupTimerEngine.applyGroupClock(session.clock)
     }
 
     // MARK: Gestes
@@ -100,21 +117,21 @@ final class GroupSessionService {
         guard let app, let groupID = group.remoteID else { return }
         isWorking = true
         defer { isWorking = false }
-        let focus = app.focus
+        let engine = app.groupTimerEngine
         do {
             // L'horloge part du chrono ouvert ici, sinon d'un chrono qui démarre.
-            var clockSource = focus.state
-            if clockSource == nil || !focus.hasSession {
-                var fresh = FocusTimerState(sessionStartedAt: Date(), pomodoro: app.settings.pomodoroDefault)
-                fresh.cycle = app.settings.pomodoro
+            var clockSource = engine.state
+            if clockSource == nil || !engine.hasSession {
+                var fresh = FocusTimerState(sessionStartedAt: Date(), pomodoro: app.groupPomodoroDefault)
+                fresh.cycle = app.groupPomodoroCycle
                 fresh.start()
                 clockSource = fresh
             }
             let session = try await app.social.createGroupSession(groupID: groupID, clock: GroupClock(clockSource!))
             let link = GroupSessionLink(sessionID: session.id, groupID: groupID, groupName: group.name)
             if session.host_id == app.social.userID, session.clock == GroupClock(clockSource!) {
-                focus.engine.hostGroupSession(link, courseID: focus.state?.courseID, taskType: focus.state?.taskType ?? .exercise,
-                                              targetID: focus.state?.targetID)
+                engine.hostGroupSession(link, courseID: engine.state?.courseID, taskType: engine.state?.taskType ?? .exercise,
+                                        targetID: engine.state?.targetID)
                 lastPushed = session.clock
             } else {
                 await join(session, group: group)
@@ -137,9 +154,9 @@ final class GroupSessionService {
         do {
             try await app.social.joinGroupSession(sessionID: session.id, groupID: groupID)
             let link = GroupSessionLink(sessionID: session.id, groupID: groupID, groupName: group.name)
-            let focus = app.focus
-            focus.engine.joinGroupSession(link, clock: session.clock, courseID: focus.state?.courseID,
-                                          taskType: focus.state?.taskType ?? .exercise, targetID: focus.state?.targetID)
+            let engine = app.groupTimerEngine
+            engine.joinGroupSession(link, clock: session.clock, courseID: engine.state?.courseID,
+                                    taskType: engine.state?.taskType ?? .exercise, targetID: engine.state?.targetID)
             linked = link
             lastPushed = session.clock
             watch(groupID: groupID)
@@ -181,7 +198,7 @@ final class GroupSessionService {
             }
             return
         }
-        guard let state = app.focus.state, let link = state.groupSession else { return }
+        guard let state = app.groupTimerState, let link = state.groupSession else { return }
         linked = link
         switch change {
         case .gesture, .remote:

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F3000000000000000000001E /* GroupSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001E /* GroupSessionService.swift */; };
 		B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StudyTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* StudyTrackShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F30000000000000000000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Theme.swift */; };
@@ -32,6 +33,12 @@
 		F30000000000000000000015 /* SupabaseOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000015 /* SupabaseOAuth.swift */; };
 		F30000000000000000000016 /* SyncDeviceLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000016 /* SyncDeviceLink.swift */; };
 		F30000000000000000000017 /* SyncEncryptionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000017 /* SyncEncryptionViews.swift */; };
+		F30000000000000000000018 /* SocialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000018 /* SocialService.swift */; };
+		F30000000000000000000019 /* GroupSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000019 /* GroupSync.swift */; };
+		F3000000000000000000001A /* PresenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001A /* PresenceService.swift */; };
+		F3000000000000000000001B /* GroupEncryption.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001B /* GroupEncryption.swift */; };
+		F3000000000000000000001C /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001C /* RealtimeClient.swift */; };
+		F3000000000000000000001D /* GroupKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001D /* GroupKeyStore.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -99,6 +106,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F2000000000000000000001E /* GroupSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSessionService.swift; path = StudyTrack/Services/GroupSessionService.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000005 /* StudyTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StudyTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000002 /* StudyTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D10000000000000000000001 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Support/Supabase.xcconfig; sourceTree = "<group>"; };
@@ -127,6 +135,12 @@
 		F20000000000000000000015 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseOAuth.swift; path = StudyTrack/Services/SupabaseOAuth.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000016 /* SyncDeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncDeviceLink.swift; path = StudyTrack/Services/SyncDeviceLink.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000017 /* SyncEncryptionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncEncryptionViews.swift; path = StudyTrack/Views/Stats/SyncEncryptionViews.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000018 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SocialService.swift; path = StudyTrack/Services/SocialService.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000019 /* GroupSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSync.swift; path = StudyTrack/Services/GroupSync.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001A /* PresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PresenceService.swift; path = StudyTrack/Services/PresenceService.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001B /* GroupEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupEncryption.swift; path = StudyTrack/Services/GroupEncryption.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001C /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RealtimeClient.swift; path = StudyTrack/Services/RealtimeClient.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001D /* GroupKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupKeyStore.swift; path = StudyTrack/Services/GroupKeyStore.swift; sourceTree = SOURCE_ROOT; };
 		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		K10000000000000000000001 /* ClaudePlugin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ClaudePlugin; sourceTree = "<group>"; };
@@ -245,6 +259,13 @@
 				F20000000000000000000004 /* CalendarService.swift */,
 				F20000000000000000000005 /* TimetableImportService.swift */,
 				F20000000000000000000006 /* TimetableImport.swift */,
+				F2000000000000000000001E /* GroupSessionService.swift */,
+				F2000000000000000000001D /* GroupKeyStore.swift */,
+				F2000000000000000000001C /* RealtimeClient.swift */,
+				F2000000000000000000001B /* GroupEncryption.swift */,
+				F2000000000000000000001A /* PresenceService.swift */,
+				F20000000000000000000019 /* GroupSync.swift */,
+				F20000000000000000000018 /* SocialService.swift */,
 				F20000000000000000000007 /* CourseImporter.swift */,
 				F20000000000000000000008 /* SeriesPDFParser.swift */,
 				F20000000000000000000009 /* PDFLayoutExtractor.swift */,
@@ -543,6 +564,13 @@
 				F30000000000000000000004 /* CalendarService.swift in Sources */,
 				F30000000000000000000005 /* TimetableImportService.swift in Sources */,
 				F30000000000000000000006 /* TimetableImport.swift in Sources */,
+				F3000000000000000000001E /* GroupSessionService.swift in Sources */,
+				F3000000000000000000001D /* GroupKeyStore.swift in Sources */,
+				F3000000000000000000001C /* RealtimeClient.swift in Sources */,
+				F3000000000000000000001B /* GroupEncryption.swift in Sources */,
+				F3000000000000000000001A /* PresenceService.swift in Sources */,
+				F30000000000000000000019 /* GroupSync.swift in Sources */,
+				F30000000000000000000018 /* SocialService.swift in Sources */,
 				F30000000000000000000007 /* CourseImporter.swift in Sources */,
 				F30000000000000000000008 /* SeriesPDFParser.swift in Sources */,
 				F30000000000000000000009 /* PDFLayoutExtractor.swift in Sources */,
