@@ -25,7 +25,14 @@ enum Carnet {
     /// L'encre : texte, glyphes, boutons pleins.
     static let ink = Color.paper(light: "#1D1B16", dark: "#EDE6D6")
     static let inkSecondary = Color.paper(light: "#6B655A", dark: "#A89F8D")
-    static let inkTertiary = Color.paper(light: "#8F8876", dark: "#7D7566")
+    /// Le troisième niveau de gris : ce qui est là sans être à lire (cotes,
+    /// chevrons, « corrigé »). Il était trop pâle pour le texte qu'il porte :
+    /// 3.10:1 sur le papier clair et 3.26:1 sur la feuille en retrait la nuit,
+    /// sous les 4.5:1 du texte courant. Il est maintenant résolu contre la plus
+    /// **claire** des surfaces où il se pose — 4.93:1 sur la feuille en retrait
+    /// (le cas le plus clair), 5.87:1 sur la feuille, 5.24:1 sur le papier ;
+    /// 4.96:1 la nuit. Il reste plus pâle que `inkSecondary` sans être illisible.
+    static let inkTertiary = Color.paper(light: "#696356", dark: "#9E9480")
     /// Les traits : séparateurs, contours.
     static let rule = Color.paper(light: "#E6DFD0", dark: "#353027")
     /// Le surligneur : la sous-question en cours dans un énoncé.
@@ -33,8 +40,13 @@ enum Carnet {
 
     // MARK: Verdicts de correction
 
-    static let correct = Color.paper(light: "#3F7A3F", dark: "#8FC58A")
-    static let review = Color.paper(light: "#A86F0C", dark: "#E0B04E")
+    /// Le vert « juste » : 4.27:1 sur la feuille en retrait du papier clair,
+    /// sous le seuil du texte (4.76:1 maintenant), et 5.66:1 sur la feuille.
+    static let correct = Color.paper(light: "#3A723A", dark: "#8FC58A")
+    /// « À revoir » : l'ambre est le plus clair des trois verdicts sur le papier,
+    /// et il n'était qu'à 4.18:1 — sous le seuil du texte (5.48:1 sur la feuille,
+    /// 4.60:1 sur la feuille en retrait).
+    static let review = Color.paper(light: "#8F5E06", dark: "#E0B04E")
     static let wrong = Color.paper(light: "#A33A2A", dark: "#E7836F")
 
     static func color(for correctness: Correctness) -> Color {

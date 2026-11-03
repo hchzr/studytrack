@@ -190,8 +190,8 @@ struct WeekCourseRow: View {
     private var correctionsLine: String {
         var parts: [String] = []
         let due = summary.corrections
-        if due.toCorrect > 0 { parts.append("\(due.toCorrect) à corriger") }
-        if due.toRedo > 0 { parts.append("\(due.toRedo) à refaire") }
+        if due.toCorrect > 0 { parts.append(String(localized: "\(due.toCorrect) à corriger")) }
+        if due.toRedo > 0 { parts.append(String(localized: "\(due.toRedo) à refaire")) }
         return parts.joined(separator: " · ")
     }
 

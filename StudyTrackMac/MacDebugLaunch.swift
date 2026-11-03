@@ -23,6 +23,49 @@ enum MacDebugLaunch {
                 switch name {
                 case "claude-card": content = AnyView(ClaudeMeasureCard().padding(24)); size = NSSize(width: 1000, height: 520)
                 case "claude-menu": content = AnyView(ClaudeMeasureMenuLine().padding(16)); size = NSSize(width: 340, height: 60)
+                case "recap":
+                    let memory = try! ModelContainer(for: StudyTrackSchema.current, configurations: [
+                        ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                    if CommandLine.arguments.contains("-previewSeed") { MacStore.previewSeedPublic(memory.mainContext) }
+                    let ctx = ModelContext(memory)
+                    let all = (try? ctx.fetch(FetchDescriptor<Course>())) ?? []
+                    let c = all.first { $0.code.hasPrefix("MATH") } ?? all.first
+                    let ex = c?.allExercises.first
+                    let part = TimerEngine.RecordedPart(sessionID: UUID(), courseID: c?.id, taskType: .exercise,
+                                                        targetID: ex?.id, seconds: 23 * 60)
+                    let part2 = TimerEngine.RecordedPart(sessionID: UUID(), courseID: c?.id, taskType: .theory,
+                                                         targetID: c?.theoryItems.first?.id, seconds: 11 * 60)
+                    content = AnyView(SessionRecapCard(totalSeconds: 34 * 60, parts: [part, part2], endedAt: Date(),
+                                                       headline: { _, type, target in
+                                                           if let ex = c?.allExercises.first(where: { $0.id == target }) {
+                                                               return ex.title.isEmpty ? ex.displayNumber : "\(ex.displayNumber) · \(ex.title)"
+                                                           }
+                                                           return type.label
+                                                       },
+                                                       tint: { _ in c.map { Carnet.tint($0.colorHex) } ?? Carnet.inkSecondary },
+                                                       dismiss: {}, undo: {})
+                        .modelContainer(memory)
+                        .padding(20).frame(width: 420).background(Carnet.ground))
+                    size = NSSize(width: 420, height: 460)
+                case "hold":
+                    // La barre « Maintiens pour finir » dans ses trois états.
+                    content = AnyView(VStack(spacing: 18) {
+                        HoldButton(title: "Terminer", systemImage: "checkmark", hold: 1.5) {}
+                        HoldButton(title: "Sortie d'urgence", systemImage: "exclamationmark.triangle", hold: StudyMode.emergencyHold) {}
+                        HoldButton(title: "Sans tenir", systemImage: "checkmark", hold: 0) {}
+                    }.padding(24).frame(maxWidth: .infinity))
+                    size = NSSize(width: 420, height: 220)
+                case "personalize":
+                    // Réglages › Personnaliser, à côté de la vraie app (base en
+                    // mémoire, réglages jetables) : relire la page sans cliquer.
+                    let memory = try! ModelContainer(for: StudyTrackSchema.current, configurations: [
+                        ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                    if CommandLine.arguments.contains("-previewSeed") {
+                        MacStore.previewSeedPublic(memory.mainContext)
+                    }
+                    content = AnyView(PersonalizeForm().modelContainer(memory).frame(width: 520).padding(.vertical, 12))
+                    size = NSSize(width: 560, height: 900)
+
                 default: content = AnyView(ClaudeMeasureSettingsPane()); size = NSSize(width: 520, height: 560)
                 }
                 let hosting = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(Carnet.ground))

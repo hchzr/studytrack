@@ -495,6 +495,11 @@ struct StudyTargetCard: View {
 }
 
 /// Un bouton qu'il faut tenir : le temps d'y penser.
+///
+/// Le même geste que sur l'iPhone (`HoldToActButton` dans `StudyKit`) : un appui
+/// long suivi par `onLongPressGesture` était rendu au défilement ou à la fenêtre
+/// qui glisse, et « Terminer » ne terminait pas. Un clic simple ne fait rien
+/// tant qu'on n'a pas tenu : un appui bref dit quoi faire.
 struct HoldButton: View {
     let title: String
     var systemImage: String
@@ -502,37 +507,15 @@ struct HoldButton: View {
     var hold: Double
     var action: () -> Void
 
-    @State private var progress: Double = 0
-    @State private var pressing = false
-
     var body: some View {
-        Label(pressing ? "Maintiens…" : title, systemImage: systemImage)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(StudyPalette.ink)
-            .padding(.horizontal, 20)
-            .frame(height: 40)
-            .background {
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(StudyPalette.raisedMore)
-                        Capsule().fill(Carnet.correct.opacity(0.55)).frame(width: proxy.size.width * progress)
-                    }
-                }
-            }
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-            .onTapGesture { if hold == 0 { action() } }
-            .onLongPressGesture(minimumDuration: max(hold, 0.01), maximumDistance: 30) {
-                guard hold > 0 else { return }
-                progress = 0
-                action()
-            } onPressingChanged: { isPressing in
-                guard hold > 0 else { return }
-                pressing = isPressing
-                withAnimation(isPressing ? .linear(duration: hold) : .easeOut(duration: 0.2)) {
-                    progress = isPressing ? 1 : 0
-                }
-            }
+        HoldToActButton(duration: hold, action: action) { pressing in
+            Label(pressing ? "Maintiens…" : title, systemImage: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(StudyPalette.ink)
+                .padding(.horizontal, 20)
+                .frame(height: 40)
+        }
+        .accessibilityLabel(title)
     }
 }
 

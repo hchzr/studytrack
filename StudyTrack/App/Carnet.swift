@@ -421,7 +421,10 @@ struct CarnetBar: View {
 
 /// Une puce (« S4 · Types avancés »), choisie ou non.
 struct CarnetChip: View {
-    let text: String
+    /// `LocalizedStringKey` : un littéral passe par le catalogue (« Chrono
+    /// libre » se lit « Free timer » en anglais) ; ce qui vient d'une donnée
+    /// (le nom d'un mode) reste tel quel.
+    let text: LocalizedStringKey
     var isSelected = false
 
     var body: some View {
@@ -473,8 +476,10 @@ struct CarnetEmpty: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(Carnet.inkSecondary)
-            Text(title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
-            Text(message).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
+            // `ui:` : un littéral passe par le catalogue (et se traduit),
+            // une phrase venue d'une donnée reste telle quelle.
+            Text(ui: title).font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
+            Text(ui: message).font(.subheadline).foregroundStyle(Carnet.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)

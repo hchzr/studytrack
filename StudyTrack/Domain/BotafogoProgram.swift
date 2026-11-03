@@ -403,7 +403,15 @@ enum BotafogoDocument {
                     questions = list(child, depth: 0)
                 case "multicols", "template":
                     if let inner = contentRoot(of: child) { visit(nodes(inner)) } else { visit(nodes(child)) }
-                case "br", "img", "div" where text(of: child).isEmpty:
+                case "br", "img", "div":
+                    // Un « div » qui porte du texte (une ligne de l'énoncé
+                    // posée là) ne se saute pas : `where` ne s'applique qu'au
+                    // dernier motif, la condition passe donc à l'intérieur.
+                    guard text(of: child).isEmpty else {
+                        let value = text(of: child)
+                        if !value.trimmingCharacters(in: .whitespaces).isEmpty { statement.append(value) }
+                        continue
+                    }
                     continue
                 default:
                     let value = text(of: child)

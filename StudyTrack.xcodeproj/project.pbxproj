@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		K10000000000000000000002 /* ClaudePlugin in Resources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000001 /* ClaudePlugin */; };
 		B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StudyTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* StudyTrackShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F30000000000000000000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Theme.swift */; };
@@ -26,16 +25,17 @@
 		F3000000000000000000000E /* CourseSiteClients.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000E /* CourseSiteClients.swift */; };
 		F3000000000000000000000F /* WebContentScraper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000F /* WebContentScraper.swift */; };
 		F30000000000000000000010 /* ConnectionCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000010 /* ConnectionCenter.swift */; };
+		F30000000000000000000011 /* CourseEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011 /* CourseEvidence.swift */; };
 		F30000000000000000000012 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000012 /* SupabaseClient.swift */; };
 		F30000000000000000000013 /* SupabaseSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000013 /* SupabaseSessionStore.swift */; };
 		F30000000000000000000014 /* SupabaseSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000014 /* SupabaseSync.swift */; };
 		F30000000000000000000015 /* SupabaseOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000015 /* SupabaseOAuth.swift */; };
 		F30000000000000000000016 /* SyncDeviceLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000016 /* SyncDeviceLink.swift */; };
 		F30000000000000000000017 /* SyncEncryptionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000017 /* SyncEncryptionViews.swift */; };
-		F30000000000000000000011 /* CourseEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011 /* CourseEvidence.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		K10000000000000000000002 /* ClaudePlugin in Resources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000001 /* ClaudePlugin */; };
 		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
 		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
 /* End PBXBuildFile section */
@@ -99,7 +99,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		K10000000000000000000001 /* ClaudePlugin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ClaudePlugin; sourceTree = "<group>"; };
 		A10000000000000000000005 /* StudyTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StudyTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000002 /* StudyTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D10000000000000000000001 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Support/Supabase.xcconfig; sourceTree = "<group>"; };
@@ -121,15 +120,16 @@
 		F2000000000000000000000E /* CourseSiteClients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseSiteClients.swift; path = StudyTrack/Services/CourseSiteClients.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000F /* WebContentScraper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WebContentScraper.swift; path = StudyTrack/Services/WebContentScraper.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000010 /* ConnectionCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectionCenter.swift; path = StudyTrack/Services/ConnectionCenter.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000011 /* CourseEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseEvidence.swift; path = StudyTrack/Services/CourseEvidence.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000012 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseClient.swift; path = StudyTrack/Services/SupabaseClient.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000013 /* SupabaseSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSessionStore.swift; path = StudyTrack/Services/SupabaseSessionStore.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000014 /* SupabaseSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSync.swift; path = StudyTrack/Services/SupabaseSync.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000015 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseOAuth.swift; path = StudyTrack/Services/SupabaseOAuth.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000016 /* SyncDeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncDeviceLink.swift; path = StudyTrack/Services/SyncDeviceLink.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000017 /* SyncEncryptionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncEncryptionViews.swift; path = StudyTrack/Views/Stats/SyncEncryptionViews.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000011 /* CourseEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseEvidence.swift; path = StudyTrack/Services/CourseEvidence.swift; sourceTree = SOURCE_ROOT; };
 		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		K10000000000000000000001 /* ClaudePlugin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ClaudePlugin; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */

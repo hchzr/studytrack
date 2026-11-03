@@ -153,8 +153,8 @@ struct CompanionDesk: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: icon).font(.title3).foregroundStyle(tint)
-                Text(title).font(.headline).foregroundStyle(Carnet.ink)
-                Text(detail).font(.caption).foregroundStyle(Carnet.inkSecondary)
+                Text(ui: title).font(.headline).foregroundStyle(Carnet.ink)
+                Text(ui: detail).font(.caption).foregroundStyle(Carnet.inkSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)

@@ -163,6 +163,11 @@ final class MacStore {
     #if DEBUG
     /// Un cours d'essai pour les captures (`-memoryStore -previewSeed`) : la
     /// vraie Série 3 d'Analyse I (le PDF du dépôt) et le vrai site Botafogo.
+    #if DEBUG
+    /// Le cours d'essai, pour les captures hors de l'app (`-captureView`).
+    static func previewSeedPublic(_ context: ModelContext) { seedPreview(context) }
+    #endif
+
     private static func seedPreview(_ context: ModelContext) {
         // `-seedCode MATH-111` : un autre code (le cours Ed qui lui correspond).
         let code = CommandLine.arguments.firstIndex(of: "-seedCode").flatMap { $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil }

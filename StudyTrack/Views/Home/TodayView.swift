@@ -250,10 +250,15 @@ struct TodayView: View {
                     }
                 }
                 if PreviewLaunch.isSet(PreviewLaunch.profileFlag)
-                    || PreviewLaunch.isSet(PreviewLaunch.statsFlag) {
+                    || PreviewLaunch.isSet(PreviewLaunch.statsFlag)
+                    || PreviewLaunch.isSet(PreviewLaunch.personalizeFlag) {
+                    // La page des réglages d'abord (`-personalize`) : la pile de la
+                    // feuille est prête quand elle apparaît.
+                    if PreviewLaunch.isSet(PreviewLaunch.personalizeFlag) { router.debugSettingsPage = "personalize" }
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
-                        if PreviewLaunch.isSet(PreviewLaunch.profileFlag) { router.showingProfile = true }
+                        if PreviewLaunch.isSet(PreviewLaunch.profileFlag)
+                            || PreviewLaunch.isSet(PreviewLaunch.personalizeFlag) { router.showingProfile = true }
                         if PreviewLaunch.isSet(PreviewLaunch.statsFlag) { router.showingStats = true }
                     }
                 }

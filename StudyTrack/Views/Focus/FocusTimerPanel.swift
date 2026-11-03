@@ -46,7 +46,6 @@ struct FocusTimerPanel: View {
     @State private var pendingStart: FocusRequest?
     @State private var confirmingDiscard = false
     /// « Session enregistrée · 42 min », affiché quelques secondes après « Terminer ».
-    @State private var savedMessage: String?
     @State private var openedExercise: Exercise?
     @State private var browsing: BrowsedLink?
     /// Pourquoi le chrono s'est ouvert sur ce cours (« Séance d'exercices de
@@ -140,14 +139,34 @@ struct FocusTimerPanel: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            if let savedMessage {
-                Label(savedMessage, systemImage: "checkmark.circle.fill")
+            // La session qui vient de finir : le temps, par exercice, et de
+            // quoi cocher tout de suite. Un message de trois secondes
+            // disparaissait avant qu'on ait lu ce qui avait été compté.
+            if let note = focus.undoNote {
+                // Le résultat de l'annulation, dit un instant : la carte a
+                // disparu, il faut voir que la session est bien partie.
+                Label(note, systemImage: "trash")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Carnet.correct)
+                    .foregroundStyle(Carnet.inkSecondary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(Carnet.sheet, in: Capsule())
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(Motion.snappy) { focus.undoNote = nil }
+                    }
+            }
+            if !focus.hasSession, let recap = focus.freshRecap {
+                SessionRecapCard(totalSeconds: recap.totalSeconds, parts: recap.parts, endedAt: recap.endedAt,
+                                 headline: { courseID, taskType, targetID in
+                                     Self.headline(courseID: courseID, taskType: taskType, targetID: targetID,
+                                                   courses: courses)
+                                 },
+                                 tint: { id in Carnet.tint(courses.first { $0.id == id }) },
+                                 dismiss: { withAnimation(Motion.snappy) { focus.dismissRecap() } },
+                                 undo: { withAnimation(Motion.snappy) { focus.undoRecap() } })
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             if focus.hasSession {
@@ -169,7 +188,6 @@ struct FocusTimerPanel: View {
             todaySummary
         }
         .animation(Motion.snappy, value: focus.hasSession)
-        .animation(Motion.snappy, value: savedMessage)
         .task {
             if !focus.hasSession {
                 draftTaskType = .exercise
@@ -329,7 +347,7 @@ struct FocusTimerPanel: View {
         }
     }
 
-    private func contextRow(title: String, value: String, tint: Color?) -> some View {
+    private func contextRow(title: LocalizedStringKey, value: String, tint: Color?) -> some View {
         HStack(spacing: 12) {
             Text(title)
                 .font(.subheadline)
@@ -352,7 +370,7 @@ struct FocusTimerPanel: View {
         .contentShape(Rectangle())
     }
 
-    private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func modeChip(_ title: LocalizedStringKey, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             CarnetChip(text: title, isSelected: selected)
         }
@@ -812,14 +830,21 @@ struct FocusTimerPanel: View {
     // MARK: Actions
 
     private func finish() {
-        guard let seconds = focus.finish() else { return }
+        guard focus.finish() != nil else { return }
         isAdjusting = false
         Haptics.success()
-        savedMessage = "Session enregistrée · \(DateUtils.durationLabel(seconds: seconds))"
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            savedMessage = nil
+    }
+
+    /// Ce qu'on a travaillé, en mots : l'exercice, la théorie, ou le cours.
+    static func headline(courseID: UUID?, taskType: TaskType, targetID: UUID?, courses: [Course]) -> String {
+        guard let course = courses.first(where: { $0.id == courseID }) else { return String(localized: "Sans cours") }
+        if let exercise = course.allExercises.first(where: { $0.id == targetID }) {
+            return exercise.title.isEmpty ? exercise.displayNumber : "\(exercise.displayNumber) · \(exercise.title)"
         }
+        if let item = course.theoryItems.first(where: { $0.id == targetID }) {
+            return item.title.isEmpty ? item.displayNumber : "\(item.displayNumber) · \(item.title)"
+        }
+        return taskType.label
     }
 
     /// Une demande venue d'ailleurs (dock, « Démarrer » d'une tâche, Siri).

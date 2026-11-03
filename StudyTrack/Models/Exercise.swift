@@ -168,7 +168,8 @@ final class Exercise {
         self.redoRequired = false
     }
 
-    var displayNumber: String { "Exercice \(exerciseNumber)" }
+    /// « Exercice 3.2 » (traduit : la leçon se lit aussi en anglais).
+    var displayNumber: String { String(localized: "Exercice \(exerciseNumber)") }
     var isDone: Bool { doneAt != nil }
     var isCorrected: Bool { correctedAt != nil }
 

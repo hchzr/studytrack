@@ -97,7 +97,8 @@ final class TheoryItem {
 
     /// Libellé : « Théorie 1.1 ». Le support (vidéo, lecture…) est une icône,
     /// pas une catégorie : tout élément de théorie se nomme de la même façon.
-    var displayNumber: String { "Théorie \(number)" }
+    /// « Théorie 2.1 » (traduit : la leçon se lit aussi en anglais).
+    var displayNumber: String { String(localized: "Théorie \(number)") }
 
     /// « 1.1 · Introduction », ou le numéro seul.
     var numberAndTitle: String { title.isEmpty ? number : "\(number) · \(title)" }

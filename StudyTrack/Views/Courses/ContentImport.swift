@@ -235,8 +235,8 @@ struct ContentImportView: View {
             VStack(alignment: .leading, spacing: Layout.micro) {
                 // Couleurs explicites : dans une liste, un bouton teinte tout son
                 // libellé à l'encre de l'app, et six lignes indigo ne se lisaient plus.
-                Text(title).font(.body).foregroundStyle(Color.primary)
-                Text(detail).font(.footnote).foregroundStyle(Color.secondary)
+                Text(ui: title).font(.body).foregroundStyle(Color.primary)
+                Text(ui: detail).font(.footnote).foregroundStyle(Color.secondary)
             }
             Spacer(minLength: Layout.inline)
             Image(systemName: "chevron.right")

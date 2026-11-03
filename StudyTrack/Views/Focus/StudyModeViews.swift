@@ -110,8 +110,6 @@ struct StudyModeScreen: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @State private var browsing: BrowsedLink?
-    @State private var holding = false
-    @State private var holdProgress: Double = 0
     @State private var tab: StudyTab = StudyTab(rawValue: StudyModeScreen.launchTab ?? "") ?? .desk
     /// L'onglet imposé par `-studyTab` (captures). `PreviewLaunch` n'existe
     /// qu'en Debug : sans ce garde, la build Release (l'archive) ne compile pas.
@@ -432,7 +430,7 @@ struct StudyModeScreen: View {
             focus.extendStudy(minutes: 25)
         }, finish: {
             focus.finish()
-            app.router.showingStudyMode = false
+            app.router.endStudyMode()
         })
     }
 
@@ -646,34 +644,34 @@ struct StudyModeScreen: View {
         if let url = URL(string: "claude://") { openURL(url) }
     }
 
-    /// Tenir pour terminer : une seconde et demie pour y penser. Sous verrou,
-    /// la sortie d'urgence : huit secondes, et la session le note.
+    /// Tenir pour terminer : une seconde et demie pour y penser. Sous verrou, la
+    /// sortie d'urgence : huit secondes, et la session le note.
+    ///
+    /// Le geste est `HoldToActButton` et non `onLongPressGesture` : dans cette
+    /// liste, l'appui long était rendu au défilement, et « Maintiens pour finir »
+    /// ne finissait rien.
     private var holdToFinish: some View {
         let locked = focus.isLocked
         let duration = locked ? StudyMode.emergencyHold : 1.5
-        return Text(holding ? "Maintiens…" : (locked ? "Sortie d'urgence · maintiens \(Int(StudyMode.emergencyHold)) s" : "Maintiens pour finir"))
+        return HoldToActButton(duration: duration) {
+            focus.finish(emergency: locked)
+            app.router.endStudyMode()
+        } label: { holding in
+            HStack(spacing: 8) {
+                Image(systemName: locked ? "exclamationmark.triangle" : "checkmark")
+                Text(holding ? "Maintiens…"
+                     : locked ? "Sortie d'urgence · maintiens \(Int(StudyMode.emergencyHold)) s"
+                              : "Maintiens pour finir")
+                    .contentTransition(.opacity)
+            }
             .font(.body.weight(.semibold))
             .foregroundStyle(Carnet.ink)
             .frame(maxWidth: .infinity, minHeight: 52)
-            .background {
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Carnet.sheetRaised)
-                        Capsule().fill(Carnet.correct.opacity(0.55)).frame(width: proxy.size.width * holdProgress)
-                    }
-                }
-            }
-            .clipShape(Capsule())
-            .onLongPressGesture(minimumDuration: duration) {
-                holdProgress = 0
-                focus.finish(emergency: locked)
-                app.router.showingStudyMode = false
-            } onPressingChanged: { pressing in
-                holding = pressing
-                withAnimation(pressing ? .linear(duration: duration) : .easeOut(duration: 0.2)) { holdProgress = pressing ? 1 : 0 }
-            }
-            .accessibilityLabel("Terminer la session")
-            .accessibilityAddTraits(.isButton)
+        }
+        .accessibilityLabel(locked ? "Sortie d'urgence" : "Terminer la session")
+        .accessibilityHint(locked
+                           ? String(localized: "Termine et enregistre la session, notée « sortie d'urgence ».")
+                           : String(localized: "Tiens le bouton \(Int(duration)) seconde pour terminer et enregistrer."))
     }
 
     private var done: some View {
@@ -683,7 +681,7 @@ struct StudyModeScreen: View {
             Text("Tout est rouvert.").foregroundStyle(Carnet.inkSecondary)
             Button {
                 focus.finish()
-                app.router.showingStudyMode = false
+                app.router.endStudyMode()
             } label: { Text("Terminer").frame(maxWidth: .infinity) }
                 .buttonStyle(.carnetPrimaryWide)
             Button { focus.extendStudy(minutes: 25) } label: { Text("Encore 25 min").frame(maxWidth: .infinity) }

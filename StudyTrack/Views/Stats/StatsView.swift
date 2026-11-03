@@ -33,7 +33,7 @@ struct StatsView: View {
     enum Period: String, CaseIterable, Identifiable {
         case week, month, semester
         var id: String { rawValue }
-        var label: String {
+        var label: LocalizedStringKey {
             switch self {
             case .week: return "Semaine"
             case .month: return "30 jours"

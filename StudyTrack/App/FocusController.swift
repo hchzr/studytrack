@@ -130,13 +130,75 @@ final class FocusController: TimerEngineHost {
     func adjust(by delta: TimeInterval) { engine.setElapsed(elapsed() + delta) }
     func setElapsed(_ total: TimeInterval) { engine.setElapsed(total) }
 
-    /// Enregistre la session ; rend la durée enregistrée, `nil` si rien ne
-    /// l'a été (moins d'une minute).
-    @discardableResult
-    func finish(emergency: Bool = false) -> Int? {
-        guard let finished = engine.finish(emergency: emergency), !finished.parts.isEmpty else { return nil }
-        return finished.totalSeconds
+    /// Ce que vient d'enregistrer `finish` : le récapitulatif de la session,
+    /// avec de quoi se relire — et de quoi se corriger si on a terminé trop tôt.
+    /// Le Mac le montrait déjà ; l'iPhone ne gardait qu'un message de trois
+    /// secondes, qui disparaissait avant qu'on ait vu ce qui avait été compté.
+    struct Recap: Identifiable, Equatable {
+        var id = UUID()
+        var totalSeconds: Int
+        var parts: [TimerEngine.RecordedPart]
+        /// La fin, pour dire « minutes avant » : le récapitulatif se relit
+        /// encore dans l'onglet Chrono un moment après.
+        var endedAt: Date
     }
+
+    private(set) var recap: Recap?
+
+    /// Enregistre la session ; rend le récapitulatif, `nil` si rien ne l'a été
+    /// (moins d'une minute).
+    ///
+    /// `shown` : le récapitulatif est destiné à l'écran (Chrono, ou la sortie du
+    /// mode étude), et se montre à l'heure de la fin. En arrière-plan (commande
+    /// de l'écran verrouillé, Siri), il est gardé sans être mis en avant.
+    @discardableResult
+    func finish(emergency: Bool = false, shown: Bool = true) -> Recap? {
+        guard let finished = engine.finish(emergency: emergency), !finished.parts.isEmpty else { return nil }
+        let result = Recap(totalSeconds: finished.totalSeconds, parts: finished.parts, endedAt: Date())
+        // Un récapitulatif d'il y a une heure n'est plus celui qu'on vient de faire.
+        if shown || recap.map({ Date().timeIntervalSince($0.endedAt) > FocusController.freshness }) ?? true {
+            recap = result
+        }
+        return result
+    }
+
+    /// Combien de temps un récapitulatif reste à l'écran comme « la session
+    /// qu'on vient de finir ».
+    static let freshness: TimeInterval = 10 * 60
+
+    /// Le récapitulatif s'il vient d'être fait (le Chrono le montrait avant
+    /// qu'on y pense).
+    var freshRecap: Recap? {
+        guard let recap, Date().timeIntervalSince(recap.endedAt) < Self.freshness else { return nil }
+        return recap
+    }
+
+    /// « Annuler » : les sessions qu'il a enregistrées partent. On ne peut
+    /// annuler que le dernier récapitulatif, et seulement tant qu'il est frais.
+    func undoRecap() {
+        guard let recap, let app, Date().timeIntervalSince(recap.endedAt) < Self.freshness else { return }
+        let context = ModelContext(app.modelContainer)
+        let ids = Set(recap.parts.map(\.sessionID))
+        let sessions = (try? context.fetch(FetchDescriptor<StudySession>())) ?? []
+        var removed = 0
+        for session in sessions where ids.contains(session.id) {
+            context.delete(session)
+            removed += 1
+        }
+        try? context.save()
+        self.recap = nil
+        // Ce n'est pas parce que la carte disparaît que c'est fait : on le dit.
+        if removed > 0 {
+            Haptics.removed()
+            undoNote = String(localized: "Session retirée du journal.")
+        }
+        WidgetSnapshotWriter.scheduleRefresh(context: context, settings: app.settings)
+    }
+
+    /// Ce qu'on dit après une annulation, quelques secondes.
+    var undoNote: String?
+
+    func dismissRecap() { recap = nil }
 
     func discard(emergency: Bool = false) { engine.discard(emergency: emergency) }
 

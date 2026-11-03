@@ -27,6 +27,17 @@ struct RootTabView: View {
                             .carnetPageSheet()
                     case .me:
                         MeView(onClose: { app.router.showingProfile = false })
+                            #if DEBUG
+                            // `-personalize` : la page des réglages ouverte d'emblée, pas
+                            // « Moi ». Une feuille qui ouvre sa page **pendant** sa
+                            // présentation la perd (SwiftUI présente la pile du moment) :
+                            // ouvrir le lien d'abord, la feuille ensuite, marche.
+                            .navigationDestination(isPresented: Binding(
+                                get: { app.router.debugSettingsPage != nil },
+                                set: { if !$0 { app.router.debugSettingsPage = nil } })) {
+                                if app.router.debugSettingsPage == "personalize" { PersonalizeView() }
+                            }
+                            #endif
                     case .stats:
                         NavigationStack {
                             StatsView()

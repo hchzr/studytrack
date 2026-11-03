@@ -3176,6 +3176,36 @@ for hex in identityPalette + suretéTriad {
 check(contrastFailures == 0,
       "\(identityPalette.count + suretéTriad.count) teintes × 2 apparences : texte ≥4.5:1, marque ≥3:1")
 
+// Le papier et l'encre de « Carnet » (`CarnetCore`), que les vues posent en dur.
+// Le troisième gris y servait de texte à 3.10:1 : il est maintenant résolu
+// contre la surface la plus claire de chaque apparence, et vérifié ici.
+print("  — le papier et l'encre de l'app")
+func rgb(_ hex: String) -> ColorContrast.RGB? { ColorContrast.rgb(fromHex: hex) }
+let paletteSurfaces = [
+    "papier clair": ("#F4F0E6", "clair"), "feuille claire": ("#FFFDF8", "clair"),
+    "feuille en retrait claire": ("#EFE9DC", "clair"),
+    "papier de nuit": ("#15130F", "sombre"), "feuille de nuit": ("#211E18", "sombre"),
+    "feuille en retrait de nuit": ("#2B271F", "sombre")
+]
+let inks = [("encre", "#1D1B16", "#EDE6D6"),
+            ("encre secondaire", "#6B655A", "#A89F8D"),
+            ("encre tertiaire", "#696356", "#9E9480"),
+            ("juste", "#3A723A", "#8FC58A"),
+            ("à revoir", "#8F5E06", "#E0B04E"),
+            ("faux", "#A33A2A", "#E7836F")]
+var paletteFailures: [String] = []
+for (name, light, dark) in inks {
+    for (surfaceName, (surface, mode)) in paletteSurfaces {
+        guard let ink = rgb(mode == "clair" ? light : dark), let base = rgb(surface) else {
+            paletteFailures.append("\(name) : couleur illisible"); continue
+        }
+        let ratio = ColorContrast.ratio(ink, base)
+        if ratio < 4.5 { paletteFailures.append("\(name) sur \(surfaceName) = \(fmt(ratio)):1") }
+    }
+}
+check(paletteFailures.isEmpty,
+      "papier et encre : \(inks.count) encres × \(paletteSurfaces.count) surfaces ≥ 4.5:1 \(paletteFailures.first.map { "— " + $0 } ?? "")")
+
 // Contrôle négatif : l'ancien schéma (teinte sur sa propre teinte) doit échouer,
 // sinon le test précédent ne prouverait rien.
 if let amber = ColorContrast.rgb(fromHex: "#F59E0B") {
@@ -7639,6 +7669,34 @@ do {
     check(!NotebookLMWire.isSignedIn(cookieNames: ["NID", "__Secure-1PSIDTS", "SIDCC"]) && NotebookLMWire.isSignedIn(cookieNames: ["NID", "SAPISID"]), "NotebookLM : connecté seulement avec un cookie de session, pas ceux d'une simple visite")
     check(NotebookLMWire.isApp(host: "notebook.google.com") && NotebookLMWire.isApp(host: "notebooklm.google.com") && !NotebookLMWire.isApp(host: "accounts.google.com") && !NotebookLMWire.isApp(host: "notebooklm.google"), "NotebookLM : l'app, pas la page de connexion ni la vitrine")
     check(NotebookLMWire.podcastInstructions(courseName: "Analyse I").contains("Analyse I"), "NotebookLM : la consigne cite le cours")
+}
+
+// MARK: - Maintiens pour finir
+
+print("\n== Tenir pour terminer (le geste et son temps) ==")
+do {
+    let hold = HoldProgress(duration: 1.5)
+    check(hold.fraction(after: 0) == 0 && hold.fraction(after: 0.75) == 0.5, "tenir : la barre suit le temps à mi-chemin")
+    check(hold.fraction(after: 0.01) > 0, "tenir : la barre avance dès le premier instant (le doigt voit qu'il est pris en compte)")
+    check(hold.isComplete(after: 1.5) && hold.isComplete(after: 9), "tenir : au bout du temps, le geste compte")
+    check(!hold.isComplete(after: 1.49), "tenir : juste avant, il ne compte pas encore")
+    check(hold.fraction(after: 99) == 1, "tenir : la barre ne déborde pas")
+    check(hold.remaining(after: 0.5) == 1, "tenir : ce qui reste se dit au doigt")
+    // Une sortie d'urgence tient huit secondes, pas une seconde et demie.
+    let urgent = HoldProgress(duration: StudyMode.emergencyHold)
+    check(!urgent.isComplete(after: 1.5) && urgent.isComplete(after: StudyMode.emergencyHold), "tenir : la sortie d'urgence demande bien ses huit secondes")
+    // Le doigt qui glisse : la page défile, l'appui se relâche.
+    check(HoldProgress.isOnButton(translation: CGSize(width: 30, height: 30)), "tenir : un doigt qui bouge un peu reste sur le bouton")
+    check(!HoldProgress.isOnButton(translation: CGSize(width: 0, height: 60)), "tenir : un doigt qui glisse de 60 points relâche l'appui (le défilement reprend)")
+    check(!HoldProgress.isOnButton(translation: CGSize(width: -200, height: 5)), "tenir : une glissade latérale aussi")
+    // Un appui bref dit quoi faire ; un tapotement ne le dit pas à chaque fois.
+    check(hold.shouldExplainRelease(after: 0.5), "tenir : lâché trop tôt, on dit quoi faire")
+    check(!hold.shouldExplainRelease(after: 0.02), "tenir : un vrai tapotement ne déclenche pas de conseil")
+    check(!hold.shouldExplainRelease(after: 2), "tenir : une fois tenu, rien à expliquer")
+    // Un bouton sans tenir (clic) agit au contact.
+    let click = HoldProgress(duration: 0)
+    check(click.isComplete(after: 0) && !click.shouldExplainRelease(after: 0), "tenir : un bouton qui n'attend pas de tenir agit au contact")
+    check(HoldProgress(duration: -3).duration == 0, "tenir : un temps négatif ne fait pas tenir à l'envers")
 }
 
 if failures == 0 {

@@ -66,6 +66,13 @@ final class AppRouter {
     var showingFocus = false
     /// L'écran plein du mode étude (lancé ici ou adopté du Mac).
     var showingStudyMode = false
+    /// Terminer une session depuis le bureau ramène ici, **dans le Chrono** :
+    /// le récapitulatif y attend (le temps par exercice, de quoi cocher). En
+    /// restant sur l'onglet quitté, la session se terminait dans le vide.
+    func endStudyMode() {
+        showingStudyMode = false
+        selectedTab = .focus
+    }
     /// « Suivre le cours » (notification de début de cours, accueil) : le
     /// bureau s'ouvre en mode « En cours » sur ce cours, jusqu'à sa fin.
     var lectureRequest: UUID?
@@ -85,6 +92,11 @@ final class AppRouter {
     var showingTasks = false
     /// Statistiques et récapitulatif, ouverts depuis « Aujourd'hui ».
     var showingStats = false
+    /// Une page des réglages ouverte d'emblée (captures du simulateur : un
+    /// `simctl` ne sait ni taper ni écrire dans une feuille déjà présentée).
+    #if DEBUG
+    var debugSettingsPage: String?
+    #endif
 
     /// Un cours à ouvrir depuis un autre onglet (accueil, widget, recherche).
     struct CourseRoute: Equatable {

@@ -179,6 +179,136 @@ struct MathText: View {
 }
 
 
+// MARK: - Tenir pour agir
+
+/// Un bouton qu'il faut **tenir** : le temps d'y penser (terminer une session,
+/// la sortie d'urgence d'un mode verrouillé).
+///
+/// Pourquoi pas `onLongPressGesture` : sa reconnaissance dépend du défilement
+/// au-dessus. Dans l'écran du mode étude — une liste, une fenêtre qui glisse — un
+/// appui franc était souvent pris pour le début d'un glissement, ou le geste
+/// rendu à la fin du défilement : la barre avançait et la session ne finissait
+/// jamais. Ici, le contact est suivi à la milliseconde par `DragGesture`, le
+/// temps s'arrête si le doigt glisse de plus de 44 points (on peut donc encore
+/// faire défiler la page en partant de ce bouton), et un appui bref dit ce qu'il
+/// faut faire au lieu de ne rien faire.
+///
+/// Lisible et utilisable sans le doigt : c'est un bouton (VoiceOver, Switch
+/// Control, Full Keyboard Access), et son action passe **tout de suite** — tenir
+/// n'est qu'un ralentisseur pour la main, jamais une barrière d'accessibilité.
+struct HoldToActButton<Label: View>: View {
+    /// Ce que le doigt doit tenir, en secondes. `0` : un appui suffit.
+    var duration: Double
+    /// Ce que fait le geste une fois tenu.
+    var action: () -> Void
+    @ViewBuilder var label: (Bool) -> Label
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: Double = 0
+    @State private var pressed = false
+    /// Ce qu'il reste à tenir, recalculé par la minuterie.
+    @State private var remaining: Double = 0
+    @State private var ticker: Task<Void, Never>?
+    /// L'appui bref n'est pas une erreur : on dit quoi faire une fois.
+    @State private var hint = false
+
+    var body: some View {
+        label(pressed)
+            .background {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Carnet.sheetRaised)
+                        Capsule()
+                            .fill(Carnet.correct.opacity(pressed ? 0.72 : 0.5))
+                            .frame(width: max(0, proxy.size.width * progress))
+                    }
+                }
+            }
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+            .overlay(alignment: .bottom) {
+                if hint {
+                    Text(String(localized: "Maintiens le doigt jusqu'au bout."))
+                        .font(.caption2)
+                        .foregroundStyle(Carnet.inkSecondary)
+                        .offset(y: 18)
+                        .transition(.opacity)
+                }
+            }
+            .gesture(drag)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(String(localized: "\(Int((progress * 100).rounded())) % tenu"))
+            .accessibilityAction { if duration > 0 { action() } }
+            .onDisappear { cancel() }
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !pressed {
+                    pressed = true
+                    hint = false
+                    if HoldProgress(duration: duration).duration <= 0 {
+                        // Un appui suffit : on agit au contact, comme un bouton.
+                        action()
+                        return
+                    }
+                    startTicker()
+                }
+                // Trop loin du doigt d'origine : l'appui se relâche (et le
+                // défilement peut prendre le relais).
+                if !HoldProgress.isOnButton(translation: value.translation) {
+                    cancel()
+                    return
+                }
+            }
+            .onEnded { _ in
+                let wasPressing = pressed
+                let held = progress * duration
+                cancel()
+                if wasPressing, HoldProgress(duration: duration).shouldExplainRelease(after: held) {
+                    withAnimation(Motion.snappy) { hint = true }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(2))
+                        withAnimation(Motion.snappy) { hint = false }
+                    }
+                }
+            }
+    }
+
+    private func startTicker() {
+        let started = Date()
+        progress = 0
+        remaining = duration
+        ticker = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return }
+                let elapsed = Date().timeIntervalSince(started)
+                let hold = HoldProgress(duration: duration)
+                withAnimation(.linear(duration: 0.016)) { progress = hold.fraction(after: elapsed) }
+                remaining = hold.remaining(after: elapsed)
+                if hold.isComplete(after: elapsed) {
+                    ticker = nil
+                    pressed = false
+                    Haptics.success()
+                    action()
+                    return
+                }
+            }
+        }
+    }
+
+    private func cancel() {
+        ticker?.cancel()
+        ticker = nil
+        guard pressed || progress > 0 else { return }
+        pressed = false
+        withAnimation(reduceMotion ? Motion.step : .easeOut(duration: 0.22)) { progress = 0 }
+    }
+}
+
 // MARK: - Plateformes
 
 #if os(macOS)

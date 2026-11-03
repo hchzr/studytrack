@@ -25,7 +25,7 @@ struct GroupsSignInView: View {
     enum Mode: String, CaseIterable, Identifiable {
         case signUp, signIn
         var id: String { rawValue }
-        var title: String { self == .signUp ? "Créer un compte" : "J'ai un compte" }
+        var title: LocalizedStringKey { self == .signUp ? "Créer un compte" : "J'ai un compte" }
     }
 
     enum Field { case email, password }

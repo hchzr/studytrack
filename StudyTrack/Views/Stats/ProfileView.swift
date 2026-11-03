@@ -22,6 +22,8 @@ struct ProfileView: View {
     @State private var exportURL: URL?
     /// Écran « Section et semestre », ouvert par la barre de navigation.
     @State private var showingSchool = false
+    /// Écran « Personnaliser », ouvert de la même façon.
+    @State private var showingPersonalize = false
     @State private var showingAIImport = false
     @State private var showingAssistant = false
     @State private var showingReset = false
@@ -76,6 +78,9 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $showingAIImport) {
                 AIImportSettingsView()
             }
+            .navigationDestination(isPresented: $showingPersonalize) {
+                PersonalizeView()
+            }
             .navigationDestination(isPresented: $showingAssistant) {
                 AssistantSettingsView()
             }
@@ -84,6 +89,7 @@ struct ProfileView: View {
                 // `-school` : cet écran est au bout d'un tap, et `simctl` ne sait
                 // pas taper.
                 if PreviewLaunch.isSet(PreviewLaunch.schoolFlag) { showingSchool = true }
+                if PreviewLaunch.isSet(PreviewLaunch.personalizeFlag) { showingPersonalize = true }
                 if PreviewLaunch.isSet(PreviewLaunch.aiImportFlag) { showingAIImport = true }
                 if PreviewLaunch.isSet(PreviewLaunch.assistantFlag) { showingAssistant = true }
                 #endif
@@ -206,7 +212,7 @@ struct ProfileView: View {
                             value: app.settings.offlineEnabled ? OfflinePlan.label(bytes: OfflineLibrary.shared.usedBytes) : "désactivé")
             }
             NavigationLink {
-                subpage("Personnaliser") { PersonalizeForm() }
+                PersonalizeView()
             } label: {
                 settingsRow("Personnaliser", icon: "slider.horizontal.3", value: Institution.current.name)
             }

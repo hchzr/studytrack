@@ -25,13 +25,13 @@ struct PomodoroStatus: Equatable {
     /// Le bloc est fini : c'est le moment de proposer la pause.
     var isBlockComplete: Bool { remaining <= 0 }
 
-    /// « Bloc 3 », ou « Bloc 3 · 2 terminés ».
-    var label: String { "Bloc \(blockNumber)" }
+    /// « Bloc 3 », ou « Bloc 3 · 2 terminés » (traduit).
+    var label: String { String(localized: "Bloc \(blockNumber)") }
 
     var remainingLabel: String {
         isBlockComplete
-            ? "bloc terminé"
-            : "reste \(DateUtils.durationLabel(seconds: Int(remaining.rounded(.up))))"
+            ? String(localized: "bloc terminé")
+            : String(localized: "reste \(DateUtils.durationLabel(seconds: Int(remaining.rounded(.up))))")
     }
 }
 

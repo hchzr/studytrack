@@ -34,6 +34,8 @@ enum PreviewLaunch {
     /// par cours (`Documents/ai-eval/series/`), sans l'envoyer.
     static let dumpSeriesPayloadsFlag = "-dumpSeriesPayloads"
     static let profileFlag = "-profile"
+    /// Ouvre Réglages › Personnaliser (captures).
+    static let personalizeFlag = "-personalize"
     /// Ouvre « Statistiques » depuis « Aujourd'hui ».
     static let statsFlag = "-stats"
     /// Index du groupe à ouvrir dans l'onglet Groupes.
