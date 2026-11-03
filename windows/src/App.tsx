@@ -15,17 +15,18 @@ import { Course } from "./models/index.ts";
 // imposent une autre source pour un essai — voir appSource.ts.
 // `useMemo` au montage : la source vit aussi longtemps que la fenêtre.
 export default function App() {
-  const source = useMemo(
-    () => notifySyncOfWrites(pickSource(isTauri(), new URLSearchParams(window.location.search))),
-    [],
-  );
+  // La base elle-même, et la même enveloppée pour prévenir la synchronisation des écritures.
+  // La synchronisation se branche sur **la base** : l'enveloppe n'est pas une SqliteSource, et
+  // tester l'enveloppe laissait la synchronisation débranchée (« jamais », sans erreur).
+  const base = useMemo(() => pickSource(isTauri(), new URLSearchParams(window.location.search)), []);
+  const source = useMemo(() => notifySyncOfWrites(base), [base]);
 
   // Le raccourci global (Ctrl+Alt+Espace) : rien hors de Tauri.
   useEffect(() => { void setupShellExtras(); }, []);
 
   return (
     <DataProvider source={source}>
-      <SyncWiring source={source} />
+      <SyncWiring source={base} />
       <NativeWiring />
       <Shell />
     </DataProvider>

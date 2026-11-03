@@ -428,6 +428,11 @@ export class SyncService {
    * branchée) ou échec — l'état dit lequel. Ne lève jamais.
    */
   syncNow(): Promise<SyncReport | null> {
+    if (this.enabled && this.client !== null && this.local === null) {
+      // Ne devrait pas arriver : le dire plutôt que de ne rien faire en silence.
+      this.persisted = { ...this.persisted, lastError: "La base locale n'est pas encore branchée à la synchronisation : relance StudyTrack." };
+      this.notify();
+    }
     if (!this.ready()) return Promise.resolve(null);
     this.pending ??= this.run().finally(() => { this.pending = null; });
     return this.pending;
