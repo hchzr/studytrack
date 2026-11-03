@@ -42,7 +42,7 @@ export function AccountSection() {
       </Section>
       <Section title="Services">
         <Card>
-          <SettingRow label="Spotify" hint="Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web.">
+          <SettingRow label="Spotify" hint="Pilote Spotify depuis la musique du mode étude, gratuit ou Premium. Non officiel.">
             {spotify.state.kind === "ready"
               ? <Button size="sm" onClick={() => run(() => spotifyAccount.signOut())}>Se déconnecter</Button>
               : <Button size="sm" onClick={() => run(() => spotifyAccount.signIn())}>Se connecter…</Button>}

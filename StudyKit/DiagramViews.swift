@@ -72,7 +72,7 @@ struct DiagramsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.largeTitle).foregroundStyle(Carnet.inkTertiary)
                 Text(chapter == nil ? "Des schémas pour comprendre" : "Pas encore de schéma pour ce chapitre").font(Carnet.serif(24)).foregroundStyle(Carnet.ink)
-                Text("Claude lit la fiche et dessine ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre — pour tout le cours ou un chapitre à la fois.")
+                Text("Claude dessine les enchaînements, les méthodes et les pièges du cours à partir de la fiche.")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary)
                 ComprehendButton(course: course, chapter: chapter)
             }

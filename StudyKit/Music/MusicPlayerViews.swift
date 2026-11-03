@@ -149,7 +149,7 @@ struct MusicNowPlayingCard: View {
                     Text("StudyTrack ne peut pas contrôler Music")
                         .font(Carnet.serif(.title3, weight: .semibold))
                         .foregroundStyle(StudyPalette.ink)
-                    Text("macOS a refusé l'accès. Active Music pour StudyTrack dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage).")
+                    Text("Autorise StudyTrack à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation.")
                         .font(.callout)
                         .foregroundStyle(StudyPalette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)

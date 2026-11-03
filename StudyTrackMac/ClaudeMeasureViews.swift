@@ -27,7 +27,7 @@ struct ClaudeMeasureSettingsPane: View {
             } header: {
                 Text("Claude Code")
             } footer: {
-                Text("Compte ton temps de Claude Code. L'étude (tes dossiers d'étude) n'est jamais limitée, seulement comptée ; les projets suivent tes règles. Durcir s'applique tout de suite, assouplir le lendemain à 4 h : on ne lâche pas ses limites sur un coup de tête.")
+                Text("Compte ton temps de Claude Code. L'étude n'est jamais limitée ; les projets suivent tes règles (assouplir prend effet le lendemain).")
             }
 
             Section("Projets") {

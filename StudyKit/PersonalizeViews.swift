@@ -348,7 +348,7 @@ struct NotebookLMSection: View {
         } header: {
             personalizeHeader("Fiche de révision")
         } footer: {
-            Text("Ajoute l'onglet « Écouter » à la fiche : la fiche part dans NotebookLM et le podcast s'écoute ici. La connexion à Google est facultative (sinon, export manuel).")
+            Text("Ajoute l'onglet « Écouter » à la fiche : un podcast NotebookLM de ta fiche.")
         }
     }
 }

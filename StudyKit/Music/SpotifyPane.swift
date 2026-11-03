@@ -45,7 +45,7 @@ struct SpotifyPane: View {
     private var connectCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Ton compte Spotify, piloté d'ici").font(Carnet.serif(18)).foregroundStyle(StudyPalette.ink)
-            Text("Connecte-toi une fois : ce qui joue sur ton ordinateur ou ton téléphone, les commandes, le volume, tes playlists — gratuit ou Premium. StudyTrack ne voit jamais ton mot de passe.")
+            Text("Ce qui joue, les commandes, le volume et tes playlists, gratuit ou Premium. Ton mot de passe reste chez Spotify.")
                 .font(.callout).foregroundStyle(StudyPalette.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if case .failed(let message) = account.state {
@@ -57,7 +57,7 @@ struct SpotifyPane: View {
                     Button("Réessayer") { Task { await account.refresh() } }.buttonStyle(.paper)
                 }
             }
-            Text("Non officiel : StudyTrack parle à Spotify comme son lecteur web. Si Spotify change, le pilotage local ci-dessous reste là.")
+            Text("Non officiel : si Spotify change, le pilotage local ci-dessous reste là.")
                 .font(.caption).foregroundStyle(StudyPalette.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -67,7 +67,7 @@ struct SpotifyPane: View {
 
     private var accountFooter: some View {
         HStack {
-            Text("Connecté·e à Spotify (non officiel : StudyTrack parle à Spotify comme son lecteur web).")
+            Text("Connecté·e à Spotify.")
                 .font(.caption).foregroundStyle(StudyPalette.inkTertiary)
             Spacer()
             Button("Se déconnecter") { Task { await account.signOut() } }
@@ -302,7 +302,7 @@ struct SpotifySettingsSection: View {
                 Button("Se connecter à Spotify…") { signingIn = true }
             }
         } footer: {
-            Text("Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web ; ton mot de passe reste chez Spotify.")
+            Text("Pilote Spotify depuis la musique du mode étude, gratuit ou Premium. Non officiel ; ton mot de passe reste chez Spotify.")
         }
         .task { if account.state == .unknown { await account.refresh() } }
         .sheet(isPresented: $signingIn) {

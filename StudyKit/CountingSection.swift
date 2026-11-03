@@ -36,8 +36,8 @@ struct CountingSection: View {
 
     private var footer: String {
         switch counting.lectures {
-        case .automatic: String(localized: "Un cours de l'horaire compte une fois fini, sauf si tu le marques manqué. Un chrono pendant une séance n'est jamais compté deux fois.")
-        case .confirmed: String(localized: "Un cours compte quand tu dis « J'y étais » (Aujourd'hui ou l'agenda). Un chrono pendant une séance n'est jamais compté deux fois.")
+        case .automatic: String(localized: "Un cours compte une fois fini, sauf marqué manqué. Jamais compté deux fois avec un chrono.")
+        case .confirmed: String(localized: "Un cours compte quand tu le coches dans l'agenda (« J'y étais »).")
         case .off: String(localized: "Les cours en amphi ne comptent pas, même chronométrés.")
         }
     }

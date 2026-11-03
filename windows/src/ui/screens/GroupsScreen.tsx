@@ -32,7 +32,7 @@ export function GroupsScreen() {
   if (open) return <GroupPage group={open} back={() => { setOpen(null); void load(); }} />;
   return (
     <div className="page">
-      <PageHeader title="Groupes" subtitle="Travailler à plusieurs : qui bosse en ce moment, le temps de la semaine."
+      <PageHeader title="Groupes"
         actions={<>
           <Button icon="plus" onClick={() => setForm("create")}>Créer</Button>
           <Button variant="primary" icon="person.2" onClick={() => setForm("join")}>Rejoindre</Button>

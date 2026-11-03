@@ -241,9 +241,9 @@ private struct StudySettingsPane: View {
         case .off:
             return String(localized: "Le Mac se met en veille comme d'habitude.")
         case .system:
-            return String(localized: "Seulement pendant que le chrono tourne : la musique continue, l'écran s'éteint comme d'habitude. En pause, le Mac dort.")
+            return String(localized: "Pendant que le chrono tourne ; en pause, le Mac dort.")
         case .display:
-            return String(localized: "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le Mac.")
+            return String(localized: "Pendant que le chrono tourne ; l'écran peut s'éteindre en pause ou sur batterie faible.")
         }
     }
 
@@ -433,7 +433,7 @@ private struct ClaudeSettingsPane: View {
             } header: {
                 Text("Après une série")
             } footer: {
-                Text("Quand tu clos une série, Claude compare ta copie au corrigé et te propose les corrections, les erreurs et les exercices à refaire. Rien n'est noté sans ton accord.")
+                Text("Claude compare ta copie au corrigé ; rien n'est noté sans ton accord.")
             }
 
             NotebookLMSection()
@@ -542,7 +542,7 @@ private struct ClaudeSettingsPane: View {
                 } header: {
                     Text("Fichiers pour Claude")
                 } footer: {
-                    Text("Tous tes PDF et documents (énoncés, corrigés, anciens examens, supports, notes) lisibles par Claude, sans limite de taille : ils sont téléchargés à la demande avec ta session Moodle et copiés dans le dossier ci-dessus. « Ajouter à l'app Claude » installe une extension (un clic de confirmation dans l'app Claude) : l'app Claude lit alors tout directement. L'adresse n'écoute que ce Mac et contient un code secret.")
+                    Text("Tes PDF et documents de cours, lisibles par Claude (téléchargés à la demande avec ta session Moodle). L'adresse n'écoute que ce Mac.")
                         .id(localTick)
                 }
             }

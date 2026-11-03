@@ -7,8 +7,8 @@ import { readCounting, writeCounting, type Counting, type LectureCounting } from
 import { SettingRow } from "./controls.tsx";
 
 const FOOTER: Record<LectureCounting, string> = {
-  automatic: "Un cours de l'horaire compte une fois fini, sauf si tu le marques manqué. Un chrono pendant une séance n'est jamais compté deux fois.",
-  confirmed: "Un cours compte quand tu le coches dans l'agenda (« J'y étais »). Un chrono pendant une séance n'est jamais compté deux fois.",
+  automatic: "Un cours compte une fois fini, sauf marqué manqué. Jamais compté deux fois avec un chrono.",
+  confirmed: "Un cours compte quand tu le coches dans l'agenda (« J'y étais »).",
   off: "Les cours en amphi ne comptent pas, même chronométrés.",
 };
 

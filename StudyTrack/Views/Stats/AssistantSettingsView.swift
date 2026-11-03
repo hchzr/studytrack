@@ -144,7 +144,7 @@ struct AssistantSettingsView: View {
         Section {
             Toggle("Fichiers et notes", isOn: Bindable(app.settings).assistantFiles)
         } footer: {
-            Text("Envoie aussi à l'assistant les énoncés et corrigés déjà téléchargés sur l'iPhone, les fichiers que tu as ajoutés, tes notes de cours, ta fiche de révision et les corrigés rédigés. Coupé, le serveur efface ce qu'il avait reçu. Pour avoir toutes les séries, active « Garder les énoncés » dans les réglages hors ligne.")
+            Text("L'assistant lit aussi tes énoncés, corrigés, fichiers, notes et fiche déjà sur l'iPhone.")
         }
 
         Section("Brancher ton assistant") {

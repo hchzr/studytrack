@@ -33,8 +33,8 @@ const KEYS = {
 /** Le pied du choix « Garder éveillé », repris du Mac (« le Mac » → « le PC »). */
 const KEEP_AWAKE_FOOTER: Record<KeepAwakeMode, string> = {
   off: "Le PC se met en veille comme d'habitude.",
-  system: "Seulement pendant que le chrono tourne : la musique continue, l'écran s'éteint comme d'habitude. En pause, le PC dort.",
-  display: "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le PC.",
+  system: "Pendant que le chrono tourne ; en pause, le PC dort.",
+  display: "Pendant que le chrono tourne ; l'écran peut s'éteindre en pause ou sur batterie faible.",
 };
 
 /** « Garder éveillé » (Réglages › Mode étude). */

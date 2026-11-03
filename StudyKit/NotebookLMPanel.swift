@@ -70,7 +70,7 @@ struct NotebookLMPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             Kicker("NotebookLM · \(course.displayCode)", color: tint)
             Text(chapterTitle.map { "Écouter : \($0)" } ?? "Écouter ton cours").font(Carnet.serif(26)).foregroundStyle(Carnet.ink)
-            Text("NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien.")
+            Text("Un podcast de ta fiche, par NotebookLM.")
                 .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -97,13 +97,13 @@ struct NotebookLMPanel: View {
             case .unknown, .checking:
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Je regarde si tu es connecté·e à Google…").font(.callout).foregroundStyle(Carnet.inkSecondary) }
             case .signedOut:
-                Text("Connecte ton compte Google : StudyTrack crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google.")
+                Text("StudyTrack crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google.")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
                 Button { signingIn = true } label: { Label("Se connecter à Google", systemImage: "person.crop.circle.badge.checkmark") }.buttonStyle(.ink)
             case .ready:
                 automaticReady
             }
-            Text("Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste.")
+            Text("Non officiel : si Google change NotebookLM, l'export manuel reste là.")
                 .font(.caption).foregroundStyle(Carnet.inkTertiary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)

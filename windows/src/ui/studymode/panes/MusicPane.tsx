@@ -69,7 +69,7 @@ function SpotifyPanel() {
       <Playlists />
       <LinkField />
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span className="faint" style={{ fontSize: 12, flex: 1 }}>Connecté·e à Spotify (non officiel : StudyTrack parle à Spotify comme son lecteur web).</span>
+        <span className="faint" style={{ fontSize: 12, flex: 1 }}>Connecté·e à Spotify.</span>
         <button type="button" className="btn btn-sm" onClick={() => { void spotifyAccount.signOut(); }}>Se déconnecter</button>
       </div>
     </>
@@ -82,7 +82,7 @@ function ConnectCard({ failure }: { failure: string | null }) {
     <section style={{ display: "flex", flexDirection: "column", gap: 10, padding: 18, borderRadius: 14, background: "var(--sheet-raised)" }}>
       <span className="serif" style={{ fontSize: 18, color: "var(--ink)" }}>Ton compte Spotify, piloté d'ici</span>
       <span style={{ color: "var(--ink-secondary)", fontSize: 14 }}>
-        Connecte-toi une fois : ce qui joue sur ton ordinateur ou ton téléphone, les commandes, le volume, tes playlists — gratuit ou Premium. StudyTrack ne voit jamais ton mot de passe.
+        Ce qui joue, les commandes, le volume et tes playlists, gratuit ou Premium. Ton mot de passe reste chez Spotify.
       </span>
       {(failure ?? error) && <span style={{ color: "var(--review)", fontSize: 13 }}>{failure ?? error}</span>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -93,7 +93,7 @@ function ConnectCard({ failure }: { failure: string | null }) {
           C'est fait
         </button>
       </div>
-      <span className="faint" style={{ fontSize: 12 }}>Non officiel : StudyTrack parle à Spotify comme son lecteur web. Si Spotify change, le lecteur du PC reste là.</span>
+      <span className="faint" style={{ fontSize: 12 }}>Non officiel : si Spotify change, le lecteur du PC reste là.</span>
     </section>
   );
 }
