@@ -242,7 +242,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
           {pane === "exercise" && <ExercisePane course={course} timer={timer} save={save} />}
           {pane === "course" && <CourseSitePane course={course} tint={tint} />}
           {pane === "notes" && <NotesPane course={course} save={save} />}
-          {pane === "sheet" && <SheetPane course={course} />}
+          {pane === "sheet" && <SheetPane course={course} save={save} />}
           {pane === "music" && <MusicPane />}
           {pane === "claude" && <ClaudePane course={course} series={series} exercise={exercise} tint={tint} />}
           {pane === "calc" && <CalcPane openWeb={(url) => { void openInApp(url, "GeoGebra"); }} />}

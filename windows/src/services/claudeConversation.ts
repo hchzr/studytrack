@@ -163,3 +163,26 @@ export class ClaudeConversation {
     this.running = false;
   }
 }
+
+/**
+ * Une question unique à Claude (la fiche de révision, une analyse) : une conversation jetable,
+ * la réponse entière rendue quand Claude a fini. Rejette si Claude Code manque ou échoue.
+ */
+export async function askClaude(instructions: string, prompt: string, onActivity?: (text: string) => void): Promise<string> {
+  const info = await claudeSetup();
+  if (!info?.found) throw new Error("Claude Code n'est pas installé sur ce PC.");
+  const id = crypto.randomUUID();
+  const conversation = new ClaudeConversation(`ask:${id}`, id, instructions);
+  return new Promise<string>((resolve, reject) => {
+    const off = conversation.subscribe(() => {
+      if (conversation.activity) onActivity?.(conversation.activity);
+      if (conversation.busy) return;
+      off();
+      conversation.close();
+      const answer = conversation.messages.filter((message) => !message.fromStudent).map((message) => message.text).join("\n");
+      if (conversation.error && answer.trim() === "") reject(new Error(conversation.error));
+      else resolve(answer);
+    });
+    void conversation.send("", prompt);
+  });
+}
