@@ -5,6 +5,7 @@
 #   windows/scripts/test-vm.sh connect # rouvre la connexion (mot de passe copié dans le presse-papiers)
 #   windows/scripts/test-vm.sh stop    # l'éteint : plus de calcul facturé, le disque reste (~3 $/mois)
 #   windows/scripts/test-vm.sh down    # la détruit, avec sa clé et son pare-feu : plus rien de facturé
+#   windows/scripts/test-vm.sh resize c7i.2xlarge  # change de taille (éteint, change, rallume)
 #   windows/scripts/test-vm.sh status
 #
 # Windows Server 2025 (bureau complet, Edge et WebView2 inclus), t3.large (2 cœurs, 8 Go).
@@ -148,6 +149,18 @@ case "${1:-status}" in
     aws ec2 delete-key-pair --key-name "$NAME" >/dev/null 2>&1 || true
     rm -f "$KEY_FILE" "$RDP_FILE"
     echo "Plus rien sur AWS pour $NAME."
+    ;;
+  resize)
+    new="${2:?Usage : $0 resize <type>, par ex. c7i.2xlarge}"
+    id="$(instance_id)"; [[ -n "$id" ]] || { echo "Aucune machine : lance « up »." >&2; exit 1; }
+    echo "Extinction de $id…"
+    aws ec2 stop-instances --instance-ids "$id" >/dev/null
+    aws ec2 wait instance-stopped --instance-ids "$id"
+    aws ec2 modify-instance-attribute --instance-id "$id" --instance-type "{\"Value\": \"$new\"}"
+    aws ec2 start-instances --instance-ids "$id" >/dev/null
+    aws ec2 wait instance-running --instance-ids "$id"
+    echo "Machine $id en $new."
+    connect
     ;;
   status)
     aws ec2 describe-instances --filters "Name=tag:Name,Values=$NAME" \
