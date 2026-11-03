@@ -8,6 +8,7 @@ import { BotafogoCourse, type BotafogoLocation } from "../botafogo/BotafogoCours
 import { Segmented } from "../kit.tsx";
 import { openInApp } from "../studymode/openers.ts";
 import { EdView } from "./EdView.tsx";
+import { RecordingsView } from "./RecordingsView.tsx";
 import { MoodleCourseView, type MoodleReading } from "./MoodleCourseView.tsx";
 import { botafogoSite, courseSources, coursewareKey, moodleCourseID, type CourseSource } from "./courseSites.ts";
 import { CoursewareView } from "./CoursewareView.tsx";
@@ -18,7 +19,7 @@ import "./coursesite.css";
 interface Remembered { source: CourseSource; botafogo: BotafogoLocation | null; moodle: MoodleReading | null }
 const remembered = new Map<string, Remembered>();
 
-const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle", courseware: "Courseware", ed: "Ed" };
+const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle", videos: "Vidéos", courseware: "Courseware", ed: "Ed" };
 
 export function CourseSitePane({ course, tint }: { course: Course | null; tint: string }) {
   const sources = courseSources(course);
@@ -60,6 +61,7 @@ export function CourseSitePane({ course, tint }: { course: Course | null; tint: 
           <BotafogoCourse site={site} tint={tint} openWeb={openWeb}
             location={state.botafogo} onLocation={(botafogo) => update({ botafogo })} />
         )}
+        {source === "videos" && <RecordingsView course={course} />}
         {source === "ed" && <EdView code={course.code} openWeb={openWeb} />}
         {source === "courseware" && coursewareKey(course) && <CoursewareView courseKey={coursewareKey(course)!} openWeb={openWeb} />}
         {source === "moodle" && moodle !== null && (

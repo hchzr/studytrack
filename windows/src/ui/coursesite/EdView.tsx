@@ -4,7 +4,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { EdDiscussion, type EdCourse, type EdLesson, type EdPoll, type EdPost, type EdQuestion, type EdSlide, type EdThread } from "../../domain/siteContent.ts";
-import { Ed, edForget, edSignIn } from "../../services/edClient.ts";
+import { Ed, edForget, edSignIn, rememberEdCourses } from "../../services/edClient.ts";
 import { SiteError } from "../../services/siteSession.ts";
 import { listenNative } from "../../native/tauri.ts";
 import { Icon } from "../icons.tsx";
@@ -41,6 +41,12 @@ const when = (iso: string | null) => {
   return Number.isNaN(date.getTime()) ? "" : dateFormat.format(date);
 };
 
+/** Un texte d'Ed : soit du texte simple, soit son format de document (`<document version="1.0">…`). */
+function EdText({ text, openWeb }: { text: string; openWeb: (url: string) => void }) {
+  if (/^\s*<document\b/.test(text)) return <SiteBlocks blocks={EdDiscussion.blocks(text)} openWeb={openWeb} />;
+  return <RichInline text={text} onLink={openWeb} />;
+}
+
 function Centered({ children }: { children: ReactNode }) {
   return <div className="bf-center">{children}</div>;
 }
@@ -68,6 +74,7 @@ export function EdView({ code, openWeb }: { code: string; openWeb: (url: string)
   if (courses.kind === "loading") return <Centered>Lecture d'Ed…</Centered>;
   if (courses.kind === "login") return <SignIn />;
   if (courses.kind === "failed") return <Centered>{courses.message}<button type="button" className="btn" onClick={reload}>Réessayer</button></Centered>;
+  rememberEdCourses(courses.value);
   const course = EdDiscussion.match(code, courses.value);
   if (!course) return <Centered>Pas de cours Ed trouvé pour {code}.</Centered>;
   return (
@@ -134,7 +141,7 @@ function ThreadView({ id, openWeb }: { id: number; openWeb: (url: string) => voi
     <div className="bf-scroll">
       <article className="bf-page">
         <PostCard post={root} openWeb={openWeb} root />
-        {EdDiscussion.pollIDs(root.content).map((poll) => <Poll key={poll} id={poll} />)}
+        {EdDiscussion.pollIDs(root.content).map((poll) => <Poll key={poll} id={poll} openWeb={openWeb} />)}
         {root.replies.map((reply) => <Reply key={reply.id} post={reply} openWeb={openWeb} onSent={reload} />)}
         <Composer label="Répondre" onSend={async (text, answer) => { await Ed.reply({ thread: id }, text, answer); reload(); }} allowAnswer />
       </article>
@@ -238,7 +245,7 @@ function NewThread({ course, done, cancel }: { course: number; done: (id: number
   );
 }
 
-function Poll({ id }: { id: number }) {
+function Poll({ id, openWeb }: { id: number; openWeb: (url: string) => void }) {
   const [poll, reload] = useLoad<EdPoll | null>(() => Ed.poll(id), [id]);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   if (poll.kind !== "ready" || !poll.value) return null;
@@ -246,7 +253,7 @@ function Poll({ id }: { id: number }) {
   const voted = value.chosen !== null;
   return (
     <section className="bf-quiz">
-      <header className="serif"><RichInline text={value.question || "Sondage"} /></header>
+      <header className="serif"><EdText text={value.question || "Sondage"} openWeb={openWeb} /></header>
       <div className="bf-quiz-choices">
         {value.options.map((option, index) => (
           <button key={index} type="button" className={`bf-choice${picked.has(index) || value.chosen?.includes(index) ? " picked" : ""}`}
@@ -256,7 +263,7 @@ function Poll({ id }: { id: number }) {
               if (picked.has(index)) next.delete(index); else next.add(index);
               setPicked(next);
             }}>
-            <span style={{ flex: 1 }}><RichInline text={option} /></span>
+            <span style={{ flex: 1 }}><EdText text={option} openWeb={openWeb} /></span>
             {value.showsResults && <span className="mono bf-detail">{Math.round(value.share(index) * 100)} %</span>}
           </button>
         ))}
@@ -345,7 +352,7 @@ function QuestionCard({ question, openWeb }: { question: EdQuestion; openWeb: (u
               if (picked.has(index)) next.delete(index); else next.add(index);
               setPicked(next);
             }}>
-              <span><RichInline text={answer} /></span>
+              <span><EdText text={answer} openWeb={openWeb} /></span>
             </button>
           ))}
         </div>
@@ -355,7 +362,7 @@ function QuestionCard({ question, openWeb }: { question: EdQuestion; openWeb: (u
       {result && (
         <p style={{ margin: 0, color: result.correct === true ? "var(--correct)" : result.correct === false ? "var(--wrong)" : "var(--ink-secondary)" }}>
           {result.correct === true ? "Juste." : result.correct === false ? "Pas tout à fait." : "Réponse envoyée."}
-          {result.explanation && <> <RichInline text={result.explanation} /></>}
+          {result.explanation && <> <EdText text={result.explanation} openWeb={openWeb} /></>}
         </p>
       )}
       <div className="bf-quiz-actions">

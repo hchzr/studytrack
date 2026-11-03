@@ -97,3 +97,20 @@ export const Ed = {
     try { await api(`lessons/slides/${slide}/complete`, "PUT"); } catch { /* sans effet */ }
   },
 };
+
+const KNOWN = "ed.knownCourses";
+
+/** Les cours Ed de l'étudiant·e, retenus (codes et noms seulement) pour ne proposer Ed qu'aux cours qui en ont un. */
+export function rememberEdCourses(courses: EdCourse[]): void {
+  try { localStorage.setItem(KNOWN, JSON.stringify(courses.map(({ id, code, name }) => ({ id, code, name })))); } catch { /* sans mémoire */ }
+}
+
+/** `null` : pas encore connecté·e à Ed (on ne sait pas). */
+export function knownEdCourses(): EdCourse[] | null {
+  try {
+    const raw = localStorage.getItem(KNOWN);
+    return raw ? JSON.parse(raw) as EdCourse[] : null;
+  } catch {
+    return null;
+  }
+}

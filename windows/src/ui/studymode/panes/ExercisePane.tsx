@@ -16,6 +16,8 @@ import type { StudyTimerApi } from "../useStudyTimer.ts";
 import { seriesName, solutionAddress } from "../helpers.ts";
 import { openInApp } from "../openers.ts";
 import { ExercisePDFView } from "../../pdf/PDFPane.tsx";
+import { BotafogoExerciseStatement, hasBotafogoStatement } from "../../botafogo/BotafogoExerciseStatement.tsx";
+import { botafogoSite } from "../../coursesite/courseSites.ts";
 import { PDFDownloadNotice } from "../../pdf/PDFDownloadNotice.tsx";
 import { useRemoteSeriesPDF } from "../../pdf/useRemoteSeriesPDF.ts";
 import { cropExercise } from "../../pdf/cropExercise.ts";
@@ -215,6 +217,9 @@ export function ExercisePane({ course, timer, save }: {
     ?? (course ? currentSeriesOf(course, timer.targetID) : null)
     ?? null;
   const exercise = series?.exercises.find((item) => item.id === timer.targetID) ?? null;
+  // Un exercice d'un cours Botafogo : son énoncé tel que le site le montre (sous-questions, indications).
+  const site = botafogoSite(course);
+  const fromSite = exercise !== null && series !== null && hasBotafogoStatement(site, series.urlString, exercise.statementURLString);
   const next = exercise && series ? ExerciseFlow.next(exercise, series.sortedExercises) : null;
   const solution = series ? solutionAddress(series, timer.now) : null;
 
@@ -330,21 +335,30 @@ export function ExercisePane({ course, timer, save }: {
               )}
             </div>
 
-            {exercise.statement !== "" ? (
-              <p className="serif" style={{
-                margin: 0, fontSize: 16, lineHeight: 1.55, color: "var(--ink)", whiteSpace: "pre-wrap",
-              }}>
-                <MathText text={exercise.statement} />
-              </p>
+            {fromSite && site && series ? (
+              <BotafogoExerciseStatement site={site} seriesURL={series.urlString} statementURL={exercise.statementURLString}
+                position={series.sortedExercises.findIndex((item) => item.id === exercise.id)} tint={tint}
+                openWeb={(url) => { void openInApp(url, course?.displayCode ?? "StudyTrack"); }} />
             ) : (
-              <p style={{ margin: 0, fontSize: 14, color: "var(--ink-secondary)" }}>
-                Pas d'énoncé lisible ici pour cet exercice.
-              </p>
+              <>
+            {exercise.statement !== "" ? (
+                <p className="serif" style={{
+                  margin: 0, fontSize: 16, lineHeight: 1.55, color: "var(--ink)", whiteSpace: "pre-wrap",
+                }}>
+                  <MathText text={exercise.statement} />
+                </p>
+              ) : (
+                <p style={{ margin: 0, fontSize: 14, color: "var(--ink-secondary)" }}>
+                  Pas d'énoncé lisible ici pour cet exercice.
+                </p>
+              )}
+
+              </>
             )}
 
             <StatementPDF exercise={exercise} />
 
-            {exercise.hint !== "" && (
+            {!fromSite && exercise.hint !== "" && (
               <details
                 onToggle={(event) => {
                   const open = (event.target as HTMLDetailsElement).open;

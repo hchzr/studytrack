@@ -5,7 +5,7 @@
 import { Institution } from "../domain/institution.ts";
 import { Kaltura } from "../domain/siteContent.ts";
 import { nativeFetch } from "../native/http.ts";
-import { openSiteLogin, siteRequest } from "./siteSession.ts";
+import { SiteError, openSiteLogin, siteRequest } from "./siteSession.ts";
 
 /** L'identifiant Kaltura d'une vidéo (« 0_6y8w1d2s ») : le dernier d'une adresse. */
 export function entryID(link: string): string | null {
@@ -64,4 +64,78 @@ export async function playbackURL(id: string): Promise<string | null> {
 
 export async function mediaspaceSignIn(): Promise<void> {
   await openSiteLogin("mediaspace", `https://${Institution.current.videoHostName}/user/login`, "Connexion à MediaSpace");
+}
+
+// MARK: - Les listes (chaînes, catégories, listes de lecture)
+
+export interface MediaSpaceVideo {
+  entryID: string;
+  title: string;
+  url: string;
+  /** Date de mise en ligne (pour la semaine quand le titre ne la dit pas). */
+  createdAt: Date | null;
+  durationSeconds: number;
+}
+
+interface KalturaEntry { id?: string; name?: string; createdAt?: number; duration?: number }
+
+async function kaltura(service: string, action: string, params: Record<string, string>): Promise<unknown> {
+  const body = new URLSearchParams({ format: "1", ...params });
+  const response = await nativeFetch(`${Kaltura.host}/api_v3/service/${service}/action/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = await response.json() as unknown;
+  if (json !== null && typeof json === "object" && (json as { objectType?: string }).objectType === "KalturaAPIException") {
+    throw new Error((json as { message?: string }).message ?? "Kaltura a refusé.");
+  }
+  return json;
+}
+
+function toVideo(entry: KalturaEntry): MediaSpaceVideo | null {
+  if (!entry.id || !/^[01]_[a-z0-9]{8}$/.test(entry.id)) return null;
+  return {
+    entryID: entry.id,
+    title: (entry.name ?? "").trim() || "Vidéo",
+    url: `https://${Institution.current.videoHostName}/media/t/${entry.id}`,
+    createdAt: typeof entry.createdAt === "number" ? new Date(entry.createdAt * 1000) : null,
+    durationSeconds: typeof entry.duration === "number" ? entry.duration : 0,
+  };
+}
+
+/** L'identifiant de catégorie d'une chaîne (`/channel/<nom>/<id>`) ou lu dans la page. */
+function categoryID(link: string, html: string): string | null {
+  const fromPath = /\/(?:channel|category|channels)\/[^/]+\/(\d+)/.exec(new URL(link).pathname)?.[1];
+  if (fromPath) return fromPath;
+  return /"categoryId"\s*:\s*"?(\d+)/.exec(html)?.[1] ?? /categoryid[=/](\d+)/i.exec(html)?.[1] ?? null;
+}
+
+/** Toutes les vidéos d'une liste MediaSpace ; lève `SiteError("notSignedIn")` s'il faut se connecter à SWITCH. */
+export async function collectionVideos(link: string): Promise<MediaSpaceVideo[]> {
+  const page = await siteRequest(link, { timeout: 25 });
+  if (/wayf|eduid|login|saml|shibboleth/i.test(page.url)) throw new SiteError("notSignedIn");
+  const config = Kaltura.config(page.body);
+  if (!config.ks) throw new SiteError("notSignedIn");
+  const ks = config.ks;
+  const playlist = new URL(link).pathname.split("/").find((part) => /^[01]_[a-z0-9]{8}$/.test(part));
+  let entries: KalturaEntry[] = [];
+  if (link.includes("/playlist/") && playlist) {
+    const result = await kaltura("playlist", "execute", { ks, id: playlist });
+    entries = Array.isArray(result) ? result as KalturaEntry[] : [];
+  } else {
+    const category = categoryID(link, page.body);
+    if (category === null) return [];
+    for (let pageIndex = 1; pageIndex <= 6; pageIndex++) {
+      const result = await kaltura("media", "list", {
+        ks, "filter:objectType": "KalturaMediaEntryFilter", "filter:categoriesIdsMatchOr": category,
+        "filter:orderBy": "+createdAt", "pager:pageSize": "200", "pager:pageIndex": String(pageIndex),
+      }) as { objects?: KalturaEntry[]; totalCount?: number };
+      const objects = result.objects ?? [];
+      entries.push(...objects);
+      if (objects.length < 200) break;
+    }
+  }
+  return entries.map(toVideo).filter((video): video is MediaSpaceVideo => video !== null);
 }
