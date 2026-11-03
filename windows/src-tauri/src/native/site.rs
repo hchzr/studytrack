@@ -46,8 +46,12 @@ fn allowed(state: &SiteState, url: &Url) -> bool {
 }
 
 /// Ouvre la fenêtre de connexion d'un site (une seule par site), et en retient le domaine.
+///
+/// `async` est obligatoire : créer une fenêtre depuis une commande synchrone (qui tourne sur
+/// le fil principal) bloque la boucle de messages sous Windows (tauri-apps/tauri#4121,
+/// wry#583) — le bouton « ne faisait rien ».
 #[tauri::command]
-pub fn site_login_open(app: AppHandle, state: State<SiteState>, label: String, url: String, title: String) -> Result<(), String> {
+pub async fn site_login_open(app: AppHandle, state: State<'_, SiteState>, label: String, url: String, title: String) -> Result<(), String> {
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
     if parsed.scheme() != "https" {
         return Err("Seules les adresses https sont acceptées.".into());
@@ -60,12 +64,15 @@ pub fn site_login_open(app: AppHandle, state: State<SiteState>, label: String, u
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.navigate(parsed);
         let _ = window.show();
+        // Sous le verrou d'étude la principale est « toujours au-dessus » : la connexion doit l'être aussi.
+        let _ = window.set_always_on_top(super::kiosk::is_locked());
         let _ = window.set_focus();
         return Ok(());
     }
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
         .title(title)
         .inner_size(980.0, 760.0)
+        .always_on_top(super::kiosk::is_locked())
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -73,7 +80,7 @@ pub fn site_login_open(app: AppHandle, state: State<SiteState>, label: String, u
 
 /// Ferme la fenêtre de connexion d'un site (la session reste dans WebView2).
 #[tauri::command]
-pub fn site_login_close(app: AppHandle, label: String) {
+pub async fn site_login_close(app: AppHandle, label: String) {
     if let Some(window) = app.get_webview_window(&format!("site-{label}")) {
         let _ = window.close();
     }
@@ -98,19 +105,33 @@ pub struct SiteResponse {
     pub body: String,
 }
 
+/// Les cookies de la session, d'où qu'ils viennent dans WebView2. Les fenêtres de l'app
+/// partagent le même profil, donc la principale les voit ; on interroge aussi les fenêtres
+/// de connexion si elle n'en voit aucun (profil séparé, ou lecture refusée).
+fn session_cookie(app: &AppHandle, url: &Url) -> String {
+    let mut windows: Vec<tauri::WebviewWindow> = app.get_webview_window("main").into_iter().collect();
+    windows.extend(app.webview_windows().into_iter().filter(|(label, _)| label.starts_with("site-")).map(|(_, w)| w));
+    for window in windows {
+        if let Ok(cookies) = window.cookies_for_url(url.clone()) {
+            if !cookies.is_empty() {
+                return cookie_header(cookies.iter().map(|c| (c.name().to_string(), c.value().to_string())));
+            }
+        }
+    }
+    String::new()
+}
+
+/// `a=1; b=2` : l'en-tête `Cookie` d'une liste de paires.
+fn cookie_header(pairs: impl Iterator<Item = (String, String)>) -> String {
+    pairs.map(|(name, value)| format!("{name}={value}")).collect::<Vec<_>>().join("; ")
+}
+
 async fn send(app: &AppHandle, state: &SiteState, req: SiteRequest) -> Result<reqwest::Response, String> {
     let url = Url::parse(&req.url).map_err(|e| e.to_string())?;
     if !allowed(state, &url) {
         return Err("Site non autorisé : connecte-toi d'abord.".into());
     }
-    // Les cookies de la session, d'où qu'ils viennent dans WebView2.
-    let cookie = app
-        .get_webview_window("main")
-        .and_then(|w| w.cookies_for_url(url.clone()).ok())
-        .map(|cookies| {
-            cookies.iter().map(|c| format!("{}={}", c.name(), c.value())).collect::<Vec<_>>().join("; ")
-        })
-        .unwrap_or_default();
+    let cookie = session_cookie(app, &url);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(req.timeout.unwrap_or(20)))
         // Sans « Safari » dans l'agent, Moodle sert une page de cours sans ses sections.
@@ -158,4 +179,31 @@ pub async fn site_download(app: AppHandle, state: State<'_, SiteState>, req: Sit
     }
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
     Ok(tauri::ipc::Response::new(bytes.to_vec()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_domains() {
+        assert_eq!(base_domain("moodle.epfl.ch"), "epfl.ch");
+        assert_eq!(base_domain("epfl.ch"), "epfl.ch");
+        assert_eq!(base_domain("a.b.c.example.org"), "example.org");
+    }
+
+    #[test]
+    fn only_declared_https_domains_are_allowed() {
+        let state = SiteState::default();
+        state.domains.lock().unwrap().insert("epfl.ch".into());
+        assert!(allowed(&state, &Url::parse("https://moodle.epfl.ch/my/").unwrap()));
+        assert!(!allowed(&state, &Url::parse("http://moodle.epfl.ch/").unwrap()));
+        assert!(!allowed(&state, &Url::parse("https://evil.com/").unwrap()));
+    }
+
+    #[test]
+    fn cookie_header_joins_pairs() {
+        let pairs = vec![("MoodleSession".to_string(), "abc".to_string()), ("x".to_string(), "1".to_string())];
+        assert_eq!(cookie_header(pairs.into_iter()), "MoodleSession=abc; x=1");
+    }
 }

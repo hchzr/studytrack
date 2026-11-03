@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Course } from "../../models/index.ts";
 import { useData } from "../../data/dataContext.tsx";
 import { timerController } from "../timerController.ts";
+import { studyFullscreen } from "../../native/fullscreen.ts";
 import { StudySetup, type SetupScreen } from "./StudySetup.tsx";
 import { StudyWorkspace } from "./StudyWorkspace.tsx";
 import { LectureDoneView, StudyDoneView } from "./doneViews.tsx";
@@ -46,6 +47,10 @@ export function StudyModeView({ onExit, initialCourseID }: { onExit?: () => void
   }));
   /** Le panneau que le prochain bureau ouvrira (enchaîner sur la série). */
   const [nextPane, setNextPane] = useState<StudyPane>("desk");
+
+  // Plein écran tant que l'écran du mode étude est ouvert (le Mac prend tout l'écran) ;
+  // la fenêtre retrouve son état en sortant. Rien hors de l'app Windows.
+  useEffect(() => studyFullscreen(), []);
 
   // À chaque changement du chrono : la session s'impose ; sortie du mode étude,
   // l'écran se ferme (update() du contrôleur du Mac).

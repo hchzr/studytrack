@@ -6,6 +6,7 @@
 // sombres (tokens.css) — les verdicts compris, pour que juste / à revoir / faux
 // gardent leurs couleurs de nuit sur le papier sombre.
 
+import { inNative } from "../../native/tauri.ts";
 import type { CSSProperties } from "react";
 
 /** La palette sombre, en variables CSS posées sur le div racine du mode étude. */
@@ -37,13 +38,19 @@ export const studyPalette = {
  *  n'existe pas encore : le choix est gardé pour quand il arrivera). */
 export const locksStorageKey = "studyMode.locks";
 
-/** « Bloquer le reste » tel qu'il a été choisi la dernière fois (faux sans choix). */
+/**
+ * « Bloquer le reste » tel qu'il a été choisi la dernière fois. Sans choix : actif dans l'app
+ * Windows (le blocage est la raison d'être du mode étude, et le réglage est juste dessous),
+ * inactif ailleurs.
+ */
 export function readStudyLocks(): boolean {
   try {
-    return globalThis.localStorage?.getItem(locksStorageKey) === "true";
+    const saved = globalThis.localStorage?.getItem(locksStorageKey);
+    if (saved === "true" || saved === "false") return saved === "true";
   } catch {
-    return false;
+    // Pas de stockage : le défaut.
   }
+  return inNative();
 }
 
 /** Retient le choix « Bloquer le reste ». */

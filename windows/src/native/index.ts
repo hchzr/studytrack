@@ -6,8 +6,8 @@ import { StudyMode } from "../domain/studyMode.ts";
 import { timerController } from "../ui/timerController.ts";
 import { startKeepAwake } from "./keepAwake.ts";
 import { startMiniBridge } from "./miniBridge.ts";
-import { readBlockedApps, readBlockedSites, readKeepAwakeMode } from "./settings.ts";
-import { loadLockCapabilities, startStudyLock } from "./studyLock.ts";
+import { readKeepAwakeMode } from "./settings.ts";
+import { startStudyLock } from "./studyLock.ts";
 import { inNative } from "./tauri.ts";
 
 /** Montre la fenêtre principale (clic « ouvrir » du chrono flottant). */
@@ -41,7 +41,6 @@ export async function startNative(courseOf: (id: string | undefined) => Course |
     readKeepAwakeMode,
   ));
 
-  await loadLockCapabilities();
   stops.push(startStudyLock(
     {
       subscribe: ctl.subscribe,
@@ -51,7 +50,6 @@ export async function startNative(courseOf: (id: string | undefined) => Course |
         return state && !StudyMode.isOpenEnded(state) ? state.studyUntil ?? null : null;
       },
     },
-    () => ({ apps: readBlockedApps(), sites: readBlockedSites() }),
   ));
 
   stops.push(await startMiniBridge({

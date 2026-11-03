@@ -128,8 +128,9 @@ pub fn set_visible(app: &AppHandle, visible: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// `async` : créer une fenêtre depuis une commande synchrone bloque Windows (wry#583).
 #[tauri::command]
-pub fn mini_set_visible(app: AppHandle, visible: bool) -> Result<(), String> {
+pub async fn mini_set_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     set_visible(&app, visible)
 }
 

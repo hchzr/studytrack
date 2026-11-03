@@ -30,7 +30,8 @@ export interface MiniTimer {
 
 /** Faut-il montrer la fenêtre flottante ? (MiniTimerPanel.update : réglage + une session.) */
 export function miniWanted(enabled: boolean, state: FocusTimerState | null): boolean {
-  return enabled && state !== null;
+  // Sous le verrou d'étude, rien ne doit flotter par-dessus l'écran de StudyTrack.
+  return enabled && state !== null && !StudyMode.blocks(state);
 }
 
 export async function startMiniBridge(options: {

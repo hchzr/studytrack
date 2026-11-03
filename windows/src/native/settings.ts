@@ -8,8 +8,6 @@ import { keepAwakeModes, type KeepAwakeMode } from "../domain/keepAwakePolicy.ts
 
 const FLOATING = "win.floatingTimer";
 const KEEP_AWAKE = "win.studyKeepAwake";
-const BLOCKED_APPS = "win.blockedApps";
-const BLOCKED_SITES = "win.blockedSites";
 
 function read(key: string): string | null {
   try {
@@ -51,33 +49,6 @@ export function writeKeepAwakeMode(mode: KeepAwakeMode): void {
   write(KEEP_AWAKE, mode);
   notifyNative();
 }
-
-/** Les apps fermées pendant un blocage (noms d'exécutables). */
-export const defaultBlockedApps = [
-  "discord.exe", "steam.exe", "epicgameslauncher.exe", "telegram.exe", "whatsapp.exe", "battle.net.exe",
-];
-
-/** Les sites coupés pendant un blocage (fichier hosts). */
-export const defaultBlockedSites = [
-  "youtube.com", "netflix.com", "twitch.tv", "reddit.com", "instagram.com", "tiktok.com",
-  "facebook.com", "x.com", "twitter.com", "primevideo.com", "disneyplus.com",
-];
-
-function readList(key: string, fallback: string[]): string[] {
-  const raw = read(key);
-  if (raw === null) return fallback;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.every((x) => typeof x === "string") ? (parsed as string[]) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-export const readBlockedApps = () => readList(BLOCKED_APPS, defaultBlockedApps);
-export const readBlockedSites = () => readList(BLOCKED_SITES, defaultBlockedSites);
-export const writeBlockedApps = (apps: string[]) => write(BLOCKED_APPS, JSON.stringify(apps));
-export const writeBlockedSites = (sites: string[]) => write(BLOCKED_SITES, JSON.stringify(sites));
 
 /** Proposer l'analyse par modèle de langage à l'import d'un PDF (`settings.aiExtractionEnabled`) : actif par défaut. */
 const AI_EXTRACTION = "win.aiExtraction";

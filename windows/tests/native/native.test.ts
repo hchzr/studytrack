@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { KeepAwakePolicy } from "../../src/domain/keepAwakePolicy.ts";
 import { needsUpdate, planKeepAwake, startKeepAwake } from "../../src/native/keepAwake.ts";
-import { lockNote, sitesToBlock, startStudyLock } from "../../src/native/studyLock.ts";
+import { KIOSK_NOTE, lockStatusLine, startStudyLock } from "../../src/native/studyLock.ts";
 import { inactiveMini, miniProgress, miniSeconds, miniSubtitle, type MiniState } from "../../src/native/miniState.ts";
+import { enterStudyFullscreen } from "../../src/native/fullscreen.ts";
 import { miniWanted } from "../../src/native/miniBridge.ts";
 
 const t0 = new Date("2026-11-02T10:00:00Z");
@@ -49,25 +50,80 @@ describe("keep-awake", () => {
 });
 
 describe("blocage", () => {
-  it("ne coupe jamais un site que l'étude permet", () => {
-    expect(sitesToBlock(["youtube.com", "moodle.epfl.ch", "claude.ai"], ["epfl.ch", "claude.ai"])).toEqual(["youtube.com"]);
-  });
-  it("dit honnêtement ce qui est tenu", () => {
-    expect(lockNote(null, false)).toContain("app Windows");
-    expect(lockNote({ supported: true, canBlockSites: false }, true)).toContain("droits administrateur requis");
-    expect(lockNote({ supported: true, canBlockSites: true }, true)).not.toContain("droits");
-    expect(lockNote({ supported: false, canBlockSites: false }, true)).toContain("pas disponible");
-  });
-  it("démarre et arrête avec le mode étude (no-op hors Tauri)", async () => {
+  it("démarre et arrête le verrou avec blocks() (no-op hors Tauri)", async () => {
     let blocks = false;
     let notify = () => {};
-    const stop = startStudyLock(
-      { subscribe: (l) => { notify = l; return () => {}; }, blocks: () => blocks, until: () => null },
-      () => ({ apps: [], sites: [] }),
-    );
+    const stop = startStudyLock({ subscribe: (l) => { notify = l; return () => {}; }, blocks: () => blocks, until: () => null });
     blocks = true; notify(); await Promise.resolve();
     blocks = false; notify(); await Promise.resolve();
     stop();
+  });
+  it("appelle study_lock_start puis study_lock_stop, une fois chacun", async () => {
+    vi.resetModules();
+    const calls: string[] = [];
+    vi.doMock("../../src/native/tauri.ts", () => ({
+      inNative: () => true,
+      callNative: async (command: string) => { calls.push(command); return command === "study_lock_start" ? { supported: true, active: true, keysBlocked: true, note: null } : null; },
+    }));
+    const lock = await import("../../src/native/studyLock.ts");
+    let blocks = true;
+    let notify = () => {};
+    const stop = lock.startStudyLock({ subscribe: (l) => { notify = l; return () => {}; }, blocks: () => blocks, until: () => null });
+    const settle = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+    await settle();
+    notify(); await settle(); // déjà tenu : pas de second départ
+    expect(calls).toEqual(["study_lock_start"]);
+    expect(lock.studyLockStatus.snapshot()?.keysBlocked).toBe(true);
+    blocks = false; notify(); await settle();
+    expect(calls).toEqual(["study_lock_start", "study_lock_stop"]);
+    expect(lock.studyLockStatus.snapshot()).toBeNull();
+    stop();
+    vi.doUnmock("../../src/native/tauri.ts");
+  });
+  it("décrit le verrou sans promettre ce qu'il ne tient pas", () => {
+    expect(KIOSK_NOTE).toContain("Ctrl+Alt+Suppr");
+  });
+});
+
+describe("ligne Blocage", () => {
+  const report = { supported: true, active: true, keysBlocked: true, note: null };
+  it("ne dit rien hors de l'app, dit « désactivé » si le blocage est coupé", () => {
+    expect(lockStatusLine(null, true, false)).toBeNull();
+    expect(lockStatusLine(null, false, true)).toContain("désactivé");
+    expect(lockStatusLine(null, true, true)).toContain("démarrage");
+  });
+  it("rend compte de ce que Rust tient vraiment", () => {
+    expect(lockStatusLine(report, true, true)).toContain("occupe l'écran");
+    expect(lockStatusLine({ ...report, keysBlocked: false, note: "les raccourcis du système n'ont pas pu être bloqués" }, true, true))
+      .toContain("n'ont pas pu être bloqués");
+    expect(lockStatusLine({ ...report, supported: false, active: false, note: "le verrou n'existe que dans l'app Windows" }, true, true))
+      .toContain("n'existe que");
+  });
+});
+
+describe("plein écran du mode étude", () => {
+  const fake = (initial: boolean) => {
+    const calls: boolean[] = [];
+    let full = initial;
+    return { calls, win: { isFullscreen: async () => full, setFullscreen: async (v: boolean) => { full = v; calls.push(v); } } };
+  };
+  const settle = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+  it("entre en plein écran puis rend la fenêtre", async () => {
+    const { calls, win } = fake(false);
+    const stop = enterStudyFullscreen(win);
+    await settle(); stop(); await settle();
+    expect(calls).toEqual([true, false]);
+  });
+  it("laisse en plein écran une fenêtre qui l'était déjà", async () => {
+    const { calls, win } = fake(true);
+    const stop = enterStudyFullscreen(win);
+    await settle(); stop(); await settle();
+    expect(calls).toEqual([]);
+  });
+  it("ne casse rien sans fenêtre ou si l'API refuse", async () => {
+    enterStudyFullscreen(null)();
+    const stop = enterStudyFullscreen({ isFullscreen: async () => { throw new Error("refusé"); }, setFullscreen: async () => {} });
+    await settle(); stop(); await settle();
   });
 });
 
@@ -100,5 +156,7 @@ describe("chrono flottant", () => {
     expect(miniWanted(true, null)).toBe(false);
     expect(miniWanted(false, {} as never)).toBe(false);
     expect(miniWanted(true, {} as never)).toBe(true);
+    // Sous le verrou d'étude, le chrono flottant reste caché.
+    expect(miniWanted(true, { studyUntil: new Date(Date.now() + 3600_000) } as never)).toBe(false);
   });
 });

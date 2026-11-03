@@ -40,7 +40,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             native::power::set_keep_awake,
-            native::lock::study_lock_capabilities,
             native::lock::study_lock_start,
             native::lock::study_lock_stop,
             native::mini::mini_set_visible,
@@ -52,8 +51,6 @@ pub fn run() {
             native::secrets::secret_set,
         ])
         .setup(|app| {
-            // Reprise après plantage : rien du blocage ne doit rester dans `hosts`.
-            native::lock::recover();
             // Le plateau (zone de notification) : l'icône de l'app, ouvrir, quitter.
             let open = MenuItem::with_id(app, "open", "Ouvrir StudyTrack", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini chrono", true, None::<&str>)?;
@@ -92,7 +89,7 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 native::mini::persist(app);
-                native::lock::shutdown(&app.state::<native::lock::LockState>());
+                native::lock::shutdown(app, &app.state::<native::lock::LockState>());
                 native::power::set(native::power::Hold::Off, 60);
             }
         });

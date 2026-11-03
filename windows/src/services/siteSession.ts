@@ -86,13 +86,22 @@ export async function siteDownload(url: string, init: SiteRequestInit = {}): Pro
   }
 }
 
+export const loginOpenTimeoutMs = 15_000;
+
 /** Ouvre la fenêtre de connexion d'un site — la connexion faite une fois sert à tous les imports suivants. */
 export async function openSiteLogin(label: string, url: string, title: string): Promise<void> {
   if (!inNative()) throw new SiteError("failed", "La connexion se fait dans l'app Windows.");
+  // Un bouton qui « ne fait rien » est pire qu'une erreur : sans réponse de Rust, on le dit.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const silence = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new SiteError("failed", "La fenêtre de connexion ne s'est pas ouverte. Relance StudyTrack et réessaie.")), loginOpenTimeoutMs);
+  });
   try {
-    await callNativeOrThrow("site_login_open", { label, url, title });
+    await Promise.race([callNativeOrThrow("site_login_open", { label, url, title }), silence]);
   } catch (error) {
-    throw failure(error);
+    throw error instanceof SiteError ? error : failure(error);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

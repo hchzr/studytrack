@@ -1,17 +1,22 @@
-// Le blocage d'étude, au mieux (StudyLock du Mac) : sous Windows, les apps de la
-// liste sont fermées par un scrutateur de processus et les sites coupés par le
-// fichier hosts — ce dernier seulement si l'app a les droits administrateur.
-// Tout se défait à la fin de la session (et au prochain lancement, côté Rust).
+// Le verrou d'étude (StudyLock du Mac) : pendant une session qui « bloque le reste »,
+// StudyTrack occupe l'écran — plein écran, toujours au-dessus, il reprend le focus, et
+// Rust avale Win, Alt+Tab, Alt+Échap, Ctrl+Échap, Alt+F4 (native/kiosk.rs). Rien n'est
+// fermé ni écrit hors de l'app, aucun droit administrateur. On en sort comme le décident
+// les règles du mode étude (StudyMode.locks), jamais autrement.
 
-import { isAllowedHost, defaultSites } from "../domain/studyMode.ts";
 import { callNative, inNative } from "./tauri.ts";
 
-export interface LockCapabilities { supported: boolean; canBlockSites: boolean }
-export interface LockReport { supported: boolean; watching: boolean; sitesBlocked: boolean; note: string | null }
+export interface LockReport {
+  supported: boolean;
+  active: boolean;
+  /** Win, Alt+Tab… sont avalés. */
+  keysBlocked: boolean;
+  note: string | null;
+}
 
-export const NEEDS_ADMIN_NOTE = "sites non bloqués (droits administrateur requis)";
+export const KIOSK_NOTE =
+  "StudyTrack occupe l'écran ; les autres apps sont inaccessibles jusqu'à la fin de la session. Ctrl+Alt+Suppr reste disponible.";
 
-let capabilities: LockCapabilities | null = null;
 let lastReport: LockReport | null = null;
 const listeners = new Set<() => void>();
 
@@ -20,7 +25,7 @@ export const studyLockStatus = {
     listeners.add(listener);
     return () => listeners.delete(listener);
   },
-  /** Le dernier rapport de Rust (`null` : aucun blocage en cours). */
+  /** Le dernier rapport de Rust (`null` : aucun verrou en cours). */
   snapshot: (): LockReport | null => lastReport,
 };
 
@@ -29,28 +34,22 @@ function publish(report: LockReport | null): void {
   for (const listener of listeners) listener();
 }
 
-/** Les sites à couper : la liste moins ce que l'étude permet d'office (jamais Moodle, Claude…). */
-export function sitesToBlock(blocked: string[], allowed: string[] = defaultSites()): string[] {
-  return blocked.filter((site) => !isAllowedHost(site, allowed));
-}
-
-/** Les mots du réglage « Bloquer le reste », honnêtes sur ce qui est vraiment tenu. */
-export function lockNote(known: LockCapabilities | null, native: boolean): string {
-  if (!native) return "Le blocage des apps et des sites ne marche que dans l'app Windows.";
-  if (known === null) return "Au mieux : les apps de la liste sont fermées, les sites coupés si StudyTrack en a les droits.";
-  if (!known.supported) return "Le blocage n'est pas disponible sur ce système.";
-  return known.canBlockSites
-    ? "Au mieux : les apps de la liste sont fermées et les sites coupés pendant la session — rien n'est garanti."
-    : `Au mieux : les apps de la liste sont fermées ; ${NEEDS_ADMIN_NOTE}.`;
-}
-
-/** La phrase de l'écran de préparation du mode étude. */
+/** Les mots du réglage « Bloquer le reste », honnêtes sur ce qui est tenu. */
 export function studyLockNote(): string {
-  return lockNote(capabilities, inNative());
+  return inNative() ? KIOSK_NOTE : "Le blocage ne marche que dans l'app Windows.";
 }
 
-export async function loadLockCapabilities(): Promise<void> {
-  capabilities = await callNative<LockCapabilities>("study_lock_capabilities");
+/**
+ * La ligne « Blocage » du mode étude : ce que Rust dit tenir réellement.
+ * `null` : rien à dire (hors de l'app Windows).
+ */
+export function lockStatusLine(report: LockReport | null, wanted: boolean, native: boolean): string | null {
+  if (!native) return null;
+  if (!wanted) return "Blocage : désactivé pour cette session.";
+  if (report === null) return "Blocage : démarrage…";
+  if (!report.supported || !report.active) return `Blocage : ${report.note ?? "indisponible sur ce système"}.`;
+  if (!report.keysBlocked) return `Blocage : écran tenu, mais ${report.note ?? "les raccourcis du système restent actifs"}.`;
+  return "Blocage : StudyTrack occupe l'écran, les raccourcis du système sont bloqués. Ctrl+Alt+Suppr reste disponible.";
 }
 
 /** Ce que `startStudyLock` lit du chrono. */
@@ -62,11 +61,7 @@ export interface StudyLockTimer {
   until(): Date | null;
 }
 
-export function startStudyLock(
-  timer: StudyLockTimer,
-  lists: () => { apps: string[]; sites: string[] },
-  now: () => Date = () => new Date(),
-): () => void {
+export function startStudyLock(timer: StudyLockTimer, now: () => Date = () => new Date()): () => void {
   let active = false;
   let wake: ReturnType<typeof setTimeout> | null = null;
 
@@ -83,8 +78,9 @@ export function startStudyLock(
     if (timer.blocks()) {
       if (!active) {
         active = true;
-        const { apps, sites } = lists();
-        publish(await callNative<LockReport>("study_lock_start", { apps, sites: sitesToBlock(sites) }));
+        const report = await callNative<LockReport>("study_lock_start");
+        // Une commande qui échoue (null) doit se voir, pas se taire.
+        publish(report ?? { supported: true, active: false, keysBlocked: false, note: "le verrou n'a pas pu démarrer" });
       }
       // Le mode étude finit sans que le chrono change : un réveil à l'heure.
       const until = timer.until();

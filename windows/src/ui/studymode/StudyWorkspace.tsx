@@ -20,6 +20,7 @@ import type { StudyTimerApi } from "./useStudyTimer.ts";
 import { STUDY_PANES, type StudyPane } from "./paneKind.ts";
 import { solutionAddress } from "./helpers.ts";
 import { StudyTopBar } from "./StudyTopBar.tsx";
+import { StudyLockStatus } from "./StudyLockStatus.tsx";
 import { StudySidePanel } from "./StudySidePanel.tsx";
 import { TakeoverOverlay } from "./TakeoverCards.tsx";
 import { DeskHome } from "./panes/DeskHome.tsx";
@@ -186,6 +187,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
         sideOpen={sideOpen}
         onToggleSide={toggleSide}
       />
+      <StudyLockStatus wanted={timer.studyLocks} />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {/* La colonne d'outils : le centre, un outil à la fois (StudyRail,
             sans Claude ni apps permises — rien à lancer hors du navigateur). */}
