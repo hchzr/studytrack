@@ -124,10 +124,12 @@ fn serve(app: AppHandle, listener: TcpListener, port: u16, stop: Arc<AtomicBool>
     }
 }
 
-/// Ouvre l'écoute sur un port libre de la boucle locale et le rend. Un nouvel appel annule le précédent.
+/// Ouvre l'écoute sur la boucle locale (le port demandé, sinon un libre) et rend le port. Un nouvel appel annule le précédent.
 #[tauri::command]
-pub async fn oauth_start(app: AppHandle, state: State<'_, OAuthState>) -> Result<u16, String> {
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|e| e.to_string())?;
+pub async fn oauth_start(app: AppHandle, state: State<'_, OAuthState>, port: Option<u16>) -> Result<u16, String> {
+    // Un port fixe pour les fournisseurs qui exigent l'adresse exacte (Spotify) ; sinon un port libre.
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port.unwrap_or(0)))
+        .map_err(|e| format!("Port {} occupé : ferme l'autre connexion en cours. ({e})", port.unwrap_or(0)))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let stop = Arc::new(AtomicBool::new(false));
     if let Ok(mut current) = state.current.lock() {

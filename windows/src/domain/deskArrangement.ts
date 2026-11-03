@@ -10,14 +10,16 @@
 // la partie touchée jusqu'au changement suivant.
 
 import type { DeskMoment } from "./deskMoment.ts";
-import type { SoundtrackPhase } from "./sessionSoundtrack.ts";
+
+/** Où en est la session : au travail, en pause du rythme, en pause, finie. */
+export type DeskPhase = "running" | "onBreak" | "paused" | "ended";
 
 /** Ce que le bureau sait de la situation. */
 export interface DeskArrangementContextInit {
   moment: DeskMoment;
   /** Le travail est de la théorie (lire, regarder), pas des exercices. */
   isTheory?: boolean;
-  phase?: SoundtrackPhase;
+  phase?: DeskPhase;
   /** Un exercice est visé. */
   hasTarget?: boolean;
   /** L'exercice visé est fait (à corriger). */
@@ -37,7 +39,7 @@ export interface DeskArrangementContextInit {
 export class DeskArrangementContext {
   moment: DeskMoment;
   isTheory: boolean;
-  phase: SoundtrackPhase;
+  phase: DeskPhase;
   hasTarget: boolean;
   targetDone: boolean;
   seriesComplete: boolean;

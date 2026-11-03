@@ -152,7 +152,6 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// frontière de temps).
     func update() {
         guard let timer else { return }
-        updateSoundtrack(timer)
         window?.appearance = (settings?.studyAlwaysDark ?? true) ? NSAppearance(named: .darkAqua) : nil
         MacKeepAwake.shared.update(mode: settings?.studyKeepAwake ?? .off, studying: timer.isStudying,
                                    running: timer.phase == .running, onBreak: timer.phase == .onBreak,
@@ -175,31 +174,6 @@ final class StudyModeController: NSObject, NSWindowDelegate {
                 closeWindow()
             }
         }
-    }
-
-    /// La bande-son suit la session : démarre avec elle, se tait pendant les
-    /// pauses, s'éteint à la fin (jamais pendant un cours).
-    private func updateSoundtrack(_ timer: MacTimer) {
-        guard let settings else { return }
-        let soundtrack = StudySoundtrack.shared
-        // « Pour mes sessions » (la musique) range la collection choisie dans les réglages.
-        if soundtrack.pick == nil {
-            soundtrack.pick = { [weak self] choice, moment in
-                if moment == .revision { self?.settings?.studySoundtrackRevision = choice } else { self?.settings?.studySoundtrack = choice }
-                DeskNotifications.shared.post(.info, "« \(choice.title) » accompagnera \(moment == .revision ? "ta révision" : "tes séances")", icon: "headphones")
-            }
-        }
-        soundtrack.breakPolicy = settings.studySoundtrackOnBreak
-        let phase: SessionSoundtrack.Phase
-        if !timer.isStudying { phase = .ended }
-        else if timer.phase == .onBreak { phase = .onBreak }
-        else if timer.phase == .paused { phase = .paused }
-        else { phase = .running }
-        let course = (timer.courseID).flatMap { id in container.flatMap { try? ModelContext($0).fetch(FetchDescriptor<Course>()).first { $0.id == id } } }
-        let moment = DeskSchedule.moment(taskType: timer.taskType, inGroup: timer.state?.groupSession != nil, course: course)
-        // Une bande-son par moment : celle de la révision si elle est choisie, sinon celle des séries.
-        soundtrack.choice = moment == .revision ? (settings.studySoundtrackRevision ?? settings.studySoundtrack) : settings.studySoundtrack
-        soundtrack.update(phase: phase, moment: moment)
     }
 
     // MARK: Fenêtre

@@ -500,11 +500,7 @@ struct MusicCollectionView: View {
                                 detail: songs.isEmpty ? nil : Self.summary(count: songs.count, duration: totalDuration)) {
                     MusicPlayButtons(play: { music.play(source) },
                                      shuffle: { music.play(source, shuffled: true) },
-                                     queue: songs.isEmpty ? nil : { next in music.enqueue(songs, next: next) },
-                                     forSessions: StudySoundtrack.shared.pick.map { pick in { moment in
-                                         guard let choice = source.sessionChoice else { return }
-                                         pick(choice, moment)
-                                     } })
+                                     queue: songs.isEmpty ? nil : { next in music.enqueue(songs, next: next) })
                 }
                 if let errorMessage {
                     ContentUnavailableView {
@@ -724,8 +720,6 @@ private struct MusicPlayButtons: View {
     var play: () -> Void
     var shuffle: () -> Void
     var queue: ((Bool) -> Void)?
-    /// « Pour mes sessions » : cette collection devient la bande-son d'un moment.
-    var forSessions: ((DeskMoment) -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -741,11 +735,6 @@ private struct MusicPlayButtons: View {
                 Menu {
                     Button("Lire ensuite", systemImage: "text.line.first.and.arrowtriangle.forward") { queue(true) }
                     Button("Ajouter à la file", systemImage: "text.line.last.and.arrowtriangle.forward") { queue(false) }
-                    if let forSessions {
-                        Divider()
-                        Button("Pour mes séances de séries", systemImage: "headphones") { forSessions(.series) }
-                        Button("Pour ma révision", systemImage: "headphones") { forSessions(.revision) }
-                    }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.callout.weight(.semibold))

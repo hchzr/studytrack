@@ -47,7 +47,6 @@ import {
   standardSessionFlow,
   toggleStep,
 } from "../../src/domain/sessionFlow.ts";
-import { SessionSoundtrack, type SoundtrackPhase, type SoundtrackBreakPolicy } from "../../src/domain/sessionSoundtrack.ts";
 import { StudySearchQuery, StudySwitcherModel } from "../../src/domain/studySwitcher.ts";
 import { TimerLink } from "../../src/domain/timerLink.ts";
 import { TimerText, WidgetFormat } from "../../src/domain/timerText.ts";
@@ -633,47 +632,6 @@ describe("Sélecteur et recherche d'étude", () => {
   it("recherche : une phrase devient une question pour Claude, un mot reste une recherche", () => {
     expect(Q.claudeQuestion("pourquoi la suite est croissante ?") !== null && Q.claudeQuestion("comment faire 3.2") !== null
       && Q.claudeQuestion("calcul") === null && Q.claudeQuestion("  ") === null && Q.claudeQuestion("quoi?") !== null).toBe(true);
-  });
-});
-
-describe("Bande-son de la session", () => {
-  type S = typeof SessionSoundtrack;
-  const act = (from: SoundtrackPhase | null, to: SoundtrackPhase,
-    o: { moment?: "lecture" | "series"; choice?: boolean; owns?: boolean; policy?: SoundtrackBreakPolicy } = {}) =>
-    SessionSoundtrack.action({ from, to, moment: o.moment ?? "series", hasChoice: o.choice ?? true,
-      ownsPlayback: o.owns ?? true, policy: o.policy ?? "pause" }) as ReturnType<S["action"]>;
-  it("bande-son : démarre avec la session", () => expect(act(null, "running", { owns: false })).toBe("start"));
-  it("bande-son : redémarre après une session finie", () => expect(act("ended", "running", { owns: false })).toBe("start"));
-  it("bande-son : jamais pendant un cours", () => expect(act(null, "running", { moment: "lecture" })).toBe("none"));
-  it("bande-son : rien sans playlist choisie", () => expect(act(null, "running", { choice: false })).toBe("none"));
-  it("bande-son : fondu et pause pendant la pause", () => expect(act("running", "onBreak")).toBe("fadeOutAndPause"));
-  it("bande-son : reprise en fondu après la pause", () => expect(act("onBreak", "running")).toBe("resumeAndFadeIn"));
-  it("bande-son : baisser puis rétablir", () => {
-    expect(act("running", "onBreak", { policy: "lower" }) === "lower" && act("onBreak", "running", { policy: "lower" }) === "restoreVolume").toBe(true);
-  });
-  it("bande-son : continuer pendant la pause", () => {
-    expect(act("running", "onBreak", { policy: "keep" }) === "none" && act("onBreak", "running", { policy: "keep" }) === "none").toBe(true);
-  });
-  it("bande-son : la musique de l'étudiant·e n'est pas touchée pendant une pause", () => {
-    expect(act("running", "onBreak", { owns: false })).toBe("none");
-  });
-  it("bande-son : une pause manuelle ne touche pas à la musique", () => {
-    expect(act("running", "paused") === "none" && act("paused", "running") === "none").toBe(true);
-  });
-  it("bande-son : s'éteint à la fin", () => expect(act("running", "ended")).toBe("fadeOutAndStop"));
-  it("bande-son : à la fin, sa propre musique reste", () => expect(act("running", "ended", { owns: false })).toBe("none"));
-  it("bande-son : lancée avant un cours changé en cours de route, elle s'éteint quand même", () => {
-    expect(act("running", "ended", { moment: "lecture" })).toBe("fadeOutAndStop");
-  });
-  const steps = SessionSoundtrack.fade(1, 0, 4);
-  it("bande-son : fondu en paliers jusqu'à la cible", () => {
-    expect(steps.length === 4 && steps[steps.length - 1] === 0 && Math.abs(steps[0] - 0.75) < 1e-9).toBe(true);
-  });
-  it("bande-son : le choix voyage en JSON", () => {
-    const choice = { kind: "playlist" as const, id: "p.123", title: "Focus", shuffled: false };
-    expect(SessionSoundtrack.decode(SessionSoundtrack.encode(choice)) !== null
-      && JSON.stringify(SessionSoundtrack.decode(SessionSoundtrack.encode(choice))) === JSON.stringify(choice)
-      && SessionSoundtrack.decode(null) === null && SessionSoundtrack.decode("x") === null).toBe(true);
   });
 });
 

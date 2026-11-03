@@ -5,7 +5,7 @@
 import { callNativeOrThrow, inNative } from "./tauri.ts";
 import type { Loopback } from "../services/oauth.ts";
 
-export async function startLoopback(): Promise<Loopback> {
+export async function startLoopback(fixedPort?: number): Promise<Loopback> {
   if (!inNative()) throw new Error("La connexion Google s'ouvre dans l'app StudyTrack pour Windows.");
   const { listen } = await import("@tauri-apps/api/event");
   const unlisten: (() => void)[] = [];
@@ -21,7 +21,7 @@ export async function startLoopback(): Promise<Loopback> {
   const cleanup = () => { unlisten.forEach((f) => f()); unlisten.length = 0; };
   let port: number;
   try {
-    port = await callNativeOrThrow<number>("oauth_start");
+    port = await callNativeOrThrow<number>("oauth_start", fixedPort ? { port: fixedPort } : {});
   } catch (e) {
     cleanup();
     throw new Error(typeof e === "string" ? e : "Impossible d'ouvrir la connexion locale.");

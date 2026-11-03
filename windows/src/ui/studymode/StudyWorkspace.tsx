@@ -11,8 +11,7 @@ import { TaskType } from "../../models/enums.ts";
 import { useData } from "../../data/dataContext.tsx";
 import { DeskSchedule, type ScheduledClass } from "../../domain/deskSchedule.ts";
 import { LectureClock } from "../../domain/deskMoment.ts";
-import type { SoundtrackPhase } from "../../domain/sessionSoundtrack.ts";
-import { DeskArrangement, type DeskCenter, type DeskArrangementContextInit, type DeskTakeover } from "../../domain/deskArrangement.ts";
+import { DeskArrangement, type DeskCenter, type DeskArrangementContextInit, type DeskPhase, type DeskTakeover } from "../../domain/deskArrangement.ts";
 import { StudyMode } from "../../domain/studyMode.ts";
 import { headlineOf } from "../screens/focus/timerView.ts";
 import { timerController } from "../timerController.ts";
@@ -33,7 +32,6 @@ import { CourseSitePane } from "../coursesite/CourseSitePane.tsx";
 import { CalcPane } from "./panes/CalcPane.tsx";
 import { ClaudePane } from "./panes/ClaudePane.tsx";
 import { MusicPane } from "./panes/MusicPane.tsx";
-import { useSoundtrack } from "./useSoundtrack.ts";
 import { openInApp } from "./openers.ts";
 import { hasCourseSite } from "../coursesite/courseSites.ts";
 
@@ -111,7 +109,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
   // Ce que le bureau sait de la situation (StudyWorkspace.arrangementContext) :
   // `writingApp` (GoodNotes au premier plan) et `hasCopy` (la copie de la
   // série dans tes notes) n'ont pas d'équivalent Windows — toujours faux.
-  const phase: SoundtrackPhase = !timer.isStudying ? "ended"
+  const phase: DeskPhase = !timer.isStudying ? "ended"
     : timer.phase.type === "onBreak" ? "onBreak"
     : timer.phase.type === "paused" ? "paused"
     : "running";
@@ -153,9 +151,6 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
     // Le contexte se déduit de l'état affiché ; seule sa clé (le moment)
     // relance la mise en place — pas chaque battement de l'horloge.
   }, [key]);
-
-  // La musique se tait pendant la pause du rythme et revient avec le travail.
-  useSoundtrack(phase, moment);
 
   // « Le cours » n'apparaît que si l'app sait lire le site de ce cours.
   const panes = STUDY_PANES.filter((entry) => entry.kind !== "course" || hasCourseSite(course));

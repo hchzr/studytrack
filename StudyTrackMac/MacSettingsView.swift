@@ -200,13 +200,6 @@ private struct StudySettingsPane: View {
                     .help("Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance StudyTrack s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout.")
                 Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                     .disabled(!settings.studyBlocking)
-                LabeledContent("Bande-son des séries") { SoundtrackPicker(choice: $settings.studySoundtrack) }
-                LabeledContent("Bande-son de la révision") { SoundtrackPicker(choice: $settings.studySoundtrackRevision) }
-                Picker("Musique pendant une pause", selection: $settings.studySoundtrackOnBreak) {
-                    Text("Pause").tag(SessionSoundtrack.BreakPolicy.pause)
-                    Text("Plus bas").tag(SessionSoundtrack.BreakPolicy.lower)
-                    Text("Continue").tag(SessionSoundtrack.BreakPolicy.keep)
-                }
                 Toggle("Poser les apps permises dans le bureau", isOn: $settings.studyPlaceApps)
                     .disabled(!settings.studyBlocking)
                     .help("GoodNotes, Claude… s'ouvrent au centre du bureau, la barre du haut et le volet d'à côté restant visibles. Demande l'Accessibilité (écran de lancement).")

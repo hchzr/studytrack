@@ -12,17 +12,6 @@ export const SystemMedia = {
   },
 };
 
-const PAUSE_KEY = "music.pauseOnBreak";
-
-/** Mettre la musique en pause pendant les pauses du rythme (Pomodoro, pause du cours) ? Oui par défaut. */
-export function readPauseOnBreak(): boolean {
-  try { return localStorage.getItem(PAUSE_KEY) !== "0"; } catch { return true; }
-}
-
-export function writePauseOnBreak(value: boolean): void {
-  try { localStorage.setItem(PAUSE_KEY, value ? "1" : "0"); } catch { /* pour la session */ }
-}
-
 /** Le nom lisible de l'app qui joue (« Spotify », « Chrome »…). */
 export function appName(id: string): string {
   const base = id.split("!")[0].split("\\").pop()?.replace(/\.exe$/i, "") ?? id;

@@ -12,12 +12,17 @@ import Foundation
 /// l'étudiant·e épingle la partie touchée jusqu'au changement suivant.
 enum DeskArrangement {
 
+    /// Où en est la session : au travail, en pause du rythme, en pause, finie.
+    enum Phase: Equatable {
+        case running, onBreak, paused, ended
+    }
+
     /// Ce que le bureau sait de la situation.
     struct Context: Equatable {
         var moment: DeskMoment
         /// Le travail est de la théorie (lire, regarder), pas des exercices.
         var isTheory = false
-        var phase: SessionSoundtrack.Phase = .running
+        var phase: Phase = .running
         /// Un exercice est visé.
         var hasTarget = false
         /// L'exercice visé est fait (à corriger).

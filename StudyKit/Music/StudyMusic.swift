@@ -567,16 +567,6 @@ final class StudyMusic {
 }
 
 /// Un album ou une playlist, pour les jouer en entier.
-extension MusicCollection {
-    /// Ce qu'on garde pour une bande-son : l'identifiant et le titre.
-    var sessionChoice: SessionSoundtrack.Choice? {
-        switch self {
-        case .playlist(let playlist): return .init(kind: .playlist, id: playlist.id.rawValue, title: playlist.name)
-        case .album(let album): return .init(kind: .album, id: album.id.rawValue, title: album.title)
-        }
-    }
-}
-
 enum MusicCollection {
     case album(Album)
     case playlist(Playlist)
