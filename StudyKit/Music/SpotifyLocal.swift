@@ -12,7 +12,6 @@ import UIKit
 ///     cours, lecture, pause, précédent, suivant, et lancer une playlist depuis son lien. Marche
 ///     avec un compte gratuit. macOS demande une fois l'autorisation (Confidentialité › Automatisation).
 ///   • iPhone : seulement ouvrir une playlist dans l'app Spotify (iOS ne laisse pas piloter une autre app).
-/// Spotify Connect (`SpotifyConnect`, Premium) reste une option à part.
 @MainActor
 @Observable
 final class SpotifyLocal {
@@ -110,7 +109,7 @@ final class SpotifyLocal {
     #endif
 }
 
-/// Le volet Spotify d'office : l'app Spotify de l'appareil, puis Spotify Connect en option.
+/// Le volet Spotify : l'app Spotify de l'appareil.
 struct SpotifyLocalView: View {
     @State private var local = SpotifyLocal.shared
     @State private var link = ""

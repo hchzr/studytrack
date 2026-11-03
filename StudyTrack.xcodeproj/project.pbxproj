@@ -38,8 +38,6 @@
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
 		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
-		M10000000000000000000008 /* SpotifyAPI in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000007 /* SpotifyAPI */; };
-		M1000000000000000000000A /* SpotifyAPI in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000009 /* SpotifyAPI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -163,7 +161,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				M10000000000000000000003 /* SwiftMath in Frameworks */,
-				M10000000000000000000008 /* SpotifyAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,7 +183,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				M10000000000000000000005 /* SwiftMath in Frameworks */,
-				M1000000000000000000000A /* SpotifyAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -297,7 +293,6 @@
 			name = StudyTrack;
 			packageProductDependencies = (
 				M10000000000000000000002 /* SwiftMath */,
-				M10000000000000000000007 /* SpotifyAPI */,
 			);
 			productName = StudyTrack;
 			productReference = A10000000000000000000005 /* StudyTrack.app */;
@@ -368,7 +363,6 @@
 			name = StudyTrackMac;
 			packageProductDependencies = (
 				M10000000000000000000004 /* SwiftMath */,
-				M10000000000000000000009 /* SpotifyAPI */,
 			);
 			productName = StudyTrackMac;
 			productReference = F10000000000000000000002 /* StudyTrack.app */;
@@ -456,7 +450,6 @@
 			mainGroup = A10000000000000000000003;
 			packageReferences = (
 				M10000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,
-				M10000000000000000000006 /* XCRemoteSwiftPackageReference "SpotifyAPI" */,
 			);
 			productRefGroup = A10000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -1087,14 +1080,6 @@
 				minimumVersion = 1.7.3;
 			};
 		};
-		M10000000000000000000006 /* XCRemoteSwiftPackageReference "SpotifyAPI" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Peter-Schorn/SpotifyAPI.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.0.2;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1107,16 +1092,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = M10000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
-		};
-		M10000000000000000000007 /* SpotifyAPI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = M10000000000000000000006 /* XCRemoteSwiftPackageReference "SpotifyAPI" */;
-			productName = SpotifyAPI;
-		};
-		M10000000000000000000009 /* SpotifyAPI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = M10000000000000000000006 /* XCRemoteSwiftPackageReference "SpotifyAPI" */;
-			productName = SpotifyAPI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
