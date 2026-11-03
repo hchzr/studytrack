@@ -24,8 +24,13 @@
 import { SyncEngine, type SyncReport } from "../sync/engine.ts";
 import type { LocalStore } from "../sync/store.ts";
 import { SupabaseTransport } from "../sync/supabaseTransport.ts";
+import { EncryptedTransport, ForeignKeyError, SkipStats } from "../sync/encryptedTransport.ts";
+import {
+  RecoveryKeyError, decodeRecoveryKey, deriveKeys, encodeRecoveryKey, fromHex, newAccountKey, toHex,
+} from "../domain/syncCrypto.ts";
+import { PairingHost, joinPairing, type HostState, type SocketFactory } from "./syncPairing.ts";
 import { SupabaseClient, SupabaseError, type Session } from "./supabase.ts";
-import { supabaseConfig, type SupabaseConfig } from "./syncConfig.ts";
+import { supabaseConfig, relayHost, type SupabaseConfig } from "./syncConfig.ts";
 import { LocalSessionStore, defaultStorage } from "./sessionStore.ts";
 import { runOAuth, oauthMessage } from "./oauth.ts";
 import { startLoopback, openInBrowser } from "../native/oauth.ts";
@@ -37,6 +42,8 @@ export type { SyncReport } from "../sync/engine.ts";
 /** Clés `localStorage` : le drapeau et l'état survivent aux lancements. */
 export const ENABLED_KEY = "studytrack.sync.enabled";
 export const STATUS_KEY = "studytrack.sync.status";
+/** La clé du compte (« <id utilisateur>:<hex> »), au coffre du système : jamais envoyée au serveur. */
+export const ACCOUNT_KEY = "studytrack.sync.accountKey";
 
 /** Attente après une écriture locale : grouper les saisies en une passe. */
 export const WRITE_DEBOUNCE_MS = 3_000;
@@ -48,7 +55,19 @@ interface PersistedStatus {
   lastSyncAt: string | null;
   lastError: string | null;
   lastReport: SyncReport | null;
+  /** Lignes laissées de côté à la dernière passe : autre clé, illisibles. */
+  skipped?: { foreignKey: number; unreadable: number };
 }
+
+/**
+ * Où en est le chiffrement pour le compte connecté :
+ *   - `signedOut` : pas de compte ; `unknown` : le coffre n'a pas encore été lu ;
+ *   - `noVault` : personne n'a activé le chiffrement sur ce compte ;
+ *   - `needsKey` : le compte est chiffré, cet appareil n'a pas la clé ;
+ *   - `keyMismatch` : la clé d'ici n'est pas celle du coffre (coffre réinitialisé ailleurs) ;
+ *   - `ready` : tout est en place.
+ */
+export type EncryptionState = "signedOut" | "unknown" | "noVault" | "needsKey" | "keyMismatch" | "ready";
 
 /** La photographie pour l'écran Réglages. */
 export interface SyncStatus {
@@ -59,6 +78,11 @@ export interface SyncStatus {
   lastSyncAt: string | null;
   lastError: string | null;
   lastReport: SyncReport | null;
+  encryption: EncryptionState;
+  skippedForeignKey: number;
+  skippedUnreadable: number;
+  /** Le build connaît l'hôte du relais : l'appairage est possible. */
+  pairingAvailable: boolean;
 }
 
 /** Ce qu'on branche au démarrage : la base locale, et la relue de l'écran. */
@@ -78,6 +102,10 @@ export interface SyncServiceInputs {
   /** Écoute du rappel OAuth et ouverture du navigateur ; les tests passent des faux. */
   oauthLoopback?: () => Promise<Loopback>;
   openBrowser?: (url: string) => Promise<void>;
+  /** Hôte du relais pour l'appairage ; `undefined` → celui du build. */
+  relayHost?: string | null;
+  /** Les WebSocket de l'appairage ; les tests passent un relais en mémoire. */
+  makeSocket?: SocketFactory;
 }
 
 /** Le refus du serveur d'authentification, dit en français. */
@@ -98,6 +126,8 @@ function authMessage(e: unknown): string {
   if (e instanceof TypeError) return "Réseau indisponible : vérifie ta connexion et réessaie.";
   return e instanceof Error ? e.message : "La connexion a échoué.";
 }
+
+const foreignKeyMessage = "Clé différente : des données de ce compte sont chiffrées avec une autre clé et restent ignorées. Ajoute cet appareil depuis un appareil connecté, ou utilise la clé de secours.";
 
 /** Une erreur de passe, en français : l'état l'affiche, jamais une alerte. */
 function syncMessage(e: unknown): string {
@@ -159,6 +189,11 @@ export class SyncService {
   private readonly oauthLoopback: () => Promise<Loopback>;
   private readonly openBrowser: (url: string) => Promise<void>;
   private oauthCancel: (() => void) | null = null;
+  private readonly relay: string | null;
+  private readonly makeSocket: SocketFactory | undefined;
+  /** `key_id` du coffre : `undefined` = pas lu, `null` = le compte n'a pas de coffre. */
+  private vaultKeyId: string | null | undefined = undefined;
+  private pairing: PairingHost | null = null;
 
   private local: LocalStore | null = null;
   private reload: (() => Promise<void>) | null = null;
@@ -175,6 +210,8 @@ export class SyncService {
     this.fetchImpl = inputs.fetchImpl ?? ((...a) => fetch(...a));
     this.oauthLoopback = inputs.oauthLoopback ?? startLoopback;
     this.openBrowser = inputs.openBrowser ?? openInBrowser;
+    this.relay = inputs.relayHost === undefined ? relayHost() : inputs.relayHost;
+    this.makeSocket = inputs.makeSocket;
     this.enabled = readEnabled(this.storage);
     this.persisted = readStatus(this.storage);
     if (inputs.config !== null) {
@@ -207,7 +244,9 @@ export class SyncService {
     } catch (e) {
       throw new Error(authMessage(e));
     }
+    this.vaultKeyId = undefined;
     this.notify();
+    void this.refreshVault().catch(() => {});
   }
 
   async signUp(email: string, password: string): Promise<void> {
@@ -228,14 +267,18 @@ export class SyncService {
     }
     // Inscription = connexion quand le projet signe tout de suite.
     await this.client.setSession(session);
+    this.vaultKeyId = undefined;
     this.notify();
+    void this.refreshVault().catch(() => {});
   }
 
   /** « Continuer avec Google » : le flux PKCE, puis la session comme après `signIn`. */
   async signInWithGoogle(): Promise<void> {
     if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
     await runOAuth({ client: this.client, fetchImpl: this.fetchImpl, startLoopback: this.oauthLoopback, openBrowser: this.openBrowser, onWaiting: (c) => { this.oauthCancel = c; this.notify(); } });
+    this.vaultKeyId = undefined;
     this.notify();
+    void this.refreshVault().catch(() => {});
   }
 
   /** Lier une identité Google au compte connecté (« manual linking » à activer sur le projet). */
@@ -274,6 +317,8 @@ export class SyncService {
       }
     }
     await this.client.signOut();
+    this.pairing?.cancel();
+    this.vaultKeyId = undefined;
     this.notify();
   }
 
@@ -336,8 +381,21 @@ export class SyncService {
     const local = this.local;
     if (!client || !local || !(await this.session())) return null;
     try {
-      const report = await new SyncEngine(local, new SupabaseTransport(client)).sync();
-      this.persisted = { lastSyncAt: new Date().toISOString(), lastError: null, lastReport: report };
+      const keys = await this.keysForPass();
+      if (typeof keys === "string") {
+        // Pas de passe tant que le chiffrement n'est pas en place : un état à lire, pas une alerte.
+        this.persisted = { ...this.persisted, lastError: keys };
+        this.writeStatus();
+        this.notify();
+        return null;
+      }
+      const stats = new SkipStats();
+      const report = await new SyncEngine(local, new EncryptedTransport(new SupabaseTransport(client), keys, stats)).sync();
+      const skipped = { foreignKey: stats.foreignKey, unreadable: stats.unreadable };
+      this.persisted = {
+        lastSyncAt: new Date().toISOString(), lastReport: report, skipped,
+        lastError: stats.foreignKey > 0 ? foreignKeyMessage : null,
+      };
       this.writeStatus();
       // Une lecture a pu changer le graphe sous l'écran : on le reconstruit.
       await this.reload?.();
@@ -346,7 +404,7 @@ export class SyncService {
     } catch (e) {
       // L'échec d'une passe n'est jamais une erreur d'écran : il s'affiche,
       // et la prochaine (timer, écriture, bouton) retente.
-      this.persisted = { ...this.persisted, lastError: syncMessage(e) };
+      this.persisted = { ...this.persisted, lastError: e instanceof ForeignKeyError ? foreignKeyMessage : syncMessage(e) };
       this.writeStatus();
       this.notify();
       return null;
@@ -361,8 +419,172 @@ export class SyncService {
       signedIn: session !== null,
       email: session?.user.email ?? null,
       enabled: this.enabled,
-      ...this.persisted,
+      lastSyncAt: this.persisted.lastSyncAt,
+      lastError: this.persisted.lastError,
+      lastReport: this.persisted.lastReport,
+      encryption: await this.encryptionState(session),
+      skippedForeignKey: this.persisted.skipped?.foreignKey ?? 0,
+      skippedUnreadable: this.persisted.skipped?.unreadable ?? 0,
+      pairingAvailable: this.relay !== null,
     };
+  }
+
+  // MARK: - Chiffrement de bout en bout
+
+  /** La clé du compte gardée sur cet appareil pour cet utilisateur ; `null` s'il n'y en a pas. */
+  private loadAccountKey(userId: string): Uint8Array | null {
+    try {
+      const raw = this.storage?.getItem(ACCOUNT_KEY) ?? "";
+      const at = raw.indexOf(":");
+      if (at < 0 || raw.slice(0, at).toLowerCase() !== userId.toLowerCase()) return null;
+      const key = fromHex(raw.slice(at + 1));
+      return key && key.length === 32 ? key : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private storeAccountKey(userId: string, key: Uint8Array): void {
+    try {
+      this.storage?.setItem(ACCOUNT_KEY, `${userId.toLowerCase()}:${toHex(key)}`);
+    } catch {
+      throw new Error("Impossible de ranger la clé dans le coffre de cet appareil.");
+    }
+  }
+
+  private async encryptionState(session: Session | null): Promise<EncryptionState> {
+    if (!session) return "signedOut";
+    if (this.vaultKeyId === undefined) return "unknown";
+    if (this.vaultKeyId === null) return "noVault";
+    const key = this.loadAccountKey(session.user.id);
+    if (!key) return "needsKey";
+    return (await deriveKeys(key)).keyId === this.vaultKeyId ? "ready" : "keyMismatch";
+  }
+
+  /** Lit le coffre du compte (`sync_vault`) : il dit si un coffre existe et quelle clé il attend. */
+  async refreshVault(): Promise<void> {
+    if (!this.client || !(await this.session())) { this.vaultKeyId = undefined; return; }
+    const rows = await this.client.request<{ key_id: string }[]>("/rest/v1/sync_vault?select=key_id");
+    this.vaultKeyId = rows[0]?.key_id ?? null;
+    this.notify();
+  }
+
+  /** Les clés d'une passe, ou la raison (en français) pour laquelle il n'y en a pas. */
+  private async keysForPass(): Promise<{ dataKey: Uint8Array; keyId: string } | string> {
+    const session = await this.session();
+    if (!session) return "Connecte-toi pour synchroniser.";
+    await this.refreshVault(); // une petite requête : un coffre réinitialisé ailleurs se voit ici
+    if (this.vaultKeyId === null) return "Active d'abord la synchronisation chiffrée.";
+    const ak = this.loadAccountKey(session.user.id);
+    if (!ak) return "Ce compte est chiffré : ajoute cet appareil depuis un appareil déjà connecté.";
+    const keys = await deriveKeys(ak);
+    if (keys.keyId !== this.vaultKeyId) return foreignKeyMessage;
+    return keys;
+  }
+
+  private async requireUser(): Promise<{ client: SupabaseClient; userId: string }> {
+    const session = await this.session();
+    if (!this.client || !session) throw new Error("Connecte-toi d'abord.");
+    return { client: this.client, userId: session.user.id };
+  }
+
+  /**
+   * Crée le coffre du compte : une clé neuve, rangée ici seulement, et son identifiant public.
+   * Rend la clé de secours, à montrer une fois. Allume la synchronisation.
+   */
+  async enableEncryption(): Promise<string> {
+    const { client, userId } = await this.requireUser();
+    await this.refreshVault();
+    if (this.vaultKeyId !== null) throw new Error("Ce compte est déjà chiffré : ajoute cet appareil par un code ou la clé de secours.");
+    const recovery = await this.createVault(client, userId);
+    this.setEnabled(true);
+    return recovery;
+  }
+
+  private async createVault(client: SupabaseClient, userId: string): Promise<string> {
+    const ak = newAccountKey();
+    const { keyId } = await deriveKeys(ak);
+    try {
+      await client.request("/rest/v1/sync_vault", { method: "POST", body: { key_id: keyId }, prefer: "return=minimal" });
+    } catch (e) {
+      if (e instanceof SupabaseError && e.status === 409) {
+        await this.refreshVault();
+        throw new Error("Un autre appareil vient d'activer le chiffrement sur ce compte : ajoute cet appareil par un code.");
+      }
+      throw e;
+    }
+    this.storeAccountKey(userId, ak);
+    this.vaultKeyId = keyId;
+    await this.local?.resetSyncState();
+    this.notify();
+    return encodeRecoveryKey(ak);
+  }
+
+  /** La clé de secours de ce compte, pour l'afficher (l'écran demande confirmation avant). */
+  async recoveryKey(): Promise<string | null> {
+    const session = await this.session();
+    const ak = session ? this.loadAccountKey(session.user.id) : null;
+    return ak ? encodeRecoveryKey(ak) : null;
+  }
+
+  /** « Restaurer avec la clé de secours » : vérifiée contre le coffre avant d'être rangée. */
+  async restoreFromRecoveryKey(text: string): Promise<void> {
+    const { userId } = await this.requireUser();
+    let ak: Uint8Array;
+    try {
+      ak = await decodeRecoveryKey(text);
+    } catch (e) {
+      if (e instanceof RecoveryKeyError) {
+        throw new Error(e.kind === "checksum"
+          ? "Une faute s'est glissée dans la clé : relis-la caractère par caractère."
+          : "Cette clé de secours n'est pas valide : 54 caractères, par groupes de 4.");
+      }
+      throw e;
+    }
+    await this.refreshVault();
+    if (this.vaultKeyId === null) throw new Error("Ce compte n'a pas encore de coffre : active d'abord le chiffrement.");
+    if ((await deriveKeys(ak)).keyId !== this.vaultKeyId) throw new Error("Cette clé de secours n'est pas celle de ce compte.");
+    this.storeAccountKey(userId, ak);
+    await this.local?.resetSyncState(false);
+    this.setEnabled(true);
+  }
+
+  /** « Ajouter un appareil » : ouvre le salon d'appairage (la WebSocket ne vit que tant que l'écran l'attend). */
+  async startPairing(onState: (state: HostState, message: string | null) => void): Promise<PairingHost> {
+    const { userId } = await this.requireUser();
+    const ak = this.loadAccountKey(userId);
+    if (!ak) throw new Error("Cet appareil n'a pas la clé du compte.");
+    if (!this.relay) throw new Error("Ce build ne connaît pas le relais : utilise la clé de secours.");
+    this.pairing?.cancel();
+    const host = await PairingHost.start({ accountKey: ak, host: this.relay, makeSocket: this.makeSocket, onState });
+    this.pairing = host;
+    return host;
+  }
+
+  /** « Entrer un code d'appairage » sur le nouvel appareil. */
+  async joinPairing(code: string): Promise<void> {
+    const { userId } = await this.requireUser();
+    await this.refreshVault();
+    if (this.vaultKeyId === null || this.vaultKeyId === undefined) throw new Error("Ce compte n'a pas encore de coffre.");
+    if (!this.relay) throw new Error("Ce build ne connaît pas le relais : utilise la clé de secours.");
+    const ak = await joinPairing({ code, expectedKeyId: this.vaultKeyId, host: this.relay, makeSocket: this.makeSocket });
+    this.storeAccountKey(userId, ak);
+    await this.local?.resetSyncState(false);
+    this.setEnabled(true);
+  }
+
+  /**
+   * « Réinitialiser le coffre » : le dernier recours quand ni les appareils ni la clé de
+   * secours ne sont plus là. Efface les lignes chiffrées du compte et son coffre sur le
+   * serveur (une transaction), puis cet appareil crée un coffre neuf et renvoie ses données.
+   */
+  async resetVault(): Promise<string> {
+    const { client, userId } = await this.requireUser();
+    await client.request("/rest/v1/rpc/sync_reset_vault", { method: "POST", body: {} });
+    this.vaultKeyId = null;
+    const recovery = await this.createVault(client, userId);
+    this.setEnabled(true);
+    return recovery;
   }
 
   private async session(): Promise<Session | null> {

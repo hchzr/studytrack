@@ -10,6 +10,7 @@ import { Plural } from "../../../domain/plural.ts";
 import { Button, Section, Card, Switch } from "../../kit.tsx";
 import { SettingRow } from "./controls.tsx";
 import { syncService, type SyncStatus } from "../../../services/syncService.ts";
+import { EncryptionPanel } from "./SyncEncryption.tsx";
 
 /** Un champ « libellé au-dessus, contrôle dessous », comme le formulaire de cours. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -150,7 +151,7 @@ export function SyncSection() {
               <h3 className="serif">Compte StudyTrack</h3>
               <p className="settings-hint">
                 Un compte pour retrouver cours, séries et sessions sur un autre appareil.
-                Personne d'autre que toi ne peut les lire.
+                Elles sont chiffrées sur tes appareils : le serveur ne peut pas les lire.
               </p>
             </div>
 
@@ -201,13 +202,16 @@ export function SyncSection() {
           <span className="settings-value">{status.email ?? "—"}</span>
         </SettingRow>
 
+        <EncryptionPanel status={status} />
+
         <SettingRow
           label="Synchroniser mes données entre mes appareils"
-          hint="Éteint : rien ne quitte cet appareil. Le premier allumage envoie ce qui est ici, puis les changements suivent."
+          hint="Éteint : rien ne quitte cet appareil. Le premier allumage envoie ce qui est ici, chiffré, puis les changements suivent."
         >
           <Switch
             checked={status.enabled}
             ariaLabel="Synchroniser mes données entre mes appareils"
+            disabled={status.encryption !== "ready" && !status.enabled}
             onChange={(value) => syncService.setEnabled(value)}
           />
         </SettingRow>

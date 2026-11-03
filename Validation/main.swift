@@ -726,6 +726,7 @@ print("== Serveur MCP local (fichiers du Mac) ==")
 for (ok, label) in localMCPResults() { check(ok, label) }
 for (ok, label) in desktopBridgeResults() { check(ok, label) }
 for (ok, label) in syncResults() { check(ok, label) }
+for (ok, label) in syncCryptoResults() { check(ok, label) }
 check(LocalFileCatalog.pageIndices("1-5,8", total: 10) == [0, 1, 2, 3, 4, 7], "pages : « 1-5,8 »")
 check(LocalFileCatalog.pageIndices("3", total: 10) == [2] && LocalFileCatalog.pageIndices("8-", total: 10) == [7, 8, 9], "pages : une page, une plage ouverte")
 check(LocalFileCatalog.pageIndices("9-20", total: 10) == [8, 9], "pages : bornées au document")

@@ -30,7 +30,11 @@ export interface Env {
   APNS_BUNDLE_ID: string;
 }
 
-const CHANNEL = /^\/v1\/(st-timer-[0-9a-f]{32})$/;
+const CHANNEL = /^\/v1\/((?:st-timer|pair)-[0-9a-f]{32})$/;
+/** Un message d'appairage ne pèse que quelques centaines d'octets. */
+const PAIR_LIMIT = 4_096;
+const PAIR_MAX_SOCKETS = 4;
+const PAIR_STEPS = new Set(["hello", "offer", "ok"]);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -87,10 +91,17 @@ export class Relay extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const device = new URL(request.url).searchParams.get("device") ?? "";
+    const url = new URL(request.url);
+    const device = url.searchParams.get("device") ?? "";
+    const isPairing = url.pathname.startsWith("/v1/pair-");
+    if (isPairing && this.ctx.getWebSockets().length >= PAIR_MAX_SOCKETS) {
+      return new Response("salon plein", { status: 429 });
+    }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    this.ctx.acceptWebSocket(server, [device]);
+    this.ctx.acceptWebSocket(server, isPairing ? [device, "pair"] : [device]);
+    // Un salon d'appairage ne garde rien : personne n'y reçoit d'état.
+    if (isPairing) return new Response(null, { status: 101, webSocket: client });
     const last = await this.ctx.storage.get<string>("last");
     if (last) server.send(last);
     // L'état de la musique de chaque appareil (un lecteur pour tous).
@@ -104,6 +115,10 @@ export class Relay extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     // Une photo de copie (« drop ») peut peser jusqu'à ~900 Ko ; le reste reste petit.
     if (typeof raw !== "string" || raw.length > 950_000) return;
+    if (this.ctx.getTags(ws).includes("pair")) {
+      this.forwardPair(ws, raw);
+      return;
+    }
     if (raw.length > 64_000 && !raw.includes('"t":"drop"')) return;
     let message: Inbound;
     try {
@@ -182,6 +197,33 @@ export class Relay extends DurableObject<Env> {
     }
     if (message.wake === true) {
       this.ctx.waitUntil(this.wakeDevices(device, message.d, message.u));
+    }
+  }
+
+  /**
+   * Un message d'appairage : validé, puis transmis aux autres sockets du salon.
+   * Rien n'est écrit (ni `last`, ni stockage), rien n'est réveillé.
+   */
+  private forwardPair(ws: WebSocket, raw: string): void {
+    if (raw.length > PAIR_LIMIT) return;
+    let message: { t?: unknown; step?: unknown; pub?: unknown; box?: unknown };
+    try {
+      message = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (message.t !== "pair" || typeof message.step !== "string" || !PAIR_STEPS.has(message.step)) return;
+    if (message.pub !== undefined && (typeof message.pub !== "string" || message.pub.length > 64)) return;
+    if (message.box !== undefined && (typeof message.box !== "string" || message.box.length > 1_024)) return;
+    const device = this.ctx.getTags(ws)[0] ?? "";
+    const outbound = JSON.stringify({ t: "pair", step: message.step, pub: message.pub, box: message.box, from: device });
+    for (const socket of this.ctx.getWebSockets("pair")) {
+      if (socket === ws) continue;
+      try {
+        socket.send(outbound);
+      } catch {
+        // fermée
+      }
     }
   }
 

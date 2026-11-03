@@ -36,6 +36,8 @@ struct MacSupabaseSyncSection: View {
                     Toggle(isOn: Binding(get: { sync.isEnabled }, set: { sync.setEnabled($0) })) {
                         Text(ui: "Synchroniser mes données")
                     }
+                    .disabled(!sync.isEnabled && sync.encryption != .ready)
+                    SyncEncryptionPanel(sync: sync)
                     if sync.isEnabled {
                         LabeledContent {
                             if sync.isSyncing { ProgressView().controlSize(.small) }

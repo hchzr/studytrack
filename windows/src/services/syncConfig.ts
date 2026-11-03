@@ -22,3 +22,14 @@ export function supabaseConfig(): SupabaseConfig | null {
   if (url === "" || anonKey === "") return null;
   return { url, anonKey };
 }
+
+/**
+ * L'hôte du relais (Cloudflare Worker, dossier relay/), sans « https:// » :
+ * l'appairage d'un appareil y passe par une WebSocket « wss://<hôte>/v1/pair-… ».
+ * Le pendant du réglage `TIMER_RELAY_HOST` des apps Apple. `null` : pas
+ * d'appairage possible dans ce build (la clé de secours reste).
+ */
+export function relayHost(): string | null {
+  const host = (import.meta.env.VITE_RELAY_HOST ?? "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return host === "" ? null : host;
+}

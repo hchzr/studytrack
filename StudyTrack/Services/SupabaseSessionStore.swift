@@ -34,7 +34,15 @@ enum SupabaseSessionStore {
               let data = item as? Data,
               let session = try? JSONDecoder().decode(StoredSession.self, from: data),
               session.isUsable else { return nil }
+        migrateAccessibility(host: host)
         return session
+    }
+
+    /// Une session rangée par une version précédente (`afterFirstUnlock`, qui voyage dans les
+    /// sauvegardes chiffrées) passe à `…ThisDeviceOnly` à sa première lecture.
+    private static func migrateAccessibility(host: String) {
+        let attributes: [String: Any] = [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+        SecItemUpdate(baseQuery(host: host) as CFDictionary, attributes as CFDictionary)
     }
 
     @discardableResult
@@ -42,10 +50,11 @@ enum SupabaseSessionStore {
         guard let data = try? JSONEncoder().encode(session) else { return false }
         let query = baseQuery(host: host)
         // `afterFirstUnlock` : lisible en arrière-plan appareil verrouillé, ce qui
-        // est le cas d'un rafraîchissement de jeton au réveil.
+        // est le cas d'un rafraîchissement de jeton au réveil. `ThisDeviceOnly` : le
+        // jeton ne quitte pas l'appareil (ni sauvegarde transférable, ni Trousseau iCloud).
         let attributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         let update = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)

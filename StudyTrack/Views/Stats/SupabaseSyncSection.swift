@@ -18,7 +18,11 @@ struct SupabaseSyncSection: View {
                 Toggle(isOn: Binding(get: { sync.isEnabled }, set: { sync.setEnabled($0) })) {
                     Text(ui: "Synchroniser mes données")
                 }
-                .disabled(!signedIn && !sync.isEnabled)
+                .disabled(!sync.isEnabled && !(signedIn && sync.encryption == .ready))
+
+                if signedIn {
+                    SyncEncryptionPanel(sync: sync)
+                }
 
                 if signedIn, let email = app.social.email ?? sync.accountEmail {
                     LabeledContent {

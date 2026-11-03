@@ -23,6 +23,8 @@ export const SECRET_KEYS: readonly string[] = [
   "settings.webhookURL",
   "ankiweb.hostKey",
   "studytrack.supabase.session",
+  // La clé du compte de la synchronisation chiffrée (« <user id>:<hex> »).
+  "studytrack.sync.accountKey",
 ];
 
 const secretSet = new Set(SECRET_KEYS);

@@ -78,9 +78,13 @@ export class SyncEngine {
     for (;;) {
       const { rows } = await this.transport.pull(table, since, afterId, this.batch);
       for (const r of rows) {
-        const outcome = await this.store.applyRemote(table, fromRemote(t, r));
-        if (outcome === "kept-local") report.keptLocal++;
-        report.pulled++;
+        // Une ligne laissée de côté par le chiffrement (autre clé, illisible) : on la saute
+        // sans y toucher, le curseur avance quand même.
+        if (r._skipped === undefined) {
+          const outcome = await this.store.applyRemote(table, fromRemote(t, r));
+          if (outcome === "kept-local") report.keptLocal++;
+          report.pulled++;
+        }
         const stamp = String(r.server_updated_at);
         if (!newest || new Date(stamp) >= new Date(newest)) newest = stamp;
       }

@@ -71,11 +71,13 @@ struct SyncTestDevice {
     let engine: SyncEngine
     var context: ModelContext { ModelContext(container) }
 
-    init(server: FakeSyncServer, clock: SyncTestClock, batch: Int = 200) throws {
+    /// `keys` : l'appareil chiffre de bout en bout (`EncryptingSyncTransport` devant le serveur simulé).
+    init(server: FakeSyncServer, clock: SyncTestClock, batch: Int = 200, keys: SyncCrypto.Keys? = nil, stats: SyncSkipStats = SyncSkipStats()) throws {
         container = try ModelContainer(for: StudyTrackSchema.current,
                                        configurations: [ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true)])
         store = SyncStateStore(url: nil)
-        engine = SyncEngine(container: container, transport: server, store: store, batch: batch, clock: { clock.now() })
+        let transport: SyncTransport = keys.map { EncryptingSyncTransport(inner: server, keys: $0, stats: stats) } ?? server
+        engine = SyncEngine(container: container, transport: transport, store: store, batch: batch, clock: { clock.now() })
     }
 
     @discardableResult
@@ -128,6 +130,8 @@ func syncChecks(_ results: inout [(Bool, String)]) throws {
     }
 
     // MARK: Correspondance avec la migration (donc avec Windows)
+    // (L'ancienne migration reste la description des champs du modèle ; en production ils vivent désormais
+    // dans `payload`, chiffrés — voir SyncCryptoTests.swift et 20261103000000_sync_e2ee.sql.)
 
     do {
         let root = ProcessInfo.processInfo.environment["STUDYTRACK_ROOT"] ?? ""

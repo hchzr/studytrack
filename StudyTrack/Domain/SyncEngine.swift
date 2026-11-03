@@ -232,6 +232,8 @@ actor SyncEngine {
 
         @discardableResult
         func applyRemote(_ t: any AnySyncTable, _ row: [String: Any]) -> Outcome {
+            // Une ligne que le chiffrement a laissée de côté (autre clé, illisible) : on n'y touche pas.
+            if row["_skipped"] != nil { return .unchanged }
             guard let rawID = row["id"] as? String, UUID(uuidString: rawID) != nil,
                   let ru = (row["updated_at"] as? String).flatMap(SyncTime.canonical) else { return .unchanged }
             let id = rawID.lowercased()

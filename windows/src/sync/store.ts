@@ -29,6 +29,14 @@ export const canonicalDate = (v: unknown): string | null =>
 /** Ligne venue du serveur (JSON PostgREST) → valeurs SQLite. */
 export function fromRemote(t: Table, r: Row): Record<string, Value> {
   const out: Record<string, Value> = { id: String(r.id) };
+  if (r._tombstone === true) {
+    // Pierre tombale chiffrée : le serveur n'a pas de champs. On ne touche qu'aux
+    // colonnes de synchronisation ; le contenu local (s'il y en a) reste.
+    out.updated_at = canonicalDate(r.updated_at);
+    out.deleted_at = canonicalDate(r.deleted_at);
+    out.server_updated_at = (r.server_updated_at as string | null) ?? null;
+    return out;
+  }
   for (const f of t.fields) {
     const v = r[fieldColumn(f)];
     if (v === null || v === undefined) { out[fieldColumn(f)] = null; continue; }
@@ -136,7 +144,9 @@ export class LocalStore {
   }
 
   private async overwrite(t: Table, server: Record<string, Value>): Promise<void> {
-    const cols = ["id", ...t.fields.map(fieldColumn), ...t.refs.map(refColumn), "updated_at", "deleted_at", "server_updated_at"];
+    // Seules les colonnes présentes : une pierre tombale chiffrée n'a que celles de synchronisation.
+    const cols = ["id", ...t.fields.map(fieldColumn), ...t.refs.map(refColumn), "updated_at", "deleted_at", "server_updated_at"]
+      .filter((c) => c in server);
     const all = [...cols, "dirty"];
     const updates = all.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
     await this.db.execute(
@@ -163,6 +173,15 @@ export class LocalStore {
       }
     }
     return swept;
+  }
+
+  /**
+   * Après un changement de clé : les curseurs repartent de zéro (on relit tout avec la
+   * nouvelle clé) et, si `markDirty`, chaque ligne est à renvoyer (coffre neuf ou réinitialisé).
+   */
+  async resetSyncState(markDirty = true): Promise<void> {
+    await this.db.execute(`DELETE FROM sync_cursor`);
+    if (markDirty) for (const t of tables) await this.db.execute(`UPDATE ${t.name} SET dirty = 1`);
   }
 
   async cursor(table: string): Promise<string | null> {

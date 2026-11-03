@@ -427,6 +427,9 @@ enum AnkiKeychain {
                                         kSecMatchLimit as String: kSecMatchLimitOne]
             guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
                   let data = item as? Data else { return nil }
+            // Rangée par une version précédente en `afterFirstUnlock` : elle passe à « cet appareil seulement ».
+            SecItemUpdate([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary,
+                          [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly] as CFDictionary)
             return String(data: data, encoding: .utf8)
         }
         set {
@@ -436,7 +439,7 @@ enum AnkiKeychain {
             guard let newValue else { return }
             var insert = base
             insert[kSecValueData as String] = Data(newValue.utf8)
-            insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             SecItemAdd(insert as CFDictionary, nil)
         }
     }

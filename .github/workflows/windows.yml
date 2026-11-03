@@ -42,6 +42,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_RELAY_HOST: ${{ vars.VITE_RELAY_HOST }}
       # Le paquet du Microsoft Store (non signé : le Store signe après certification).
       # L'identité vient des variables du dépôt une fois le compte Partner Center créé.
       - name: Package MSIX

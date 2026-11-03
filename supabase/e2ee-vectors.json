@@ -1,0 +1,41 @@
+{
+  "_doc": "Vecteurs communs : windows/tests/domain/syncCrypto.test.ts (WebCrypto) et Validation/SyncCryptoTests.swift (CryptoKit). Générés une fois par TS, relus à l'identique par Swift.",
+  "accountKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "dataKey": "a347db63d70a519c710f0e16b7fedb508dfd4c4dc50470fddaeccf4fcd90046c",
+  "keyId": "35377b71bdef7eb9f45b9bb10c9da3ad",
+  "recoveryKey": "000G-40R4-0M30-E209-185G-R38E-1W81-24GK-2GAH-C5RR-34D1-P70X-3RFG-0N",
+  "row": {
+    "table": "sync_courses",
+    "id": "0A1B2C3D-4E5F-4071-8293-A4B5C6D7E8F9",
+    "fields": {
+      "code": "MATH-101",
+      "credits": 7.5,
+      "is_active": true,
+      "name": "Analyse I — é \"q\" a/b\\c\nligne",
+      "notes": null,
+      "term_id": "11111111-2222-4333-8444-555555555555",
+      "weekly_lecture_hours": 4,
+      "start_date": "2026-10-30T10:00:00.000Z"
+    },
+    "plaintext": "{\"code\":\"MATH-101\",\"credits\":7.5,\"is_active\":true,\"name\":\"Analyse I — é \\\"q\\\" a/b\\\\c\\nligne\",\"notes\":null,\"start_date\":\"2026-10-30T10:00:00.000Z\",\"term_id\":\"11111111-2222-4333-8444-555555555555\",\"weekly_lecture_hours\":4}",
+    "aad": "sync_courses/0a1b2c3d-4e5f-4071-8293-a4b5c6d7e8f9/v1",
+    "nonce": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "payload": "a0a1a2a3a4a5a6a7a8a9aaabb9ab37aeb3fad2b78cd06401a7cb21db6233ac54125901f7cc139c0f31e8fdd585d133add9a4ecdee2a142870bbc4e7144642968c45aa615504bb99ba547d3e5d022ca6098d23de360ecb9a126429266836fdbd1d054034628e11c62fe3d7273284a8dfb0c3f6203a2480c3cfbb88612af861edcf3c0d82abeed0f64a16f38f89f724c34535d458e78528c91568d183c8465f6352a6219dabfe210906d1b11cac7a068b925b6fcf2a2a106128ac5f910bdd01365c72a80cd15b7a24778c01cc300c5593a6280b09ee3f89e99dbfa0b0240185ad2638f0dcfd54a39774f5796568ccf39cbd2075cd0f06f9f2410918e",
+    "bytea": "\\xa0a1a2a3a4a5a6a7a8a9aaabb9ab37aeb3fad2b78cd06401a7cb21db6233ac54125901f7cc139c0f31e8fdd585d133add9a4ecdee2a142870bbc4e7144642968c45aa615504bb99ba547d3e5d022ca6098d23de360ecb9a126429266836fdbd1d054034628e11c62fe3d7273284a8dfb0c3f6203a2480c3cfbb88612af861edcf3c0d82abeed0f64a16f38f89f724c34535d458e78528c91568d183c8465f6352a6219dabfe210906d1b11cac7a068b925b6fcf2a2a106128ac5f910bdd01365c72a80cd15b7a24778c01cc300c5593a6280b09ee3f89e99dbfa0b0240185ad2638f0dcfd54a39774f5796568ccf39cbd2075cd0f06f9f2410918e"
+  },
+  "pairing": {
+    "secret": "101112131415161718191a1b1c1d1e1f",
+    "code": "208H-44RM-2MB1-E60S-38DH-R78Y-3W",
+    "qr": "studytrack-pair:208H-44RM-2MB1-E60S-38DH-R78Y-3W",
+    "channel": "pair-77e5e62297ccdaa82434cd1262d69ed5",
+    "privateA": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+    "publicA": "64b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d48466",
+    "privateB": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+    "publicB": "244fe3b963e899dd295baffce248d3530f3a9a7479ba063002680ebfe7adad49",
+    "key": "6da2af7c43326b60fed5b1a9df6c8658869985f77461e51e9bf4c3c749185047",
+    "nonceAK": "b0b1b2b3b4b5b6b7b8b9babb",
+    "sealedAccountKey": "b0b1b2b3b4b5b6b7b8b9babb7549c95699a0605aae2c2050e4eda8e5b7c5cc71f8582515bd57506ef1a6ed4acb5d43387e275b09044883209f4cc036",
+    "nonceOk": "c0c1c2c3c4c5c6c7c8c9cacb",
+    "sealedOk": "c0c1c2c3c4c5c6c7c8c9cacb6c9b0e7f31fa6dd0177bd460f90449ebe78f"
+  }
+}

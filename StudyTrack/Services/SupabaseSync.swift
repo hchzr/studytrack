@@ -86,6 +86,24 @@ final class SupabaseSync {
     /// Fournisseurs de connexion du compte (« apple », « email »…), lus sur le serveur ; vide tant qu'inconnus.
     private(set) var accountProviders: [String] = []
 
+    /// Où en est le chiffrement de bout en bout du compte connecté (docs/sync-e2ee.md) :
+    /// pas de compte ; coffre pas encore lu ; aucun coffre (personne n'a activé) ; le compte
+    /// est chiffré mais cet appareil n'a pas la clé ; la clé d'ici n'est pas celle du coffre
+    /// (réinitialisé ailleurs) ; tout est en place.
+    enum EncryptionState: Equatable { case signedOut, unknown, noVault, needsKey, keyMismatch, ready }
+    private(set) var encryption: EncryptionState = .signedOut
+    /// Lignes laissées de côté à la dernière passe : autre clé, illisibles.
+    private(set) var skippedForeignKey = 0
+    private(set) var skippedUnreadable = 0
+    /// Le build connaît le relais : l'appairage est possible (sinon, la clé de secours).
+    var pairingAvailable: Bool { relayHost != nil }
+
+    enum VaultInfo: Equatable { case unknown, none, exists(String) }
+    @ObservationIgnored private var vault: VaultInfo = .unknown
+    @ObservationIgnored private var vaultUserID: String?
+    @ObservationIgnored let relayHost: String?
+    @ObservationIgnored private var pairingHost: SyncPairingHost?
+
     @ObservationIgnored let client: SupabaseClient?
     @ObservationIgnored private let container: ModelContainer
     @ObservationIgnored private let stateURL: URL?
@@ -105,7 +123,8 @@ final class SupabaseSync {
     var isConfigured: Bool { client != nil }
 
     init(container: ModelContainer, client: SupabaseClient?, stateURL: URL? = SyncStateStore.defaultURL,
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = .standard, relayHost: String? = RelayPairSocket.configuredHost) {
+        self.relayHost = relayHost
         self.container = container
         self.client = client
         self.stateURL = stateURL
@@ -122,6 +141,7 @@ final class SupabaseSync {
     func refreshAccount() {
         isSignedIn = client?.isSignedIn ?? false
         accountEmail = client?.userEmail
+        updateEncryption()
     }
 
     func signIn(email: String, password: String) async -> Bool {
@@ -160,6 +180,8 @@ final class SupabaseSync {
     }
 
     func signOut() async {
+        await pairingHost?.cancel()
+        pairingHost = nil
         await client?.signOut()
         refreshAccount()
     }
@@ -170,6 +192,7 @@ final class SupabaseSync {
             try await body(client)
             lastError = nil
             refreshAccount()
+            Task { await refreshVault() }
             if isEnabled { requestSync(pull: true) }
             return isSignedIn
         } catch {
@@ -177,6 +200,188 @@ final class SupabaseSync {
             refreshAccount()
             return false
         }
+    }
+
+
+    // MARK: - Chiffrement de bout en bout
+
+    /// Un message d'erreur destiné à l'écran.
+    struct EncryptionFailure: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    private func updateEncryption() {
+        guard isSignedIn, let uid = client?.userID?.lowercased() else {
+            encryption = .signedOut
+            return
+        }
+        if vaultUserID != uid { vault = .unknown; vaultUserID = uid }
+        switch vault {
+        case .unknown: encryption = .unknown
+        case .none: encryption = .noVault
+        case .exists(let keyID):
+            if let ak = SyncKeyStore.load(userID: uid), let keys = try? SyncCrypto.keys(for: ak) {
+                encryption = keys.keyID == keyID ? .ready : .keyMismatch
+            } else {
+                encryption = .needsKey
+            }
+        }
+    }
+
+    /// Lit le coffre du compte (`sync_vault`) : il dit si un coffre existe et quelle clé il attend.
+    private func loadVault() async throws {
+        guard let client, client.isSignedIn else { vault = .unknown; updateEncryption(); return }
+        let data = try await client.select("sync_vault", query: [URLQueryItem(name: "select", value: "key_id")])
+        let rows = (data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] }) ?? []
+        vaultUserID = client.userID?.lowercased()
+        vault = (rows.first?["key_id"] as? String).map(VaultInfo.exists) ?? .none
+        updateEncryption()
+    }
+
+    /// Relit le coffre ; une panne laisse l'état tel quel (l'écran réessaiera).
+    func refreshVault() async {
+        try? await loadVault()
+    }
+
+    /// Les clés d'une passe, ou la raison (en français) pour laquelle il n'y en a pas.
+    private func keysForPass(userID: String) async throws -> SyncCrypto.Keys {
+        try await loadVault() // une petite requête : un coffre réinitialisé ailleurs se voit ici
+        switch vault {
+        case .unknown, .none:
+            throw EncryptionFailure(message: "Active d'abord la synchronisation chiffrée.")
+        case .exists(let keyID):
+            guard let ak = SyncKeyStore.load(userID: userID), let keys = try? SyncCrypto.keys(for: ak) else {
+                throw EncryptionFailure(message: "Ce compte est chiffré : ajoute cet appareil depuis un appareil déjà connecté.")
+            }
+            guard keys.keyID == keyID else { throw EncryptionFailure(message: SyncMessages.foreignKey) }
+            return keys
+        }
+    }
+
+    private func requireUser() throws -> (client: SupabaseClient, userID: String) {
+        guard let client, client.isSignedIn, let userID = client.userID else { throw EncryptionFailure(message: "Connecte-toi d'abord.") }
+        return (client, userID.lowercased())
+    }
+
+    /// Une clé vient d'arriver ou de changer : allume la synchronisation, ou relance une passe si elle l'est déjà.
+    private func kickAfterKeyChange() {
+        if isEnabled { lastError = nil; requestSync(pull: true) } else { setEnabled(true) }
+    }
+
+    private func storeKey(_ ak: Data, userID: String) throws {
+        guard SyncKeyStore.save(ak, userID: userID) else {
+            throw EncryptionFailure(message: "Impossible de ranger la clé dans le trousseau de cet appareil.")
+        }
+    }
+
+    /// Après un changement de clé : `full` repart de zéro (coffre neuf : tout est à renvoyer) ;
+    /// sinon seuls les curseurs repartent (on relit tout avec la clé reçue).
+    private func resetSyncState(userID: String, full: Bool) {
+        let store = syncStore()
+        if full {
+            store.reset(userID: userID)
+        } else {
+            store.state.cursors = [:]
+            store.markChanged()
+            store.save()
+        }
+    }
+
+    /// Crée le coffre du compte : une clé neuve, rangée ici seulement, et son identifiant public.
+    /// Rend la clé de secours, à montrer une fois. Allume la synchronisation.
+    func enableEncryption() async throws -> String {
+        let (client, userID) = try requireUser()
+        try await loadVault()
+        guard vault == .none else {
+            throw EncryptionFailure(message: "Ce compte est déjà chiffré : ajoute cet appareil par un code ou la clé de secours.")
+        }
+        let recovery = try await createVault(client: client, userID: userID)
+        kickAfterKeyChange()
+        return recovery
+    }
+
+    private func createVault(client: SupabaseClient, userID: String) async throws -> String {
+        let ak = SyncCrypto.newAccountKey()
+        let keys = try SyncCrypto.keys(for: ak)
+        do {
+            try await client.insert("sync_vault", values: ["key_id": keys.keyID], returning: false)
+        } catch SupabaseError.server(let status, _) where status == 409 {
+            await refreshVault()
+            throw EncryptionFailure(message: "Un autre appareil vient d'activer le chiffrement sur ce compte : ajoute cet appareil par un code.")
+        }
+        try storeKey(ak, userID: userID)
+        vault = .exists(keys.keyID)
+        resetSyncState(userID: userID, full: true)
+        updateEncryption()
+        return SyncCrypto.encodeRecoveryKey(ak)
+    }
+
+    /// La clé de secours de ce compte, pour l'afficher (l'écran demande confirmation avant).
+    func recoveryKey() -> String? {
+        guard let userID = client?.userID?.lowercased(), let ak = SyncKeyStore.load(userID: userID) else { return nil }
+        return SyncCrypto.encodeRecoveryKey(ak)
+    }
+
+    /// « Restaurer avec la clé de secours » : vérifiée contre le coffre avant d'être rangée.
+    func restore(recoveryKey text: String) async throws {
+        let (_, userID) = try requireUser()
+        let ak: Data
+        do {
+            ak = try SyncCrypto.decodeRecoveryKey(text)
+        } catch SyncCrypto.RecoveryFailure.checksum {
+            throw EncryptionFailure(message: "Une faute s'est glissée dans la clé : relis-la caractère par caractère.")
+        } catch {
+            throw EncryptionFailure(message: "Cette clé de secours n'est pas valide : 54 caractères, par groupes de 4.")
+        }
+        try await loadVault()
+        guard case .exists(let keyID) = vault else {
+            throw EncryptionFailure(message: "Ce compte n'a pas encore de coffre : active d'abord le chiffrement.")
+        }
+        guard (try? SyncCrypto.keys(for: ak))?.keyID == keyID else {
+            throw EncryptionFailure(message: "Cette clé de secours n'est pas celle de ce compte.")
+        }
+        try storeKey(ak, userID: userID)
+        resetSyncState(userID: userID, full: false)
+        updateEncryption()
+        kickAfterKeyChange()
+    }
+
+    /// « Ajouter un appareil » : ouvre le salon d'appairage (la WebSocket ne vit que tant que l'écran l'attend).
+    func startPairing(onState: @escaping @Sendable (SyncPairingHost.State) -> Void) async throws -> SyncPairingHost {
+        let (_, userID) = try requireUser()
+        guard let ak = SyncKeyStore.load(userID: userID) else { throw EncryptionFailure(message: "Cet appareil n'a pas la clé du compte.") }
+        guard let relayHost else { throw EncryptionFailure(message: "Cette version ne connaît pas le relais : utilise la clé de secours.") }
+        await pairingHost?.cancel()
+        let host = try SyncPairingHost(accountKey: ak, makeSocket: RelayPairSocket.factory(host: relayHost), onState: onState)
+        pairingHost = host
+        await host.start()
+        return host
+    }
+
+    /// « Entrer un code d'appairage » sur le nouvel appareil.
+    func joinPairing(code: String) async throws {
+        let (_, userID) = try requireUser()
+        try await loadVault()
+        guard case .exists(let keyID) = vault else { throw EncryptionFailure(message: "Ce compte n'a pas encore de coffre.") }
+        guard let relayHost else { throw EncryptionFailure(message: "Cette version ne connaît pas le relais : utilise la clé de secours.") }
+        let ak = try await SyncPairingJoiner.join(code: code, expectedKeyID: keyID, makeSocket: RelayPairSocket.factory(host: relayHost))
+        try storeKey(ak, userID: userID)
+        resetSyncState(userID: userID, full: false)
+        updateEncryption()
+        kickAfterKeyChange()
+    }
+
+    /// « Réinitialiser le coffre » : le dernier recours quand ni les appareils ni la clé de secours ne
+    /// sont plus là. Efface les lignes chiffrées du compte et son coffre sur le serveur (une
+    /// transaction), puis cet appareil crée un coffre neuf et renvoie ses données.
+    func resetVault() async throws -> String {
+        let (client, userID) = try requireUser()
+        try await client.rpc("sync_reset_vault", params: [:])
+        vault = .none
+        let recovery = try await createVault(client: client, userID: userID)
+        kickAfterKeyChange()
+        return recovery
     }
 
     // MARK: - Réglage
@@ -320,11 +525,15 @@ final class SupabaseSync {
         awaitingMassDeletion = false
         defer { isSyncing = false }
 
-        let engine = prepareEngine(userID: userID, client: client)
         do {
+            let keys = try await keysForPass(userID: userID)
+            let stats = SyncSkipStats()
+            let engine = prepareEngine(userID: userID, client: client, keys: keys, stats: stats)
             let report = try await engine.sync(pull: pull, acceptMassDeletion: accept)
             if pull { lastPull = Date() }
-            lastError = nil
+            skippedForeignKey = stats.foreignKey
+            skippedUnreadable = stats.unreadableCount
+            lastError = stats.foreignKey > 0 ? SyncMessages.foreignKey : nil
             lastSyncAt = Date()
             lastReport = report.summary
             persistStatus()
@@ -343,18 +552,24 @@ final class SupabaseSync {
         }
     }
 
-    private func prepareEngine(userID: String, client: SupabaseClient) -> SyncEngine {
-        let store = self.store ?? SyncStateStore(url: stateURL)
-        self.store = store
+    /// Un moteur par passe : les clés peuvent avoir changé (appairage, coffre réinitialisé), et il ne
+    /// garde rien d'autre que l'état (`SyncStateStore`) qui, lui, persiste.
+    private func prepareEngine(userID: String, client: SupabaseClient, keys: SyncCrypto.Keys, stats: SyncSkipStats) -> SyncEngine {
+        let store = syncStore()
         // Un autre compte : l'état de l'ancien (curseurs, empreintes) ne vaut rien pour le nouveau.
         if store.state.userID != userID.lowercased() {
             store.reset(userID: userID.lowercased())
-            engine = nil
         }
-        if let engine { return engine }
-        let created = SyncEngine(container: container, transport: SupabaseSyncTransport(client: client), store: store)
+        let transport = EncryptingSyncTransport(inner: SupabaseSyncTransport(client: client), keys: keys, stats: stats)
+        let created = SyncEngine(container: container, transport: transport, store: store)
         engine = created
         return created
+    }
+
+    private func syncStore() -> SyncStateStore {
+        let store = self.store ?? SyncStateStore(url: stateURL)
+        self.store = store
+        return store
     }
 
     private func persistStatus(defaults: UserDefaults = .standard) {
