@@ -13,8 +13,30 @@ import AppKit
 struct MusicPane: View {
     var compact = false
     @State private var music = StudyMusic.shared
+    /// Apple Music (la bibliothèque, lue ici) ou Spotify Connect (piloté sur tes appareils).
+    @AppStorage("music.source") private var source = "apple"
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Source", selection: $source) {
+                Text("Apple Music").tag("apple")
+                Text("Spotify").tag("spotify")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 280)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(StudyPalette.ground)
+            if source == "spotify" {
+                SpotifyConnectView()
+            } else {
+                appleMusic
+            }
+        }
+    }
+
+    private var appleMusic: some View {
         Group {
             if compact {
                 VStack(spacing: 0) {
