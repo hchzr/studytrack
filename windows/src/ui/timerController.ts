@@ -16,6 +16,7 @@ import { Course, StudySession, type ModelStore } from "../models/index.ts";
 import { TaskType } from "../models/enums.ts";
 import {
   FocusTimerStore,
+  GroupClock,
   allocatedSeconds,
   cycleOr,
   elapsed,
@@ -28,6 +29,7 @@ import {
   switchContext,
   taskType as stateTaskType,
   type FocusTimerState,
+  type GroupSessionLink,
   type KeyValueStore,
 } from "../domain/focusTimerState.ts";
 import {
@@ -451,6 +453,44 @@ export class FocusTimerController {
     const endedAt = this.now();
     this.recapValue = await this.record(current, endedAt, options.emergency === true);
     this.persist(null);
+  }
+
+  // MARK: Session de groupe (TimerEngine.hostGroupSession & co)
+
+  /** **Lance** une session de groupe à partir de ce chrono (ouvert au besoin). */
+  hostGroupSession(link: GroupSessionLink): void {
+    if (!this.state) this.start();
+    if (!this.state) return;
+    this.persist({ ...this.state, groupSession: link });
+  }
+
+  /** **Rejoint** une session de groupe : la session personnelle est d'abord enregistrée. */
+  async joinGroupSession(link: GroupSessionLink, clock: GroupClock): Promise<void> {
+    const current = this.state;
+    if (current && current.groupSession?.sessionID !== link.sessionID) await this.finish();
+    const own = this.state ?? current;
+    this.recapValue = null;
+    this.persist(GroupClock.joining(clock, link, {
+      courseID: own?.courseID ?? this.draftValue.courseID,
+      taskTypeRaw: own?.taskTypeRaw ?? this.draftValue.taskType,
+      targetID: own?.targetID ?? this.draftValue.targetID,
+    }, this.now()));
+  }
+
+  /** L'horloge du groupe a bougé (pause, reprise d'un autre membre). */
+  applyGroupClock(clock: GroupClock): void {
+    if (!this.state?.groupSession) return;
+    const copy = { ...this.state };
+    GroupClock.apply(clock, copy);
+    this.persist(copy);
+  }
+
+  /** La session de groupe est finie mais le verrou tient : le chrono reste, à soi. */
+  detachGroup(): void {
+    if (!this.state?.groupSession) return;
+    const copy = { ...this.state };
+    delete copy.groupSession;
+    this.persist(copy);
   }
 
   /** L'état d'un autre appareil (le chrono relié) : adopté tel quel, sans rien enregistrer ici. */

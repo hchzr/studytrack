@@ -25,6 +25,7 @@ export const SECRET_KEYS: readonly string[] = [
   "studytrack.supabase.session",
   // La clé du compte de la synchronisation chiffrée (« <user id>:<hex> »).
   "studytrack.sync.accountKey",
+  "studytrack.groups.keys",
 ];
 
 const secretSet = new Set(SECRET_KEYS);

@@ -6,6 +6,7 @@ import { pickSource } from "./data/appSource.ts";
 import { syncService } from "./services/syncService.ts";
 import { checkMoodleNews } from "./services/moodleWatcher.ts";
 import { startGroupPresence } from "./ui/groups/groupPresence.ts";
+import { groupSessions } from "./services/groupFeatures.ts";
 import { setupShellExtras } from "./ui/shellExtras.ts";
 import { Shell } from "./ui/shell.tsx";
 import { QuickNoteHost } from "./ui/quicknote/QuickNote.tsx";
@@ -74,6 +75,8 @@ function GroupPresenceWiring() {
   const { store } = useData();
   const storeRef = useRef(store);
   storeRef.current = store;
+  // La session ensemble : mon chrono suit le groupe (relu seulement tant qu'il y est lié).
+  useEffect(() => { groupSessions.start(); }, []);
   useEffect(() => startGroupPresence(
     (id) => (id ? storeRef.current?.fetch(Course).find((c) => c.id === id)?.displayCode ?? "" : ""),
     (state) => {
