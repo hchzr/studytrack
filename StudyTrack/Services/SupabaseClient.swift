@@ -273,6 +273,21 @@ final class SupabaseClient {
         try applySession(data)
     }
 
+    /// Définit le mot de passe du compte connecté (voir `SupabasePasswordUpdate`).
+    /// Passe par `request` : jeton rafraîchi et requête rejouée sur 401, comme les autres appels.
+    func updatePassword(_ password: String) async throws {
+        guard isSignedIn else { throw SupabaseError.notSignedIn }
+        guard let body = SupabasePasswordUpdate.body(password: password) else { throw SupabaseError.invalidResponse }
+        _ = try await request(SupabasePasswordUpdate.path, method: SupabasePasswordUpdate.method, body: body)
+    }
+
+    /// Les fournisseurs de connexion du compte (« apple », « email »…), lus sur le serveur.
+    func fetchProviders() async throws -> [String] {
+        let data = try await request(SupabasePasswordUpdate.path)
+        guard let data, let user = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        return SupabasePasswordUpdate.providers(in: user)
+    }
+
     func signOut() async {
         Task { @MainActor in ConnectionCenter.shared.report(.groups, .unknown) }
         if accessToken != nil {

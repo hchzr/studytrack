@@ -153,6 +153,7 @@ private struct SyncSettings: View {
             } footer: {
                 Text("Les mêmes données que sur ton iPhone.")
             }
+            MacSupabaseSyncSection()
         }
         .formStyle(.grouped)
         .frame(height: 440)

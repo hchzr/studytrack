@@ -47,6 +47,10 @@ struct StudyTrackMacApp: App {
         StudyModeController.shared.timer = timer
         StudyModeController.shared.settings = settings
         StudyModeController.shared.container = store.container
+        // La synchronisation Supabase (éteinte tant qu'on ne l'a pas demandée).
+        SupabaseSync.shared = SupabaseSync(container: store.container,
+                                           client: SupabaseClient(urlString: SupabaseConfig.urlString, anonKey: SupabaseConfig.anonKey))
+        SupabaseSync.shared?.start()
         // La fiche de révision des cours sans polycopié : Claude, par l'abonnement.
         RevisionSheetMaker.shared.writer = { try await RevisionSheetClaude.write(instructions: $0, prompt: $1) }
         // Une fiche par cours : celles qui manquent se font seules, au calme

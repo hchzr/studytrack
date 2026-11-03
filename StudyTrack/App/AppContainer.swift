@@ -10,6 +10,8 @@ final class AppContainer {
     let settings: SettingsStore
     let notifications: NotificationScheduler
     let social: SocialService
+    /// La synchronisation Supabase des données (éteinte tant qu'on ne l'a pas demandée).
+    let supabaseSync: SupabaseSync
     let router: AppRouter
     /// Présence en direct dans les groupes (« untel travaille sur CS-250 »).
     let presence: PresenceService
@@ -111,6 +113,8 @@ final class AppContainer {
         // par conception (elle n'autorise que ce que les politiques RLS permettent).
         self.social = SocialService(urlString: SupabaseConfig.urlString,
                                     anonKey: SupabaseConfig.anonKey)
+        self.supabaseSync = SupabaseSync(container: modelContainer, client: social.client)
+        SupabaseSync.shared = supabaseSync
         self.router = AppRouter()
         self.presence = PresenceService()
         self.focus = FocusController()
@@ -120,6 +124,7 @@ final class AppContainer {
         focus.app = self
         groupSessions.app = self
         focus.startRelay()
+        supabaseSync.start()
         // La voie instantanée du chrono partagé (moins d'une seconde, apps ouvertes).
         if isCloudSynced {
             // Un seul lecteur pour l'iPhone et le Mac, par le même lien.

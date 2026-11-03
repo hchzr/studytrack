@@ -160,6 +160,12 @@ struct ProfileView: View {
                 settingsRow("Compte et groupes", icon: "person.2",
                             value: app.social.isSignedIn ? (app.social.email ?? "connecté·e") : "aucun")
             }
+            NavigationLink {
+                subpage("Synchronisation") { SupabaseSyncSection() }
+            } label: {
+                settingsRow("Synchronisation", icon: "arrow.triangle.2.circlepath",
+                            value: app.supabaseSync.isEnabled ? "activée" : nil)
+            }
         } header: {
             CarnetFormHeader("Comptes")
         }

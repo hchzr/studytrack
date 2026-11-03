@@ -53,6 +53,7 @@ cp "$ROOT"/Validation/main.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/PDFFixtures.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/BotafogoFixtures.swift "$WORK/Sources/"
 cp "$ROOT"/Validation/LocalMCPTests.swift "$WORK/Sources/"
+cp "$ROOT"/Validation/SyncTests.swift "$WORK/Sources/"
 
 # Garde-fou : tout type annoté `@Model` doit figurer dans le schéma versionné.
 #
@@ -80,4 +81,5 @@ xcrun swiftc -disable-sandbox \
   "$WORK"/Sources/*.swift
 
 echo "→ Exécution…"
+export STUDYTRACK_ROOT="$ROOT"
 "$WORK/validate" "$@"
