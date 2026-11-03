@@ -7,6 +7,7 @@ import type { Course } from "../../models/course.ts";
 import { BotafogoCourse, type BotafogoLocation } from "../botafogo/BotafogoCourse.tsx";
 import { Segmented } from "../kit.tsx";
 import { openInApp } from "../studymode/openers.ts";
+import { EdView } from "./EdView.tsx";
 import { MoodleCourseView, type MoodleReading } from "./MoodleCourseView.tsx";
 import { botafogoSite, courseSources, moodleCourseID, type CourseSource } from "./courseSites.ts";
 import "./coursesite.css";
@@ -14,7 +15,7 @@ import "./coursesite.css";
 interface Remembered { source: CourseSource; botafogo: BotafogoLocation | null; moodle: MoodleReading | null }
 const remembered = new Map<string, Remembered>();
 
-const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle" };
+const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle", ed: "Ed" };
 
 export function CourseSitePane({ course, tint }: { course: Course | null; tint: string }) {
   const sources = courseSources(course);
@@ -51,6 +52,7 @@ export function CourseSitePane({ course, tint }: { course: Course | null; tint: 
           <BotafogoCourse site={site} tint={tint} openWeb={openWeb}
             location={state.botafogo} onLocation={(botafogo) => update({ botafogo })} />
         )}
+        {source === "ed" && <EdView code={course.code} openWeb={openWeb} />}
         {source === "moodle" && moodle !== null && (
           <MoodleCourseView courseID={moodle} title={course.name} openWeb={openWeb}
             reading={state.moodle} onReading={(value) => update({ moodle: value })} />

@@ -4,8 +4,9 @@
 import type { Course } from "../../models/course.ts";
 import { MoodleCourseMatcher } from "../../domain/moodleImport.ts";
 import { isBotafogo } from "../../services/botafogoBook.ts";
+import { Institution } from "../../domain/institution.ts";
 
-export type CourseSource = "botafogo" | "moodle";
+export type CourseSource = "botafogo" | "moodle" | "ed";
 
 /** Le site Botafogo du cours, s'il en a un. */
 export function botafogoSite(course: Course | null): string | null {
@@ -24,6 +25,8 @@ export function courseSources(course: Course | null): CourseSource[] {
   const out: CourseSource[] = [];
   if (botafogoSite(course)) out.push("botafogo");
   if (moodleCourseID(course) !== null) out.push("moodle");
+  // Ed : retrouvé par le code du cours une fois connecté·e (l'école doit avoir Ed).
+  if (course && course.code.trim() !== "" && Institution.current.ed) out.push("ed");
   return out;
 }
 

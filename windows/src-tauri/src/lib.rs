@@ -49,6 +49,8 @@ pub fn run() {
             native::site::site_login_open,
             native::site::site_login_close,
             native::site::web_open,
+            native::ed::ed_sign_in,
+            native::ed::ed_sign_out,
             native::site::site_request,
             native::site::site_download,
             native::secrets::secrets_load,
