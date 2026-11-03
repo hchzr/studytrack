@@ -25,6 +25,15 @@ need jq
 if [[ -z "${RESEND_API_KEY:-}" ]]; then read -rsp "Clé API Resend (re_…) : " RESEND_API_KEY; echo; fi
 if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then read -rsp "Jeton d'accès Supabase (sbp_…) : " SUPABASE_ACCESS_TOKEN; echo; fi
 
+# Un copier-coller rapporte souvent une espace ou un retour à la ligne.
+RESEND_API_KEY="$(tr -d '[:space:]' <<<"$RESEND_API_KEY")"
+SUPABASE_ACCESS_TOKEN="$(tr -d '[:space:]' <<<"$SUPABASE_ACCESS_TOKEN")"
+if [[ "$SUPABASE_ACCESS_TOKEN" != sbp_* ]]; then
+  echo "Ce n'est pas un jeton d'accès Supabase : il commence par « sbp_ »." >&2
+  echo "Il se crée sur supabase.com › Account › Access Tokens (pas la clé anon ni service_role du projet)." >&2
+  exit 1
+fi
+
 resend() { curl -sS -H "Authorization: Bearer $RESEND_API_KEY" -H "Content-Type: application/json" "$@"; }
 
 # 1. Le domaine d'envoi chez Resend (créé s'il n'existe pas).
