@@ -5157,6 +5157,36 @@ do {
     check(blocks.contains { $0.taskType == "lecture" && $0.courseCode == "MATH-101" },
           "le cours part dans les groupes avec son code et la nature « lecture »")
 
+    // Ce qui compte, au choix (StudyTime.Counting).
+    var choice = StudyTime.Counting()
+    choice.exerciseSessions = true
+    check(StudyTime.total(StudyTime.blocks(events: [lecture, exercises], sessions: [chrono], counting: choice)) == (105 + 120) * 60,
+          "séances d'exercices comptées : la séance de 2 h compte, le chrono qu'elle recouvre n'est pas doublé")
+    choice = StudyTime.Counting(); choice.lectures = .confirmed
+    check(StudyTime.total(StudyTime.lectureBlocks(events: [lecture], sessions: [], counting: choice)) == 0,
+          "amphi « seulement confirmés » : un cours non confirmé ne compte pas")
+    lecture.isAttended = true
+    check(StudyTime.total(StudyTime.lectureBlocks(events: [lecture], sessions: [], counting: choice)) == 105 * 60,
+          "amphi confirmé (« J'y étais ») : il compte")
+    lecture.isAttended = false
+    choice = StudyTime.Counting(); choice.lectures = .off; choice.timer = false
+    let manual = StudySession(course: course, taskType: .theory, startedAt: at(-2000), durationSeconds: 1800, isManual: true)
+    let amphiTimer = StudySession(course: course, taskType: .lecture, startedAt: at(-1900), durationSeconds: 1800)
+    check(StudyTime.total(StudyTime.blocks(events: [lecture], sessions: [chrono, manual, amphiTimer], counting: choice)) == 1800,
+          "sans amphi ni chrono : seule la saisie manuelle compte")
+    let twin = LinkedCalendarEvent(title: "Analyse I", startsAt: at(-3000), endsAt: at(-2895), kind: .lecture)
+    twin.course = course; context.insert(twin)
+    check(StudyTime.total(StudyTime.lectureBlocks(events: [lecture, twin], sessions: [], counting: StudyTime.Counting())) == 105 * 60,
+          "la même séance lue deux fois (horaire et calendrier) ne compte qu'une fois")
+    let other = Course(code: "PHYS-101", name: "Physique"); context.insert(other)
+    let otherTimer = StudySession(course: other, taskType: .exercise, startedAt: at(-3000), durationSeconds: 3600)
+    check(StudyTime.total(StudyTime.lectureBlocks(events: [lecture], sessions: [otherTimer], counting: StudyTime.Counting())) == 45 * 60,
+          "un chrono d'un autre cours pendant l'amphi : on n'était pas en amphi, il n'est pas doublé")
+    course.isTracked = false
+    check(StudyTime.lectureBlocks(events: [lecture], sessions: [], counting: StudyTime.Counting()).isEmpty,
+          "un cours retiré du suivi ne gonfle plus les heures")
+    course.isTracked = true
+
     check(TimetableClassifier.kind(title: "🧠 MATH-111 — finir la série", location: "", hasCourse: true) == .study
           && TimetableClassifier.kind(title: "✓ [MATH-101] Série 2", location: "", hasCourse: true) == .study,
           "un bloc personnel qui cite un cours n'est pas un cours (ni une séance d'exercices)")

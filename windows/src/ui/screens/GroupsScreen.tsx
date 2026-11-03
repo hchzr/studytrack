@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Course, StudySession } from "../../models/index.ts";
 import { useData } from "../../data/dataContext.tsx";
+import { countsSession, readCounting } from "../../domain/studyCounting.ts";
 import { DateUtils } from "../../domain/dateUtils.ts";
 import { Groups, type Group, type LeaderboardRow, type Member, type Presence } from "../../services/groupsService.ts";
 import { readGroupsDisplayName, refreshMyGroups, writeGroupsDisplayName } from "../groups/groupPresence.ts";
@@ -117,8 +118,9 @@ function GroupPage({ group, back }: { group: Group; back: () => void }) {
       // Mon temps des deux dernières semaines, pour que le classement soit juste.
       if (store) {
         const subjects = new Set(group.courses);
+        const counting = readCounting();
         const logs = store.fetch(StudySession)
-          .filter((s) => s.course && (subjects.size === 0 || subjects.has(s.course.code) || subjects.has(s.course.displayCode)))
+          .filter((s) => s.course && countsSession(counting, s) && (subjects.size === 0 || subjects.has(s.course.code) || subjects.has(s.course.displayCode)))
           .map((s) => ({ courseCode: s.course?.code ?? "", taskType: s.taskTypeRaw, startedAt: s.startedAt, durationSeconds: s.durationSeconds }));
         await Groups.replaceStudyLogs(group.id, logs).catch(() => {});
       }

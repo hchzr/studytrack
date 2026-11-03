@@ -5,6 +5,7 @@
 // Le clic sur un cours terminé marque « manqué » (ou le rétablit), le seul geste
 // de présence que l'agenda Swift autorise (`isSkipped.toggle()` + `save()`).
 
+import { countsEvent, isCheckable, readCounting } from "../../../domain/studyCounting.ts";
 import { useOpenCourse } from "./openCourse.ts";
 import type { CSSProperties } from "react";
 import { DateUtils } from "../../../domain/dateUtils.ts";
@@ -169,10 +170,11 @@ function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
   // Un clic ouvre le cours de l'entrée (la grille du Mac fait pareil).
   const open = useOpenCourse();
   const courseID = event?.course?.id ?? entry.session?.course?.id ?? null;
-  // Un cours magistral terminé se marque manqué — une séance d'exercices se
-  // chronomètre, elle ne se coche pas ici.
-  const canToggle = event !== null && event.isLecture && event.course !== null
-    && event.endsAt.getTime() <= now.getTime();
+  // Une séance commencée se coche (« j'y étais ») ou se décoche (« manqué ») selon ce qui
+  // compte dans les heures (Réglages › Chrono › Ce qui compte).
+  const counting = readCounting();
+  const canToggle = event !== null && isCheckable(counting, event, now);
+  const checked = event !== null && countsEvent(counting, event, now);
 
   const title = event !== null ? (entry.courseCode ?? entry.title) : entry.title;
   const details = event !== null
@@ -184,7 +186,7 @@ function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
   const tooltip = `${event?.title ?? entry.title}\n${DateUtils.time(entry.start)} – ${DateUtils.time(entry.end)}`
     + (detail === "" ? "" : `\n${detail}`);
   const toggleLabel = event === null ? ""
-    : event.isSkipped ? `Compter ${event.title} comme suivi` : `Marquer ${event.title} manqué`;
+    : checked ? `Marquer ${event.title} manqué` : `J'étais à ${event.title}`;
 
   return (
     <div
@@ -200,8 +202,8 @@ function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
       {canToggle && event !== null && (
         <button
           type="button"
-          className={cx("wk-skip", event.isSkipped && "off")}
-          aria-pressed={!event.isSkipped}
+          className={cx("wk-skip", !checked && "off")}
+          aria-pressed={checked}
           aria-label={toggleLabel}
           title={toggleLabel}
           onClick={(e) => { e.stopPropagation(); onToggleSkipped(event); }}

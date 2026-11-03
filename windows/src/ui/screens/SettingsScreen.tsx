@@ -13,6 +13,7 @@ import { ConnectionsSection } from "./settings/ConnectionsSection.tsx";
 import { AIReadingSection } from "./settings/AIReadingSection.tsx";
 import { SyncSection } from "./settings/SyncSection.tsx";
 import { AccountSection } from "./settings/AccountSection.tsx";
+import { CountingSection } from "./settings/CountingSection.tsx";
 import { StudyModeSection } from "./settings/StudyModeSection.tsx";
 import { readPreference, writePreference } from "./settings/preferences.ts";
 import "./settings/settings.css";
@@ -21,7 +22,7 @@ type Page = "general" | "chrono" | "study" | "accounts" | "claude";
 
 const PAGES: { id: Page; title: string; icon: IconName; subtitle: string; advanced: string | null }[] = [
   { id: "general", title: "Général", icon: "gearshape", subtitle: "Apparence, semestre et cours.", advanced: "Horaire (.ics), calendrier académique, AnkiWeb, tâches." },
-  { id: "chrono", title: "Chrono", icon: "timer", subtitle: "Objectif de la semaine et Pomodoro.", advanced: null },
+  { id: "chrono", title: "Chrono", icon: "timer", subtitle: "Objectif, Pomodoro et ce qui compte dans tes heures.", advanced: null },
   { id: "study", title: "Mode étude", icon: "moon", subtitle: "Ce que le mode étude propose en s'ouvrant.", advanced: "Ouvrir sans heure de fin." },
   { id: "accounts", title: "Comptes", icon: "person", subtitle: "Ton compte, la synchronisation, les sites des cours, Spotify.", advanced: null },
   { id: "claude", title: "Claude et IA", icon: "sparkles", subtitle: "L'IA qui lit tes PDF.", advanced: null },
@@ -71,7 +72,7 @@ export function SettingsScreen() {
 function pageContent(page: Page, advanced: boolean): ReactNode {
   switch (page) {
     case "general": return <><AppearanceSection /><TermSection /><CoursesSection /></>;
-    case "chrono": return <ChronoSection />;
+    case "chrono": return <><ChronoSection /><CountingSection /></>;
     case "study": return <StudyModeSection advanced={advanced} />;
     case "accounts": return <><SyncSection /><AccountSection /></>;
     case "claude": return <AIReadingSection />;

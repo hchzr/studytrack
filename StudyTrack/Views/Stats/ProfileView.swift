@@ -139,10 +139,6 @@ struct ProfileView: View {
                 subpage("Horaire et calendrier") {
                     calendarSection(settings)
                     workloadSection(settings)
-                    Section(header: CarnetFormHeader("Présence")) {
-                        Toggle("Suivre la présence en amphi", isOn: Binding(get: { settings.trackAttendance },
-                                                                             set: { settings.trackAttendance = $0 }))
-                    }
                 }
             } label: {
                 settingsRow("Horaire et calendrier", icon: "calendar",
@@ -192,7 +188,10 @@ struct ProfileView: View {
     private var studyToolsSection: some View {
         Section {
             NavigationLink {
-                subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
+                subpage("Chrono et Pomodoro") {
+                    PomodoroSettingsForm(settings: app.settings)
+                    CountingSection()
+                }
             } label: {
                 settingsRow("Chrono et Pomodoro", icon: "timer",
                             value: "\(app.settings.pomodoro.focusMinutes) / \(app.settings.pomodoro.shortBreakMinutes) min")

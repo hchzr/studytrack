@@ -506,6 +506,16 @@
         }
       }
     },
+    "%@ %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$lld"
+          }
+        }
+      }
+    },
     "%@ %lld/%lld" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3210,7 +3220,6 @@
       }
     },
     "À propos" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3240,6 +3249,9 @@
           }
         }
       }
+    },
+    "À reconnecter" : {
+
     },
     "à refaire" : {
       "localizations" : {
@@ -3672,6 +3684,9 @@
         }
       }
     },
+    "Affiché" : {
+
+    },
     "Afficher" : {
       "localizations" : {
         "en" : {
@@ -3804,7 +3819,11 @@
         }
       }
     },
+    "Ajoute l'onglet « Écouter » à la fiche : la fiche part dans NotebookLM et le podcast s'écoute ici. La connexion à Google est facultative (sinon, export manuel)." : {
+
+    },
     "Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. StudyTrack ne se connecte jamais à Google." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4839,6 +4858,9 @@
         }
       }
     },
+    "Aucun appareil Spotify n'est ouvert. Ouvre Spotify sur ton ordinateur ou ton téléphone." : {
+
+    },
     "Aucun badge pour l'instant — continue !" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5169,6 +5191,7 @@
       }
     },
     "Aucune" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5335,6 +5358,7 @@
       }
     },
     "Aucune playlist trouvée" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5603,6 +5627,9 @@
         }
       }
     },
+    "Autorise StudyTrack à piloter Spotify : Réglages Système › Confidentialité › Automatisation." : {
+
+    },
     "Autoriser" : {
       "localizations" : {
         "en" : {
@@ -5704,6 +5731,9 @@
         }
       }
     },
+    "Avancé" : {
+
+    },
     "Avancement" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5788,6 +5818,7 @@
       }
     },
     "Bande-son de la révision" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5798,6 +5829,7 @@
       }
     },
     "Bande-son des séries" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5816,6 +5848,9 @@
           }
         }
       }
+    },
+    "Barre des menus et clavier" : {
+
     },
     "Barres flottantes" : {
       "localizations" : {
@@ -5950,6 +5985,9 @@
           }
         }
       }
+    },
+    "Blocage" : {
+
     },
     "Blocage pas activé" : {
       "localizations" : {
@@ -6520,6 +6558,9 @@
         }
       }
     },
+    "Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web ; ton mot de passe reste chez Spotify." : {
+
+    },
     "Ce qui n'est pas solide et sur quoi d'autres notions s'appuient." : {
       "localizations" : {
         "en" : {
@@ -6579,6 +6620,9 @@
           }
         }
       }
+    },
+    "Ces réglages s'appliquent quand « Bloquer le reste » est activé." : {
+
     },
     "Ces vidéos n'ont pas de transcription." : {
       "localizations" : {
@@ -6891,6 +6935,7 @@
       }
     },
     "Chargement…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7049,6 +7094,9 @@
           }
         }
       }
+    },
+    "Choisir un appareil" : {
+
     },
     "Choisir un autre fichier" : {
       "localizations" : {
@@ -7212,6 +7260,9 @@
           }
         }
       }
+    },
+    "Choisis une playlist ci-dessous, ou lance la lecture." : {
+
     },
     "Choisis-en un à gauche." : {
       "localizations" : {
@@ -7498,6 +7549,9 @@
           }
         }
       }
+    },
+    "Claude et IA" : {
+
     },
     "Claude lit la fiche et dessine ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre — pour tout le cours ou un chapitre à la fois." : {
       "localizations" : {
@@ -7804,6 +7858,9 @@
           }
         }
       }
+    },
+    "Colle un lien Spotify (playlist, album…)." : {
+
     },
     "Coller le texte d'une série" : {
       "extractionState" : "stale",
@@ -8316,6 +8373,12 @@
         }
       }
     },
+    "Connecte-toi une fois : ce qui joue sur ton ordinateur ou ton téléphone, les commandes, le volume, tes playlists — gratuit ou Premium. StudyTrack ne voit jamais ton mot de passe." : {
+
+    },
+    "Connecté·e à Spotify (non officiel : StudyTrack parle à Spotify comme son lecteur web)." : {
+
+    },
     "Connexion à %@" : {
       "localizations" : {
         "en" : {
@@ -8355,6 +8418,9 @@
           }
         }
       }
+    },
+    "Connexion à Spotify" : {
+
     },
     "Connexion EPFL" : {
       "localizations" : {
@@ -8420,6 +8486,7 @@
       }
     },
     "Continue" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11231,6 +11298,7 @@
       }
     },
     "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11628,6 +11696,9 @@
           }
         }
       }
+    },
+    "Exécutable" : {
+
     },
     "Exemple" : {
       "localizations" : {
@@ -12073,6 +12144,9 @@
           }
         }
       }
+    },
+    "Fenêtres" : {
+
     },
     "Fermer" : {
       "localizations" : {
@@ -12663,6 +12737,9 @@
           }
         }
       }
+    },
+    "Google (NotebookLM)" : {
+
     },
     "Google a refusé la demande (code %@) : la limite du jour est peut-être atteinte, ou NotebookLM a changé son fonctionnement." : {
       "localizations" : {
@@ -13654,6 +13731,9 @@
         }
       }
     },
+    "Installe l'app Spotify pour la piloter d'ici." : {
+
+    },
     "Installée" : {
       "localizations" : {
         "en" : {
@@ -13703,6 +13783,9 @@
           }
         }
       }
+    },
+    "introuvable — installe Claude Code" : {
+
     },
     "Invitation" : {
       "extractionState" : "stale",
@@ -14646,6 +14729,9 @@
         }
       }
     },
+    "La session Spotify a expiré : reconnecte-toi." : {
+
+    },
     "Lance un chrono ou ajoute une session manuelle : elle apparaîtra ici." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14657,6 +14743,9 @@
         }
       }
     },
+    "Lancer dans Spotify" : {
+
+    },
     "Lancer l'animation" : {
       "localizations" : {
         "en" : {
@@ -14666,6 +14755,9 @@
           }
         }
       }
+    },
+    "Lancer un lien" : {
+
     },
     "Lancer une activité d'essai" : {
       "localizations" : {
@@ -14994,6 +15086,9 @@
           }
         }
       }
+    },
+    "Le projet Claude en détail (dossier, studytrack.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise." : {
+
     },
     "Le reste" : {
       "localizations" : {
@@ -15449,6 +15544,9 @@
         }
       }
     },
+    "Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
+
+    },
     "Les photos et questions passent chiffrées par le relais de StudyTrack, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route." : {
       "localizations" : {
         "en" : {
@@ -15651,6 +15749,9 @@
           }
         }
       }
+    },
+    "Lien d'une playlist ou d'un album (Partager › Copier le lien)" : {
+
     },
     "Lien du corrigé (optionnel)" : {
       "localizations" : {
@@ -16104,6 +16205,9 @@
           }
         }
       }
+    },
+    "Masqué" : {
+
     },
     "Masquées" : {
       "localizations" : {
@@ -17174,6 +17278,7 @@
       }
     },
     "Musique pendant une pause" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17315,6 +17420,9 @@
         }
       }
     },
+    "Non connecté" : {
+
+    },
     "Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste." : {
       "localizations" : {
         "en" : {
@@ -17324,6 +17432,9 @@
           }
         }
       }
+    },
+    "Non officiel : StudyTrack parle à Spotify comme son lecteur web. Si Spotify change, le pilotage local ci-dessous reste là." : {
+
     },
     "Non planifié" : {
       "localizations" : {
@@ -18229,6 +18340,9 @@
         }
       }
     },
+    "Ouvre Spotify sur un appareil (ordinateur, téléphone…) : il se pilote ici." : {
+
+    },
     "Ouvre StudyTrack" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18460,6 +18574,9 @@
         }
       }
     },
+    "Ouvrir Spotify" : {
+
+    },
     "Ouvrir StudyTrack" : {
       "localizations" : {
         "en" : {
@@ -18571,6 +18688,7 @@
       }
     },
     "Paliers" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18579,6 +18697,9 @@
           }
         }
       }
+    },
+    "Paliers de reprise" : {
+
     },
     "Panneau" : {
       "extractionState" : "stale",
@@ -19582,6 +19703,7 @@
       }
     },
     "Plus bas" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19898,6 +20020,7 @@
       }
     },
     "Pour ma révision" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19908,6 +20031,7 @@
       }
     },
     "Pour mes séances de séries" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -20164,6 +20288,9 @@
         }
       }
     },
+    "Projet Claude" : {
+
+    },
     "Projet EPFL" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20330,6 +20457,7 @@
       }
     },
     "Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -20338,6 +20466,9 @@
           }
         }
       }
+    },
+    "Quand tu clos une série, Claude compare ta copie au corrigé et te propose les corrections, les erreurs et les exercices à refaire. Rien n'est noté sans ton accord." : {
+
     },
     "Que choisir ?" : {
       "localizations" : {
@@ -22474,6 +22605,9 @@
         }
       }
     },
+    "Sans « Fermer les autres apps », elles sont juste cachées." : {
+
+    },
     "Sans cette clé ni un autre appareil connecté, tes données chiffrées sont perdues pour de bon. Note-la sur papier ou dans un gestionnaire de mots de passe." : {
       "localizations" : {
         "en" : {
@@ -22681,6 +22815,9 @@
         }
       }
     },
+    "Se connecte depuis l'onglet « Écouter » d'une fiche" : {
+
+    },
     "Se connecter" : {
       "localizations" : {
         "en" : {
@@ -22721,6 +22858,12 @@
         }
       }
     },
+    "Se connecter à Spotify" : {
+
+    },
+    "Se connecter à Spotify…" : {
+
+    },
     "Se connecter avec EPFL" : {
       "localizations" : {
         "en" : {
@@ -22740,6 +22883,9 @@
           }
         }
       }
+    },
+    "Se déconnecter de Spotify" : {
+
     },
     "Se reconnecter" : {
       "localizations" : {
@@ -22762,6 +22908,7 @@
       }
     },
     "Se tait pendant les pauses, s'éteint à la fin." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22821,6 +22968,9 @@
           }
         }
       }
+    },
+    "Secondes dans la barre des menus, raccourci global, cahiers de notes." : {
+
     },
     "Secret client (client Web uniquement)" : {
       "localizations" : {
@@ -23531,6 +23681,9 @@
         }
       }
     },
+    "Seules les apps et les sites ci-dessous restent ouverts." : {
+
+    },
     "Seules les séries sont comparées pour ce cours." : {
       "localizations" : {
         "en" : {
@@ -23583,6 +23736,7 @@
       }
     },
     "Sinon, elles sont juste cachées." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23755,6 +23909,15 @@
           }
         }
       }
+    },
+    "Spotify" : {
+
+    },
+    "Spotify a refusé la commande (code %lld)." : {
+
+    },
+    "Spotify a répondu autrement que prévu (%@) : son lecteur web a peut-être changé. Le pilotage local reste possible." : {
+
     },
     "Spotlight, ⌘Tab et Mission Control : éteints" : {
       "localizations" : {
@@ -24417,6 +24580,9 @@
         }
       }
     },
+    "Sur ce Mac" : {
+
+    },
     "Sur cet exercice" : {
       "localizations" : {
         "en" : {
@@ -24623,6 +24789,7 @@
       }
     },
     "Synchronisation Supabase" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24797,7 +24964,11 @@
         }
       }
     },
+    "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : {
+
+    },
     "Ta façon de travailler est dans studytrack.json." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25662,6 +25833,9 @@
         }
       }
     },
+    "Ton compte Spotify, piloté d'ici" : {
+
+    },
     "Ton compte, tes adhésions aux groupes et tout ce que tu y as partagé seront effacés du serveur. Tes cours et tes sessions restent sur cet appareil." : {
       "localizations" : {
         "en" : {
@@ -25682,6 +25856,9 @@
           }
         }
       }
+    },
+    "Ton mot de passe reste chez Google." : {
+
     },
     "Ton mot de passe se tape sur la page de l'EPFL, pas dans l'app." : {
       "localizations" : {
@@ -26325,6 +26502,9 @@
         }
       }
     },
+    "Trouvé" : {
+
+    },
     "Trouvés dans tes inscriptions Moodle. Décoche ceux que tu ne suis pas." : {
       "localizations" : {
         "en" : {
@@ -26951,6 +27131,9 @@
           }
         }
       }
+    },
+    "Verrou système, fermer les autres apps, barres flottantes, écrans, gestes du trackpad, Dock." : {
+
     },
     "Verrouillé" : {
       "localizations" : {

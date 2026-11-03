@@ -678,12 +678,14 @@ struct AgendaView: View {
                         }
                     }
                     Spacer(minLength: Layout.inline)
-                    if let event = entry.event, event.isLecture, event.course != nil, event.endsAt <= Date() {
-                        // Un cours fini compte d'office ; le toucher le marque manqué.
-                        CheckCircleButton(isOn: !event.isSkipped,
+                    if let event = entry.event, event.isCheckable() {
+                        // Coché = compté dans les heures (Réglages › Chrono › Ce qui compte) :
+                        // « J'y étais » ou « manqué », d'un geste.
+                        let on = event.isChecked()
+                        CheckCircleButton(isOn: on,
                                           tint: TaskType.lecture.tint,
-                                          label: event.isSkipped ? "Compter \(event.title) comme suivi" : "Marquer \(event.title) manqué") {
-                            event.isSkipped.toggle()
+                                          label: on ? "Marquer \(event.title) manqué" : "J'étais à \(event.title)") {
+                            event.toggleChecked()
                             try? context.save()
                         }
                     } else {

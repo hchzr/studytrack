@@ -6,6 +6,7 @@
 // (une heure suivie moins ce que le chrono du même cours recouvre), et
 // `SessionStats` regroupe le journal par jour.
 
+import { countsSession, readCounting } from "../../../domain/studyCounting.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { ProgressEngine, type CourseProgress } from "../../../domain/progressEngine.ts";
 import { SessionStats } from "../../../domain/sessionStats.ts";
@@ -200,8 +201,9 @@ export function buildStats(
     date.getTime() >= range.start.getTime() && date.getTime() < range.end.getTime();
 
   // Une session « Cours en amphi » n'est pas de l'étude : elle rejoint l'amphi.
+  const counting = readCounting();
   const studySessions = sessions.filter(
-    (session) => inRange(session.startedAt) && TaskType.canonical(session.taskType) !== "lecture",
+    (session) => inRange(session.startedAt) && TaskType.canonical(session.taskType) !== "lecture" && countsSession(counting, session),
   );
 
   const byCode = new Map(courses.map((course) => [course.code, course]));
@@ -213,7 +215,7 @@ export function buildStats(
       course: block.courseCode ? byCode.get(block.courseCode) ?? null : null,
     }));
   for (const session of sessions) {
-    if (inRange(session.startedAt) && TaskType.canonical(session.taskType) === "lecture") {
+    if (inRange(session.startedAt) && TaskType.canonical(session.taskType) === "lecture" && countsSession(counting, session)) {
       lectures.push({ date: session.startedAt, seconds: session.durationSeconds, course: session.course });
     }
   }
@@ -330,7 +332,7 @@ export function buildStats(
     map.set(key, (map.get(key) ?? 0) + seconds);
   };
   for (const session of sessions) {
-    if (session.startedAt.getTime() < semesterStart.getTime()) continue;
+    if (session.startedAt.getTime() < semesterStart.getTime() || !countsSession(counting, session)) continue;
     if (TaskType.canonical(session.taskType) === "lecture") {
       addWeek(weeklyLecture, session.startedAt, session.durationSeconds);
     } else {

@@ -164,6 +164,7 @@ private struct PomodoroSettingsPane: View {
             } header: {
                 Text("Chrono")
             }
+            CountingSection()
             Section {
                 Toggle("Démarrer en Pomodoro", isOn: $settings.pomodoroDefault)
                 Stepper("Bloc de travail : \(settings.focusMinutes) min", value: $settings.focusMinutes, in: 5...120, step: 5)

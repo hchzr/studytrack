@@ -83,7 +83,8 @@ struct StatsView: View {
     /// amphi » n'en est pas : elle rejoint les heures d'amphi.
     private var studySessions: [StudySession] {
         let r = range
-        return sessions.filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical != .lecture }
+        let counting = StudyTime.Counting.current
+        return sessions.filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical != .lecture && counting.counts($0) }
     }
 
     private struct LectureSlot {
@@ -104,7 +105,7 @@ struct StatsView: View {
             LectureSlot(date: $0.start, seconds: $0.seconds, course: $0.courseCode.flatMap { byCode[$0] })
         }
         slots += sessions
-            .filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical == .lecture }
+            .filter { $0.startedAt >= r.start && $0.startedAt < r.end && $0.taskType.canonical == .lecture && StudyTime.Counting.current.counts($0) }
             .map { LectureSlot(date: $0.startedAt, seconds: $0.durationSeconds, course: $0.course) }
         return slots
     }
@@ -292,7 +293,8 @@ struct StatsView: View {
         let start = term.map { DateUtils.startOfWeek($0.startDate) } ?? DateUtils.addWeeks(-13, to: DateUtils.startOfWeek(Date()))
         var study: [Date: Int] = [:]
         var lecture: [Date: Int] = [:]
-        for session in sessions where session.startedAt >= start {
+        let counting = StudyTime.Counting.current
+        for session in sessions where session.startedAt >= start && counting.counts(session) {
             if session.taskType.canonical == .lecture {
                 lecture[DateUtils.startOfWeek(session.startedAt), default: 0] += session.durationSeconds
             } else {

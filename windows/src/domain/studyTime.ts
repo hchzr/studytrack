@@ -2,18 +2,14 @@
 // (StudyTrack/Domain/StudyTime.swift) : les sessions (chrono, saisies, Anki)
 // **plus** les cours suivis.
 //
-// La règle :
-//   • une heure de cours (amphi) compte toute seule, une fois passée — sauf
-//     marquée manquée ;
-//   • une séance d'exercices ne compte jamais d'elle-même : seul le chrono
-//     lancé pendant la séance compte ;
-//   • un chrono lancé pendant un cours ne compte pas deux fois : la part du
-//     cours qu'il recouvre est retirée du cours.
+// Ce qui compte, l'étudiant·e le choisit (`studyCounting.ts`, Réglages › Chrono) ; une séance
+// de l'horaire compte finie, pas manquée, d'un cours suivi, et jamais deux fois avec un chrono.
 
 import { LinkedCalendarEvent } from "../models/linkedCalendarEvent.ts";
 import { StudySession } from "../models/studySession.ts";
 import type { ModelStore } from "../models/store.ts";
 import { DateUtils } from "./dateUtils.ts";
+import { countsEvent, countsSession, readCounting, type Counting } from "./studyCounting.ts";
 
 /** Un intervalle de chrono (début, fin). */
 export interface Interval {
@@ -59,43 +55,39 @@ export function lectureSeconds(start: Date, end: Date, minus: Interval[]): numbe
   return Math.max(0, Math.trunc(secondsBetween(end, start) - covered));
 }
 
-/** Les cours qui comptent, à partir de l'horaire et des sessions. */
-export function lectureBlocks(events: LinkedCalendarEvent[], sessions: StudySession[]): Block[] {
-  const byCourse = new Map<string, StudySession[]>();
-  for (const session of sessions) {
-    const course = session.course;
-    if (!course) continue;
-    const list = byCourse.get(course.id) ?? [];
-    list.push(session);
-    byCourse.set(course.id, list);
-  }
+/**
+ * Les séances de l'horaire qui comptent (amphi, et exercices si choisi), moins ce que recouvrent
+ * les chronos comptés — de n'importe quel cours ; la même séance lue deux fois ne compte qu'une fois.
+ */
+export function lectureBlocks(events: LinkedCalendarEvent[], sessions: StudySession[], counting: Counting = readCounting(), now = new Date()): Block[] {
+  const timers = sessions.filter((s) => !s.isFromAnki && countsSession(counting, s)).map((s) => ({
+    start: s.startedAt,
+    end: new Date(s.startedAt.getTime() + s.durationSeconds * 1000),
+  }));
+  const seen = new Set<string>();
   const result: Block[] = [];
-  for (const event of events) {
-    if (!event.countsAsAttendedLecture) continue;
-    const own = (event.course ? byCourse.get(event.course.id) ?? [] : []).map((session) => ({
-      start: session.startedAt,
-      end: new Date(session.startedAt.getTime() + session.durationSeconds * 1000),
-    }));
-    const seconds = lectureSeconds(event.startsAt, event.endsAt, own);
+  for (const event of [...events].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())) {
+    if (!countsEvent(counting, event, now)) continue;
+    const key = `${event.course?.id ?? event.title}|${event.startsAt.getTime()}|${event.endsAt.getTime()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Une séance pas encore finie (« J'y suis ») ne compte que jusqu'à maintenant.
+    const end = new Date(Math.min(event.endsAt.getTime(), Math.max(event.startsAt.getTime(), now.getTime())));
+    const seconds = lectureSeconds(event.startsAt, end, timers);
     if (seconds <= 0) continue;
-    result.push({
-      start: event.startsAt,
-      seconds,
-      courseCode: event.course?.code ?? null,
-      taskType: "lecture",
-    });
+    result.push({ start: event.startsAt, seconds, courseCode: event.course?.code ?? null, taskType: event.kind === "lecture" ? "lecture" : "exercise" });
   }
   return result;
 }
 
-/** Tout ce qui compte : les sessions (chrono, saisies, Anki), puis les cours. */
-export function blocks(events: LinkedCalendarEvent[], sessions: StudySession[]): Block[] {
-  return sessions.map((session) => ({
+/** Tout ce qui compte : les sessions choisies (chrono, saisies, Anki), puis les séances. */
+export function blocks(events: LinkedCalendarEvent[], sessions: StudySession[], counting: Counting = readCounting(), now = new Date()): Block[] {
+  return sessions.filter((session) => countsSession(counting, session)).map((session) => ({
     start: session.startedAt,
     seconds: session.durationSeconds,
     courseCode: session.course?.code ?? null,
     taskType: session.taskTypeRaw,
-  })).concat(lectureBlocks(events, sessions));
+  })).concat(lectureBlocks(events, sessions, counting, now));
 }
 
 /** Tout ce qui compte entre deux dates, lu dans le magasin (mêmes prédicats qu'en Swift). */

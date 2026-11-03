@@ -76,7 +76,8 @@ struct MacAgendaView: View {
     var body: some View {
         let start = weekStart
         let end = DateUtils.addDays(7, to: start)
-        let events = allEvents.filter { $0.startsAt >= start && $0.startsAt < end && $0.isAcademic && !$0.isSkipped }
+        // Les séances manquées restent visibles, estompées : on peut se raviser.
+        let events = allEvents.filter { $0.startsAt >= start && $0.startsAt < end && $0.isAcademic }
         let deadlines = Deadline.between(tracked, start, end)
         let days = (0..<7).map { DateUtils.addDays($0, to: start) }
             .filter { day in
@@ -225,6 +226,7 @@ private struct DayColumn: View {
     let hours: Int
     let hourHeight: CGFloat
     var tap: (LinkedCalendarEvent) -> Void
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -240,10 +242,17 @@ private struct DayColumn: View {
                 let tint = Carnet.tint(event.course)
                 Button { tap(event) } label: {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(event.course?.displayCode ?? event.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Carnet.ink)
-                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(event.course?.displayCode ?? event.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Carnet.ink)
+                                .strikethrough(event.isSkipped)
+                                .lineLimit(1)
+                            if event.isCheckable(), event.isChecked() {
+                                Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(tint)
+                                    .accessibilityLabel("Compté")
+                            }
+                        }
                         if height > 34 {
                             Text([event.kind == .lecture ? "Cours" : event.kind.label, event.location.isEmpty ? nil : event.location]
                                 .compactMap { $0 }.joined(separator: " · "))
@@ -261,10 +270,17 @@ private struct DayColumn: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .opacity(event.isSkipped ? 0.45 : 1)
+                .contextMenu {
+                    if event.isCheckable() {
+                        let on = event.isChecked()
+                        Button(on ? "Marquer manqué" : "J'y étais") { event.toggleChecked(); try? context.save() }
+                    }
+                }
                 .frame(height: height)
                 .padding(.horizontal, 3)
                 .offset(y: top)
-                .help("\(event.title)\n\(DateUtils.time.string(from: event.startsAt)) – \(DateUtils.time.string(from: event.endsAt))")
+                .help("\(event.title)\n\(DateUtils.time.string(from: event.startsAt)) – \(DateUtils.time.string(from: event.endsAt))" + (event.isCheckable() ? "\n" + String(localized: "Clic droit : j'y étais / manqué") : ""))
             }
             if Calendar.current.isDateInToday(day) {
                 let now = offset(Date())

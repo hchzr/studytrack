@@ -5,6 +5,7 @@
 // geste de présence autorisé côté Swift — marquer un cours magistral terminé
 // « manqué » (`isSkipped.toggle()` puis `save()`).
 
+import { readCounting, toggleChecked } from "../../domain/studyCounting.ts";
 import { OpenCourseContext, type OpenCourse } from "./agenda/openCourse.ts";
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "../../data/dataContext.tsx";
@@ -69,8 +70,9 @@ export function AgendaScreen({ onOpenCourse }: { onOpenCourse?: OpenCourse } = {
   const coming = Deadline.upcoming(tracked, 30);
   const days = visibleWeekDays(weekDays(weekStart), entries, deadlines);
 
+  // La coche : « J'y étais » / « manqué », selon ce qui compte (Réglages › Chrono).
   const toggleSkipped = (event: LinkedCalendarEvent) => {
-    event.isSkipped = !event.isSkipped;
+    toggleChecked(readCounting(), event);
     void save(event);
   };
 

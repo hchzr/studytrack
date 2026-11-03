@@ -1,10 +1,9 @@
 import { DateUtils } from "../domain/dateUtils.ts";
 import { CalendarEventKind } from "./enums.ts";
+import { countsEvent, readCounting } from "../domain/studyCounting.ts";
 import { defineToOne, newId } from "./relations.ts";
 import type { Course } from "./course.ts";
 
-/** `StudyTime.longestLecture` (Domain/StudyTime.swift) : 4 h 30, en secondes. */
-const longestLecture = 4.5 * 3600;
 
 export interface LinkedCalendarEventInit {
   id?: string;
@@ -71,13 +70,9 @@ export class LinkedCalendarEvent {
   get durationLabel(): string { return DateUtils.durationLabel(this.durationSeconds); }
   get isLecture(): boolean { return this.kind === "lecture"; }
 
-  /**
-   * Le cours magistral compte dans les heures d'amphi : fini, et pas manqué. Une
-   * **séance d'exercices** ne compte jamais d'elle-même — elle se chronomètre.
-   */
+  /** Le cours magistral compte dans les heures (la règle choisie : `studyCounting.ts`). */
   get countsAsAttendedLecture(): boolean {
-    return this.isLecture && !this.isSkipped && (this.endsAt.getTime() <= Date.now() || this.isAttended)
-      && this.durationSeconds > 0 && this.durationSeconds <= longestLecture;
+    return this.isLecture && countsEvent(readCounting(), this);
   }
 
   /** Ce qui a sa place dans l'agenda : l'horaire, les évaluations, les sessions de révision — pas l'agenda personnel. */
