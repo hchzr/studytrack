@@ -6,6 +6,7 @@
 // les corrigés, `Deadline` pour les échéances. L'écran ne recompte rien.
 
 import { useData } from "../../data/dataContext.tsx";
+import { MoodleNewsCard } from "./home/moodleNewsCard.tsx";
 import { Course, LinkedTask } from "../../models/index.ts";
 import { DateUtils } from "../../domain/dateUtils.ts";
 import { PageHeader, Section, Card, EmptyState } from "../kit.tsx";
@@ -86,6 +87,7 @@ export function TodayScreen({ onOpenCourse, onOpenFocus, onEnterStudyMode }: {
           <div className="t-grid">
             <div className="t-col">
               <NextActionCard action={nextAction} onOpen={onOpenCourse} />
+              <MoodleNewsCard onOpenCourse={onOpenCourse} />
 
               <Section title={weekTitle}>
                 <WeekTimeCard

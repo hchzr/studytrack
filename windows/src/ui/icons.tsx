@@ -70,7 +70,8 @@ export function Icon({ name, size = 16, strokeWidth = 1.75, color, style, classN
   /** Pour une icône seule porteuse de sens ; sinon elle est décorative. */
   label?: string;
 }) {
-  const Glyph = ICONS[name];
+  // Un nom inconnu (une icône du Mac sans équivalent) : un rond, plutôt qu'un écran cassé.
+  const Glyph = ICONS[name] ?? ICONS["circle"];
   return (
     <Glyph size={size} strokeWidth={strokeWidth} color={color} style={style} className={className}
       aria-hidden={label ? undefined : true} aria-label={label} role={label ? "img" : undefined} />

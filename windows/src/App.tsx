@@ -4,6 +4,7 @@ import { DataProvider, useData } from "./data/dataContext.tsx";
 import { SqliteSource, type DataSource } from "./data/source.ts";
 import { pickSource } from "./data/appSource.ts";
 import { syncService } from "./services/syncService.ts";
+import { checkMoodleNews } from "./services/moodleWatcher.ts";
 import { setupShellExtras } from "./ui/shellExtras.ts";
 import { Shell } from "./ui/shell.tsx";
 import { QuickNoteHost } from "./ui/quicknote/QuickNote.tsx";
@@ -29,6 +30,7 @@ export default function App() {
     <DataProvider source={source}>
       <SyncWiring source={base} />
       <NativeWiring />
+      <MoodleNewsWiring />
       <Shell />
       <QuickNoteHost />
     </DataProvider>
@@ -62,6 +64,19 @@ function SyncWiring({ source }: { source: DataSource }) {
     syncService.attach({ local: source.localStore, reload });
     syncService.startAutoSync();
   }, [source, store, reload]);
+  return null;
+}
+
+/** Les nouveautés Moodle : un relevé au lancement et au retour sur l'app (deux heures au plus souvent). */
+function MoodleNewsWiring() {
+  const { store } = useData();
+  useEffect(() => {
+    if (!store) return;
+    const check = () => { void checkMoodleNews(store.fetch(Course)); };
+    check();
+    window.addEventListener("focus", check);
+    return () => window.removeEventListener("focus", check);
+  }, [store]);
   return null;
 }
 
