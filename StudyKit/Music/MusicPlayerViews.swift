@@ -29,8 +29,7 @@ struct MusicPane: View {
             .frame(maxWidth: .infinity)
             .background(StudyPalette.ground)
             if source == "spotify" {
-                ScrollView { SpotifyLocalView().padding(28).frame(maxWidth: 820, alignment: .leading).frame(maxWidth: .infinity) }
-                    .background(StudyPalette.ground)
+                SpotifyPane(compact: compact)
             } else {
                 appleMusic
             }
@@ -337,7 +336,7 @@ private struct MusicVolume: View {
 
 /// Un curseur à la façon de Music : 4 pt au repos, 8 pt sous le pointeur ou
 /// pendant qu'on tire ; pas de bouton rond.
-private struct MusicSlider: View {
+struct MusicSlider: View {
     let value: Double
     let onChange: (Double) -> Void
     let onCommit: (Double) -> Void
@@ -503,7 +502,7 @@ struct MusicNowArtwork: View {
 
 /// Un bouton de lecteur : un glyphe nu, un disque au survol (Mac), un léger
 /// enfoncement au clic. La cible fait au moins 28 pt.
-private struct MusicGlyphButton: View {
+struct MusicGlyphButton: View {
     let icon: String
     var size: CGFloat
     let label: LocalizedStringKey

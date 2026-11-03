@@ -7612,6 +7612,47 @@ do {
           "transcriptions : le français d'abord, puis l'anglais")
 }
 
+// MARK: Spotify (protocole du lecteur web, d'après SpotAPI)
+print("\n— Spotify —")
+do {
+    let secret = SpotifyWire.fallbackSecret.bytes
+    check(SpotifyWire.totp(secret: secret, at: Date(timeIntervalSince1970: 59)) == "332823", "Spotify : TOTP à 59 s (comme pyotp)")
+    check(SpotifyWire.totp(secret: secret, at: Date(timeIntervalSince1970: 1_700_000_000)) == "371599", "Spotify : TOTP à 1 700 000 000 s")
+    let dict = #"{"59":[1,2],"61":[44,55],"x":[3]}"#.data(using: .utf8)!
+    check(SpotifyWire.latestSecret(from: dict)?.version == 61, "Spotify : la clé la plus récente du dictionnaire")
+    let html = "<script id=\"appServerConfig\" type=\"text/plain\">" + Data(#"{"clientVersion":"1.2.3.g1"}"#.utf8).base64EncodedString() + "</script>"
+    check(SpotifyWire.clientVersion(inPage: html) == "1.2.3.g1", "Spotify : version du lecteur lue dans la page")
+    let token = SpotifyWire.webToken(from: Data(#"{"accessToken":"abc","clientId":"cid","accessTokenExpirationTimestampMs":1700000000000,"isAnonymous":false}"#.utf8))
+    check(token?.accessToken == "abc" && token?.clientID == "cid" && token?.anonymous == false, "Spotify : jeton du lecteur web")
+    let zipped = Data(base64Encoded: "H4sIAAAAAAAA/6tWSs4pLS5JLVKyUqhWSkwuySxLjU9JLctMTo3PTAEKKqUYKtXWAgDNw9NCJwAAAA==")!
+    let dealer = try! JSONSerialization.data(withJSONObject: ["type": "message", "uri": "hm://connect-state/v1/cluster", "headers": ["Transfer-Encoding": "gzip"], "payloads": [zipped.base64EncodedString()]])
+    let payload = SpotifyWire.clusterPayloads(fromDealer: dealer).first
+    let decoded = payload.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    check(decoded.map { SpotifyWire.now(fromCluster: $0).activeDevice } == "d1", "Spotify : état du dealer décompressé (gzip)")
+    let cluster: [String: Any] = [
+        "active_device_id": "mac", "server_timestamp_ms": "10000",
+        "devices": ["mac": ["device_id": "mac", "name": "MacBook", "device_type": "COMPUTER", "volume": 32768, "can_play": true],
+                    "hobs_x": ["name": "obs", "capabilities": ["hidden": true]]],
+        "player_state": ["is_playing": true, "is_paused": false, "timestamp": "8000", "position_as_of_timestamp": "30000", "duration": "200000",
+                         "options": ["shuffling_context": true, "repeating_context": false, "repeating_track": true],
+                         "track": ["uri": "spotify:track:T1", "metadata": ["title": "Song", "artist_name": "Artist", "image_url": "spotify:image:ab12"]],
+                         "next_tracks": [["uri": "spotify:track:T2", "metadata": ["title": "Next"]], ["uri": "spotify:delimiter"]]],
+    ]
+    let now = SpotifyWire.now(fromCluster: cluster)
+    check(now.track?.title == "Song" && now.track?.artist == "Artist", "Spotify : morceau en cours")
+    check(now.track?.artwork?.absoluteString == "https://i.scdn.co/image/ab12", "Spotify : pochette spotify:image → i.scdn.co")
+    check(now.isPlaying && abs(now.position - 32) < 0.01 && now.duration == 200, "Spotify : position ramenée à l'heure du serveur")
+    check(now.shuffle && now.repeatTrack && !now.repeatContext, "Spotify : aléatoire et répétition")
+    check(now.devices.map(\.id) == ["mac"] && abs((now.volume ?? 0) - 0.5) < 0.01, "Spotify : appareils visibles et volume")
+    check(now.upNext.map(\.uri) == ["spotify:track:T2"], "Spotify : à suivre, sans délimiteur")
+    let play = SpotifyWire.commandBody(.play(context: "spotify:playlist:P"))["command"] as? [String: Any]
+    check(play?["endpoint"] as? String == "play" && (play?["context"] as? [String: Any])?["url"] as? String == "context://spotify:playlist:P", "Spotify : lancer une playlist")
+    check(SpotifyWire.volumeBody(0.5)["volume"] as? Int == 32768, "Spotify : volume sur 65 535")
+    let lists = SpotifyWire.playlists(from: Data(#"{"items":[{"uri":"spotify:playlist:P","name":"Focus","images":[{"url":"https://x/y.jpg"}],"owner":{"display_name":"Hugo"}}]}"#.utf8))
+    check(lists.first?.name == "Focus" && lists.first?.image != nil, "Spotify : mes playlists")
+    check(SpotifyWire.isSignedIn(cookieNames: ["sp_t", "sp_dc"]) && !SpotifyWire.isSignedIn(cookieNames: ["sp_t"]), "Spotify : connecté·e = cookie sp_dc")
+}
+
 if CommandLine.arguments.contains("--bench") {
     runBenchmark()
 }
