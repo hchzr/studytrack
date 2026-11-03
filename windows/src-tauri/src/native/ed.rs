@@ -12,8 +12,10 @@ const LABEL: &str = "site-ed";
 const SENTINEL_HOST: &str = "studytrack.invalid";
 pub const SECRET_KEY: &str = "ed.token";
 
-/// Lit la clé dans la page d'Ed (sans rien envoyer ailleurs que vers l'adresse sentinelle).
-const PROBE: &str = r#"(function(){try{var t=null,r='eu';for(var k=0;k<localStorage.length;k++){var key=localStorage.key(k);var v=(localStorage.getItem(key)||'').replace(/^"|"$/g,'');if(/authRegion/.test(key)&&v)r=v;if(/authToken/.test(key)&&!/device/i.test(key)&&v)t=v;}if(t){location.href='https://studytrack.invalid/ed#'+encodeURIComponent(r)+'|'+encodeURIComponent(t);}}catch(e){}})();"#;
+/// Lit la clé dans la page d'Ed, chaque seconde pendant un quart d'heure : Ed change de page sans
+/// recharger (la connexion finit sur le tableau de bord sans nouveau chargement). Rien n'est envoyé
+/// ailleurs que vers l'adresse sentinelle.
+const PROBE: &str = r#"(function(){if(window.__studytrackProbe)return;window.__studytrackProbe=true;var tries=0;var look=function(){try{var t=null,r='eu';for(var k=0;k<localStorage.length;k++){var key=localStorage.key(k);var v=(localStorage.getItem(key)||'').replace(/^"|"$/g,'');if(/authRegion/.test(key)&&v)r=v;if(/authToken/.test(key)&&!/device/i.test(key)&&v)t=v;}if(t){location.href='https://studytrack.invalid/ed#'+encodeURIComponent(r)+'|'+encodeURIComponent(t);return;}}catch(e){}if(++tries<900)setTimeout(look,1000);};look();})();"#;
 
 /// `https://studytrack.invalid/ed#eu|abc` → (« eu », « abc »).
 pub fn parse_sentinel(url: &Url) -> Option<(String, String)> {

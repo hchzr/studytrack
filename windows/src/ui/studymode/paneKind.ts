@@ -2,7 +2,7 @@
 // ce qui existe sur Windows — pas de navigateur intégré, pas de calcul ni de
 // musique : le volet d'à côté porte le reste).
 
-export type StudyPane = "desk" | "course" | "exercise" | "notes" | "sheet";
+export type StudyPane = "desk" | "course" | "exercise" | "notes" | "sheet" | "calc" | "claude";
 
 export const STUDY_PANES: { kind: StudyPane; label: string; icon: string; help: string }[] = [
   { kind: "desk", label: "Bureau", icon: "square.grid.2x2", help: "L'accueil du moment" },
@@ -10,4 +10,6 @@ export const STUDY_PANES: { kind: StudyPane; label: string; icon: string; help: 
   { kind: "exercise", label: "Exercice", icon: "doc.text", help: "L'énoncé, les questions, la correction" },
   { kind: "notes", label: "Notes", icon: "text.alignleft", help: "Les notes du cours" },
   { kind: "sheet", label: "Fiche", icon: "list.bullet.rectangle", help: "La fiche de révision" },
+  { kind: "claude", label: "Claude", icon: "sparkles", help: "Claude, par ton abonnement : une conversation par série" },
+  { kind: "calc", label: "Calcul", icon: "function", help: "Calculatrice et grapheur : équations, complexes, matrices" },
 ];

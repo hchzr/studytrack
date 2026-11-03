@@ -1,5 +1,6 @@
 //! Couche native de l'app : veille, verrou d'étude, mini chrono flottant.
 
+pub mod claude;
 pub mod ed;
 pub mod kiosk;
 pub mod lock;

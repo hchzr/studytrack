@@ -30,6 +30,9 @@ import { SheetPane } from "./panes/SheetPane.tsx";
 import { Glyph, tintOfCourse } from "./parts.tsx";
 import { ErrorBoundary } from "../ErrorBoundary.tsx";
 import { CourseSitePane } from "../coursesite/CourseSitePane.tsx";
+import { CalcPane } from "./panes/CalcPane.tsx";
+import { ClaudePane } from "./panes/ClaudePane.tsx";
+import { openInApp } from "./openers.ts";
 import { hasCourseSite } from "../coursesite/courseSites.ts";
 
 /** La série du moment : celle de l'exercice suivi, sinon celle de la semaine. */
@@ -50,6 +53,7 @@ function mapCenter(center: DeskCenter): StudyPane | null {
     case "exercise": return "exercise";
     case "course": return "course";
     case "notes": return "notes";
+    case "calc": return "calc";
     default: return null;
   }
 }
@@ -233,6 +237,8 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
           {pane === "course" && <CourseSitePane course={course} tint={tint} />}
           {pane === "notes" && <NotesPane course={course} save={save} />}
           {pane === "sheet" && <SheetPane course={course} />}
+          {pane === "claude" && <ClaudePane course={course} series={series} exercise={exercise} tint={tint} />}
+          {pane === "calc" && <CalcPane openWeb={(url) => { void openInApp(url, "GeoGebra"); }} />}
           </ErrorBoundary>
         </main>
 

@@ -38,6 +38,7 @@ pub fn run() {
         .manage(native::lock::LockState::default())
         .manage(native::site::SiteState::default())
         .manage(native::oauth::OAuthState::default())
+        .manage(native::claude::ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             native::power::set_keep_awake,
@@ -50,6 +51,11 @@ pub fn run() {
             native::site::site_login_close,
             native::site::web_open,
             native::ed::ed_sign_in,
+            native::claude::claude_setup,
+            native::claude::claude_start,
+            native::claude::claude_send,
+            native::claude::claude_stop,
+            native::claude::claude_history,
             native::ed::ed_sign_out,
             native::site::site_request,
             native::site::site_download,
@@ -99,6 +105,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 native::mini::persist(app);
                 native::lock::shutdown(app, &app.state::<native::lock::LockState>());
+                native::claude::shutdown(&app.state::<native::claude::ClaudeState>());
                 native::power::set(native::power::Hold::Off, 60);
             }
         });
