@@ -6,6 +6,7 @@
 // mode étude. Réglages : la roue en bas (le Mac les met dans leur fenêtre, ⌘,).
 
 import { GroupsScreen } from "./screens/GroupsScreen.tsx";
+import { ClaudeScreen } from "./screens/ClaudeScreen.tsx";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useData } from "../data/dataContext.tsx";
 import { Course } from "../models/index.ts";
@@ -30,7 +31,7 @@ const CommandPalette = lazy(() => import("./palette/CommandPalette.tsx").then((m
 
 export type Page =
   | { kind: "today" } | { kind: "courses" } | { kind: "focus" }
-  | { kind: "agenda" } | { kind: "stats" } | { kind: "groups" } | { kind: "settings" }
+  | { kind: "agenda" } | { kind: "stats" } | { kind: "groups" } | { kind: "claude" } | { kind: "settings" }
   | { kind: "course"; id: string; item?: string | null };
 
 type TabKind = Exclude<Page["kind"], "course">;
@@ -40,8 +41,9 @@ const TABS: { kind: TabKind; label: string; icon: IconName }[] = [
   { kind: "agenda", label: "Agenda", icon: "calendar" },
   { kind: "stats", label: "Bilan", icon: "chart.bar.xaxis" },
   { kind: "groups", label: "Groupes", icon: "person.2" },
+  { kind: "claude", label: "Claude", icon: "sparkles" },
 ];
-const PAGE_KINDS: TabKind[] = ["today", "courses", "focus", "agenda", "stats", "groups", "settings"];
+const PAGE_KINDS: TabKind[] = ["today", "courses", "focus", "agenda", "stats", "groups", "claude", "settings"];
 
 /** La page demandée dans l'adresse (`?page=…`), ou rien. */
 function pageFromParams(): Page | null {
@@ -194,6 +196,7 @@ export function Shell() {
         {page.kind === "agenda" && <AgendaScreen onOpenCourse={openCourse} />}
         {page.kind === "stats" && <StatsScreen />}
         {page.kind === "groups" && <GroupsScreen />}
+        {page.kind === "claude" && <ClaudeScreen />}
         {page.kind === "settings" && <SettingsScreen />}
         {page.kind === "course" && current && <CourseScreen key={`${current.id}:${page.kind === "course" ? page.item ?? "" : ""}`} course={current}
           focusTarget={page.kind === "course" ? page.item : null} />}

@@ -3,12 +3,13 @@
 // l'horaire, la révision avant l'examen. Les cartes que le Mac réarrange à la
 // main (DeskWidgets) sont ici en grille fixe, les mêmes pour chacun.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Icon } from "../../kit.tsx";
 import type { Course } from "../../../models/course.ts";
 import type { TheoryItem } from "../../../models/theoryItem.ts";
 import { TaskType } from "../../../models/enums.ts";
-import { DeskMoment, LectureClock, type DeskMoment as DeskMomentValue } from "../../../domain/deskMoment.ts";
+import { DeskMoment, LectureClock, LectureMark, LectureMarks, RevisionFocus, type DeskMoment as DeskMomentValue } from "../../../domain/deskMoment.ts";
+import { openInApp } from "../openers.ts";
 import { DeskSchedule, kindLabelOf, type ScheduledClass } from "../../../domain/deskSchedule.ts";
 import { Deadline } from "../../../domain/deadline.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
@@ -120,6 +121,86 @@ function TheoryTick({ item, onToggle }: { item: TheoryItem; onToggle: () => void
       </span>
       <span style={{ flex: 1 }}>{item.numberAndTitle}</span>
     </button>
+  );
+}
+
+
+// MARK: Repère, annales, théorie (LectureDeskView / RevisionDeskView)
+
+const MARKS_KEY = "lecture.marks";
+function readMarks(): LectureMark[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MARKS_KEY) ?? "[]") as { id: string; courseID: string; classStart: string; at: string }[];
+    return raw.map((m) => ({ id: m.id, courseID: m.courseID, classStart: new Date(m.classStart), at: new Date(m.at) }));
+  } catch { return []; }
+}
+
+/** « Repère » : un toucher quand on décroche ; le soir, l'enregistrement s'ouvre à cette minute. */
+function RepereCard({ course, classStart, now }: { course: Course; classStart: Date; now: Date }) {
+  const [marks, setMarks] = useState<LectureMark[]>(readMarks);
+  const mine = LectureMarks.of(course.id, classStart, marks);
+  const add = () => {
+    const next = LectureMarks.adding(LectureMark.make(course.id, classStart, new Date()), marks);
+    setMarks(next);
+    try { localStorage.setItem(MARKS_KEY, JSON.stringify(next)); } catch { /* pour la session */ }
+  };
+  void now;
+  return (
+    <GlassCard>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Kicker>Repère</Kicker>
+        <button type="button" className="btn btn-primary" onClick={add}>Je décroche ici</button>
+        {mine.length > 0 && (
+          <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
+            {mine.map((m) => LectureMark.offsetLabel(m)).join(" · ")} — à revoir dans l'enregistrement
+          </span>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+
+/** Les annales, dans l'ordre où les travailler (RevisionFocus.pastExamOrder). */
+function PastExamsCard({ course }: { course: Course }) {
+  const exams = course.pastExams;
+  if (exams.length === 0) return null;
+  const order = RevisionFocus.pastExamOrder(exams.map((exam) => ({
+    id: exam.id, year: exam.year, worked: exam.workedAt !== null, confidence: (exam.confidenceRaw as "red" | "orange" | "green" | null) ?? null,
+  })));
+  const sorted = order.map((id) => exams.find((exam) => exam.id === id)).filter((exam): exam is NonNullable<typeof exam> => exam !== undefined);
+  return (
+    <GlassCard>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Kicker>Annales</Kicker>
+        {sorted.slice(0, 5).map((exam) => (
+          <div key={exam.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+            <span style={{ flex: 1, color: "var(--ink)" }}>{exam.title || `${exam.year}`}</span>
+            <span style={{ fontSize: 12, color: exam.workedAt ? "var(--ink-secondary)" : "var(--review)" }}>{exam.workedAt ? "faite" : "jamais faite"}</span>
+            {exam.urlString && <button type="button" className="btn btn-sm" onClick={() => { void openInApp(exam.urlString, exam.title || "Annale"); }}>Sujet</button>}
+            {exam.solutionURLString && <button type="button" className="btn btn-sm" onClick={() => { void openInApp(exam.solutionURLString, "Corrigé"); }}>Corrigé</button>}
+          </div>
+        ))}
+      </div>
+    </GlassCard>
+  );
+}
+
+/** La théorie pas encore vue, jusqu'à cette semaine. */
+function UnseenTheoryCard({ course, save }: { course: Course; save?: (instance: object) => Promise<void> }) {
+  const [, bump] = useState(0);
+  const week = course.currentWeek;
+  const unseen = course.theoryItems.filter((item) => !item.isWatched && item.plannedWeek <= Math.max(week, 1))
+    .sort((a, b) => a.plannedWeek - b.plannedWeek);
+  if (unseen.length === 0) return null;
+  return (
+    <GlassCard>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Kicker>{`Théorie pas encore vue · ${unseen.length}`}</Kicker>
+        {unseen.slice(0, 6).map((item) => (
+          <TheoryTick key={item.id} item={item} onToggle={() => { item.watchedAt = new Date(); void save?.(item); bump((n) => n + 1); }} />
+        ))}
+      </div>
+    </GlassCard>
   );
 }
 
@@ -282,6 +363,7 @@ export function DeskHome({ course, courses, classes, timer, save, onOpenPane }: 
       {header}
       {grid(
         <>
+          {course && klass && <RepereCard course={course} classStart={klass.slot.start} now={timer.now} />}
           <GlassCard>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -410,6 +492,8 @@ export function DeskHome({ course, courses, classes, timer, save, onOpenPane }: 
             </GlassCard>
           )}
 
+          {course && <PastExamsCard course={course} />}
+          {course && <UnseenTheoryCard course={course} save={save} />}
           {due.length > 0 ? (
             <button
               type="button"

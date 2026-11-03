@@ -61,23 +61,27 @@ function useConversation(key: string | null, make: () => Conversation): Conversa
   return conversation;
 }
 
-export function ClaudePane({ course, series, exercise, tint }: {
+export function ClaudePane({ course, series, exercise, tint, general = false, context = "" }: {
   course: Course | null; series: ExerciseSeries | null; exercise: Exercise | null; tint: string;
+  /** La page « Claude » : une conversation libre (le semestre en contexte), sans série. */
+  general?: boolean; context?: string;
 }) {
   const [installed, setInstalled] = useState<boolean | null>(null);
   useEffect(() => { void claudeSetup().then((info) => setInstalled(info?.found ?? false)); }, []);
   // Claude Code sur le PC : Claude par l'abonnement. Sinon : le tuteur gratuit du serveur.
   const free = installed === false;
-  const key = series && installed !== null ? `series:${series.id}:${free ? "free" : "claude"}` : null;
+  const key = installed === null ? null
+    : general ? `general:${free ? "free" : "claude"}`
+    : series ? `series:${series.id}:${free ? "free" : "claude"}` : null;
   const conversation = useConversation(key, () => free
     ? new FreeTutorConversation(key!)
-    : new ClaudeConversation(key!, ClaudeTutor.sessionID(series!.id, "isolated"), ClaudeTutor.systemPrompt("tutor")));
+    : new ClaudeConversation(key!, ClaudeTutor.sessionID(general ? "general" : series!.id, "isolated"), ClaudeTutor.systemPrompt("tutor")));
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement | null>(null);
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }, [conversation?.messages.length, conversation?.messages[conversation.messages.length - 1]?.text]);
 
-  if (!course || !series || !conversation) {
-    return <div className="bf-center">Choisis une série : Claude t'accompagne exercice par exercice.</div>;
+  if (!conversation || (!general && (!course || !series))) {
+    return <div className="bf-center">{installed === null ? "…" : "Choisis une série : Claude t'accompagne exercice par exercice."}</div>;
   }
 
   const send = async (shown: string) => {
@@ -86,6 +90,12 @@ export function ClaudePane({ course, series, exercise, tint }: {
     setText("");
     let prefix = "";
     const attachments = [];
+    if (general || !course || !series) {
+      // La page Claude : le semestre en contexte au premier message, puis la conversation.
+      const opening = conversation.messages.length === 0 && context ? `[StudyTrack]\n${context}\n[/StudyTrack]\n\n` : "";
+      await conversation.send(value, opening + value);
+      return;
+    }
     if (conversation.messages.length === 0) {
       // Le début : la série entière (et son PDF s'il est sur l'appareil), l'exercice en cours.
       // Claude lit le PDF joint ; le tuteur gratuit en reçoit le texte.
@@ -111,7 +121,7 @@ export function ClaudePane({ course, series, exercise, tint }: {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div className="bf-page-bar">
         <Icon name="sparkles" size={15} />
-        <span className="bf-trail" style={{ color: "var(--ink)" }}>{free ? "Tuteur" : "Claude"} · {series.title || `Série ${series.seriesNumber}`}{exercise ? ` · ${exercise.displayNumber}` : ""}</span>
+        <span className="bf-trail" style={{ color: "var(--ink)" }}>{free ? "Tuteur" : "Claude"}{series ? ` · ${series.title || `Série ${series.seriesNumber}`}` : ""}{exercise ? ` · ${exercise.displayNumber}` : ""}</span>
         {free && (
           <button type="button" className="link-btn" title="Claude (par ton abonnement) répond mieux et lit le PDF de la série"
             onClick={() => { void openInApp("https://claude.com/product/claude-code", "Claude Code"); }}>
@@ -123,14 +133,14 @@ export function ClaudePane({ course, series, exercise, tint }: {
       <div ref={scroller} style={{ flex: 1, overflowY: "auto", padding: "18px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
         {conversation.messages.length === 0 && (
           <div style={{ color: "var(--ink-secondary)", fontSize: 14, maxWidth: 560 }}>
-            Pose ta question, ou commence par une action ci-dessous. Claude a la série{exercise ? `, ${exercise.displayNumber}` : ""} et ce que tu as coché ; il guide plutôt que de donner la réponse.
+            {general ? "Pose ta question : Claude connaît tes cours et ce qui t'attend cette semaine." : <>Pose ta question, ou commence par une action ci-dessous. Claude a la série{exercise ? `, ${exercise.displayNumber}` : ""} et ce que tu as coché ; il guide plutôt que de donner la réponse.</>}
           </div>
         )}
         {conversation.messages.map((message, index) => <Bubble key={index} message={message} tint={tint} />)}
         {conversation.error && <div style={{ color: "var(--wrong)", fontSize: 13 }}>{conversation.error}</div>}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "0 18px 8px" }}>
-        {Object.values(ClaudeTutor.quickActions).map((action) => (
+        {!general && Object.values(ClaudeTutor.quickActions).map((action) => (
           <button key={action.label} type="button" className="btn" disabled={conversation.busy} onClick={() => { void send(action.prompt); }}>
             {action.label}
           </button>
