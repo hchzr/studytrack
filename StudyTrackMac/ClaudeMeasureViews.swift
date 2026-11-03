@@ -89,7 +89,6 @@ struct ClaudeMeasureSettingsPane: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
         .onAppear {
             draft = service.desired
             service.refreshUsage(force: true)

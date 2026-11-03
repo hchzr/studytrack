@@ -29,6 +29,8 @@ struct ProfileView: View {
     @State private var showingReset = false
     @State private var showingDeleteAccount = false
     @State private var csvURL: URL?
+    /// La ligne « Avancé » de l'accueil, retenue (les mêmes réglages rares que sur le Mac et Windows).
+    @AppStorage("settings.advanced.home") private var showingAdvanced = false
 
     /// Poussé depuis l'onglet Moi (sans pile ni « Fermer »), ou présenté seul.
     var isEmbedded = false
@@ -59,9 +61,12 @@ struct ProfileView: View {
                     storeSection
                     identitySection(app.settings)
                     studiesSection(app.settings)
+                    studyToolsSection
                     accountsHubSection
-                    toolsSection
-                    remindersAndDataSection(app.settings)
+                    aiSection
+                    generalSection(app.settings)
+                    AdvancedSettingsToggle(isOn: $showingAdvanced, summary: "Anki, tâches, hors ligne, données et sauvegarde, revoir l'accueil.")
+                    if showingAdvanced { advancedSection }
                     aboutSection
                 }
                 .listRowBackground(Carnet.sheet)
@@ -172,13 +177,80 @@ struct ProfileView: View {
                 settingsRow("Synchronisation", icon: "arrow.triangle.2.circlepath",
                             value: app.supabaseSync.isEnabled ? "activée" : nil)
             }
+            NavigationLink {
+                subpage("Spotify") { SpotifySettingsSection() }
+            } label: {
+                settingsRow("Spotify", icon: "music.note",
+                            value: SpotifyAccount.shared.state == .ready ? "connecté" : nil)
+            }
         } header: {
             CarnetFormHeader("Comptes")
         }
     }
 
-    /// Les outils reliés : Anki, tâches, assistant, IA de lecture, chrono.
-    private var toolsSection: some View {
+    /// Le chrono et le mode étude.
+    private var studyToolsSection: some View {
+        Section {
+            NavigationLink {
+                subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
+            } label: {
+                settingsRow("Chrono et Pomodoro", icon: "timer",
+                            value: "\(app.settings.pomodoro.focusMinutes) / \(app.settings.pomodoro.shortBreakMinutes) min")
+            }
+            NavigationLink {
+                StudyModeSettingsView()
+            } label: {
+                settingsRow("Mode étude", icon: "moon.stars",
+                            value: !StudyLock.isAvailable ? "sans blocage" : StudyLock.shared.isAuthorized ? Plural.count(StudyLock.shared.allowedAppCount, "\(StudyLock.shared.allowedAppCount) app permise", "\(StudyLock.shared.allowedAppCount) apps permises") : "à configurer")
+            }
+        } header: {
+            CarnetFormHeader("Chrono")
+        }
+    }
+
+    /// Claude et l'IA : l'assistant (Claude ou le tuteur gratuit), l'IA qui lit les cours.
+    private var aiSection: some View {
+        Section {
+            NavigationLink {
+                AssistantSettingsView()
+            } label: {
+                settingsRow("Assistant IA", icon: "bubble.left.and.text.bubble.right",
+                            value: app.settings.assistantToken.isEmpty ? "non relié" : "relié")
+            }
+            NavigationLink {
+                AIImportSettingsView()
+            } label: {
+                settingsRow("IA de lecture", icon: "sparkles",
+                            value: app.settings.aiExtractionEnabled ? "activée" : "désactivée")
+            }
+        } header: {
+            CarnetFormHeader("Claude et IA")
+        }
+    }
+
+    /// Général : l'école, la langue, la fiche (Personnaliser) et les notifications.
+    private func generalSection(_ settings: SettingsStore) -> some View {
+        Section {
+            NavigationLink {
+                PersonalizeView()
+            } label: {
+                settingsRow("École, langue et fiche", icon: "slider.horizontal.3", value: Institution.current.name)
+            }
+            NavigationLink {
+                subpage("Notifications") {
+                    MoodleNewsSettingsSections()
+                    notificationsSection(settings)
+                }
+            } label: {
+                settingsRow("Notifications", icon: "bell", value: notificationsSummary(settings))
+            }
+        } header: {
+            CarnetFormHeader("Général")
+        }
+    }
+
+    /// Avancé : ce qu'on ouvre rarement — rien n'est supprimé, tout est là.
+    private var advancedSection: some View {
         let tasks = TaskServiceFactory.shared.configuredServices(settings: app.settings)
         return Section {
             NavigationLink {
@@ -194,55 +266,10 @@ struct ProfileView: View {
                             value: tasks.isEmpty ? "aucune" : tasks.map(\.provider.label).joined(separator: ", "))
             }
             NavigationLink {
-                AssistantSettingsView()
-            } label: {
-                settingsRow("Assistant IA", icon: "bubble.left.and.text.bubble.right",
-                            value: app.settings.assistantToken.isEmpty ? "non relié" : "relié")
-            }
-            NavigationLink {
-                AIImportSettingsView()
-            } label: {
-                settingsRow("IA de lecture", icon: "sparkles",
-                            value: app.settings.aiExtractionEnabled ? "activée" : "désactivée")
-            }
-            NavigationLink {
                 OfflineSettingsView()
             } label: {
                 settingsRow("Hors ligne", icon: "arrow.down.circle",
                             value: app.settings.offlineEnabled ? OfflinePlan.label(bytes: OfflineLibrary.shared.usedBytes) : "désactivé")
-            }
-            NavigationLink {
-                PersonalizeView()
-            } label: {
-                settingsRow("Personnaliser", icon: "slider.horizontal.3", value: Institution.current.name)
-            }
-            NavigationLink {
-                StudyModeSettingsView()
-            } label: {
-                settingsRow("Mode étude", icon: "moon.stars",
-                            value: !StudyLock.isAvailable ? "sans blocage" : StudyLock.shared.isAuthorized ? Plural.count(StudyLock.shared.allowedAppCount, "\(StudyLock.shared.allowedAppCount) app permise", "\(StudyLock.shared.allowedAppCount) apps permises") : "à configurer")
-            }
-            NavigationLink {
-                subpage("Chrono et Pomodoro") { PomodoroSettingsForm(settings: app.settings) }
-            } label: {
-                settingsRow("Chrono et Pomodoro", icon: "timer",
-                            value: "\(app.settings.pomodoro.focusMinutes) / \(app.settings.pomodoro.shortBreakMinutes) min")
-            }
-        } header: {
-            CarnetFormHeader("Outils")
-        }
-    }
-
-    /// Rappels et données : deux pages, rarement ouvertes.
-    private func remindersAndDataSection(_ settings: SettingsStore) -> some View {
-        Section {
-            NavigationLink {
-                subpage("Notifications") {
-                    MoodleNewsSettingsSections()
-                    notificationsSection(settings)
-                }
-            } label: {
-                settingsRow("Notifications", icon: "bell", value: notificationsSummary(settings))
             }
             NavigationLink {
                 subpage("Données") { dataSection }

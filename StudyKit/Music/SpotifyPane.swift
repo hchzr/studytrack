@@ -274,3 +274,39 @@ private struct SpotifyLinkField: View {
         link = ""
     }
 }
+
+/// Réglages › Comptes › Spotify : l'état de la session, s'y connecter, s'en déconnecter.
+struct SpotifySettingsSection: View {
+    @State private var account = SpotifyAccount.shared
+    @State private var signingIn = false
+
+    var body: some View {
+        Section {
+            HStack {
+                Label("Spotify", systemImage: "music.note")
+                Spacer()
+                switch account.state {
+                case .ready:
+                    Text("Connecté").foregroundStyle(Carnet.inkSecondary)
+                case .checking, .unknown:
+                    ProgressView().controlSize(.small)
+                case .signedOut:
+                    Text("Non connecté").foregroundStyle(Carnet.inkSecondary)
+                case .failed:
+                    Text("À reconnecter").foregroundStyle(Carnet.review)
+                }
+            }
+            if account.state == .ready {
+                Button("Se déconnecter de Spotify", role: .destructive) { Task { await account.signOut() } }
+            } else {
+                Button("Se connecter à Spotify…") { signingIn = true }
+            }
+        } footer: {
+            Text("Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web ; ton mot de passe reste chez Spotify.")
+        }
+        .task { if account.state == .unknown { await account.refresh() } }
+        .sheet(isPresented: $signingIn) {
+            SpotifySignInSheet { signingIn = false; Task { await account.refresh() } }
+        }
+    }
+}

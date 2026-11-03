@@ -1,56 +1,54 @@
-// Compte et synchronisation — le pendant Windows de `SyncSettings` (Mac) et de
-// `ConnectionsView` (iPhone). Rien n'est branché pour l'instant : on affiche
-// l'état réel (base locale, aucun compte) et on ne propose aucun bouton qui
-// ferait semblant de se connecter.
+// Réglages › Comptes : les sites des cours (une fenêtre de connexion chacun, la session reste dans
+// l'app), et Spotify. Le compte StudyTrack et la synchronisation sont juste au-dessus
+// (`SyncSection`). Le pendant de `ConnectionsView` (iPhone) et de « Comptes » (Mac).
 
-import { Badge, Section, Card } from "../../kit.tsx";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Button, Card, Section } from "../../kit.tsx";
+import { Institution } from "../../../domain/institution.ts";
+import { MoodleClient } from "../../../services/moodleClient.ts";
+import { coursewareSignIn } from "../../../services/coursewareClient.ts";
+import { mediaspaceSignIn } from "../../../services/mediaspace.ts";
+import { edSignIn } from "../../../services/edClient.ts";
+import { spotifyAccount } from "../../../services/spotifyAccount.ts";
 import { SettingRow } from "./controls.tsx";
 
-const CONNECTIONS: readonly { title: string; purpose: string; status: string }[] = [
-  { title: "Moodle", purpose: "Séries, énoncés, théorie et échéances, mis à jour tout seuls", status: "Pas connecté·e" },
-  { title: "Courseware", purpose: "Vidéos des MOOC que les cours demandent de regarder", status: "Pas connecté·e" },
-  { title: "Explique", purpose: "Cours en replay et exercices d'AICC (CS-101)", status: "Pas connecté·e" },
-  { title: "MediaSpace", purpose: "Enregistrements des cours, lus dans l'app", status: "Pas connecté·e" },
-  { title: "AnkiWeb", purpose: "Cartes, révisions et temps de révision", status: "Facultatif" },
-  { title: "Calendrier", purpose: "Ton horaire et tes sessions dans l'agenda", status: "Accès à autoriser" },
-];
+interface Site { title: string; purpose: string; open: () => Promise<void> }
 
-function ConnectionCard({ title, purpose, status }: { title: string; purpose: string; status: string }) {
-  return (
-    <Card className="settings-connection">
-      <h3>{title}</h3>
-      <p>{purpose}</p>
-      <Badge>{status}</Badge>
-    </Card>
-  );
+function sites(): Site[] {
+  return [
+    { title: `Moodle (${Institution.current.name})`, purpose: "Séries, énoncés, théorie et échéances, mis à jour tout seuls.", open: () => MoodleClient.openLogin() },
+    { title: "Courseware", purpose: "Les vidéos et exercices des MOOC des cours.", open: coursewareSignIn },
+    { title: "MediaSpace", purpose: "Les enregistrements des cours, lus dans l'app.", open: mediaspaceSignIn },
+    { title: "Ed Discussion", purpose: "Les questions et réponses des cours.", open: edSignIn },
+  ];
 }
 
 export function AccountSection() {
+  const [error, setError] = useState<string | null>(null);
+  const spotify = useSyncExternalStore(spotifyAccount.subscribe, spotifyAccount.get);
+  useEffect(() => { if (spotify.state.kind === "unknown") void spotifyAccount.refresh(); }, [spotify.state.kind]);
+  const run = (action: () => Promise<void>) => { setError(null); action().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))); };
   return (
     <>
-      <Section title="Compte">
+      <Section title="Sites des cours">
         <Card>
-          <SettingRow label="Base" hint="Les données de cette installation : la base locale, synchronisée si tu l'as activée.">
-            <span className="settings-value">locale</span>
-          </SettingRow>
-          <SettingRow label="Compte StudyTrack" hint="Groupes indisponibles dans cette version.">
-            <span className="settings-value">aucun</span>
+          {sites().map((site) => (
+            <SettingRow key={site.title} label={site.title} hint={site.purpose}>
+              <Button size="sm" onClick={() => run(site.open)}>Se connecter…</Button>
+            </SettingRow>
+          ))}
+        </Card>
+        <p className="settings-footnote">Une fois suffit : la session reste dans l'app. Ton mot de passe ne passe que par la page de ton école.</p>
+      </Section>
+      <Section title="Services">
+        <Card>
+          <SettingRow label="Spotify" hint="Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web.">
+            {spotify.state.kind === "ready"
+              ? <Button size="sm" onClick={() => run(() => spotifyAccount.signOut())}>Se déconnecter</Button>
+              : <Button size="sm" onClick={() => run(() => spotifyAccount.signIn())}>Se connecter…</Button>}
           </SettingRow>
         </Card>
-        <p className="settings-footnote">
-          Les données restent sur cet appareil ; la synchronisation se règle juste au-dessus. Les groupes se brancheront plus tard.
-        </p>
-      </Section>
-
-      <Section title="Connexions aux sites">
-        <div className="settings-connections">
-          {CONNECTIONS.map((connection) => (
-            <ConnectionCard key={connection.title} {...connection} />
-          ))}
-        </div>
-        <p className="settings-footnote">
-          Lecture seule pour l'instant : les connexions s'ouvriront depuis cet écran dans une prochaine version.
-        </p>
+        {error && <p className="settings-error">{error}</p>}
       </Section>
     </>
   );

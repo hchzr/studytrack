@@ -53,9 +53,8 @@ private func personalizeHeader(_ title: String) -> some View {
     #else
     // `ui:` : le titre se lit dans le catalogue (« École » → « School ») —
     // un `Text(title)` nu affichait le français tel quel en anglais.
+    // Les en-têtes des réglages du Mac (« Session », « Sur ce Mac »…) : ceux du système, partout.
     Text(ui: title)
-        .font(Carnet.serif(.title3))
-        .foregroundStyle(Carnet.ink)
     #endif
 }
 
@@ -347,9 +346,9 @@ struct NotebookLMSection: View {
         Section {
             Toggle("NotebookLM", isOn: $enabled)
         } header: {
-            personalizeHeader("Fiche")
+            personalizeHeader("Fiche de révision")
         } footer: {
-            Text("Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. StudyTrack ne se connecte jamais à Google.")
+            Text("Ajoute l'onglet « Écouter » à la fiche : la fiche part dans NotebookLM et le podcast s'écoute ici. La connexion à Google est facultative (sinon, export manuel).")
         }
     }
 }

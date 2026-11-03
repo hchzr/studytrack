@@ -66,6 +66,17 @@ enum MacDebugLaunch {
                     content = AnyView(PersonalizeForm().modelContainer(memory).frame(width: 520).padding(.vertical, 12))
                     size = NSSize(width: 560, height: 900)
 
+                case let page where page.hasPrefix("settings-"):
+                    // Réglages › une page (`settings-general|chrono|study|accounts|claude`), avancé ouvert
+                    // avec `-advanced`.
+                    let key = String(page.dropFirst("settings-".count))
+                    UserDefaults.standard.set(key, forKey: "settings.page")
+                    UserDefaults.standard.set(CommandLine.arguments.contains("-advanced"), forKey: "settings.advanced.\(key)")
+                    let settings = StudyModeController.shared.settings ?? MacSettings()
+                    content = AnyView(MacSettingsView()
+                        .environment(settings).environment(timer).environment(settings.shared).environment(store)
+                        .modelContainer(store.container))
+                    size = NSSize(width: 760, height: CommandLine.arguments.contains("-advanced") ? 1100 : 580)
                 default: content = AnyView(ClaudeMeasureSettingsPane()); size = NSSize(width: 520, height: 560)
                 }
                 let hosting = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(Carnet.ground))

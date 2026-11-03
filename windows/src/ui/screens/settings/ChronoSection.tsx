@@ -37,10 +37,25 @@ const KEEP_AWAKE_FOOTER: Record<KeepAwakeMode, string> = {
   display: "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le PC.",
 };
 
+/** « Garder éveillé » (Réglages › Mode étude). */
+export function KeepAwakeRow() {
+  const [keepAwake, setKeepAwake] = useState<KeepAwakeMode>(readKeepAwakeMode);
+  return (
+    <SettingRow label="Garder éveillé" hint={KEEP_AWAKE_FOOTER[keepAwake]}>
+      <Select<KeepAwakeMode> value={keepAwake} ariaLabel="Garder éveillé"
+        options={[
+          { value: "off", label: "Non" },
+          { value: "system", label: "Le PC" },
+          { value: "display", label: "Le PC et l'écran" },
+        ]}
+        onChange={(value) => { writeKeepAwakeMode(value); setKeepAwake(value); }} />
+    </SettingRow>
+  );
+}
+
 export function ChronoSection() {
   const [settings, setSettings] = useState<Settings>(() => readFocusSettings());
   const [floating, setFloating] = useState(readFloatingTimer);
-  const [keepAwake, setKeepAwake] = useState<KeepAwakeMode>(readKeepAwakeMode);
   const { cycle } = settings;
 
   const setNumber = (key: string, apply: (current: Settings) => Settings) => (value: number) => {
@@ -105,20 +120,11 @@ export function ChronoSection() {
         </Card>
         <p className="settings-footnote">Les nouvelles durées s'appliquent à la prochaine session.</p>
       </Section>
-      <Section title="Fenêtre et veille">
+      <Section title="Fenêtre">
         <Card>
           <SettingRow label="Chrono flottant" hint="Une petite fenêtre au-dessus des autres pendant une session.">
             <Switch checked={floating} ariaLabel="Chrono flottant"
               onChange={(value) => { writeFloatingTimer(value); setFloating(value); }} />
-          </SettingRow>
-          <SettingRow label="Garder éveillé" hint={KEEP_AWAKE_FOOTER[keepAwake]}>
-            <Select<KeepAwakeMode> value={keepAwake} ariaLabel="Garder éveillé"
-              options={[
-                { value: "off", label: "Non" },
-                { value: "system", label: "Le PC" },
-                { value: "display", label: "Le PC et l'écran" },
-              ]}
-              onChange={(value) => { writeKeepAwakeMode(value); setKeepAwake(value); }} />
           </SettingRow>
         </Card>
       </Section>

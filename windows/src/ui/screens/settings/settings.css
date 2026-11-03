@@ -93,3 +93,27 @@ ol.settings-hint { margin: 0; padding-left: 18px; font-size: 12px; color: var(--
 .link-btn:disabled { opacity: 0.5; cursor: default; }
 .account-apple { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
 .account-apple:hover:not(:disabled) { background: var(--ink); opacity: 0.88; }
+
+/* Les pages des réglages : une colonne à gauche, la page à droite (comme le Mac). */
+.settings-layout { display: flex; gap: 28px; align-items: flex-start; }
+.settings-nav { position: sticky; top: 0; flex: none; width: 190px; display: flex; flex-direction: column; gap: 2px; padding-top: 18px; }
+.settings-nav-item {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-radius: var(--radius-row); color: var(--ink-secondary); font-size: 14px; cursor: pointer;
+}
+.settings-nav-item:hover { background: var(--hover); color: var(--ink); }
+.settings-nav-item[aria-current="page"] { background: var(--selection); color: var(--ink); font-weight: 600; }
+.settings-nav-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.settings-layout .settings-screen { flex: 1; min-width: 0; }
+.settings-advanced {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 22px;
+  padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--sheet); cursor: pointer; color: var(--ink-secondary);
+}
+.settings-advanced:hover { border-color: var(--rule-strong); }
+.settings-advanced:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.settings-advanced-text { flex: 1; display: flex; flex-direction: column; }
+.settings-advanced-text .settings-hint { margin-top: 2px; }
+@media (max-width: 760px) {
+  .settings-layout { flex-direction: column; gap: 8px; }
+  .settings-nav { position: static; width: 100%; flex-direction: row; flex-wrap: wrap; padding-top: 8px; }
+}

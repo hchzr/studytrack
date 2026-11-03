@@ -16,7 +16,7 @@ import {
   Landmark, ListOrdered, GalleryVerticalEnd, BadgeCheck, MoonStar, FastForward, PictureInPicture2,
   ListChecks, MonitorPlay, Minus, Equal, CircleHelp, ClipboardPaste, FilePlus, FileSearch, ScanSearch,
   SquareDashed, StarOff, CopyPlus, IndentIncrease, IndentDecrease, AlignLeft, ListPlus, CirclePlus, FileScan,
-  Shuffle, Repeat1, SkipBack, Volume1, ListMusic, Laptop, Smartphone, Tablet, Speaker, Tv, ChevronsUpDown,
+  SlidersHorizontal, Shuffle, Repeat1, SkipBack, Volume1, ListMusic, Laptop, Smartphone, Tablet, Speaker, Tv, ChevronsUpDown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,7 +39,7 @@ const ICONS = {
   "play.fill": Play, "pause.fill": Pause, "stop.fill": Square, "forward.end.fill": SkipForward,
   "clock": Clock, "alarm": AlarmClock, "hourglass": Hourglass, "cup.and.saucer": Coffee,
   "moon": Moon, "lock": Lock, "lock.open": LockOpen, "target": Target, "bolt": Zap, "calendar.badge.clock": CalendarClock,
-  "music.note": Music, "shuffle": Shuffle, "repeat.1": Repeat1, "backward.fill": SkipBack, "speaker.fill": Volume1,
+  "music.note": Music, "slider.horizontal.3": SlidersHorizontal, "shuffle": Shuffle, "repeat.1": Repeat1, "backward.fill": SkipBack, "speaker.fill": Volume1,
   "speaker.wave.3.fill": Volume2, "music.note.list": ListMusic, "laptopcomputer": Laptop, "iphone": Smartphone, "ipad": Tablet,
   "hifispeaker": Speaker, "tv": Tv, "chevron.up.chevron.down": ChevronsUpDown, "speaker.wave.2": Volume2, "speaker.slash": VolumeX, "wifi": Wifi, "battery.75": Battery,
   "face.smiling": Smile, "heart": Heart, "lightbulb": Lightbulb, "square.stack.3d.up": Layers,
