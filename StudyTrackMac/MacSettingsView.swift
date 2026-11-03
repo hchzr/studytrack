@@ -69,6 +69,7 @@ private struct GeneralSettings: View {
         @Bindable var settings = settings
         Form {
             SchoolSection()
+            TimetableSettingsSection(settings: settings.shared)
             Section {
                 Toggle("Ouvrir StudyTrack à la connexion", isOn: Binding(
                     get: { _ = settings.launchAtLoginRevision; return settings.launchAtLogin },

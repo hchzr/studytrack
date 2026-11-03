@@ -373,11 +373,12 @@ struct ProfileView: View {
 
     // MARK: Calendrier
 
+    @ViewBuilder
     private func calendarSection(_ settings: SettingsStore) -> some View {
-        @Bindable var settings = settings
-        return Section {
+        TimetableSettingsSection(settings: settings)
+        Section {
             HStack {
-                Label(app.calendar.hasAccess ? "Calendrier autorisé" : "Calendrier non autorisé",
+                Label(app.calendar.hasAccess ? "Calendrier de l'iPhone relié" : "Calendrier de l'iPhone",
                       systemImage: "calendar")
                 Spacer()
                 Button(app.calendar.hasAccess ? "Synchroniser" : "Autoriser") {
@@ -386,19 +387,13 @@ struct ProfileView: View {
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.borderless)
             }
-
-            TextField("Flux iCalendar de ton horaire", text: $settings.timetableURLString)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-
             Button {
                 showingImport = true
             } label: {
-                Label("Importer un horaire / JSON / CSV", systemImage: "square.and.arrow.down")
+                Label("Importer des cours (JSON, CSV)", systemImage: "square.and.arrow.down")
             }
-        } header: {
-            CarnetFormHeader("Horaire")
+        } footer: {
+            Text("Si ton horaire est déjà abonné dans le calendrier de l'iPhone, StudyTrack peut le lire.")
         }
     }
 
