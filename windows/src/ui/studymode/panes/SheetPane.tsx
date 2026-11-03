@@ -6,6 +6,11 @@
 import type { Course } from "../../../models/course.ts";
 import { RevisionSheet, RevisionEntryKind } from "../../../domain/revisionSheet.ts";
 import { useState } from "react";
+import { Segmented } from "../../kit.tsx";
+import { StudyMap } from "../../../domain/studyMap.ts";
+import { ConceptPanel, LearningPathView, MindMapView, readStudyMap, updateStudyMap } from "../../studymap/StudyMapViews.tsx";
+
+type SheetTab = "fiche" | "carte" | "parcours";
 import { RichInline } from "../../rich/RichText.tsx";
 import { makeRevisionSheet } from "../../../services/revisionSheetMaker.ts";
 import { openInApp } from "../openers.ts";
@@ -30,6 +35,9 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
   const [making, setMaking] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [, bump] = useState(0);
+  const [tab, setTab] = useState<SheetTab>("fiche");
+  const [chapter, setChapter] = useState<string | null>(null);
+  const [concept, setConcept] = useState<string | null>(null);
   const make = async () => {
     if (!course || making) return;
     setFailure(null);
@@ -54,9 +62,16 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
   }
   const tint = tintOfCourse(course);
   const sheet = RevisionSheet.decode(course.revisionSheetRaw);
+  const map = readStudyMap(course);
+  const change = (edit: (map: StudyMap) => void) => {
+    if (!save) return;
+    updateStudyMap(course, save, edit);
+    bump((n) => n + 1);
+  };
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: "24px 28px 40px" }}>
+    <div style={{ height: "100%", display: "flex", minHeight: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "24px 28px 40px" }}>
       <div style={{ maxWidth: 820, display: "flex", flexDirection: "column", gap: 22 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <Kicker color={tint}>{course.displayCode} · Fiche</Kicker>
@@ -73,10 +88,31 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
           )}
         </div>
 
+        {sheet !== null && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <Segmented<SheetTab> ariaLabel="Vue de la fiche" value={tab} onChange={setTab}
+              options={[{ value: "fiche", label: "Fiche" }, { value: "carte", label: "Carte" }, { value: "parcours", label: "Parcours" }]} />
+            {sheet.chapters.length > 1 && (
+              <select className="select" value={chapter ?? ""} onChange={(event) => setChapter(event.target.value || null)} aria-label="Chapitre">
+                <option value="">Tout le cours</option>
+                {sheet.chapters.filter((item) => item.entries.length > 0).map((item) => <option key={item.id} value={item.id}>{item.title.replace(/\$/g, "")}</option>)}
+              </select>
+            )}
+          </div>
+        )}
+
+        {sheet !== null && tab === "parcours" && (
+          <LearningPathView sheet={sheet} map={map} chapter={chapter} tint={tint} openConcept={setConcept} selectChapter={setChapter} />
+        )}
+        {sheet !== null && tab === "carte" && (
+          <MindMapView sheet={sheet} map={map} courseTitle={course.name} chapter={chapter} tint={tint} openConcept={setConcept}
+            toggleCollapsed={(id) => change((m) => { if (m.collapsed.has(id)) m.collapsed.delete(id); else m.collapsed.add(id); })} />
+        )}
+
         {making && <div style={{ fontSize: 13, color: "var(--ink-secondary)" }}>{making}</div>}
         {failure && <div style={{ fontSize: 13, color: "var(--wrong)" }}>{failure}</div>}
 
-        {sheet === null ? (
+        {tab !== "fiche" && sheet !== null ? null : sheet === null ? (
           // Pas de fiche : le dire, et comment en avoir une.
           <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
             <span className="serif" style={{ fontSize: 26, color: "var(--ink)" }}>Pas encore de fiche</span>
@@ -136,6 +172,11 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
           ))
         )}
       </div>
+    </div>
+    {sheet !== null && concept !== null && (
+      <ConceptPanel sheet={sheet} map={map} conceptKey={concept} tint={tint} openConcept={setConcept} close={() => setConcept(null)}
+        setMastery={(level) => change((m) => { m.progress[concept] = { level, at: new Date() }; })} />
+    )}
     </div>
   );
 }
