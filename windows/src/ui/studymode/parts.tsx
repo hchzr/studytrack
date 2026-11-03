@@ -273,8 +273,10 @@ export function SmallRing({ progress, tint, size = 24 }: { progress: number; tin
  * `HoldToActButton` de StudyKit). Un clic simple ne fait rien tant qu'on n'a
  * pas tenu ; un appui bref dit quoi faire.
  */
-export function HoldButton({ title, glyph, hold, onAct, tint }: {
+export function HoldButton({ title, glyph, hold, onAct, tint, help }: {
   title: string;
+  /** L'infobulle ; par défaut « Maintiens N s » (ou le titre sans maintien). */
+  help?: string;
   glyph: string;
   /** Secondes à tenir ; `0` : un clic suffit. */
   hold: number;
@@ -322,7 +324,7 @@ export function HoldButton({ title, glyph, hold, onAct, tint }: {
     <button
       type="button"
       className="btn hold-btn"
-      title={hold > 0 ? `Maintiens ${Math.trunc(hold)} s` : title}
+      title={help ?? (hold > 0 ? `Maintiens ${Math.trunc(hold)} s` : title)}
       onMouseDown={begin}
       onMouseUp={stop}
       onMouseLeave={stop}

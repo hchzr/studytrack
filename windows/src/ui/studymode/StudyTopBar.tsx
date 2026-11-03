@@ -14,6 +14,7 @@ import { timerController } from "../timerController.ts";
 import type { StudyTimerApi } from "./useStudyTimer.ts";
 import { Icon, IconButton, type IconName, type MenuItem } from "../kit.tsx";
 import { openWebURL } from "./openers.ts";
+import { releaseStudyLock } from "../../native/studyLock.ts";
 import { CourseTag, DropMenu, Glyph, HoldButton, SmallRing } from "./parts.tsx";
 
 /** La forme du bureau : le chrono continue, le temps déjà compté reste. */
@@ -226,7 +227,12 @@ export function StudyTopBar({ course, tint, moment, timer, headline, sideOpen, o
               glyph="exclamationmark.triangle"
               hold={StudyMode.emergencyHold}
               tint="var(--wrong)"
-              onAct={() => { void timerController.finish({ emergency: true }); }}
+              help={`Maintiens ${Math.trunc(StudyMode.emergencyHold)} secondes : la session s'enregistre, notée « sortie d'urgence », et l'écran est rendu.`}
+              onAct={() => {
+                // L'écran d'abord : la sortie d'urgence ne doit dépendre de rien d'autre.
+                void releaseStudyLock();
+                void timerController.finish({ emergency: true });
+              }}
             />
           </>
         ) : (

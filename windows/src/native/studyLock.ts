@@ -61,6 +61,15 @@ export interface StudyLockTimer {
   until(): Date | null;
 }
 
+/**
+ * Sortie d'urgence : rend l'écran tout de suite, sans attendre que le chrono se termine
+ * (s'il échoue à s'enregistrer, l'écran est quand même rendu). Sans effet hors de l'app.
+ */
+export async function releaseStudyLock(): Promise<void> {
+  await callNative("study_lock_stop");
+  publish(null);
+}
+
 export function startStudyLock(timer: StudyLockTimer, now: () => Date = () => new Date()): () => void {
   let active = false;
   let wake: ReturnType<typeof setTimeout> | null = null;
