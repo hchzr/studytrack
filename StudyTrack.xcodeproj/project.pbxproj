@@ -29,6 +29,7 @@
 		F30000000000000000000012 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000012 /* SupabaseClient.swift */; };
 		F30000000000000000000013 /* SupabaseSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000013 /* SupabaseSessionStore.swift */; };
 		F30000000000000000000014 /* SupabaseSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000014 /* SupabaseSync.swift */; };
+		F30000000000000000000015 /* SupabaseOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000015 /* SupabaseOAuth.swift */; };
 		F30000000000000000000011 /* CourseEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011 /* CourseEvidence.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
@@ -121,6 +122,7 @@
 		F20000000000000000000012 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseClient.swift; path = StudyTrack/Services/SupabaseClient.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000013 /* SupabaseSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSessionStore.swift; path = StudyTrack/Services/SupabaseSessionStore.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000014 /* SupabaseSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSync.swift; path = StudyTrack/Services/SupabaseSync.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000015 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseOAuth.swift; path = StudyTrack/Services/SupabaseOAuth.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000011 /* CourseEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseEvidence.swift; path = StudyTrack/Services/CourseEvidence.swift; sourceTree = SOURCE_ROOT; };
 		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -250,6 +252,7 @@
 				F2000000000000000000000F /* WebContentScraper.swift */,
 				F20000000000000000000011 /* CourseEvidence.swift */,
 				F20000000000000000000010 /* ConnectionCenter.swift */,
+				F20000000000000000000015 /* SupabaseOAuth.swift */,
 				F20000000000000000000012 /* SupabaseClient.swift */,
 				F20000000000000000000013 /* SupabaseSessionStore.swift */,
 				F20000000000000000000014 /* SupabaseSync.swift */,
@@ -545,6 +548,7 @@
 				F3000000000000000000000F /* WebContentScraper.swift in Sources */,
 				F30000000000000000000011 /* CourseEvidence.swift in Sources */,
 				F30000000000000000000010 /* ConnectionCenter.swift in Sources */,
+				F30000000000000000000015 /* SupabaseOAuth.swift in Sources */,
 				F30000000000000000000012 /* SupabaseClient.swift in Sources */,
 				F30000000000000000000013 /* SupabaseSessionStore.swift in Sources */,
 				F30000000000000000000014 /* SupabaseSync.swift in Sources */,

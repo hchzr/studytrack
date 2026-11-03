@@ -47,7 +47,8 @@ export function SyncSection() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   /** Le geste en vol, pour désactiver les boutons le temps qu'il finisse. */
-  const [busy, setBusy] = useState<"in" | "up" | "sync" | null>(null);
+  const [busy, setBusy] = useState<"in" | "up" | "sync" | "google" | null>(null);
+  const [providers, setProviders] = useState<string[]>([]);
 
   useEffect(() => {
     // L'état vient du service (asynchrone : la session se relit), et chaque
@@ -56,6 +57,27 @@ export function SyncSection() {
     refresh();
     return syncService.subscribe(refresh);
   }, []);
+
+  const signedIn = status?.signedIn ?? false;
+  useEffect(() => {
+    if (!signedIn) { setProviders([]); return; }
+    void syncService.providers().then(setProviders);
+  }, [signedIn]);
+
+  const google = async (link: boolean) => {
+    if (busy !== null) return;
+    setBusy("google");
+    setError(null);
+    try {
+      if (link) await syncService.linkGoogle();
+      else await syncService.signInWithGoogle();
+      setProviders(await syncService.providers());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "La connexion Google a échoué.");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const authenticate = async (mode: "in" | "up") => {
     if (busy !== null) return;
@@ -149,6 +171,12 @@ export function SyncSection() {
             )}
 
             <div className="settings-actions">
+              <Button disabled={busy !== null} onClick={() => void google(false)}>
+                {busy === "google" ? "En attente du navigateur…" : "Continuer avec Google"}
+              </Button>
+              {busy === "google" && (
+                <Button onClick={() => syncService.cancelOAuth()}>Annuler</Button>
+              )}
               <Button disabled={busy !== null} onClick={() => void authenticate("up")}>
                 {busy === "up" ? "Création…" : "Créer un compte"}
               </Button>
@@ -194,6 +222,20 @@ export function SyncSection() {
           <span className="settings-value mono" style={{ fontWeight: 600 }}>{reportLine(status)}</span>
         </SettingRow>
 
+        {!providers.includes("google") && (
+          <SettingRow label="Compte Google" hint="Lie ton compte Google pour te connecter avec lui, sans mot de passe.">
+            <Button disabled={busy !== null} onClick={() => void google(true)}>
+              {busy === "google" ? "En attente du navigateur…" : "Lier un compte Google"}
+            </Button>
+            {busy === "google" && (
+              <Button onClick={() => syncService.cancelOAuth()}>Annuler</Button>
+            )}
+          </SettingRow>
+        )}
+
+        {error && (
+          <p className="settings-error" role="alert">{error}</p>
+        )}
         {status.lastError && (
           <p className="settings-error" role="alert">{status.lastError}</p>
         )}

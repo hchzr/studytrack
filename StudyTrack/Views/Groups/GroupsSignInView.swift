@@ -72,6 +72,19 @@ struct GroupsSignInView: View {
                     .frame(height: 50)
                     .clipShape(Capsule())
 
+                    Button {
+                        Task {
+                            isWorking = true
+                            let ok = await app.social.signInWithGoogle()
+                            isWorking = false
+                            if ok { Haptics.success(); message = nil } else { message = app.social.lastError }
+                        }
+                    } label: {
+                        Label { Text(ui: "Continuer avec Google") } icon: { Image(systemName: "g.circle.fill") }
+                    }
+                    .buttonStyle(.carnetSecondaryWide)
+                    .disabled(isWorking)
+
                     if !usesEmail {
                         Button {
                             withAnimation(Motion.snappy) { usesEmail = true }

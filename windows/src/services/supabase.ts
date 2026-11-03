@@ -56,6 +56,21 @@ export class SupabaseClient {
     return s;
   }
 
+  /** Échange le code PKCE d'un retour OAuth contre la session (`grant_type=pkce`). */
+  async exchangeCode(code: string, verifier: string): Promise<Session> {
+    const s = await this.authCall("token?grant_type=pkce", { auth_code: code, code_verifier: verifier });
+    await this.setSession(s);
+    return s;
+  }
+
+  /** Les fournisseurs de connexion du compte (« email », « google », « apple »…). */
+  async providers(): Promise<string[]> {
+    const user = await this.request<{ app_metadata?: { provider?: string; providers?: string[] }; identities?: { provider?: string }[] }>("/auth/v1/user");
+    const found = [...(user?.app_metadata?.providers ?? []), ...(user?.app_metadata?.provider ? [user.app_metadata.provider] : []),
+      ...(user?.identities ?? []).flatMap((i) => (i.provider ? [i.provider] : []))];
+    return [...new Set(found)];
+  }
+
   async signOut(): Promise<void> { await this.setSession(null); }
 
   async setSession(s: Session | null): Promise<void> {

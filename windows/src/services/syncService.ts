@@ -27,6 +27,9 @@ import { SupabaseTransport } from "../sync/supabaseTransport.ts";
 import { SupabaseClient, SupabaseError, type Session } from "./supabase.ts";
 import { supabaseConfig, type SupabaseConfig } from "./syncConfig.ts";
 import { LocalSessionStore, defaultStorage } from "./sessionStore.ts";
+import { runOAuth, oauthMessage } from "./oauth.ts";
+import { startLoopback, openInBrowser } from "../native/oauth.ts";
+import type { Loopback } from "./oauth.ts";
 
 /** Le rapport de la dernière passe, pour l'écran Réglages. */
 export type { SyncReport } from "../sync/engine.ts";
@@ -72,6 +75,9 @@ export interface SyncServiceInputs {
   storage?: Storage | null;
   /** Les requêtes réseau ; les tests passent un fetch simulé. */
   fetchImpl?: typeof fetch;
+  /** Écoute du rappel OAuth et ouverture du navigateur ; les tests passent des faux. */
+  oauthLoopback?: () => Promise<Loopback>;
+  openBrowser?: (url: string) => Promise<void>;
 }
 
 /** Le refus du serveur d'authentification, dit en français. */
@@ -149,6 +155,10 @@ export class SyncService {
   private readonly storage: Storage | null;
   private readonly client: SupabaseClient | null;
   private readonly sessions: LocalSessionStore | null;
+  private readonly fetchImpl: typeof fetch;
+  private readonly oauthLoopback: () => Promise<Loopback>;
+  private readonly openBrowser: (url: string) => Promise<void>;
+  private oauthCancel: (() => void) | null = null;
 
   private local: LocalStore | null = null;
   private reload: (() => Promise<void>) | null = null;
@@ -162,6 +172,9 @@ export class SyncService {
 
   constructor(inputs: SyncServiceInputs) {
     this.storage = inputs.storage === undefined ? defaultStorage() : inputs.storage;
+    this.fetchImpl = inputs.fetchImpl ?? ((...a) => fetch(...a));
+    this.oauthLoopback = inputs.oauthLoopback ?? startLoopback;
+    this.openBrowser = inputs.openBrowser ?? openInBrowser;
     this.enabled = readEnabled(this.storage);
     this.persisted = readStatus(this.storage);
     if (inputs.config !== null) {
@@ -216,6 +229,37 @@ export class SyncService {
     // Inscription = connexion quand le projet signe tout de suite.
     await this.client.setSession(session);
     this.notify();
+  }
+
+  /** « Continuer avec Google » : le flux PKCE, puis la session comme après `signIn`. */
+  async signInWithGoogle(): Promise<void> {
+    if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
+    await runOAuth({ client: this.client, fetchImpl: this.fetchImpl, startLoopback: this.oauthLoopback, openBrowser: this.openBrowser, onWaiting: (c) => { this.oauthCancel = c; this.notify(); } });
+    this.notify();
+  }
+
+  /** Lier une identité Google au compte connecté (« manual linking » à activer sur le projet). */
+  async linkGoogle(): Promise<void> {
+    if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
+    await runOAuth({ client: this.client, fetchImpl: this.fetchImpl, startLoopback: this.oauthLoopback, openBrowser: this.openBrowser, link: true, onWaiting: (c) => { this.oauthCancel = c; this.notify(); } });
+    this.notify();
+  }
+
+  /** Une connexion Google attend le navigateur ? */
+  get oauthWaiting(): boolean { return this.oauthCancel !== null; }
+
+  /** « Annuler » pendant l'attente du navigateur. */
+  cancelOAuth(): void { this.oauthCancel?.(); }
+
+  /** Fournisseurs du compte connecté ; vide si inconnus ou hors ligne. */
+  async providers(): Promise<string[]> {
+    if (!this.client || !(await this.session())) return [];
+    try {
+      return await this.client.providers();
+    } catch (e) {
+      void oauthMessage(e);
+      return [];
+    }
   }
 
   async signOut(): Promise<void> {

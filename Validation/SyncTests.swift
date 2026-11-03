@@ -194,6 +194,31 @@ func syncChecks(_ results: inout [(Bool, String)]) throws {
         note(SupabasePasswordUpdate.message(forStatus: 422, body: "{\"error_code\":\"same_password\"}").contains("déjà"), "mot de passe : même mot de passe → message clair")
     }
 
+    // MARK: Google (OAuth PKCE)
+
+    do {
+        note(OAuthPKCE.challenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk") == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+             "google : le vecteur de la RFC 7636 (annexe B) donne le bon défi S256")
+        let v = OAuthPKCE.makeVerifier()
+        note(v.count == 43 && v.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" } && v != OAuthPKCE.makeVerifier(), "google : un verifier tiré a 43 caractères permis et change à chaque fois")
+        let url = OAuthPKCE.authorizeURL(base: URL(string: "https://x.supabase.co")!, challenge: "CHAL")!
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+        func q(_ n: String) -> String? { items.first { $0.name == n }?.value }
+        note(url.path == "/auth/v1/authorize" && q("provider") == "google" && q("redirect_to") == "studytrack://auth-callback"
+             && q("code_challenge") == "CHAL" && q("code_challenge_method") == "s256", "google : l'adresse d'autorisation porte provider, rappel et défi S256")
+        let link = OAuthPKCE.authorizeURL(base: URL(string: "https://x.supabase.co")!, challenge: "C", link: true, skipRedirect: true)!
+        note(link.path == "/auth/v1/user/identities/authorize" && link.query?.contains("skip_http_redirect=true") == true, "google : lier une identité passe par /user/identities/authorize")
+        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback?code=abc123")!) == .code("abc123"), "google : le retour donne son code")
+        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback?error=access_denied&error_description=Nope")!) == .error("Nope"), "google : le retour en erreur (requête) est lu")
+        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback#error_code=400&error_description=bad")!) == .error("bad"), "google : le retour en erreur (fragment) est lu")
+        note(OAuthPKCE.parseCallback(URL(string: "https://x.supabase.co/?code=1")!) == nil && OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback")!) == nil, "google : ce qui n'est pas notre retour est ignoré")
+        let body = OAuthPKCE.exchangeBody(code: "C1", verifier: "V1").flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }
+        note(body == ["auth_code": "C1", "code_verifier": "V1"] && OAuthPKCE.exchangePath == "/auth/v1/token" && OAuthPKCE.exchangeQuery.first?.value == "pkce", "google : la requête d'échange est POST /auth/v1/token?grant_type=pkce {auth_code, code_verifier}")
+        note(OAuthPKCE.message(status: 400, body: "{\"msg\":\"Unsupported provider: provider is not enabled\"}") == "La connexion Google n'est pas encore activée sur le serveur.", "google : fournisseur éteint → message clair")
+        note(OAuthPKCE.message(status: 400, body: "Manual linking is disabled", link: true) == OAuthPKCE.linkDisabledMessage, "google : liaison manuelle éteinte → message clair")
+        note(OAuthPKCE.callbackMessage("Unsupported provider: provider is not enabled").contains("pas encore activée"), "google : le retour en erreur est traduit")
+    }
+
     // MARK: Cas d'usage
 
     func fill(_ device: SyncTestDevice) throws -> (Course, ExerciseSeries, Exercise) {

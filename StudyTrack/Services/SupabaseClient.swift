@@ -254,6 +254,17 @@ final class SupabaseClient {
         try applySession(data)
     }
 
+    /// Échange le code d'un retour OAuth (PKCE) contre la session (voir `OAuthPKCE`).
+    func exchangePKCE(code: String, verifier: String) async throws {
+        guard let body = OAuthPKCE.exchangeBody(code: code, verifier: verifier) else { throw SupabaseError.invalidResponse }
+        let data = try await request(OAuthPKCE.exchangePath,
+                                     method: "POST",
+                                     query: OAuthPKCE.exchangeQuery,
+                                     body: body,
+                                     useAuth: false)
+        try applySession(data)
+    }
+
     func signUp(email: String, password: String) async throws {
         let payload: [String: Any] = ["email": email, "password": password]
         let data = try await request("/auth/v1/signup",

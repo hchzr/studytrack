@@ -152,6 +152,13 @@ final class SupabaseSync {
         }
     }
 
+    /// « Continuer avec Google », ou lier Google au compte connecté.
+    func signInWithGoogle(link: Bool = false) async -> Bool {
+        let ok = await authenticate { try await $0.continueWithGoogle(link: link) }
+        await refreshProviders()
+        return ok
+    }
+
     func signOut() async {
         await client?.signOut()
         refreshAccount()

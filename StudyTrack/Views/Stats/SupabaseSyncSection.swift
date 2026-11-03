@@ -5,6 +5,7 @@ import SwiftUI
 struct SupabaseSyncSection: View {
     @Environment(AppContainer.self) private var app
     @State private var showingPassword = false
+    @State private var linkMessage: String?
 
     var body: some View {
         let sync = app.supabaseSync
@@ -43,6 +44,22 @@ struct SupabaseSyncSection: View {
                         Label { Text(ui: sync.accountProviders.contains("apple")
                                      ? "Définir un mot de passe pour les autres appareils"
                                      : "Changer le mot de passe") } icon: { Image(systemName: "key") }
+                    }
+                }
+
+                if signedIn, !sync.accountProviders.contains("google") {
+                    Button {
+                        Task {
+                            linkMessage = nil
+                            let ok = await app.social.signInWithGoogle(link: true)
+                            if !ok { linkMessage = app.social.lastError }
+                            await sync.refreshProviders()
+                        }
+                    } label: {
+                        Label { Text(ui: "Lier un compte Google") } icon: { Image(systemName: "link") }
+                    }
+                    if let linkMessage {
+                        Text(linkMessage).font(.footnote).foregroundStyle(Carnet.wrong)
                     }
                 }
 

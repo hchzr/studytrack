@@ -16,6 +16,10 @@ struct MacSupabaseSyncSection: View {
                 } else if !sync.isSignedIn {
                     TextField(text: $email) { Text(ui: "Adresse e-mail") }
                     SecureField(text: $password) { Text(ui: "Mot de passe") }
+                    Button { Task { working = true; _ = await sync.signInWithGoogle(); working = false } } label: {
+                        Label { Text(ui: "Continuer avec Google") } icon: { Image(systemName: "g.circle.fill") }
+                    }
+                    .disabled(working)
                     HStack {
                         Button { Task { await authenticate(sync, signUp: false) } } label: { Text(ui: "Se connecter") }
                         Button { Task { await authenticate(sync, signUp: true) } } label: { Text(ui: "Créer un compte") }
@@ -23,6 +27,12 @@ struct MacSupabaseSyncSection: View {
                     .disabled(working || email.isEmpty || password.count < 6)
                 } else {
                     LabeledContent { Text(sync.accountEmail ?? "—") } label: { Text(ui: "Compte") }
+                    if !sync.accountProviders.contains("google") {
+                        Button { Task { working = true; _ = await sync.signInWithGoogle(link: true); working = false } } label: {
+                            Label { Text(ui: "Lier un compte Google") } icon: { Image(systemName: "link") }
+                        }
+                        .disabled(working)
+                    }
                     Toggle(isOn: Binding(get: { sync.isEnabled }, set: { sync.setEnabled($0) })) {
                         Text(ui: "Synchroniser mes données")
                     }
@@ -54,6 +64,7 @@ struct MacSupabaseSyncSection: View {
             } footer: {
                 Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut.")
             }
+            .task(id: sync.isSignedIn) { await sync.refreshProviders() }
         }
     }
 

@@ -37,12 +37,15 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .manage(native::lock::LockState::default())
         .manage(native::site::SiteState::default())
+        .manage(native::oauth::OAuthState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             native::power::set_keep_awake,
             native::lock::study_lock_start,
             native::lock::study_lock_stop,
             native::mini::mini_set_visible,
+            native::oauth::oauth_start,
+            native::oauth::oauth_cancel,
             native::site::site_login_open,
             native::site::site_login_close,
             native::site::site_request,

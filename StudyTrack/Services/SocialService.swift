@@ -367,6 +367,23 @@ final class SocialService {
         }
     }
 
+    /// « Continuer avec Google », ou lier Google au compte connecté (`link`).
+    func signInWithGoogle(link: Bool = false) async -> Bool {
+        guard let client else {
+            lastError = SupabaseError.notConfigured.localizedDescription
+            return false
+        }
+        do {
+            try await client.continueWithGoogle(link: link)
+            syncSession()
+            lastError = nil
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     func signUp(email value: String, password: String) async -> Bool {
         guard let client else {
             lastError = SupabaseError.notConfigured.localizedDescription
