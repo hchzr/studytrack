@@ -26,11 +26,12 @@ import type { LocalStore } from "../sync/store.ts";
 import { SupabaseTransport } from "../sync/supabaseTransport.ts";
 import { EncryptedTransport, ForeignKeyError, SkipStats } from "../sync/encryptedTransport.ts";
 import {
-  RecoveryKeyError, decodeRecoveryKey, deriveKeys, encodeRecoveryKey, fromHex, newAccountKey, toHex,
+  RecoveryKeyError, decodeRecoveryKey, deriveKeys, encodeRecoveryKey, fromHex, newAccountKey, openRow, toHex,
 } from "../domain/syncCrypto.ts";
 import { PairingHost, joinPairing, type HostState, type SocketFactory } from "./syncPairing.ts";
 import { SupabaseClient, SupabaseError, type Session } from "./supabase.ts";
 import { supabaseConfig, relayHost, type SupabaseConfig } from "./syncConfig.ts";
+import { timerLink, storedTimerIdentity } from "./timerLinkClient.ts";
 import { LocalSessionStore, defaultStorage } from "./sessionStore.ts";
 import { runOAuth, oauthMessage } from "./oauth.ts";
 import { startLoopback, openInBrowser } from "../native/oauth.ts";
@@ -418,6 +419,9 @@ export class SyncService {
    */
   startAutoSync(): void {
     if (this.autoTimer !== null) return;
+    // Le chrono relié reprend tout de suite avec l'identité déjà reçue (sans attendre une passe).
+    const identity = storedTimerIdentity();
+    if (identity && this.relay && this.enabled) void timerLink.start(this.relay, identity);
     void this.syncNow();
     this.autoTimer = setInterval(() => { void this.syncNow(); }, AUTO_SYNC_MS);
   }
@@ -470,6 +474,7 @@ export class SyncService {
         lastError: stats.foreignKey > 0 ? foreignKeyMessage : null,
       };
       this.writeStatus();
+      void this.linkTimer(client, keys);
       // Une lecture a pu changer le graphe sous l'écran : on le reconstruit.
       await this.reload?.();
       this.notify();
@@ -482,6 +487,29 @@ export class SyncService {
       this.writeStatus();
       this.notify();
       return null;
+    }
+  }
+
+  /**
+   * Le chrono relié : l'identité du compte publiée par l'iPhone ou le Mac (`sync_device_link`,
+   * chiffrée avec la clé de données), puis la WebSocket du relais. Sans ligne : rien.
+   */
+  private async linkTimer(client: SupabaseClient, keys: { dataKey: Uint8Array; keyId: string }): Promise<void> {
+    if (!this.relay) return;
+    try {
+      const session = await this.session();
+      if (!session) return;
+      const rows = await client.request<{ key_id: string; payload: string }[]>("/rest/v1/sync_device_link?select=key_id,payload");
+      const row = rows?.[0];
+      if (!row || row.key_id !== keys.keyId) return;
+      const box = fromHex(row.payload.replace(/^\\x/, ""));
+      if (!box) return;
+      const fields = await openRow(keys.dataKey, "sync_device_link", session.user.id, box);
+      if (typeof fields.timerIdentity === "string" && fields.timerIdentity !== "") {
+        await timerLink.start(this.relay, fields.timerIdentity);
+      }
+    } catch {
+      // Table absente ou ligne illisible : le chrono reste local.
     }
   }
 

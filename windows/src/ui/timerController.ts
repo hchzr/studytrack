@@ -453,6 +453,19 @@ export class FocusTimerController {
     this.persist(null);
   }
 
+  /** L'état d'un autre appareil (le chrono relié) : adopté tel quel, sans rien enregistrer ici. */
+  adoptRemote(state: FocusTimerState): void {
+    this.recapValue = null;
+    this.persist({ ...state });
+  }
+
+  /** La session a été terminée (et enregistrée) sur un autre appareil : on la ferme ici, sans l'enregistrer. */
+  closeRemote(): void {
+    if (!this.state) return;
+    this.recapValue = null;
+    this.persist(null);
+  }
+
   /** Abandonner : rien n'est enregistré. Refusé sous verrou. */
   discard(): void {
     if (!this.state || this.isLocked) return;

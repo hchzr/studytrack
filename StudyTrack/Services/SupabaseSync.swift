@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SwiftData
 import Observation
@@ -537,6 +538,7 @@ final class SupabaseSync {
             lastSyncAt = Date()
             lastReport = report.summary
             persistStatus()
+            await publishDeviceLink(client: client, keys: keys)
         } catch let failure as SyncEngine.Failure {
             if case .massDeletion = failure { awaitingMassDeletion = true }
             lastError = failure.localizedDescription
@@ -549,6 +551,24 @@ final class SupabaseSync {
         if let next = rerun {
             rerun = nil
             await run(pull: next.pull, accept: next.accept)
+        }
+    }
+
+    /// Le lien du chrono pour Windows (`sync_device_link`) : l'identité iCloud qui donne son canal au
+    /// chrono relié, chiffrée avec la clé de données du compte. Écrite quand elle change (ou la clé).
+    private func publishDeviceLink(client: SupabaseClient, keys: SyncCrypto.Keys) async {
+        guard let identity = UserDefaults.standard.string(forKey: "timerLink.identity"), !identity.isEmpty,
+              let userID = client.userID?.lowercased() else { return }
+        let marker = keys.keyID + ":" + SyncCrypto.hex(Data(SHA256.hash(data: Data(identity.utf8))))
+        guard UserDefaults.standard.string(forKey: "deviceLink.published") != marker else { return }
+        do {
+            let box = try SyncCrypto.sealRow(dataKey: keys.dataKey, table: "sync_device_link", id: userID,
+                                             fields: ["timerIdentity": identity])
+            try await client.upsert("sync_device_link", rows: [["user_id": userID, "key_id": keys.keyID, "payload": SyncCrypto.bytea(box)]],
+                                    onConflict: "user_id", returning: false)
+            UserDefaults.standard.set(marker, forKey: "deviceLink.published")
+        } catch {
+            // Sans la table (migration pas encore passée) : on réessaiera à la passe suivante.
         }
     }
 
