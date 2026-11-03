@@ -45,6 +45,10 @@ security_group() {
   aws ec2 authorize-security-group-ingress --group-id "$sg" \
     --ip-permissions "IpProtocol=tcp,FromPort=3389,ToPort=3389,IpRanges=[{CidrIp=$ip/32,Description=mac}]" \
     >/dev/null 2>&1 || true
+  # UDP aussi : le Bureau à distance y passe l'image (plus fluide, plus net qu'en TCP seul).
+  aws ec2 authorize-security-group-ingress --group-id "$sg" \
+    --ip-permissions "IpProtocol=udp,FromPort=3389,ToPort=3389,IpRanges=[{CidrIp=$ip/32,Description=mac}]" \
+    >/dev/null 2>&1 || true
   echo "$sg"
 }
 
@@ -88,6 +92,10 @@ username:s:Administrator
 prompt for credentials:i:0
 screen mode id:i:2
 dynamic resolution:i:1
+session bpp:i:32
+connection type:i:6
+networkautodetect:i:1
+bandwidthautodetect:i:1
 redirectclipboard:i:1
 drivestoredirect:s:*
 keyboardhook:i:1
