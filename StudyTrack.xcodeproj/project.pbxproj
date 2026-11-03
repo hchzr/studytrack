@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F3000000000000000000001E /* GroupSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001E /* GroupSessionService.swift */; };
 		B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StudyTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* StudyTrackShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F30000000000000000000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Theme.swift */; };
@@ -39,6 +38,7 @@
 		F3000000000000000000001B /* GroupEncryption.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001B /* GroupEncryption.swift */; };
 		F3000000000000000000001C /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001C /* RealtimeClient.swift */; };
 		F3000000000000000000001D /* GroupKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001D /* GroupKeyStore.swift */; };
+		F3000000000000000000001E /* GroupSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001E /* GroupSessionService.swift */; };
 		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
 		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -106,7 +106,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F2000000000000000000001E /* GroupSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSessionService.swift; path = StudyTrack/Services/GroupSessionService.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000005 /* StudyTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StudyTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000002 /* StudyTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D10000000000000000000001 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Support/Supabase.xcconfig; sourceTree = "<group>"; };
@@ -141,6 +140,7 @@
 		F2000000000000000000001B /* GroupEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupEncryption.swift; path = StudyTrack/Services/GroupEncryption.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000001C /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RealtimeClient.swift; path = StudyTrack/Services/RealtimeClient.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000001D /* GroupKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupKeyStore.swift; path = StudyTrack/Services/GroupKeyStore.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001E /* GroupSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSessionService.swift; path = StudyTrack/Services/GroupSessionService.swift; sourceTree = SOURCE_ROOT; };
 		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		K10000000000000000000001 /* ClaudePlugin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ClaudePlugin; sourceTree = "<group>"; };
@@ -703,7 +703,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -730,7 +730,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -755,7 +755,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackWidgets-Info.plist";
@@ -780,7 +780,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackWidgets-Info.plist";
@@ -805,7 +805,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackShare-Info.plist";
@@ -830,7 +830,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackShare-Info.plist";
@@ -858,7 +858,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_LANGUAGE = fr;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -892,7 +892,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_LANGUAGE = fr;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -924,7 +924,7 @@
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackMacWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -953,7 +953,7 @@
 				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackMacWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -982,7 +982,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_LOCK_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";
@@ -1010,7 +1010,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_LOCK_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";

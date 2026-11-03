@@ -38,6 +38,8 @@ struct TodayItem: Identifiable {
     let color: Color
     /// Un cours ou une séance de l'horaire : « Suivre le cours » pendant le créneau.
     var classCourseID: UUID? = nil
+    /// La séance de l'horaire, pour la cocher (« J'y étais » / « manqué »).
+    var event: LinkedCalendarEvent? = nil
 }
 
 /// Aujourd'hui : le tableau de bord de la semaine.
@@ -116,7 +118,8 @@ struct TodayView: View {
                                        .compactMap { $0 }.joined(separator: " · "),
                                    icon: event.kind.icon,
                                    color: event.course.map { Carnet.tint($0.colorHex) } ?? event.kind.color,
-                                   classCourseID: [.lecture, .exerciseSession].contains(event.kind) ? event.course?.id : nil))
+                                   classCourseID: [.lecture, .exerciseSession].contains(event.kind) ? event.course?.id : nil,
+                                   event: event))
         }
         for session in plannedSessions where calendar.isDateInToday(session.startsAt) {
             items.append(TodayItem(id: "planned-\(session.id)",
@@ -705,6 +708,15 @@ struct TodayView: View {
                 }
             }
             Spacer(minLength: 0)
+            // Coché = compté dans les heures (Réglages › Chrono › Ce qui compte).
+            if let event = item.event, event.isCheckable(now: now) {
+                let on = event.isChecked(now: now)
+                CheckCircleButton(isOn: on, tint: item.color,
+                                  label: on ? "Marquer \(event.title) manqué" : "J'étais à \(event.title)") {
+                    event.toggleChecked(now: now)
+                    try? context.save()
+                }
+            }
         }
         .padding(.horizontal, Carnet.rowInset)
         .padding(.vertical, 10)

@@ -39,7 +39,8 @@ struct MacTodayView: View {
     private var tracked: [Course] { courses.filter(\.isTracked) }
 
     var body: some View {
-        let todayEvents = events.filter { $0.isAcademic && !$0.isSkipped }
+        // Les séances manquées restent, estompées : on peut se raviser d'un clic.
+        let todayEvents = events.filter { $0.isAcademic }
         let deadlines = Deadline.upcoming(in: tracked, days: 14).filter { $0.date >= Date() }
         let summaries = tracked.map { WeekCourseSummary(course: $0) }
         ScrollView {

@@ -4,6 +4,7 @@ import SwiftData
 /// Une ligne d'horaire : l'heure, le cours, la salle.
 struct EventLine: View {
     let event: LinkedCalendarEvent
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         let tint = Carnet.tint(event.course)
@@ -23,6 +24,21 @@ struct EventLine: View {
             }
             Spacer()
             if live { Kicker("En cours", color: tint) }
+            // Coché = compté dans les heures (« J'y étais » / « manqué »), d'un clic.
+            if event.isCheckable() {
+                let on = event.isChecked()
+                Button {
+                    event.toggleChecked()
+                    try? context.save()
+                } label: {
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .font(.body)
+                        .foregroundStyle(on ? tint : Carnet.inkTertiary)
+                }
+                .buttonStyle(.plain)
+                .help(on ? "Compté — cliquer pour marquer manqué" : "J'y étais")
+                .accessibilityLabel(on ? "Marquer manqué" : "J'y étais")
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)

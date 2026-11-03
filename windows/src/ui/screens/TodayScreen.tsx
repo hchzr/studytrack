@@ -5,6 +5,7 @@
 // `StudyTime` pour les heures, `ProgressEngine` pour la théorie / les séries /
 // les corrigés, `Deadline` pour les échéances. L'écran ne recompte rien.
 
+import { readCounting, toggleChecked } from "../../domain/studyCounting.ts";
 import { useData } from "../../data/dataContext.tsx";
 import { MoodleNewsCard } from "./home/moodleNewsCard.tsx";
 import { Course, LinkedTask } from "../../models/index.ts";
@@ -26,7 +27,7 @@ export function TodayScreen({ onOpenCourse, onOpenFocus, onEnterStudyMode }: {
   onOpenFocus?: () => void;
   onEnterStudyMode?: (courseID?: string) => void;
 }) {
-  const { store } = useData();
+  const { store, save } = useData();
   const timing = useSyncExternalStore(subscribeTimer, timerRunning);
   const now = new Date();
   if (!store) return null;
@@ -127,7 +128,8 @@ export function TodayScreen({ onOpenCourse, onOpenFocus, onEnterStudyMode }: {
                   ) : (
                     <>
                       {todayItems.slice(0, 8).map((item) => (
-                        <PlanRow key={item.id} item={item} now={now} onOpen={onOpenCourse} />
+                        <PlanRow key={item.id} item={item} now={now} onOpen={onOpenCourse}
+                          onToggle={(event) => { toggleChecked(readCounting(), event, now); void save?.(event); }} />
                       ))}
                       {todayItems.length > 8 && <div className="t-more">+ {todayItems.length - 8} autres</div>}
                     </>

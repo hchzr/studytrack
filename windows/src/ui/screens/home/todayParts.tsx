@@ -1,6 +1,7 @@
 // Les petites vues d'« Aujourd'hui » : le prochain geste, une ligne du planning,
 // une session, une échéance, une tâche et l'anneau de l'objectif du jour.
 
+import { countsEvent, isCheckable, readCounting } from "../../../domain/studyCounting.ts";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import type { StudySession } from "../../../models/studySession.ts";
 import type { LinkedTask } from "../../../models/linkedTask.ts";
@@ -73,8 +74,11 @@ export function NextActionCard({ action, onOpen }:
 }
 
 /** Une ligne du planning : l'heure, la couleur, le titre et l'état « en cours »/passé. */
-export function PlanRow({ item, now, onOpen }:
-  { item: TodayItem; now: Date; onOpen: (id: string) => void }) {
+export function PlanRow({ item, now, onOpen, onToggle }:
+  { item: TodayItem; now: Date; onOpen: (id: string) => void; onToggle?: (event: NonNullable<TodayItem["event"]>) => void }) {
+  const counting = readCounting();
+  const checkable = item.event !== undefined && onToggle !== undefined && isCheckable(counting, item.event, now);
+  const checked = checkable && countsEvent(counting, item.event!, now);
   const end = item.end ?? item.start;
   const isPast = end.getTime() < now.getTime();
   const isOngoing = item.start.getTime() <= now.getTime() && !isPast;
@@ -94,6 +98,15 @@ export function PlanRow({ item, now, onOpen }:
         </span>
         {item.subtitle !== "" && <span className="t-sub t-ellipsis">{item.subtitle}</span>}
       </span>
+      {checkable && (
+        <span role="checkbox" aria-checked={checked} tabIndex={0} title={checked ? "Compté — marquer manqué" : "J'y étais"}
+          onClick={(e) => { e.stopPropagation(); onToggle!(item.event!); }}
+          onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); onToggle!(item.event!); } }}
+          style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 11, cursor: "pointer", flex: "none",
+            border: checked ? "none" : "1.5px solid var(--ink-tertiary)", background: checked ? item.color : "transparent", color: "var(--ground)" }}>
+          {checked && <Icon name="checkmark" size={12} />}
+        </span>
+      )}
       {item.courseId && <Icon name="chevron.right" size={14} className="t-chev" />}
     </>
   );

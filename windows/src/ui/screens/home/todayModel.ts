@@ -31,6 +31,8 @@ export interface TodayItem {
   /** Couleur du cours, ou une variable CSS pour ce qui n'en a pas. */
   color: string;
   courseId: string | null;
+  /** La séance de l'horaire, pour la cocher (« J'y étais » / « manqué »). */
+  event?: LinkedCalendarEvent;
 }
 
 export interface NextAction {
@@ -68,7 +70,7 @@ const join = (parts: (string | null | undefined)[]): string =>
 
 function eventsToday(store: ModelStore, now: Date): LinkedCalendarEvent[] {
   return store.fetch(LinkedCalendarEvent)
-    .filter((event) => event.isAcademic && !event.isSkipped && DateUtils.isSameDay(event.startsAt, now));
+    .filter((event) => event.isAcademic && DateUtils.isSameDay(event.startsAt, now));
 }
 
 function plannedToday(store: ModelStore, now: Date): PlannedSession[] {
@@ -87,6 +89,7 @@ export function collectTodayItems(store: ModelStore, courses: Course[], now: Dat
       subtitle: join([event.course?.displayCode, event.location]),
       color: event.course?.colorHex ?? "var(--ink-tertiary)",
       courseId: event.course?.id ?? null,
+      event,
     });
   }
   for (const session of plannedToday(store, now)) {
