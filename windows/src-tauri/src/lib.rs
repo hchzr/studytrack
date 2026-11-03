@@ -53,6 +53,7 @@ pub fn run() {
             native::ed::ed_sign_out,
             native::site::site_request,
             native::site::site_download,
+            native::site::site_cookie,
             native::secrets::secrets_load,
             native::secrets::secret_set,
         ])

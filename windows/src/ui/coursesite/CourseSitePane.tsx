@@ -9,16 +9,20 @@ import { Segmented } from "../kit.tsx";
 import { openInApp } from "../studymode/openers.ts";
 import { EdView } from "./EdView.tsx";
 import { MoodleCourseView, type MoodleReading } from "./MoodleCourseView.tsx";
-import { botafogoSite, courseSources, moodleCourseID, type CourseSource } from "./courseSites.ts";
+import { botafogoSite, courseSources, coursewareKey, moodleCourseID, type CourseSource } from "./courseSites.ts";
+import { CoursewareView } from "./CoursewareView.tsx";
+import { MediaSpaceOverlay } from "../media/MediaSpaceOverlay.tsx";
+import { isMediaSpaceVideo } from "../../services/mediaspace.ts";
 import "./coursesite.css";
 
 interface Remembered { source: CourseSource; botafogo: BotafogoLocation | null; moodle: MoodleReading | null }
 const remembered = new Map<string, Remembered>();
 
-const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle", ed: "Ed" };
+const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle", courseware: "Courseware", ed: "Ed" };
 
 export function CourseSitePane({ course, tint }: { course: Course | null; tint: string }) {
   const sources = courseSources(course);
+  const [video, setVideo] = useState<string | null>(null);
   const [state, setState] = useState<Remembered>(() =>
     (course ? remembered.get(course.id) : undefined) ?? { source: sources[0] ?? "botafogo", botafogo: null, moodle: null });
   const update = (patch: Partial<Remembered>) => {
@@ -36,7 +40,11 @@ export function CourseSitePane({ course, tint }: { course: Course | null; tint: 
     );
   }
   const source = sources.includes(state.source) ? state.source : sources[0];
-  const openWeb = (url: string) => { void openInApp(url, course.displayCode); };
+  // Une vidéo MediaSpace se lit ici même ; le reste s'ouvre dans une fenêtre de l'app.
+  const openWeb = (url: string) => {
+    if (isMediaSpaceVideo(url)) setVideo(url);
+    else void openInApp(url, course.displayCode);
+  };
   const site = botafogoSite(course);
   const moodle = moodleCourseID(course);
   return (
@@ -53,11 +61,13 @@ export function CourseSitePane({ course, tint }: { course: Course | null; tint: 
             location={state.botafogo} onLocation={(botafogo) => update({ botafogo })} />
         )}
         {source === "ed" && <EdView code={course.code} openWeb={openWeb} />}
+        {source === "courseware" && coursewareKey(course) && <CoursewareView courseKey={coursewareKey(course)!} openWeb={openWeb} />}
         {source === "moodle" && moodle !== null && (
           <MoodleCourseView courseID={moodle} title={course.name} openWeb={openWeb}
             reading={state.moodle} onReading={(value) => update({ moodle: value })} />
         )}
       </div>
+      {video && <MediaSpaceOverlay link={video} close={() => setVideo(null)} openWeb={(url) => { void openInApp(url, course.displayCode); }} />}
     </div>
   );
 }

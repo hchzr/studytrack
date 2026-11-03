@@ -3,13 +3,14 @@
 // une question ; les sondages ; les leçons, diapositive par diapositive, avec leurs questions.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { EdDiscussion, type EdCourse, type EdLesson, type EdPoll, type EdPost, type EdQuestion, type EdSlide, type EdThread, type SiteBlock } from "../../domain/siteContent.ts";
+import { EdDiscussion, type EdCourse, type EdLesson, type EdPoll, type EdPost, type EdQuestion, type EdSlide, type EdThread } from "../../domain/siteContent.ts";
 import { Ed, edForget, edSignIn } from "../../services/edClient.ts";
 import { SiteError } from "../../services/siteSession.ts";
 import { listenNative } from "../../native/tauri.ts";
 import { Icon } from "../icons.tsx";
 import { Segmented } from "../kit.tsx";
 import { RichInline } from "../rich/RichText.tsx";
+import { SiteBlocks } from "../rich/SiteBlocks.tsx";
 import "../botafogo/botafogo.css";
 import "./coursesite.css";
 
@@ -39,30 +40,6 @@ const when = (iso: string | null) => {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? "" : dateFormat.format(date);
 };
-
-/** Les blocs d'un message d'Ed (texte et formules, images, fichiers, liens). */
-export function SiteBlocks({ blocks, openWeb }: { blocks: SiteBlock[]; openWeb: (url: string) => void }) {
-  return (
-    <div className="bf-blocks">
-      {blocks.map((block, index) => {
-        switch (block.type) {
-          case "markdown":
-            return block.text.split(/\n{2,}/).map((paragraph, i) => (
-              <p key={`${index}-${i}`} className="bf-p" style={{ whiteSpace: "pre-wrap" }}><RichInline text={paragraph} onLink={openWeb} /></p>
-            ));
-          case "image": return <img key={index} className="bf-img" src={block.url} alt="" loading="lazy" />;
-          case "file": case "video": case "link":
-            return (
-              <button key={index} type="button" className="bf-media-link" onClick={() => openWeb(block.url)}>
-                <Icon name={block.type === "video" ? "play.rectangle.fill" : block.type === "file" ? "doc.text" : "link"} size={16} />
-                <span>{block.title || block.url}</span>
-              </button>
-            );
-        }
-      })}
-    </div>
-  );
-}
 
 function Centered({ children }: { children: ReactNode }) {
   return <div className="bf-center">{children}</div>;

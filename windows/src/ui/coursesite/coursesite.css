@@ -1,5 +1,5 @@
 /* Le volet « Le cours » : le choix de la source, Moodle. */
-.cs-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cs-pane { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .cs-sources { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule); }
 .cs-body { flex: 1; min-height: 0; }
 

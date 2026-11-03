@@ -253,6 +253,25 @@ async fn send(app: &AppHandle, state: &SiteState, req: SiteRequest) -> Result<re
     builder.send().await.map_err(|e| e.to_string())
 }
 
+/// La valeur d'un cookie de session (le jeton CSRF de Courseware), pour un site déclaré seulement.
+#[tauri::command]
+pub async fn site_cookie(app: AppHandle, state: State<'_, SiteState>, url: String, name: String) -> Result<Option<String>, String> {
+    let url = Url::parse(&url).map_err(|e| e.to_string())?;
+    if !allowed(&state, &url) {
+        return Err("Site non autorisé : connecte-toi d'abord.".into());
+    }
+    let mut windows: Vec<tauri::WebviewWindow> = app.get_webview_window("main").into_iter().collect();
+    windows.extend(app.webview_windows().into_iter().filter(|(label, _)| label.starts_with("site-")).map(|(_, w)| w));
+    for window in windows {
+        if let Ok(cookies) = window.cookies_for_url(url.clone()) {
+            if let Some(cookie) = cookies.iter().find(|c| c.name() == name) {
+                return Ok(Some(cookie.value().to_string()));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Une requête avec la session ; le corps est rendu en texte.
 #[tauri::command]
 pub async fn site_request(app: AppHandle, state: State<'_, SiteState>, req: SiteRequest) -> Result<SiteResponse, String> {
