@@ -14,11 +14,13 @@
 //! traverse la webview que le texte rendu.
 
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::PageLoadEvent;
+use tauri::{AppHandle, Emitter, Manager, State, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_http::reqwest;
 
 /// Les domaines (« epfl.ch ») dont une fenêtre de connexion a été ouverte.
@@ -101,13 +103,51 @@ pub async fn site_login_open(app: AppHandle, state: State<'_, SiteState>, label:
         let _ = window.set_focus();
         return Ok(());
     }
+    let home = host.clone();
+    let left_home = Arc::new(AtomicBool::new(false));
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
+        // Connexion faite : la fenêtre se ferme seule (et l'app est prévenue).
+        .on_page_load(move |window, payload| {
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+            let url = payload.url();
+            if signed_in_back(&home, url, &left_home) {
+                let _ = window.emit("site:signed-in", window.label().trim_start_matches("site-").to_string());
+                let window = window.clone();
+                std::thread::spawn(move || {
+                    // Un instant pour que la page pose ses derniers cookies.
+                    std::thread::sleep(Duration::from_millis(700));
+                    let _ = window.close();
+                });
+            }
+        })
         .title(title)
         .inner_size(980.0, 760.0)
         .always_on_top(super::kiosk::is_locked())
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Une page de connexion (Moodle, SSO de l'école, fournisseur d'identité) ?
+fn looks_like_login(url: &Url) -> bool {
+    let path = url.path().to_ascii_lowercase();
+    ["login", "logout", "signin", "sign-in", "auth", "sso", "saml", "tequila", "idp", "cas/", "shibboleth"]
+        .iter()
+        .any(|word| path.contains(word))
+}
+
+/// La connexion est-elle faite ? Vrai quand on **revient** sur le site ouvert (même hôte, pas une
+/// page de connexion) après être passé par une page de connexion ou un autre hôte (le SSO).
+/// Un site déjà connecté n'a pas d'aller-retour : la fenêtre reste, on la ferme soi-même.
+fn signed_in_back(home: &str, url: &Url, left_home: &AtomicBool) -> bool {
+    let at_home = url.host_str() == Some(home);
+    if !at_home || looks_like_login(url) {
+        left_home.store(true, Ordering::SeqCst);
+        return false;
+    }
+    left_home.load(Ordering::SeqCst)
 }
 
 /// Ferme la fenêtre de connexion d'un site (la session reste dans WebView2).
@@ -241,6 +281,19 @@ mod tests {
         assert!(!is_domain("localhost"));
         assert!(!is_domain("evil.com/x"));
         assert!(!is_domain("a b.ch"));
+    }
+
+    #[test]
+    fn closes_after_the_sign_in_round_trip() {
+        let left = AtomicBool::new(false);
+        let at = |u: &str| Url::parse(u).unwrap();
+        // L'accueil sans connexion : rien.
+        assert!(!signed_in_back("moodle.epfl.ch", &at("https://moodle.epfl.ch/"), &left));
+        // La page de connexion puis le SSO de l'école…
+        assert!(!signed_in_back("moodle.epfl.ch", &at("https://moodle.epfl.ch/login/index.php"), &left));
+        assert!(!signed_in_back("moodle.epfl.ch", &at("https://tequila.epfl.ch/cgi-bin/tequila/auth"), &left));
+        // … et le retour sur Moodle : connecté.
+        assert!(signed_in_back("moodle.epfl.ch", &at("https://moodle.epfl.ch/my/"), &left));
     }
 
     #[test]

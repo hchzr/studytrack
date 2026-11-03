@@ -307,8 +307,12 @@ function SyncFooter() {
 
 export function describeSync(s: SyncStatus, now: Date): { text: string; icon: IconName; failed: boolean } {
   if (!s.configured || !s.signedIn || !s.enabled) return { text: "Sur cet appareil", icon: "icloud.slash", failed: false };
+  if (s.syncing) {
+    const moved = s.syncing.pulled + s.syncing.pushed;
+    return { text: moved > 0 ? `Synchronisation… ${moved} lignes` : "Synchronisation…", icon: "arrow.clockwise", failed: false };
+  }
   if (s.lastError) return { text: "Synchronisation en échec", icon: "exclamationmark.triangle", failed: true };
-  if (!s.lastSyncAt) return { text: "Synchronisation…", icon: "arrow.clockwise", failed: false };
+  if (!s.lastSyncAt) return { text: "Pas encore synchronisé", icon: "arrow.clockwise", failed: false };
   const minutes = Math.floor((now.getTime() - new Date(s.lastSyncAt).getTime()) / 60_000);
   if (minutes < 1) return { text: "Synchronisé à l'instant", icon: "icloud", failed: false };
   const rtf = new Intl.RelativeTimeFormat("fr-CH", { numeric: "auto" });

@@ -83,6 +83,8 @@ export interface SyncStatus {
   skippedUnreadable: number;
   /** Le build connaît l'hôte du relais : l'appairage est possible. */
   pairingAvailable: boolean;
+  /** Une passe est en cours, et ce qu'elle a déjà fait (`null` hors passe). */
+  syncing: SyncReport | null;
 }
 
 /** Ce qu'on branche au démarrage : la base locale, et la relue de l'écran. */
@@ -137,6 +139,9 @@ const foreignKeyMessage = "Clé différente : des données de ce compte sont chi
 /** Une erreur de passe, en français : l'état l'affiche, jamais une alerte. */
 function syncMessage(e: unknown): string {
   if (e instanceof SupabaseError) return `Erreur serveur (${e.status}) : ${e.message}`;
+  if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+    return "Le serveur ne répond pas : la passe a été interrompue, la suivante reprendra où elle en était.";
+  }
   if (e instanceof TypeError) return "Réseau indisponible : vérifie ta connexion.";
   return e instanceof Error ? e.message : "La synchronisation a échoué.";
 }
@@ -209,6 +214,8 @@ export class SyncService {
   private autoTimer: ReturnType<typeof setInterval> | null = null;
   /** La passe en cours : un appel pendant l'autre l'attend, le moteur de plus en serialise. */
   private pending: Promise<SyncReport | null> | null = null;
+  /** La passe en cours : lignes envoyées et reçues jusqu'ici. */
+  private progress: SyncReport | null = null;
 
   constructor(inputs: SyncServiceInputs) {
     this.storage = inputs.storage === undefined ? defaultStorage() : inputs.storage;
@@ -444,7 +451,14 @@ export class SyncService {
         return null;
       }
       const stats = new SkipStats();
-      const report = await new SyncEngine(local, new EncryptedTransport(new SupabaseTransport(client), keys, stats)).sync();
+      this.progress = { pushed: 0, pulled: 0, keptLocal: 0, orphans: 0 };
+      this.notify();
+      const engine = new SyncEngine(local, new EncryptedTransport(new SupabaseTransport(client), keys, stats), 200, (r) => {
+        this.progress = r;
+        this.notify();
+      });
+      const report = await engine.sync();
+      this.progress = null;
       const skipped = { foreignKey: stats.foreignKey, unreadable: stats.unreadable };
       this.persisted = {
         lastSyncAt: new Date().toISOString(), lastReport: report, skipped,
@@ -456,6 +470,7 @@ export class SyncService {
       this.notify();
       return report;
     } catch (e) {
+      this.progress = null;
       // L'échec d'une passe n'est jamais une erreur d'écran : il s'affiche,
       // et la prochaine (timer, écriture, bouton) retente.
       this.persisted = { ...this.persisted, lastError: e instanceof ForeignKeyError ? foreignKeyMessage : syncMessage(e) };
@@ -480,6 +495,7 @@ export class SyncService {
       skippedForeignKey: this.persisted.skipped?.foreignKey ?? 0,
       skippedUnreadable: this.persisted.skipped?.unreadable ?? 0,
       pairingAvailable: this.relay !== null,
+      syncing: this.progress,
     };
   }
 

@@ -149,7 +149,9 @@ export function SyncSection() {
 
         <SettingRow label="Dernière synchronisation">
           <span className="settings-value">
-            {status.lastSyncAt ? syncMoment(status.lastSyncAt) : "jamais"}
+            {status.syncing
+              ? `en cours… ${status.syncing.pulled} reçues, ${status.syncing.pushed} envoyées`
+              : status.lastSyncAt ? syncMoment(status.lastSyncAt) : "jamais"}
           </span>
         </SettingRow>
 

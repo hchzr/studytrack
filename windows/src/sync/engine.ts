@@ -32,7 +32,13 @@ export function rewind(cursor: string | null, ms = CURSOR_OVERLAP_MS): string | 
 }
 
 export class SyncEngine {
-  constructor(readonly store: LocalStore, readonly transport: Transport, readonly batch = 200) {}
+  constructor(
+    readonly store: LocalStore,
+    readonly transport: Transport,
+    readonly batch = 200,
+    /** Après chaque lot envoyé ou reçu : de quoi dire où en est une longue première passe. */
+    readonly onProgress?: (report: SyncReport) => void,
+  ) {}
 
   private running: Promise<SyncReport> | null = null;
 
@@ -67,6 +73,7 @@ export class SyncEngine {
         await this.store.acknowledge(table, sent, fromRemote(t, server));
         report.pushed++;
       }
+      this.onProgress?.({ ...report });
     }
   }
 
@@ -88,6 +95,7 @@ export class SyncEngine {
         const stamp = String(r.server_updated_at);
         if (!newest || new Date(stamp) >= new Date(newest)) newest = stamp;
       }
+      if (rows.length) this.onProgress?.({ ...report });
       if (rows.length < this.batch) break;
       const last = rows[rows.length - 1];
       since = String(last.server_updated_at);

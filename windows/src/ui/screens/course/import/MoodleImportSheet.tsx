@@ -8,6 +8,7 @@
 // (Tequila / Microsoft) ; la session sert ensuite à toutes les lectures.
 
 import { useEffect, useRef, useState } from "react";
+import { listenNative } from "../../../../native/tauri.ts";
 import type { Course } from "../../../../models/course.ts";
 import { useData } from "../../../../data/dataContext.tsx";
 import { Button, EmptyState, Icon, IconButton } from "../../../kit.tsx";
@@ -54,6 +55,16 @@ export function MoodleImportSheet({ course, onClose, initialDraft }: {
   useEffect(() => { if (siteAvailable() && !initialDraft) void start(); return () => abort.current?.abort(); },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []);
+
+  // La fenêtre de connexion se ferme seule une fois connecté·e (native/site.rs) : on enchaîne
+  // sans attendre « C'est fait ».
+  const phaseRef = useRef(phase.name);
+  phaseRef.current = phase.name;
+  useEffect(() => listenNative<string>("site:signed-in", (label) => {
+    if (label === "moodle" && phaseRef.current === "login") void start();
+  }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  []);
 
   function close() { abort.current?.abort(); void closeSiteLogin("moodle"); onClose(); }
 

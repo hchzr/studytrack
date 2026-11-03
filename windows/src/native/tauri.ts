@@ -28,3 +28,15 @@ export async function callNativeOrThrow<T>(command: string, args?: Record<string
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(command, args);
 }
+
+/** Écoute un événement de Rust ; renvoie l'arrêt (sans effet hors de l'app). */
+export function listenNative<T>(event: string, handler: (payload: T) => void): () => void {
+  if (!inNative()) return () => {};
+  let off: (() => void) | null = null;
+  let stopped = false;
+  void import("@tauri-apps/api/event").then(({ listen }) => listen<T>(event, ({ payload }) => handler(payload))).then((unlisten) => {
+    if (stopped) unlisten();
+    else off = unlisten;
+  });
+  return () => { stopped = true; off?.(); };
+}

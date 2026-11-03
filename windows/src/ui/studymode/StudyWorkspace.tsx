@@ -28,6 +28,7 @@ import { ExercisePane } from "./panes/ExercisePane.tsx";
 import { NotesPane } from "./panes/NotesPane.tsx";
 import { SheetPane } from "./panes/SheetPane.tsx";
 import { Glyph, tintOfCourse } from "./parts.tsx";
+import { ErrorBoundary } from "../ErrorBoundary.tsx";
 
 /** La série du moment : celle de l'exercice suivi, sinon celle de la semaine. */
 function currentSeriesOf(course: Course | null, targetID: string | undefined) {
@@ -208,6 +209,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
         </nav>
 
         <main style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <ErrorBoundary label="Ce panneau" resetKey={pane}>
           {pane === "desk" && (
             <DeskHome
               course={course}
@@ -221,9 +223,11 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
           {pane === "exercise" && <ExercisePane course={course} timer={timer} save={save} />}
           {pane === "notes" && <NotesPane course={course} save={save} />}
           {pane === "sheet" && <SheetPane course={course} />}
+          </ErrorBoundary>
         </main>
 
         {sideOpen && (
+          <ErrorBoundary label="Le volet">
           <StudySidePanel
             course={course}
             series={series}
@@ -231,6 +235,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
             onOpenPane={openPane}
             onClose={() => setSideOpen(false)}
           />
+          </ErrorBoundary>
         )}
       </div>
 

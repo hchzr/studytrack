@@ -29,6 +29,9 @@ export interface RequestOptions {
   auth?: boolean;
 }
 
+/** Au-delà, une requête est abandonnée (une page de 200 lignes revient en bien moins). */
+export const REQUEST_TIMEOUT_MS = 45_000;
+
 export class SupabaseClient {
   private session: Session | null = null;
   private refreshing: Promise<void> | null = null;
@@ -108,6 +111,8 @@ export class SupabaseClient {
       method: opts.method ?? "GET",
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      // Une requête qui ne revient jamais bloquait la passe — et l'écran disait « Synchronisation… » sans fin.
+      signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined,
     });
   }
 

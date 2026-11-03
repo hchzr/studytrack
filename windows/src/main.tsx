@@ -2,6 +2,7 @@ import "./ui/tokens.css";
 import "./ui/kit.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ErrorBoundary } from "./ui/ErrorBoundary.tsx";
 
 // Un seul bundle, deux fenêtres : `?window=mini` est le chrono flottant (créé par
 // Rust, voir src-tauri/src/native/mini.rs) ; sinon, l'app. Les imports sont
@@ -10,7 +11,7 @@ async function boot() {
   const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
   if (new URLSearchParams(window.location.search).get("window") === "mini") {
     const { MiniTimer } = await import("./ui/mini/MiniTimer.tsx");
-    root.render(<React.StrictMode><MiniTimer /></React.StrictMode>);
+    root.render(<React.StrictMode><ErrorBoundary label="Le chrono"><MiniTimer /></ErrorBoundary></React.StrictMode>);
     return;
   }
   // Les secrets (jetons, session) sortent du coffre du système avant le premier
@@ -20,7 +21,7 @@ async function boot() {
   // Avant toute lecture d'un cours : fiche de révision et carte décodées en types du domaine.
   await import("./domain/registerCodecs.ts");
   const { default: App } = await import("./App");
-  root.render(<React.StrictMode><App /></React.StrictMode>);
+  root.render(<React.StrictMode><ErrorBoundary label="StudyTrack"><App /></ErrorBoundary></React.StrictMode>);
 }
 
 void boot();
