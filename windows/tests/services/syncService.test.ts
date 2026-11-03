@@ -55,9 +55,15 @@ function makeServer() {
     }
     if (url === `${BASE}/auth/v1/signup`) {
       // Sans jeton : l'adresse attend sa confirmation.
-      if (!state.confirmSignUp) return json({ id: "u1", email: "hugo@epfl.ch" });
+      if ((body as { email?: string }).email === "deja@epfl.ch") return json({ id: "u0", email: "deja@epfl.ch", identities: [] });
+      if (!state.confirmSignUp) return json({ id: "u1", email: "hugo@epfl.ch", identities: [{ id: "i1" }] });
       return json(SESSION_OK);
     }
+    if (url === `${BASE}/auth/v1/verify`) {
+      if ((body as { token?: string }).token === "123456") return json(SESSION_OK);
+      return json({ code: "otp_expired", msg: "Token has expired or is invalid" }, 403);
+    }
+    if (url === `${BASE}/auth/v1/resend`) return json({});
     if (url === `${BASE}/auth/v1/logout`) return new Response(null, { status: 204 });
     if (url.startsWith(`${BASE}/rest/`)) {
       if (state.failRest) return json("boom", 500);
@@ -188,11 +194,21 @@ describe("syncService", () => {
     expect(server.calls.some((c) => c.url === `${BASE}/auth/v1/signup`)).toBe(true);
   });
 
-  it("inscription avec adresse à confirmer : pas de session, un message clair", async () => {
+  it("inscription avec adresse à confirmer : pas de session, puis le code connecte", async () => {
     const { server, service } = await setup();
     server.state.confirmSignUp = false;
-    await expect(service.signUp("hugo@epfl.ch", "bon")).rejects.toThrow(/confirme l'adresse e-mail/);
+    expect(await service.signUp("hugo@epfl.ch", "bon")).toBe("confirm");
     expect((await service.status()).signedIn).toBe(false);
+    await expect(service.verifySignUp("hugo@epfl.ch", "000000")).rejects.toThrow(/Code faux ou expiré/);
+    await service.verifySignUp("hugo@epfl.ch", "123 456");
+    expect((await service.status()).signedIn).toBe(true);
+    await service.resendSignUp("hugo@epfl.ch");
+    expect(server.calls.some((c) => c.url === `${BASE}/auth/v1/resend`)).toBe(true);
+  });
+
+  it("inscription d'une adresse qui a déjà un compte : on le dit", async () => {
+    const { service } = await setup();
+    await expect(service.signUp("deja@epfl.ch", "bon")).rejects.toThrow(/déjà un compte/);
   });
 
   it("activé et connecté : la passe pousse les lignes à envoyer, puis recharge", async () => {

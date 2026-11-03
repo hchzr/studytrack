@@ -114,6 +114,11 @@ function authMessage(e: unknown): string {
     const raw = e.message.toLowerCase();
     if (e.status >= 500) return `Le serveur a un problème (${e.status}) : réessaie dans un instant.`;
     if (/already|exist/.test(raw)) return "Cette adresse a déjà un compte : connecte-toi.";
+    if (/not confirmed/.test(raw)) return "Adresse pas encore confirmée : tape le code reçu par e-mail.";
+    if (/expired|invalid.*(otp|token)|(otp|token).*invalid/.test(raw)) return "Code faux ou expiré : vérifie-le, ou demande-en un nouveau.";
+    if (e.status === 429 || /rate limit|security purposes/.test(raw)) {
+      return "Trop d'essais d'affilée : attends une minute, puis réessaie.";
+    }
     if (/password/.test(raw) && /at least|weak|too short/.test(raw)) {
       return "Le mot de passe est trop court (6 caractères au moins).";
     }
@@ -249,7 +254,11 @@ export class SyncService {
     void this.refreshVault().catch(() => {});
   }
 
-  async signUp(email: string, password: string): Promise<void> {
+  /**
+   * Créer un compte. `"confirm"` : le projet exige la confirmation de l'adresse — un code
+   * (et un lien) part par e-mail, et `verifySignUp` termine. `"signedIn"` : c'est fait.
+   */
+  async signUp(email: string, password: string): Promise<"confirm" | "signedIn"> {
     if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
     // Le client n'a pas de `signUp` (le Swift passe par la même requête) :
     // `/auth/v1/signup` s'appelle sans session, la clé anon en Bearer.
@@ -259,14 +268,47 @@ export class SyncService {
     } catch (e) {
       throw new Error(authMessage(e));
     }
-    const session = sessionFromSignUp(raw);
-    if (!session) {
-      // Le projet demande la confirmation de l'adresse : pas de session avant
-      // le clic dans le message reçu.
-      throw new Error("Compte créé : confirme l'adresse e-mail reçue, puis connecte-toi.");
+    // Une adresse qui a déjà un compte : Supabase répond un utilisateur sans identité
+    // (pour ne pas dire quelles adresses existent) et n'envoie rien.
+    const identities = (raw as { identities?: unknown[] } | null)?.identities;
+    if (Array.isArray(identities) && identities.length === 0) {
+      throw new Error("Cette adresse a déjà un compte : connecte-toi (ou « Continuer avec Google » si tu l'as créé ainsi).");
     }
-    // Inscription = connexion quand le projet signe tout de suite.
-    await this.client.setSession(session);
+    const session = sessionFromSignUp(raw);
+    // Le projet demande la confirmation de l'adresse : pas de session avant le code.
+    if (!session) return "confirm";
+    await this.adopt(session);
+    return "signedIn";
+  }
+
+  /** Le code à 6 chiffres reçu par e-mail : confirme l'adresse et connecte. */
+  async verifySignUp(email: string, code: string): Promise<void> {
+    if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
+    let raw: unknown;
+    try {
+      raw = await this.client.request("/auth/v1/verify", {
+        method: "POST", body: { type: "email", email, token: code.replace(/\s+/g, "") }, auth: false,
+      });
+    } catch (e) {
+      throw new Error(authMessage(e));
+    }
+    const session = sessionFromSignUp(raw);
+    if (!session) throw new Error("Code accepté, mais pas de session : connecte-toi avec ton mot de passe.");
+    await this.adopt(session);
+  }
+
+  /** Renvoie le message de confirmation (code et lien). */
+  async resendSignUp(email: string): Promise<void> {
+    if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
+    try {
+      await this.client.request("/auth/v1/resend", { method: "POST", body: { type: "signup", email }, auth: false });
+    } catch (e) {
+      throw new Error(authMessage(e));
+    }
+  }
+
+  private async adopt(session: Session): Promise<void> {
+    await this.client!.setSession(session);
     this.vaultKeyId = undefined;
     this.notify();
     void this.refreshVault().catch(() => {});

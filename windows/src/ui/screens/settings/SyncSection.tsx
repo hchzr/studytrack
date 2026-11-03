@@ -3,7 +3,7 @@
 // connecter n'envoie rien, et tout se débraye. Les données restent lisibles
 // par leur seul auteur (RLS côté serveur).
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useData } from "../../../data/dataContext.tsx";
 import { DateUtils } from "../../../domain/dateUtils.ts";
 import { Plural } from "../../../domain/plural.ts";
@@ -11,16 +11,7 @@ import { Button, Section, Card, Switch } from "../../kit.tsx";
 import { SettingRow } from "./controls.tsx";
 import { syncService, type SyncStatus } from "../../../services/syncService.ts";
 import { EncryptionPanel } from "./SyncEncryption.tsx";
-
-/** Un champ « libellé au-dessus, contrôle dessous », comme le formulaire de cours. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="settings-form-field">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
+import { SyncAccount } from "./SyncAccount.tsx";
 
 /** « lun. 28 sept. à 08:15 » — l'heure de la dernière passe. */
 function syncMoment(iso: string): string {
@@ -44,11 +35,9 @@ function reportLine(status: SyncStatus): string {
 export function SyncSection() {
   const { reload } = useData();
   const [status, setStatus] = useState<SyncStatus | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   /** Le geste en vol, pour désactiver les boutons le temps qu'il finisse. */
-  const [busy, setBusy] = useState<"in" | "up" | "sync" | "google" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "google" | null>(null);
   const [providers, setProviders] = useState<string[]>([]);
 
   useEffect(() => {
@@ -75,21 +64,6 @@ export function SyncSection() {
       setProviders(await syncService.providers());
     } catch (e) {
       setError(e instanceof Error ? e.message : "La connexion Google a échoué.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const authenticate = async (mode: "in" | "up") => {
-    if (busy !== null) return;
-    setBusy(mode);
-    setError(null);
-    try {
-      if (mode === "in") await syncService.signIn(email.trim(), password);
-      else await syncService.signUp(email.trim(), password);
-      setPassword("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "La connexion a échoué.");
     } finally {
       setBusy(null);
     }
@@ -141,55 +115,12 @@ export function SyncSection() {
 
   if (!status.signedIn) {
     return (
-      <Section title="Synchronisation">
+      <Section title="Compte et synchronisation">
         <Card>
-          <form className="settings-form" onSubmit={(event: FormEvent<HTMLFormElement>) => {
-            event.preventDefault();
-            void authenticate("in");
-          }}>
-            <div className="settings-form-head">
-              <h3 className="serif">Compte StudyTrack</h3>
-              <p className="settings-hint">
-                Un compte pour retrouver cours, séries et sessions sur un autre appareil.
-                Elles sont chiffrées sur tes appareils : le serveur ne peut pas les lire.
-              </p>
-            </div>
-
-            <div className="settings-form-grid">
-              <Field label="Adresse e-mail">
-                <input className="field" type="email" required value={email} autoComplete="email"
-                  aria-label="Adresse e-mail" onChange={(event) => setEmail(event.target.value)} />
-              </Field>
-              <Field label="Mot de passe">
-                <input className="field" type="password" required value={password}
-                  autoComplete="current-password" aria-label="Mot de passe"
-                  onChange={(event) => setPassword(event.target.value)} />
-              </Field>
-            </div>
-
-            {error && (
-              <p className="settings-error" role="alert">{error}</p>
-            )}
-
-            <div className="settings-actions">
-              <Button disabled={busy !== null} onClick={() => void google(false)}>
-                {busy === "google" ? "En attente du navigateur…" : "Continuer avec Google"}
-              </Button>
-              {busy === "google" && (
-                <Button onClick={() => syncService.cancelOAuth()}>Annuler</Button>
-              )}
-              <Button disabled={busy !== null} onClick={() => void authenticate("up")}>
-                {busy === "up" ? "Création…" : "Créer un compte"}
-              </Button>
-              <Button type="submit" variant="primary"
-                disabled={busy !== null || email.trim() === "" || password === ""}>
-                {busy === "in" ? "Connexion…" : "Se connecter"}
-              </Button>
-            </div>
-          </form>
+          <SyncAccount />
         </Card>
         <p className="settings-footnote">
-          Un compte n'envoie rien tout seul : la synchronisation s'active après, et elle se débraye.
+          Un compte n'envoie rien tout seul : la synchronisation s'allume ensuite, ici, et elle s'éteint quand tu veux.
         </p>
       </Section>
     );

@@ -28,10 +28,14 @@ export interface MiniTimer {
   finish(): Promise<void>;
 }
 
-/** Faut-il montrer la fenêtre flottante ? (MiniTimerPanel.update : réglage + une session.) */
-export function miniWanted(enabled: boolean, state: FocusTimerState | null): boolean {
+/**
+ * Faut-il montrer la fenêtre flottante ? (MiniTimerPanel.update : réglage + une session.)
+ * Elle sert quand on est **ailleurs** : tant que la fenêtre de StudyTrack est devant, son
+ * chrono est déjà à l'écran (mode étude, récapitulatif), la pilule par-dessus ne ferait que gêner.
+ */
+export function miniWanted(enabled: boolean, state: FocusTimerState | null, mainFocused = false): boolean {
   // Sous le verrou d'étude, rien ne doit flotter par-dessus l'écran de StudyTrack.
-  return enabled && state !== null && !StudyMode.blocks(state);
+  return enabled && state !== null && !mainFocused && !StudyMode.blocks(state);
 }
 
 export async function startMiniBridge(options: {
@@ -45,6 +49,10 @@ export async function startMiniBridge(options: {
   const now = options.now ?? (() => new Date());
   let visible = false;
   let enabled = readFloatingTimer();
+  let mainFocused = true;
+  /** Les commandes partent une à une : deux `mini_set_visible` simultanés pouvaient
+   *  arriver dans le désordre (montrer après masquer), et la pilule restait. */
+  let queue: Promise<unknown> = Promise.resolve();
   let last: MiniState | null = null;
 
   const state = (): { state: FocusTimerState | null; settings: PomodoroSettings } => {
@@ -57,9 +65,11 @@ export async function startMiniBridge(options: {
     return buildMiniState(current, settings, options.courseOf(current?.courseID), now());
   };
 
-  const publish = async () => {
-    const wanted = miniWanted(enabled, state().state);
-    if (wanted !== visible) {
+  const apply = async () => {
+    const wanted = miniWanted(enabled, state().state, mainFocused);
+    // Masquer est sans effet si c'est déjà fait : on le redit toujours (le verrou d'étude
+    // masque aussi la pilule de son côté, sans passer par ici).
+    if (wanted !== visible || !wanted) {
       visible = wanted;
       await callNative("mini_set_visible", { visible: wanted });
     }
@@ -68,13 +78,24 @@ export async function startMiniBridge(options: {
       await emit(MINI_STATE, last);
     }
   };
+  const publish = (): Promise<unknown> => (queue = queue.then(apply, apply));
 
   const unsubscribe = options.timer.subscribe(() => void publish());
   // Réglages › Chrono › Chrono flottant : appliqué tout de suite.
   const onSettings = () => { enabled = readFloatingTimer(); void publish(); };
   globalThis.addEventListener?.(NATIVE_SETTINGS_EVENT, onSettings);
 
+  // La fenêtre principale devant ou non : par événements du système.
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const main = getCurrentWindow();
+  try { mainFocused = await main.isFocused(); } catch { /* garde la valeur prudente */ }
+
   const offs = await Promise.all([
+    main.onFocusChanged(({ payload }) => {
+      if (payload === mainFocused) return;
+      mainFocused = payload;
+      void publish();
+    }),
     listen<MiniCommand>(MINI_COMMAND, ({ payload }) => {
       switch (payload) {
         case "toggle": options.timer.toggle(); break;
