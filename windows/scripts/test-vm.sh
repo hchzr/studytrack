@@ -116,7 +116,7 @@ case "${1:-status}" in
       sg="$(security_group)"
       ami="$(aws ssm get-parameter --name /aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base \
         --query Parameter.Value --output text)"
-      echo "Création de la machine ($TYPE, $REGION)…"
+      echo "Création de la machine (${TYPE}, ${REGION})…"
       id="$(aws ec2 run-instances --image-id "$ami" --instance-type "$TYPE" --key-name "$NAME" \
         --security-group-ids "$sg" \
         --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=50,VolumeType=gp3,DeleteOnTermination=true}' \
@@ -124,7 +124,7 @@ case "${1:-status}" in
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$NAME}]" \
         --query 'Instances[0].InstanceId' --output text)"
     elif [[ "$(aws ec2 describe-instances --instance-ids "$id" --query 'Reservations[0].Instances[0].State.Name' --output text)" != "running" ]]; then
-      echo "Rallumage de $id…"
+      echo "Rallumage de ${id}…"
       aws ec2 wait instance-stopped --instance-ids "$id" 2>/dev/null || true
       aws ec2 start-instances --instance-ids "$id" >/dev/null
     fi
@@ -142,7 +142,7 @@ case "${1:-status}" in
     id="$(instance_id)"
     if [[ -n "$id" ]]; then
       aws ec2 terminate-instances --instance-ids "$id" >/dev/null
-      echo "Destruction de $id…"
+      echo "Destruction de ${id}…"
       aws ec2 wait instance-terminated --instance-ids "$id"
     fi
     aws ec2 delete-security-group --group-name "$NAME" >/dev/null 2>&1 || true
@@ -153,7 +153,7 @@ case "${1:-status}" in
   resize)
     new="${2:?Usage : $0 resize <type>, par ex. c7i.2xlarge}"
     id="$(instance_id)"; [[ -n "$id" ]] || { echo "Aucune machine : lance « up »." >&2; exit 1; }
-    echo "Extinction de $id…"
+    echo "Extinction de ${id}…"
     aws ec2 stop-instances --instance-ids "$id" >/dev/null
     aws ec2 wait instance-stopped --instance-ids "$id"
     aws ec2 modify-instance-attribute --instance-id "$id" --instance-type "{\"Value\": \"$new\"}"
