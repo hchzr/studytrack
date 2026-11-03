@@ -121,8 +121,7 @@ enum ContentRefresher {
         guard await SeriesSourceWatch.flagChanged(courses: courses, moodleReady: false) > 0 else { return }
         let news = await SeriesAutoReader.shared.readPending(courses: courses, context: context, settings: settings)
         if !news.isEmpty {
-            settings.contentRefreshNews = settings.contentRefreshNews.isEmpty
-                ? news.joined(separator: " · ") : settings.contentRefreshNews + " · " + news.joined(separator: " · ")
+            settings.contentRefreshNews = SettingsStore.mergedNews(settings.contentRefreshNews, adding: news.joined(separator: " · "))
         }
     }
 

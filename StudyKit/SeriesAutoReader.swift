@@ -13,7 +13,7 @@ enum SeriesAutoReading {
             let report = await SeriesAutoReader.shared.readPending(courses: courses, context: context, settings: settings)
             guard !report.isEmpty else { return }
             let line = "Énoncés lus — " + report.joined(separator: " · ")
-            settings.contentRefreshNews = settings.contentRefreshNews.isEmpty ? line : settings.contentRefreshNews + " · " + line
+            settings.contentRefreshNews = SettingsStore.mergedNews(settings.contentRefreshNews, adding: line)
         }
     }
 }

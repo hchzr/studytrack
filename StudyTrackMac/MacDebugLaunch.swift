@@ -66,6 +66,21 @@ enum MacDebugLaunch {
                     content = AnyView(PersonalizeForm().modelContainer(memory).frame(width: 520).padding(.vertical, 12))
                     size = NSSize(width: 560, height: 900)
 
+                case let page where page.hasPrefix("page-"):
+                    // Une page de la fenêtre (`page-today|agenda|stats|groups|focus`), sur la vraie base.
+                    let settings = StudyModeController.shared.settings ?? MacSettings()
+                    let view: AnyView
+                    switch page.dropFirst("page-".count) {
+                    case "agenda": view = AnyView(MacAgendaView(open: { _, _ in }))
+                    case "stats": view = AnyView(MacStatsView())
+                    case "groups": view = AnyView(MacGroupsView())
+                    case "focus": view = AnyView(MacFocusView())
+                    default: view = AnyView(MacTodayView(open: { _, _ in }, goFocus: {}))
+                    }
+                    content = AnyView(view
+                        .environment(settings).environment(timer).environment(settings.shared).environment(store)
+                        .modelContainer(store.container))
+                    size = NSSize(width: 1100, height: 900)
                 case let page where page.hasPrefix("settings-"):
                     // Réglages › une page (`settings-general|chrono|study|accounts|claude`), avancé ouvert
                     // avec `-advanced`.

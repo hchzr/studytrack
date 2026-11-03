@@ -253,6 +253,16 @@ final class SettingsStore {
     // MARK: État interne
     var hasSeededSampleData: Bool { didSet { defaults.set(hasSeededSampleData, forKey: Key.hasSeededSampleData) } }
 
+    /// « Nouveau dans tes cours » : une ligne de plus, sans répéter ce qui y est déjà
+    /// (deux relectures du même cours ajoutaient la même série deux fois).
+    static func mergedNews(_ existing: String, adding line: String) -> String {
+        var seen = Set<String>()
+        return (existing.components(separatedBy: " · ") + line.components(separatedBy: " · "))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+            .joined(separator: " · ")
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.hoursPerCredit = defaults.object(forKey: Key.hoursPerCredit) as? Double ?? 30

@@ -97,11 +97,12 @@ struct MacGroupsView: View {
                     Text("Groupes").font(Carnet.serif(30)).foregroundStyle(Carnet.ink)
                     Spacer()
                     if groupsService.isSyncing { ProgressView().controlSize(.small) }
-                    Button { Task { await groupsService.refresh() } } label: { Image(systemName: "arrow.clockwise") }
-                        .help("Actualiser")
-                        .disabled(!social.isSignedIn)
-                    Button("Rejoindre") { form = .join }.disabled(!social.isSignedIn)
-                    Button("Créer") { form = .create }.buttonStyle(.ink).disabled(!social.isSignedIn)
+                    if social.isSignedIn {
+                        Button { Task { await groupsService.refresh() } } label: { Image(systemName: "arrow.clockwise") }
+                            .help("Actualiser")
+                        Button("Rejoindre") { form = .join }
+                        Button("Créer") { form = .create }.buttonStyle(.ink)
+                    }
                 }
                 .buttonStyle(.paper)
                 if !social.isSignedIn {

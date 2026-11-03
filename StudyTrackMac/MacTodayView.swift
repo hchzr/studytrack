@@ -74,7 +74,7 @@ struct MacTodayView: View {
     /// (ici ou sur l'iPhone), jusqu'à ce qu'on le ferme (ici ou là-bas).
     @ViewBuilder
     private var news: some View {
-        let news = store.preferences.contentRefreshNews
+        let news = SettingsStore.mergedNews("", adding: store.preferences.contentRefreshNews)
         if !news.isEmpty {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "sparkles").foregroundStyle(Carnet.ink)
@@ -155,6 +155,12 @@ struct MacTodayView: View {
     private func weekCourses(_ summaries: [WeekCourseSummary]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: weekTitle)
+            if summaries.isEmpty {
+                Text("Aucun cours suivi. Ajoute-en un avec + dans la barre latérale.")
+                    .foregroundStyle(Carnet.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .paperSheet(padding: 14)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14)], spacing: 14) {
                 ForEach(summaries, id: \.course.id) { summary in
                     Button { open(summary.course.id, nil) } label: { WeekCourseCard(summary: summary) }
@@ -267,6 +273,12 @@ struct MacTodayView: View {
         let goalHours = Double(settings.dailyGoalSeconds(in: context)) / 3600
         return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "7 derniers jours")
+            if days.allSatisfy({ $0.seconds == 0 }) {
+                Text("Pas encore de temps compté cette semaine.")
+                    .font(.callout).foregroundStyle(Carnet.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .paperSheet(padding: 14)
+            } else {
             Chart {
                 ForEach(days, id: \.day) { day in
                     BarMark(x: .value("Jour", day.day, unit: .day), y: .value("Heures", Double(day.seconds) / 3600))
@@ -290,6 +302,7 @@ struct MacTodayView: View {
             }
             .frame(height: 120)
             .paperSheet(padding: 14)
+            }
         }
     }
 }

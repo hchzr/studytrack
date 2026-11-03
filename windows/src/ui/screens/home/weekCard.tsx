@@ -145,7 +145,7 @@ export function WeekCourseRow({ summary, onOpen }:
           )}
         </span>
       ) : (
-        <span className="t-sub">Rien de prévu cette semaine</span>
+        <span className="t-sub">{summary.late > 0 ? "Rien de nouveau cette semaine : le moment de rattraper" : "Rien de prévu cette semaine"}</span>
       )}
       {!summary.corrections.isEmpty && (
         <span className={cx("t-sub-xs", summary.corrections.toRedo > 0 && "urgent")}>{correctionsLine(summary)}</span>
