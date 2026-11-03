@@ -79,7 +79,7 @@ struct ClaudePane: View {
                     header(chat)
                     Rectangle().fill(Carnet.rule).frame(height: 1)
                     if scope == .series, exercise != nil { strip(chat) }
-                    if !ClaudeChat.isAvailable {
+                    if !ClaudeChat.isAvailable, chat.messages.isEmpty {
                         notInstalled
                     } else {
                         conversation(chat)
@@ -637,8 +637,8 @@ struct ClaudePane: View {
     private var notInstalled: some View {
         VStack(spacing: 14) {
             Image(systemName: "terminal").font(.largeTitle).foregroundStyle(Carnet.inkSecondary)
-            Text("Connecte Claude").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
-            Text("Installe Claude Code, puis tape `claude` une fois dans le Terminal.")
+            Text("Le tuteur gratuit répond").font(Carnet.serif(.title2)).foregroundStyle(Carnet.ink)
+            Text("Pose ta question ci-dessous. Pour Claude (ton abonnement, il lit le PDF de la série) : installe Claude Code, puis tape `claude` une fois dans le Terminal.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Carnet.inkSecondary)
                 .frame(maxWidth: 420)

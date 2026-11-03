@@ -13,7 +13,19 @@ enum RevisionSheetClaude {
 
     @MainActor
     static func write(instructions: String, prompt: String) async throws -> String {
-        guard let executable = ClaudeChat.executable else { throw ClaudeChat.Failure.notInstalled }
+        guard let executable = ClaudeChat.executable else {
+            // Sans Claude Code : le tuteur gratuit, dans le mode qui porte cette consigne (le serveur
+            // n'accepte pas de consigne du client, il a la même copie).
+            let mode: String
+            switch instructions {
+            case RevisionSheetAI.instructions: mode = "sheet"
+            case RevisionSheetAI.methodsInstructions: mode = "sheetMethods"
+            case StudyMapAI.instructions: mode = "studyMap"
+            case StudyMapAI.chapterInstructions: mode = "studyMapChapter"
+            default: throw ClaudeChat.Failure.notInstalled
+            }
+            return try await FreeTutor.ask(mode: mode, messages: [(role: "user", content: prompt)]).text
+        }
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {

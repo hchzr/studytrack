@@ -416,14 +416,14 @@ private struct ClaudeSettingsPane: View {
                     if ClaudeChat.executable != nil {
                         Label("Trouvé", systemImage: "checkmark.circle.fill").foregroundStyle(.secondary)
                     } else {
-                        Text("introuvable — installe Claude Code").foregroundStyle(Carnet.wrong)
+                        Text("absent : le tuteur gratuit répond").foregroundStyle(.secondary)
                     }
                 }
                 Toggle("Mon projet Claude (dossier, compétences, connecteurs)", isOn: $settings.claudeProject)
             } header: {
                 Text("Claude")
             } footer: {
-                Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : "Passe par ton abonnement, sans outils.")
+                Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : "Passe par ton abonnement ; sans Claude Code, le tuteur gratuit prend le relais.")
             }
 
             Section {

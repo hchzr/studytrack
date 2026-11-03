@@ -65,6 +65,8 @@ final class ClaudeChat: Identifiable {
     private(set) var messages: [Message] = []
     private(set) var isThinking = false
     private(set) var isAnswering = false
+    /// La conversation telle que le tuteur gratuit l'a reçue (sans Claude Code).
+    @ObservationIgnored private var tutorHistory: [(role: String, content: String)] = []
     /// L'outil en cours (« Notion », « compétence »), pendant une réponse.
     private(set) var activeTool: String?
     /// Où en est la fenêtre de 5 h de l'abonnement (0 → 1).
@@ -211,11 +213,14 @@ final class ClaudeChat: Identifiable {
             close()
         }
         requestedModel = model
-        do {
-            try startIfNeeded()
-        } catch {
-            messages.append(Message(role: .claude, text: "", error: error.localizedDescription))
-            return
+        let free = !Self.isAvailable
+        if !free {
+            do {
+                try startIfNeeded()
+            } catch {
+                messages.append(Message(role: .claude, text: "", error: error.localizedDescription))
+                return
+            }
         }
         var prompt = ""
         if !opened, let series = situation.series {
@@ -250,6 +255,23 @@ final class ClaudeChat: Identifiable {
         messages.append(Message(role: .claude, text: "", isStreaming: true))
         isAnswering = true
         isThinking = true
+        if free {
+            // Sans Claude Code : le tuteur gratuit du serveur (le texte seulement, sans pièces jointes).
+            tutorHistory.append((role: "user", content: prompt))
+            let history = tutorHistory
+            Task { @MainActor in
+                do {
+                    let answer = try await FreeTutor.ask(messages: history)
+                    tutorHistory.append((role: "assistant", content: answer.text))
+                    if let index = messages.lastIndex(where: { $0.role == .claude && $0.isStreaming }) { messages[index].text = answer.text }
+                    finishStreaming(error: nil)
+                } catch {
+                    tutorHistory.removeLast()
+                    finishStreaming(error: error.localizedDescription)
+                }
+            }
+            return
+        }
         let line = ClaudeTutor.userLine(text: prompt, attachments: attachments) + "\n"
         lastLine = line
         receivedAny = false
