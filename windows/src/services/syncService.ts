@@ -195,6 +195,9 @@ function readStatus(storage: Storage | null): PersistedStatus {
 export class SyncService {
   private readonly storage: Storage | null;
   private readonly client: SupabaseClient | null;
+
+  /** Le client du compte (les groupes s'en servent : même session, mêmes jetons). */
+  get supabase(): SupabaseClient | null { return this.client; }
   private readonly sessions: LocalSessionStore | null;
   private readonly fetchImpl: typeof fetch;
   private readonly oauthLoopback: () => Promise<Loopback>;

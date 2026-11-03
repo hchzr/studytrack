@@ -5,6 +5,7 @@ import { SqliteSource, type DataSource } from "./data/source.ts";
 import { pickSource } from "./data/appSource.ts";
 import { syncService } from "./services/syncService.ts";
 import { checkMoodleNews } from "./services/moodleWatcher.ts";
+import { startGroupPresence } from "./ui/groups/groupPresence.ts";
 import { setupShellExtras } from "./ui/shellExtras.ts";
 import { Shell } from "./ui/shell.tsx";
 import { QuickNoteHost } from "./ui/quicknote/QuickNote.tsx";
@@ -31,6 +32,7 @@ export default function App() {
       <SyncWiring source={base} />
       <NativeWiring />
       <MoodleNewsWiring />
+      <GroupPresenceWiring />
       <Shell />
       <QuickNoteHost />
     </DataProvider>
@@ -64,6 +66,22 @@ function SyncWiring({ source }: { source: DataSource }) {
     syncService.attach({ local: source.localStore, reload });
     syncService.startAutoSync();
   }, [source, store, reload]);
+  return null;
+}
+
+/** Ma présence dans mes groupes pendant que le chrono tourne. */
+function GroupPresenceWiring() {
+  const { store } = useData();
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  useEffect(() => startGroupPresence(
+    (id) => (id ? storeRef.current?.fetch(Course).find((c) => c.id === id)?.displayCode ?? "" : ""),
+    (state) => {
+      const course = state.courseID ? storeRef.current?.fetch(Course).find((c) => c.id === state.courseID) : undefined;
+      const exercise = course?.allExercises.find((e) => e.id === state.targetID);
+      return exercise ? exercise.displayNumber : "";
+    },
+  ), []);
   return null;
 }
 
