@@ -13,6 +13,8 @@ import {
   ConfidenceDot, ConfidencePicker, Pill, openURL, tintColor, webURL, type CourseActions,
 } from "./common.tsx";
 import "./course.css";
+import { useState } from "react";
+import { PastExamWork } from "../../pastexam/PastExamWork.tsx";
 
 interface ExamsTabProps {
   course: Course;
@@ -24,6 +26,7 @@ export function ExamsTab({ course, saveAll, actions }: ExamsTabProps) {
   const menu = useContextMenu();
   const exams = course.sortedExams;
   const past = course.sortedPastExams;
+  const [working, setWorking] = useState<PastExam | null>(null);
   const summary = PastExamProgress.summary(past.map((exam) => ({ year: exam.year, worked: exam.isWorked })));
   const priority = PastExamProgress.priority(past.map((exam) => ({ year: exam.year, worked: exam.isWorked })));
 
@@ -119,6 +122,7 @@ export function ExamsTab({ course, saveAll, actions }: ExamsTabProps) {
                       <ConfidencePicker value={exam.confidence} onChange={(value) => void setConfidence(exam, value)} size={18} />
                     </div>
                   </div>
+                  {url && <Button size="sm" icon="doc.text" onClick={() => setWorking(exam)}>Travailler</Button>}
                   {url && <IconButton icon="arrow.up.right.square" label="Ouvrir le sujet" size="sm" onClick={() => openURL(url)} />}
                 </div>
               );
@@ -131,6 +135,7 @@ export function ExamsTab({ course, saveAll, actions }: ExamsTabProps) {
         )}
       </Card>
       {menu.element}
+      {working && <PastExamWork exam={working} save={(instance) => saveAll([instance])} close={() => setWorking(null)} />}
     </div>
   );
 }
