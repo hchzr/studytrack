@@ -9,8 +9,11 @@ import { useState } from "react";
 import { Segmented } from "../../kit.tsx";
 import { StudyMap } from "../../../domain/studyMap.ts";
 import { ConceptPanel, LearningPathView, MindMapView, readStudyMap, updateStudyMap } from "../../studymap/StudyMapViews.tsx";
+import { DiagramsView } from "../../studymap/DiagramViews.tsx";
+import { ListenView } from "../../studymap/ListenView.tsx";
+import { enrichStudyMap } from "../../../services/studyMapMaker.ts";
 
-type SheetTab = "fiche" | "carte" | "parcours";
+type SheetTab = "fiche" | "carte" | "schemas" | "parcours" | "ecouter";
 import { RichInline } from "../../rich/RichText.tsx";
 import { makeRevisionSheet } from "../../../services/revisionSheetMaker.ts";
 import { openInApp } from "../openers.ts";
@@ -38,6 +41,7 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
   const [tab, setTab] = useState<SheetTab>("fiche");
   const [chapter, setChapter] = useState<string | null>(null);
   const [concept, setConcept] = useState<string | null>(null);
+  const [enriching, setEnriching] = useState<string | null>(null);
   const make = async () => {
     if (!course || making) return;
     setFailure(null);
@@ -69,6 +73,24 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
     bump((n) => n + 1);
   };
 
+  // « Comprendre avec Claude » : relier les notions, les expliquer, dessiner les schémas.
+  const done = chapter ? map.enrichedChapters?.[chapter] !== undefined : map.enrichedAt !== null;
+  const comprehend = save && sheet !== null ? (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button type="button" className="btn" disabled={enriching !== null} onClick={() => {
+        setEnriching("…");
+        setFailure(null);
+        void enrichStudyMap(course, chapter, readStudyMap(course), setEnriching)
+          .then((next) => { updateStudyMap(course, save, (m) => Object.assign(m, next)); bump((n) => n + 1); },
+            (error: unknown) => setFailure(error instanceof Error ? error.message : String(error)))
+          .finally(() => setEnriching(null));
+      }}>
+        {enriching ? "Claude travaille…" : chapter ? (done ? "Refaire ce chapitre" : "Comprendre ce chapitre") : (done ? "Refaire les liens" : "Comprendre avec Claude")}
+      </button>
+      {enriching && enriching !== "…" && <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{enriching}</span>}
+    </div>
+  ) : null;
+
   return (
     <div style={{ height: "100%", display: "flex", minHeight: 0 }}>
     <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "24px 28px 40px" }}>
@@ -91,7 +113,7 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
         {sheet !== null && (
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Segmented<SheetTab> ariaLabel="Vue de la fiche" value={tab} onChange={setTab}
-              options={[{ value: "fiche", label: "Fiche" }, { value: "carte", label: "Carte" }, { value: "parcours", label: "Parcours" }]} />
+              options={[{ value: "fiche", label: "Fiche" }, { value: "carte", label: "Carte" }, { value: "schemas", label: "Schémas" }, { value: "parcours", label: "Parcours" }, { value: "ecouter", label: "Écouter" }]} />
             {sheet.chapters.length > 1 && (
               <select className="select" value={chapter ?? ""} onChange={(event) => setChapter(event.target.value || null)} aria-label="Chapitre">
                 <option value="">Tout le cours</option>
@@ -101,6 +123,13 @@ export function SheetPane({ course, save }: { course: Course | null; save?: (ins
           </div>
         )}
 
+        {sheet !== null && tab === "schemas" && (
+          <DiagramsView sheet={sheet} map={map} chapter={chapter} tint={tint} openConcept={setConcept} comprehend={comprehend} />
+        )}
+        {sheet !== null && tab === "ecouter" && (
+          <ListenView courseName={course.name} code={course.displayCode} sheet={sheet} map={map} chapter={chapter} />
+        )}
+        {sheet !== null && (tab === "carte" || tab === "parcours") && comprehend}
         {sheet !== null && tab === "parcours" && (
           <LearningPathView sheet={sheet} map={map} chapter={chapter} tint={tint} openConcept={setConcept} selectChapter={setChapter} />
         )}

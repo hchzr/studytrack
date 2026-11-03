@@ -8,7 +8,7 @@ import { nativeFetch } from "../native/http.ts";
 import { installID } from "../native/settings.ts";
 import type { ChatMessage } from "./claudeConversation.ts";
 
-export type TutorMode = "tutor" | "sheet" | "sheetMethods";
+export type TutorMode = "tutor" | "sheet" | "sheetMethods" | "studyMap" | "studyMapChapter";
 
 export interface TutorAnswer { text: string; model: string; provider: string }
 

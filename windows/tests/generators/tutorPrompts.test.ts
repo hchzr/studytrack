@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { ClaudeTutor } from "../../src/domain/claudeTutor.ts";
 import { RevisionSheetAI } from "../../src/domain/revisionSheet.ts";
+import { StudyMapAI } from "../../src/domain/studyMapAI.ts";
 
 const FILE = new URL("../../../supabase/functions/tutor/prompts.generated.ts", import.meta.url);
 
 function generated(): string {
-  const prompts = { tutor: ClaudeTutor.systemPrompt("tutor"), sheet: RevisionSheetAI.instructions, sheetMethods: RevisionSheetAI.methodsInstructions };
-  return "// Généré depuis l'app (ClaudeTutor.systemPrompt, RevisionSheetAI) : le serveur n'accepte pas de consigne du client.\n"
+  const prompts = { tutor: ClaudeTutor.systemPrompt("tutor"), sheet: RevisionSheetAI.instructions, sheetMethods: RevisionSheetAI.methodsInstructions,
+    studyMap: StudyMapAI.instructions, studyMapChapter: StudyMapAI.chapterInstructions };
+  return "// Généré depuis l'app (ClaudeTutor.systemPrompt, RevisionSheetAI, StudyMapAI) : le serveur n'accepte pas de consigne du client.\n"
     + "// Régénérer : cd windows && UPDATE=1 npx vitest run tests/generators\n\nexport const PROMPTS: Record<string, string> = "
     + JSON.stringify(prompts, null, 2) + ";\n";
 }
