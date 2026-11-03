@@ -34,6 +34,15 @@ function GoogleMark() {
   );
 }
 
+/** La pomme d'Apple, de la couleur du texte du bouton (consignes d'Apple : noir sur blanc ou blanc sur noir). */
+function AppleMark() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 814 1000" aria-hidden fill="currentColor">
+      <path d="M788 341c-6 4-108 62-108 190 0 149 131 201 135 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-128C45 789 0 668 0 553 0 368 120 270 239 270c63 0 115 41 155 41 38 0 97-44 169-44 27 0 125 2 190 74zM555 168c30-35 51-84 51-133 0-7-1-14-2-19-48 2-106 32-140 72-27 31-53 80-53 130 0 8 1 15 2 18 3 1 8 1 13 1 43 0 98-29 129-69z" />
+    </svg>
+  );
+}
+
 export function SyncAccount() {
   const [mode, setMode] = useState<Mode>("signin");
   const [stage, setStage] = useState<Stage>({ kind: "form" });
@@ -43,7 +52,7 @@ export function SyncAccount() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"google" | "submit" | "verify" | "resend" | "link" | null>(null);
+  const [busy, setBusy] = useState<"google" | "apple" | "submit" | "verify" | "resend" | "link" | null>(null);
   const [cooldown, setCooldown] = useState(0);
 
   // Le décompte du « Renvoyer » : un réveil par seconde, seulement pendant qu'il court.
@@ -164,17 +173,25 @@ export function SyncAccount() {
         </p>
       </div>
 
+      <Button className="account-main account-apple" disabled={busy !== null}
+        onClick={() => void run("apple", () => syncService.signInWithApple())}>
+        <AppleMark />
+        {busy === "apple" ? "Termine dans ton navigateur…" : "Continuer avec Apple"}
+      </Button>
       <Button className="account-main" disabled={busy !== null}
         onClick={() => void run("google", () => syncService.signInWithGoogle())}>
         <GoogleMark />
         {busy === "google" ? "Termine dans ton navigateur…" : "Continuer avec Google"}
       </Button>
-      {busy === "google" && (
+      {(busy === "google" || busy === "apple") && (
         <p className="settings-hint">
-          Une page s'est ouverte dans ton navigateur : choisis ton compte, puis reviens ici.{" "}
+          Une page s'est ouverte dans ton navigateur : connecte-toi, puis reviens ici.{" "}
           <button type="button" className="link-btn" onClick={() => syncService.cancelOAuth()}>Annuler</button>
         </p>
       )}
+      <p className="settings-hint account-center">
+        Tu as créé ton compte sur iPhone avec Apple ? Choisis « Continuer avec Apple » : c'est le même compte.
+      </p>
 
       <div className="account-or"><span>ou avec ton e-mail</span></div>
 

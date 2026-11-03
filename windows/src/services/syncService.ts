@@ -34,7 +34,7 @@ import { supabaseConfig, relayHost, type SupabaseConfig } from "./syncConfig.ts"
 import { LocalSessionStore, defaultStorage } from "./sessionStore.ts";
 import { runOAuth, oauthMessage } from "./oauth.ts";
 import { startLoopback, openInBrowser } from "../native/oauth.ts";
-import type { Loopback } from "./oauth.ts";
+import type { Loopback, OAuthProvider } from "./oauth.ts";
 
 /** Le rapport de la dernière passe, pour l'écran Réglages. */
 export type { SyncReport } from "../sync/engine.ts";
@@ -316,8 +316,20 @@ export class SyncService {
 
   /** « Continuer avec Google » : le flux PKCE, puis la session comme après `signIn`. */
   async signInWithGoogle(): Promise<void> {
+    await this.signInWith("google");
+  }
+
+  /**
+   * « Continuer avec Apple » : le même flux, dans le navigateur du système. Pour les comptes
+   * créés sur iPhone avec « Se connecter avec Apple » — le même compte, sans mot de passe.
+   */
+  async signInWithApple(): Promise<void> {
+    await this.signInWith("apple");
+  }
+
+  private async signInWith(provider: OAuthProvider): Promise<void> {
     if (!this.client) throw new Error("La synchronisation n'est pas configurée sur ce poste.");
-    await runOAuth({ client: this.client, fetchImpl: this.fetchImpl, startLoopback: this.oauthLoopback, openBrowser: this.openBrowser, onWaiting: (c) => { this.oauthCancel = c; this.notify(); } });
+    await runOAuth({ client: this.client, fetchImpl: this.fetchImpl, startLoopback: this.oauthLoopback, openBrowser: this.openBrowser, provider, onWaiting: (c) => { this.oauthCancel = c; this.notify(); } });
     this.vaultKeyId = undefined;
     this.notify();
     void this.refreshVault().catch(() => {});

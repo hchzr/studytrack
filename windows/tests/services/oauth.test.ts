@@ -30,6 +30,13 @@ describe("adresses", () => {
     expect(u.searchParams.get("code_challenge")).toBe("CHAL");
     expect(u.searchParams.get("code_challenge_method")).toBe("s256");
   });
+  it("Apple passe par le même chemin, et les messages le nomment", () => {
+    const u = new URL(authorizeURL(BASE, "apple", "C", loopbackRedirect(1)));
+    expect(u.searchParams.get("provider")).toBe("apple");
+    expect(oauthMessage(new SupabaseError(400, "Unsupported provider: provider is not enabled"), false, "apple"))
+      .toBe("La connexion Apple n'est pas encore activée sur le serveur.");
+    expect(callbackMessage("identity_already_exists", false, "apple")).toContain("compte Apple");
+  });
   it("lier une identité passe par /user/identities/authorize", () => {
     const u = new URL(authorizeURL(BASE, "google", "C", loopbackRedirect(1), { link: true, skipRedirect: true }));
     expect(u.pathname).toBe("/auth/v1/user/identities/authorize");

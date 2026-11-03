@@ -19,6 +19,11 @@ struct SupabaseSyncSection: View {
                     Text(ui: "Synchroniser mes données")
                 }
                 .disabled(!sync.isEnabled && !(signedIn && sync.encryption == .ready))
+                // Les modificateurs d'une Section se posent sur chacune de ses lignes : la feuille du
+                // mot de passe, présentée par toutes à la fois, se refermait aussitôt. Une seule ligne la porte.
+                .sheet(isPresented: $showingPassword) { SetPasswordSheet(sync: sync) }
+                .task(id: signedIn) { await sync.refreshProviders() }
+                .onChange(of: signedIn) { _, _ in sync.refreshAccount() }
 
                 if signedIn {
                     SyncEncryptionPanel(sync: sync)
@@ -114,9 +119,6 @@ struct SupabaseSyncSection: View {
         } footer: {
             Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur le Mac et sur Windows, en plus d'iCloud. Désactivée par défaut.")
         }
-        .sheet(isPresented: $showingPassword) { SetPasswordSheet(sync: sync) }
-        .task(id: signedIn) { await sync.refreshProviders() }
-        .onChange(of: signedIn) { _, _ in sync.refreshAccount() }
     }
 
     static func lastSyncText(_ date: Date?) -> String {

@@ -75,6 +75,35 @@ struct SyncEncryptionPanel: View {
             Text(ui: "Tes données sont chiffrées sur tes appareils ; le serveur ne peut pas les lire. Il voit seulement quand une ligne change et combien il y en a.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            // Dans une liste, les modificateurs d'un Group se posent sur **chaque** ligne : la feuille
+            // était présentée par plusieurs lignes à la fois et se refermait aussitôt. Une seule ligne la porte.
+            .task { await sync.refreshVault() }
+            .sheet(item: $sheet) { item in
+                switch item {
+                case .recoveryCreated(let key):
+                    RecoveryKeySheet(keyText: key, title: "Clé de secours", done: "J'ai noté la clé")
+                case .showRecovery(let key):
+                    RecoveryKeySheet(keyText: key, title: "Clé de secours", done: "Masquer")
+                case .confirmRecovery:
+                    ConfirmSheet(title: "Afficher la clé de secours ?",
+                                 message: "Elle donne accès à toutes tes données chiffrées. Vérifie que personne ne regarde l'écran.",
+                                 action: "Afficher") {
+                        if let key = sync.recoveryKey() { sheet = .showRecovery(key) } else { sheet = nil; error = "Cet appareil n'a pas la clé du compte." }
+                    }
+                case .pairHost:
+                    PairHostSheet(sync: sync)
+                case .pairJoin:
+                    CodeEntrySheet(title: "Entrer un code d'appairage", prompt: "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX", action: "Ajouter",
+                                   hint: "Sur un appareil déjà connecté : Réglages › Synchronisation › Ajouter un appareil. Saisis le code affiché, ou scanne le QR code.",
+                                   scanner: true) { try await sync.joinPairing(code: $0) }
+                case .restore:
+                    CodeEntrySheet(title: "Utiliser la clé de secours", prompt: "XXXX-XXXX-…", action: "Restaurer",
+                                   hint: "La clé de secours de 54 caractères, montrée à l'activation du chiffrement.",
+                                   scanner: false) { try await sync.restore(recoveryKey: $0) }
+                case .reset:
+                    ResetSheet(sync: sync) { key in sheet = .recoveryCreated(key) }
+                }
+            }
 
             switch sync.encryption {
             case .signedOut:
@@ -125,33 +154,7 @@ struct SyncEncryptionPanel: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
         }
-        .task { await sync.refreshVault() }
-        .sheet(item: $sheet) { item in
-            switch item {
-            case .recoveryCreated(let key):
-                RecoveryKeySheet(keyText: key, title: "Clé de secours", done: "J'ai noté la clé")
-            case .showRecovery(let key):
-                RecoveryKeySheet(keyText: key, title: "Clé de secours", done: "Masquer")
-            case .confirmRecovery:
-                ConfirmSheet(title: "Afficher la clé de secours ?",
-                             message: "Elle donne accès à toutes tes données chiffrées. Vérifie que personne ne regarde l'écran.",
-                             action: "Afficher") {
-                    if let key = sync.recoveryKey() { sheet = .showRecovery(key) } else { sheet = nil; error = "Cet appareil n'a pas la clé du compte." }
-                }
-            case .pairHost:
-                PairHostSheet(sync: sync)
-            case .pairJoin:
-                CodeEntrySheet(title: "Entrer un code d'appairage", prompt: "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX", action: "Ajouter",
-                               hint: "Sur un appareil déjà connecté : Réglages › Synchronisation › Ajouter un appareil. Saisis le code affiché, ou scanne le QR code.",
-                               scanner: true) { try await sync.joinPairing(code: $0) }
-            case .restore:
-                CodeEntrySheet(title: "Utiliser la clé de secours", prompt: "XXXX-XXXX-…", action: "Restaurer",
-                               hint: "La clé de secours de 54 caractères, montrée à l'activation du chiffrement.",
-                               scanner: false) { try await sync.restore(recoveryKey: $0) }
-            case .reset:
-                ResetSheet(sync: sync) { key in sheet = .recoveryCreated(key) }
-            }
-        }
+
     }
 
     private func activate() async {

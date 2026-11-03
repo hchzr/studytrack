@@ -91,3 +91,5 @@ ol.settings-hint { margin: 0; padding-left: 18px; font-size: 12px; color: var(--
 .link-btn { background: none; border: 0; padding: 0; color: var(--ink-secondary); font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .link-btn:hover:not(:disabled) { color: var(--ink); }
 .link-btn:disabled { opacity: 0.5; cursor: default; }
+.account-apple { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+.account-apple:hover:not(:disabled) { background: var(--ink); opacity: 0.88; }

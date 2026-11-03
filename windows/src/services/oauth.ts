@@ -1,4 +1,4 @@
-// Connexion par un fournisseur (Google) : GoTrue en OAuth avec PKCE, sans supabase-js.
+// Connexion par un fournisseur (Google, Apple) : GoTrue en OAuth avec PKCE, sans supabase-js.
 //
 //   1. un `code_verifier` tiré au hasard et son `code_challenge` (S256) ;
 //   2. la commande Rust `oauth_start` écoute un port libre de 127.0.0.1 (RFC 8252) ;
@@ -22,7 +22,12 @@ export function loopbackRedirect(port: number): string {
   return `http://127.0.0.1:${port}${OAUTH_CALLBACK_PATH}`;
 }
 
-export type OAuthProvider = "google";
+export type OAuthProvider = "google" | "apple";
+
+/** Le nom du fournisseur, pour les messages. */
+export function providerName(provider: OAuthProvider): string {
+  return provider === "apple" ? "Apple" : "Google";
+}
 
 /** Le résultat d'un retour de GoTrue. */
 export type OAuthCallback = { code: string } | { error: string };
@@ -87,26 +92,26 @@ export function exchangeBody(code: string, verifier: string): { auth_code: strin
   return { auth_code: code, code_verifier: verifier };
 }
 
-const NOT_ENABLED = "La connexion Google n'est pas encore activée sur le serveur.";
-const LINK_DISABLED = "Lier un compte Google n'est pas encore activé sur le serveur.";
-
 /** Une erreur de GoTrue ou du flux, dite en français. */
-export function oauthMessage(e: unknown, link = false): string {
+export function oauthMessage(e: unknown, link = false, provider: OAuthProvider = "google"): string {
+  const name = providerName(provider);
+  const NOT_ENABLED = `La connexion ${name} n'est pas encore activée sur le serveur.`;
+  const LINK_DISABLED = `Lier un compte ${name} n'est pas encore activé sur le serveur.`;
   if (e instanceof SupabaseError) {
     const raw = e.message.toLowerCase();
     if (/manual.?linking|linking.*(disabled|not enabled)/.test(raw)) return LINK_DISABLED;
     if (/provider is not enabled|unsupported provider|not enabled/.test(raw)) return link ? LINK_DISABLED : NOT_ENABLED;
-    if (/already.*(linked|exists|registered)|identity_already_exists/.test(raw)) return "Ce compte Google est déjà lié à un autre compte StudyTrack.";
+    if (/already.*(linked|exists|registered)|identity_already_exists/.test(raw)) return `Ce compte ${name} est déjà lié à un autre compte StudyTrack.`;
     if (e.status >= 500) return `Le serveur a un problème (${e.status}) : réessaie dans un instant.`;
-    return `Le serveur a refusé la connexion Google (${e.status}).`;
+    return `Le serveur a refusé la connexion ${name} (${e.status}).`;
   }
   if (e instanceof TypeError) return "Réseau indisponible : vérifie ta connexion et réessaie.";
-  return e instanceof Error ? e.message : "La connexion Google a échoué.";
+  return e instanceof Error ? e.message : `La connexion ${name} a échoué.`;
 }
 
 /** Un retour d'erreur de GoTrue (dans l'adresse de rappel), en français. */
-export function callbackMessage(description: string, link = false): string {
-  return oauthMessage(new SupabaseError(400, description), link);
+export function callbackMessage(description: string, link = false, provider: OAuthProvider = "google"): string {
+  return oauthMessage(new SupabaseError(400, description), link, provider);
 }
 
 /** Une écoute de rappel sur la boucle locale (voir `native/oauth.ts`). */
@@ -126,27 +131,29 @@ export interface FlowInputs {
   /** Ouvre une adresse https dans le navigateur du système. */
   openBrowser: (url: string) => Promise<void>;
   link?: boolean;
+  /** Google par défaut. */
+  provider?: OAuthProvider;
   /** Reçoit l'annulation possible pendant l'attente du navigateur. */
   onWaiting?: (cancel: (() => void) | null) => void;
 }
 
 /** Le flux complet ; la session est posée sur le client (comme `signInWithPassword`). */
-export async function runOAuth({ client, fetchImpl, startLoopback, openBrowser, link = false, onWaiting }: FlowInputs): Promise<void> {
+export async function runOAuth({ client, fetchImpl, startLoopback, openBrowser, link = false, provider = "google", onWaiting }: FlowInputs): Promise<void> {
   const verifier = makeVerifier();
   const challenge = await challengeS256(verifier);
   const loopback = await startLoopback();
   try {
-    const plain = authorizeURL(client.url, "google", challenge, loopback.redirect, { link });
-    const target = await resolveAuthorizeURL(client, fetchImpl, challenge, loopback.redirect, link) ?? plain;
+    const plain = authorizeURL(client.url, provider, challenge, loopback.redirect, { link });
+    const target = await resolveAuthorizeURL(client, fetchImpl, provider, challenge, loopback.redirect, link) ?? plain;
     onWaiting?.(loopback.cancel);
     await openBrowser(target);
     const callback = parseCallback(await loopback.callback);
-    if (callback === null) throw new Error("La connexion Google a été interrompue.");
-    if ("error" in callback) throw new Error(callbackMessage(callback.error, link));
+    if (callback === null) throw new Error(`La connexion ${providerName(provider)} a été interrompue.`);
+    if ("error" in callback) throw new Error(callbackMessage(callback.error, link, provider));
     try {
       await client.exchangeCode(callback.code, verifier);
     } catch (e) {
-      throw new Error(oauthMessage(e, link));
+      throw new Error(oauthMessage(e, link, provider));
     }
   } finally {
     onWaiting?.(null);
@@ -159,8 +166,8 @@ export async function runOAuth({ client, fetchImpl, startLoopback, openBrowser, 
  * se dit tout de suite, au lieu d'une page d'erreur JSON dans le navigateur. `null` : réponse
  * inattendue (redirection suivie, CORS) — on ouvre alors l'adresse directe.
  */
-async function resolveAuthorizeURL(client: SupabaseClient, fetchImpl: typeof fetch, challenge: string, redirect: string, link: boolean): Promise<string | null> {
-  const url = authorizeURL(client.url, "google", challenge, redirect, { link, skipRedirect: true });
+async function resolveAuthorizeURL(client: SupabaseClient, fetchImpl: typeof fetch, provider: OAuthProvider, challenge: string, redirect: string, link: boolean): Promise<string | null> {
+  const url = authorizeURL(client.url, provider, challenge, redirect, { link, skipRedirect: true });
   try {
     if (link) {
       const json = await client.request<{ url?: string }>(url.slice(client.url.length));
@@ -172,7 +179,7 @@ async function resolveAuthorizeURL(client: SupabaseClient, fetchImpl: typeof fet
     const json = JSON.parse(text) as { url?: string };
     return typeof json.url === "string" ? json.url : null;
   } catch (e) {
-    if (e instanceof SupabaseError) throw new Error(oauthMessage(e, link));
+    if (e instanceof SupabaseError) throw new Error(oauthMessage(e, link, provider));
     return null;
   }
 }
