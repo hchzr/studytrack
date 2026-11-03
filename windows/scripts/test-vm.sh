@@ -12,7 +12,7 @@
 # Prérequis : `aws login` (ou `aws configure`) fait une fois, et l'app « Windows App ».
 set -euo pipefail
 
-REGION="${AWS_REGION:-${STUDYTRACK_VM_REGION:-eu-central-2}}" # Zurich : la plus proche
+REGION="${AWS_REGION:-${STUDYTRACK_VM_REGION:-eu-central-1}}" # Francfort : proche, et activée sur tout compte (Zurich est en option)
 TYPE="${STUDYTRACK_VM_TYPE:-t3.large}"
 NAME="studytrack-windows-test"
 KEY_FILE="$HOME/.ssh/$NAME.pem"
