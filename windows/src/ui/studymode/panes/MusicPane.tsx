@@ -1,12 +1,14 @@
 // La musique du bureau (le volet Musique du Mac) :
-//   • Spotify Connect : ce qui joue sur n'importe lequel de tes appareils Spotify, le piloter,
-//     le déplacer vers ce PC ou une enceinte, lancer une playlist ;
-//   • sans Spotify : le lecteur du système (Apple Music, un navigateur…), lecture et pause.
+//   • d'office, sans compte développeur ni Premium : ce que joue le lecteur du PC (l'app Spotify,
+//     gratuite ou non, Apple Music, un navigateur), le piloter, et lancer une playlist Spotify
+//     dans l'app Spotify depuis son lien ;
+//   • en option (« Autoriser Spotify Connect », Premium) : tous ses appareils Spotify, ses
+//     playlists, changer d'appareil.
 
 import { useEffect, useState } from "react";
 import { SystemMedia, appName, type MediaState } from "../../../native/media.ts";
 import {
-  Spotify, onSpotifyChange, spotifyClientID, spotifyConnected, spotifySignIn, spotifySignOut,
+  Spotify, onSpotifyChange, setSpotifyClientID, spotifyClientID, spotifyConnected, spotifySignIn, spotifySignOut,
   type SpotifyDevice, type SpotifyPlayback, type SpotifyPlaylist,
 } from "../../../services/spotify.ts";
 import { Icon } from "../../icons.tsx";
@@ -27,27 +29,98 @@ export function MusicPane() {
   );
 }
 
-function ConnectSpotify() {
+/** `https://open.spotify.com/playlist/…` ou `spotify:playlist:…` → l'adresse que l'app Spotify ouvre. */
+export function spotifyURI(text: string): string | null {
+  const value = text.trim();
+  const uri = /^spotify:(playlist|album|artist|track|show|episode):([A-Za-z0-9]+)$/.exec(value);
+  if (uri) return value;
+  const web = /open\.spotify\.com\/(?:intl-[a-z-]+\/)?(playlist|album|artist|track|show|episode)\/([A-Za-z0-9]+)/.exec(value);
+  return web ? `spotify:${web[1]}:${web[2]}` : null;
+}
+
+const SAVED = "spotify.savedLinks";
+
+/** Lancer une playlist dans l'app Spotify du PC (gratuit ou Premium) : son lien, gardé pour la prochaine fois. */
+function OpenInSpotify() {
+  const [text, setText] = useState("");
+  const [saved, setSaved] = useState<{ uri: string; label: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED) ?? "[]"); } catch { return []; }
+  });
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const hasApp = spotifyClientID() !== "";
+  const open = async (uri: string) => {
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(uri);
+    } catch {
+      setError("L'app Spotify ne s'ouvre pas : est-elle installée ?");
+    }
+  };
+  const add = () => {
+    const uri = spotifyURI(text);
+    if (!uri) { setError("Colle un lien Spotify (playlist, album…)."); return; }
+    setError(null);
+    const next = [{ uri, label: uri.split(":")[1] === "playlist" ? "Playlist" : uri.split(":")[1] }, ...saved.filter((s) => s.uri !== uri)].slice(0, 8);
+    setSaved(next);
+    try { localStorage.setItem(SAVED, JSON.stringify(next)); } catch { /* pour la session */ }
+    setText("");
+    void open(uri);
+  };
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16, borderRadius: 14, border: "1px solid var(--rule)" }}>
-      <span className="serif" style={{ fontSize: 18, color: "var(--ink)" }}>Spotify Connect</span>
-      <span style={{ fontSize: 13, color: "var(--ink-secondary)" }}>
-        Pilote Spotify sur tous tes appareils (ce PC, ton téléphone, une enceinte) sans quitter le mode étude :
-        ce qui joue, morceau suivant, changer d'appareil, lancer une playlist. Le pilotage demande Spotify Premium.
-      </span>
-      {hasApp ? (
-        <button type="button" className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => {
-          setBusy(true);
-          setError(null);
-          void spotifySignIn().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
-        }}>{busy ? "Termine dans ton navigateur…" : "Se connecter à Spotify"}</button>
-      ) : (
-        <span style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>Ce build n'a pas d'app Spotify : ajoute son identifiant dans Réglages › Musique.</span>
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span className="serif" style={{ fontSize: 16, color: "var(--ink)" }}>Lancer dans Spotify</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input className="field" style={{ flex: 1 }} placeholder="Lien d'une playlist ou d'un album (Partager › Copier le lien)" value={text}
+          onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") add(); }} />
+        <button type="button" className="btn btn-primary" disabled={!text.trim()} onClick={add}>Écouter</button>
+      </div>
+      {saved.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {saved.map((item, index) => (
+            <button key={item.uri} type="button" className="chip" title={item.uri} onClick={() => { void open(item.uri); }}>
+              {item.label} {index + 1}
+            </button>
+          ))}
+        </div>
       )}
       {error && <span style={{ color: "var(--wrong)", fontSize: 13 }}>{error}</span>}
+    </section>
+  );
+}
+
+/** Spotify Connect, en option : piloter tous ses appareils Spotify (compte Premium et app Spotify déclarée). */
+function ConnectSpotify() {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [clientID, setClientID] = useState(spotifyClientID);
+  const [field, setField] = useState("");
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 14, borderRadius: 14, border: "1px solid var(--rule)" }}>
+      <button type="button" className="link-btn" style={{ alignSelf: "flex-start", textDecoration: "none", fontSize: 14, color: "var(--ink)" }}
+        aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={open ? "chevron.down" : "chevron.right"} size={12} /> Autoriser Spotify Connect (Premium)
+      </button>
+      {open && (
+        <>
+          <span style={{ fontSize: 13, color: "var(--ink-secondary)" }}>
+            Pour piloter Spotify sur tous tes appareils (ton téléphone, une enceinte), voir tes playlists et changer d'appareil.
+            Spotify le réserve aux comptes Premium, avec une app déclarée sur developer.spotify.com.
+          </span>
+          {clientID ? (
+            <button type="button" className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => {
+              setBusy(true);
+              setError(null);
+              void spotifySignIn().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
+            }}>{busy ? "Termine dans ton navigateur…" : "Autoriser Spotify"}</button>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="field" style={{ flex: 1 }} placeholder="Client ID de l'app Spotify" value={field} onChange={(event) => setField(event.target.value)} />
+              <button type="button" className="btn" disabled={!field.trim()} onClick={() => { setSpotifyClientID(field); setClientID(field.trim()); }}>Garder</button>
+            </div>
+          )}
+          {error && <span style={{ color: "var(--wrong)", fontSize: 13 }}>{error}</span>}
+        </>
+      )}
     </section>
   );
 }
@@ -63,11 +136,10 @@ function SystemPanel() {
   const act = (action: "toggle" | "next" | "previous") => { void SystemMedia.command(action).then(() => window.setTimeout(refresh, 300)); };
   return (
     <>
-      <ConnectSpotify />
       <section style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
         <span className="serif" style={{ fontSize: 18, color: "var(--ink)" }}>Ce qui joue sur ce PC</span>
         {state === null ? <span>…</span> : !state.available ? (
-          <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>Rien ne joue. Lance ta musique (Apple Music, un navigateur…) : elle se pilote ici.</span>
+          <span style={{ color: "var(--ink-secondary)", fontSize: 13 }}>Rien ne joue. Lance ta musique (Spotify, Apple Music, un navigateur…) : elle se pilote ici.</span>
         ) : (
           <>
             <span className="serif" style={{ fontSize: 22, color: "var(--ink)" }}>{state.title || "Sans titre"}</span>
@@ -76,6 +148,8 @@ function SystemPanel() {
           </>
         )}
       </section>
+      <OpenInSpotify />
+      <ConnectSpotify />
     </>
   );
 }

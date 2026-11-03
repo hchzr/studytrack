@@ -247,7 +247,10 @@ struct SpotifyConnectView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                if !spotify.isConnected { connect } else { player; devices; playlists }
+                if !spotify.isConnected {
+                    SpotifyLocalView()
+                    connect
+                } else { player; devices; playlists }
                 if let error = spotify.lastError {
                     Text(error).font(.callout).foregroundStyle(Carnet.wrong)
                 }
@@ -267,22 +270,34 @@ struct SpotifyConnectView: View {
         }
     }
 
+    @State private var showsConnect = false
+
+    /// Spotify Connect, en option : réservé par Spotify aux comptes Premium, avec une app déclarée.
     private var connect: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Spotify Connect").font(Carnet.serif(22)).foregroundStyle(StudyPalette.ink)
-            Text("Pilote Spotify sur tous tes appareils (ce Mac, ton téléphone, une enceinte) sans quitter le mode étude : ce qui joue, morceau suivant, changer d'appareil, lancer une playlist. Le pilotage demande Spotify Premium.")
-                .font(.callout).foregroundStyle(StudyPalette.inkSecondary)
-            if spotify.clientID.isEmpty {
-                HStack {
-                    TextField("Identifiant de l'app Spotify (developer.spotify.com)", text: $clientField)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Garder") { spotify.clientID = clientField }.disabled(clientField.isEmpty)
+            Button { withAnimation(.snappy(duration: 0.2)) { showsConnect.toggle() } } label: {
+                Label("Autoriser Spotify Connect (Premium)", systemImage: showsConnect ? "chevron.down" : "chevron.right")
+                    .font(.callout.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(StudyPalette.ink)
+            if showsConnect {
+                Text("Pour piloter Spotify sur tous tes appareils (ton téléphone, une enceinte), voir tes playlists et changer d'appareil. Spotify le réserve aux comptes Premium, avec une app déclarée sur developer.spotify.com.")
+                    .font(.callout).foregroundStyle(StudyPalette.inkSecondary)
+                if spotify.clientID.isEmpty {
+                    HStack {
+                        TextField("Client ID de l'app Spotify", text: $clientField)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Garder") { spotify.clientID = clientField }.disabled(clientField.isEmpty)
+                    }
+                } else {
+                    Button { Task { await spotify.signIn() } } label: { Label("Autoriser Spotify", systemImage: "music.note") }
+                        .buttonStyle(InkButtonStyle())
                 }
-            } else {
-                Button { Task { await spotify.signIn() } } label: { Label("Se connecter à Spotify", systemImage: "music.note") }
-                    .buttonStyle(InkButtonStyle())
             }
         }
+        .padding(14)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(StudyPalette.rule))
     }
 
     private var player: some View {
