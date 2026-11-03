@@ -54,6 +54,8 @@ pub fn run() {
             native::secrets::secret_set,
         ])
         .setup(|app| {
+            // Les sites où l'on s'est déjà connecté (les cookies, eux, sont dans WebView2).
+            app.state::<native::site::SiteState>().load(app.handle());
             // Le plateau (zone de notification) : l'icône de l'app, ouvrir, quitter.
             let open = MenuItem::with_id(app, "open", "Ouvrir StudyTrack", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini chrono", true, None::<&str>)?;

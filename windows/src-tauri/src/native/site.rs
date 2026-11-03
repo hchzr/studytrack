@@ -22,9 +22,43 @@ use tauri::{AppHandle, Manager, State, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_http::reqwest;
 
 /// Les domaines (« epfl.ch ») dont une fenêtre de connexion a été ouverte.
+/// Retenus d'un lancement à l'autre (`site-domains.json`, noms de domaine seulement — les
+/// cookies restent dans WebView2) : sans cela, chaque relance redemandait d'ouvrir la connexion.
 #[derive(Default)]
 pub struct SiteState {
     domains: Mutex<HashSet<String>>,
+}
+
+const DOMAINS_FILE: &str = "site-domains.json";
+
+impl SiteState {
+    /// Relit les domaines déjà déclarés (au démarrage).
+    pub fn load(&self, app: &AppHandle) {
+        let Ok(dir) = app.path().app_config_dir() else { return };
+        let Ok(text) = std::fs::read_to_string(dir.join(DOMAINS_FILE)) else { return };
+        let saved: Vec<String> = serde_json::from_str(&text).unwrap_or_default();
+        if let Ok(mut domains) = self.domains.lock() {
+            domains.extend(saved.into_iter().filter(|d| is_domain(d)));
+        }
+    }
+
+    fn remember(&self, app: &AppHandle, domain: String) {
+        let Ok(mut domains) = self.domains.lock() else { return };
+        if !domains.insert(domain) {
+            return;
+        }
+        let mut list: Vec<&String> = domains.iter().collect();
+        list.sort();
+        if let (Ok(dir), Ok(json)) = (app.path().app_config_dir(), serde_json::to_string(&list)) {
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join(DOMAINS_FILE), json);
+        }
+    }
+}
+
+/// Un nom de domaine plausible (le fichier peut avoir été modifié à la main).
+fn is_domain(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 253 && s.contains('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
 /// Le domaine d'enregistrement d'un hôte : ses deux derniers segments (« moodle.epfl.ch » → « epfl.ch »).
@@ -57,9 +91,7 @@ pub async fn site_login_open(app: AppHandle, state: State<'_, SiteState>, label:
         return Err("Seules les adresses https sont acceptées.".into());
     }
     let host = parsed.host_str().ok_or("Adresse sans hôte.")?.to_string();
-    if let Ok(mut domains) = state.domains.lock() {
-        domains.insert(base_domain(&host));
-    }
+    state.remember(&app, base_domain(&host));
     let label = format!("site-{label}");
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.navigate(parsed);
@@ -199,6 +231,16 @@ mod tests {
         assert!(allowed(&state, &Url::parse("https://moodle.epfl.ch/my/").unwrap()));
         assert!(!allowed(&state, &Url::parse("http://moodle.epfl.ch/").unwrap()));
         assert!(!allowed(&state, &Url::parse("https://evil.com/").unwrap()));
+    }
+
+    #[test]
+    fn saved_domains_are_checked() {
+        assert!(is_domain("epfl.ch"));
+        assert!(is_domain("moodle-test.example.org"));
+        assert!(!is_domain(""));
+        assert!(!is_domain("localhost"));
+        assert!(!is_domain("evil.com/x"));
+        assert!(!is_domain("a b.ch"));
     }
 
     #[test]

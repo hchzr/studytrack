@@ -3,13 +3,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ExerciseSeries } from "../../models/exercise.ts";
+import type { SeriesPDFError } from "../../services/seriesPDFStore.ts";
 import { IconButton, Select } from "../kit.tsx";
 import { ExercisePDFView, PDFPane } from "./PDFPane.tsx";
+import { PDFDownloadNotice } from "./PDFDownloadNotice.tsx";
 import { cropExercise } from "./cropExercise.ts";
 import "./pdf.css";
 
-export function SeriesPDFDialog({ series, bytes, exerciseID, onClose }: {
-  series: ExerciseSeries; bytes: Uint8Array; exerciseID?: string | null; onClose: () => void;
+export function SeriesPDFDialog({ series, bytes, loading = false, error = null, onRetry, exerciseID, onClose }: {
+  series: ExerciseSeries; bytes: Uint8Array | null; loading?: boolean; error?: SeriesPDFError | null;
+  onRetry?: () => void; exerciseID?: string | null; onClose: () => void;
 }) {
   const exercises = series.sortedExercises;
   const [choice, setChoice] = useState<string>(exerciseID ?? "");
@@ -37,7 +40,9 @@ export function SeriesPDFDialog({ series, bytes, exerciseID, onClose }: {
           <IconButton icon="xmark" label="Fermer" onClick={onClose} />
         </div>
         <div className="pdf-dialog-body">
-          {crop ? <ExercisePDFView bytes={bytes} exercise={crop} next={cropNext} /> : <PDFPane bytes={bytes} />}
+          {bytes === null
+            ? <PDFDownloadNotice loading={loading} error={error} onRetry={onRetry ?? (() => {})} />
+            : crop ? <ExercisePDFView bytes={bytes} exercise={crop} next={cropNext} /> : <PDFPane bytes={bytes} />}
         </div>
       </div>
     </div>

@@ -16,7 +16,8 @@ import type { StudyTimerApi } from "../useStudyTimer.ts";
 import { seriesName, solutionAddress } from "../helpers.ts";
 import { openWebURL } from "../openers.ts";
 import { ExercisePDFView } from "../../pdf/PDFPane.tsx";
-import { useSeriesPDF } from "../../pdf/useSeriesPDF.ts";
+import { PDFDownloadNotice } from "../../pdf/PDFDownloadNotice.tsx";
+import { useRemoteSeriesPDF } from "../../pdf/useRemoteSeriesPDF.ts";
 import { cropExercise } from "../../pdf/cropExercise.ts";
 import { ExerciseQuickMark, Glyph, InkButton, Kicker, PaperButton, SubQuestionChecklist } from "../parts.tsx";
 
@@ -498,11 +499,12 @@ export function ExercisePane({ course, timer, save }: {
 
 /** L'énoncé tel qu'imprimé : la bande du PDF importé qui correspond à l'exercice, s'il est sur l'appareil. */
 function StatementPDF({ exercise }: { exercise: Exercise }) {
-  const bytes = useSeriesPDF(exercise.series?.id ?? null);
+  const remote = useRemoteSeriesPDF(exercise.series ?? null, true);
+  const bytes = remote.bytes;
   const crop = useMemo(() => cropExercise(exercise), [exercise]);
   const following = exercise.series?.sortedExercises[exercise.series.sortedExercises.findIndex((e) => e.id === exercise.id) + 1] ?? null;
   const cropNext = useMemo(() => (following ? cropExercise(following) : null), [following]);
-  if (bytes === null) return null;
+  if (bytes === null) return remote.loading || remote.error ? <PDFDownloadNotice loading={remote.loading} error={remote.error} onRetry={remote.load} /> : null;
   return (
     <div style={{ height: 420, border: "1px solid var(--rule)", borderRadius: 10, overflow: "hidden" }}>
       <ExercisePDFView bytes={bytes} exercise={crop} next={cropNext} />

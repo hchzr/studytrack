@@ -19,7 +19,7 @@ import {
   type CourseActions,
 } from "./common.tsx";
 import { SeriesPDFDialog } from "../../pdf/SeriesPDFDialog.tsx";
-import { useSeriesPDF } from "../../pdf/useSeriesPDF.ts";
+import { useRemoteSeriesPDF } from "../../pdf/useRemoteSeriesPDF.ts";
 import "./course.css";
 
 interface ExercisesTabProps {
@@ -222,7 +222,7 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
 }) {
   const links = seriesLinks(series);
   // Le PDF importé de la série, s'il est sur l'appareil.
-  const pdf = useSeriesPDF(series.id);
+  const pdf = useRemoteSeriesPDF(series);
   const [viewingPDF, setViewingPDF] = useState(false);
   const required = series.requiredExercises;
   const spent = ExerciseFlow.seconds(series);
@@ -251,10 +251,10 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
 
       {!collapsed && (
         <div className="cs-series-body">
-          {(links.length > 0 || pdf !== null) && (
+          {(links.length > 0 || pdf.available) && (
             <div className="cs-links">
-              {pdf !== null && (
-                <Button size="sm" icon="doc.text" onClick={() => setViewingPDF(true)} title="Lire le PDF importé de la série">
+              {pdf.available && (
+                <Button size="sm" icon="doc.text" onClick={() => { setViewingPDF(true); pdf.load(); }} title="Lire le PDF de la série">
                   Énoncé PDF
                 </Button>
               )}
@@ -286,7 +286,7 @@ function SeriesCard({ series, collapsed, onToggleCollapse, onMenu, onMenuAt, sel
           )}
         </div>
       )}
-      {viewingPDF && pdf && <SeriesPDFDialog series={series} bytes={pdf} onClose={() => setViewingPDF(false)} />}
+      {viewingPDF && <SeriesPDFDialog series={series} bytes={pdf.bytes} loading={pdf.loading} error={pdf.error} onRetry={pdf.load} onClose={() => setViewingPDF(false)} />}
     </Card>
   );
 }
