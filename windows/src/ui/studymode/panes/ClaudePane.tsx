@@ -8,12 +8,15 @@ import type { Course } from "../../../models/course.ts";
 import type { Exercise, ExerciseSeries } from "../../../models/exercise.ts";
 import { ClaudeTutor, type ClaudeContext, type SeriesContext } from "../../../domain/claudeTutor.ts";
 import { ClaudeConversation, claudeSetup, type ChatMessage } from "../../../services/claudeConversation.ts";
+import { FreeTutorConversation } from "../../../services/freeTutor.ts";
+import { linesFromData, plainText } from "../../../services/pdfLayoutExtractor.ts";
 import { SeriesPDFStore } from "../../../services/seriesPDFStore.ts";
 import { Icon } from "../../icons.tsx";
 import { RichInline } from "../../rich/RichText.tsx";
 import { openInApp } from "../openers.ts";
 
-const conversations = new Map<string, ClaudeConversation>();
+type Conversation = ClaudeConversation | FreeTutorConversation;
+const conversations = new Map<string, Conversation>();
 /** L'exercice dont Claude a déjà le contexte, par conversation. */
 const announced = new Map<string, string>();
 
@@ -41,7 +44,7 @@ function exerciseContext(course: Course, exercise: Exercise): ClaudeContext {
   };
 }
 
-function useConversation(key: string | null, make: () => ClaudeConversation): ClaudeConversation | null {
+function useConversation(key: string | null, make: () => Conversation): Conversation | null {
   const conversation = useMemo(() => {
     if (key === null) return null;
     let found = conversations.get(key);
@@ -63,28 +66,16 @@ export function ClaudePane({ course, series, exercise, tint }: {
 }) {
   const [installed, setInstalled] = useState<boolean | null>(null);
   useEffect(() => { void claudeSetup().then((info) => setInstalled(info?.found ?? false)); }, []);
-  const key = series ? `series:${series.id}` : null;
-  const conversation = useConversation(key, () => new ClaudeConversation(
-    key!, ClaudeTutor.sessionID(series!.id, "isolated"), ClaudeTutor.systemPrompt("tutor"),
-  ));
+  // Claude Code sur le PC : Claude par l'abonnement. Sinon : le tuteur gratuit du serveur.
+  const free = installed === false;
+  const key = series && installed !== null ? `series:${series.id}:${free ? "free" : "claude"}` : null;
+  const conversation = useConversation(key, () => free
+    ? new FreeTutorConversation(key!)
+    : new ClaudeConversation(key!, ClaudeTutor.sessionID(series!.id, "isolated"), ClaudeTutor.systemPrompt("tutor")));
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement | null>(null);
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }, [conversation?.messages.length, conversation?.messages[conversation.messages.length - 1]?.text]);
 
-  if (installed === false) {
-    return (
-      <div className="bf-center">
-        <span className="serif" style={{ fontSize: 20, color: "var(--ink)" }}>Claude passe par Claude Code</span>
-        <span style={{ maxWidth: 520 }}>
-          Installe Claude Code (gratuit avec ton abonnement Claude), connecte-toi une fois dans un terminal avec la commande
-          <span className="mono"> claude</span>, puis reviens ici : la conversation de chaque série se garde d'une séance à l'autre.
-        </span>
-        <button type="button" className="btn btn-primary" onClick={() => { void openInApp("https://claude.com/product/claude-code", "Claude Code"); }}>
-          Installer Claude Code
-        </button>
-      </div>
-    );
-  }
   if (!course || !series || !conversation) {
     return <div className="bf-center">Choisis une série : Claude t'accompagne exercice par exercice.</div>;
   }
@@ -97,22 +88,36 @@ export function ClaudePane({ course, series, exercise, tint }: {
     const attachments = [];
     if (conversation.messages.length === 0) {
       // Le début : la série entière (et son PDF s'il est sur l'appareil), l'exercice en cours.
+      // Claude lit le PDF joint ; le tuteur gratuit en reçoit le texte.
       const pdf = await SeriesPDFStore.localFile(series.id).catch(() => null);
-      if (pdf) attachments.push({ kind: { type: "pdf" as const }, data: pdf, name: `${series.title || "Série"}.pdf` });
-      prefix = ClaudeTutor.openingMessage(seriesContext(course, series, pdf !== null), exercise ? exerciseContext(course, exercise) : null, null) + "\n\n";
+      let pdfText = "";
+      if (pdf && conversation instanceof FreeTutorConversation) {
+        pdfText = await linesFromData(pdf).then(plainText).catch(() => "");
+      } else if (pdf) {
+        attachments.push({ kind: { type: "pdf" as const }, data: pdf, name: `${series.title || "Série"}.pdf` });
+      }
+      prefix = ClaudeTutor.openingMessage(seriesContext(course, series, pdf !== null), exercise ? exerciseContext(course, exercise) : null, null) + "\n\n"
+        + (pdfText ? `[StudyTrack]\nTexte de l'énoncé (PDF de la série) :\n${pdfText.slice(0, 40_000)}\n[/StudyTrack]\n\n` : "");
       if (exercise) announced.set(conversation.key, exercise.id);
     } else if (exercise && announced.get(conversation.key) !== exercise.id) {
       prefix = ClaudeTutor.exerciseSwitch(exerciseContext(course, exercise));
       announced.set(conversation.key, exercise.id);
     }
-    await conversation.send(value, prefix + value, attachments);
+    if (conversation instanceof ClaudeConversation) await conversation.send(value, prefix + value, attachments);
+    else await conversation.send(value, prefix + value);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div className="bf-page-bar">
         <Icon name="sparkles" size={15} />
-        <span className="bf-trail" style={{ color: "var(--ink)" }}>Claude · {series.title || `Série ${series.seriesNumber}`}{exercise ? ` · ${exercise.displayNumber}` : ""}</span>
+        <span className="bf-trail" style={{ color: "var(--ink)" }}>{free ? "Tuteur" : "Claude"} · {series.title || `Série ${series.seriesNumber}`}{exercise ? ` · ${exercise.displayNumber}` : ""}</span>
+        {free && (
+          <button type="button" className="link-btn" title="Claude (par ton abonnement) répond mieux et lit le PDF de la série"
+            onClick={() => { void openInApp("https://claude.com/product/claude-code", "Claude Code"); }}>
+            Gratuit{conversation instanceof FreeTutorConversation && conversation.model ? ` · ${conversation.model}` : ""} — passer à Claude
+          </button>
+        )}
         {conversation.activity && <span className="bf-detail">{conversation.activity}</span>}
       </div>
       <div ref={scroller} style={{ flex: 1, overflowY: "auto", padding: "18px 24px", display: "flex", flexDirection: "column", gap: 14 }}>

@@ -28,3 +28,7 @@ verify_jwt = false
 # la clé `anon` de l'app.
 [functions.analyze-course]
 verify_jwt = true
+
+# Le tuteur de repli (sans Claude Code sur l'appareil) : une clé d'app exigée, plafonds dans la fonction.
+[functions.tutor]
+verify_jwt = true

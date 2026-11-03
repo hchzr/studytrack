@@ -10,6 +10,7 @@ import { RevisionSheet, RevisionSheetAI, RevisionSheetBuilder } from "../domain/
 import type { BotafogoBlock } from "../domain/botafogoPage.ts";
 import { botafogoBook, isBotafogo } from "./botafogoBook.ts";
 import { askClaude, claudeSetup } from "./claudeConversation.ts";
+import { askTutor } from "./freeTutor.ts";
 import { SeriesPDFStore } from "./seriesPDFStore.ts";
 import { linesFromData, plainText } from "./pdfLayoutExtractor.ts";
 
@@ -20,9 +21,14 @@ function site(course: Course): string | null {
 }
 
 /** Peut-on faire la fiche de ce cours ici ? (le polycopié, ou Claude pour le reste) */
-export async function canMakeSheet(course: Course): Promise<boolean> {
-  if (site(course)) return true;
-  return (await claudeSetup())?.found ?? false;
+export async function canMakeSheet(_course: Course): Promise<boolean> {
+  return true;
+}
+
+/** Claude s'il est là (l'abonnement), sinon le modèle gratuit du serveur. */
+async function write(instructions: string, mode: "sheet" | "sheetMethods", prompt: string, progress: (text: string) => void): Promise<string> {
+  if ((await claudeSetup())?.found) return askClaude(instructions, prompt, progress);
+  return (await askTutor(mode, [{ role: "user", content: prompt }])).text;
 }
 
 async function pdfText(address: string): Promise<string | null> {
@@ -101,16 +107,15 @@ async function handoutSheet(address: string, progress: (text: string) => void): 
 /** Fait la fiche et la range dans le cours (à sauvegarder par l'appelant). */
 export async function makeRevisionSheet(course: Course, progress: (text: string) => void): Promise<RevisionSheet> {
   const handout = site(course);
-  const claude = (await claudeSetup())?.found ?? false;
   let sheet: RevisionSheet;
   if (handout) {
     sheet = await handoutSheet(handout, progress);
-    if (claude) {
+    {
       const material = await seriesMaterial(course, progress);
       if (material.length > 0) {
-        progress("Claude écrit les méthodes des séries…");
+        progress("Écriture des méthodes des séries…");
         try {
-          const answer = await askClaude(RevisionSheetAI.methodsInstructions, RevisionSheetAI.prompt(course.name, material, 200_000));
+          const answer = await write(RevisionSheetAI.methodsInstructions, "sheetMethods", RevisionSheetAI.prompt(course.name, material, 200_000), progress);
           const methods = RevisionSheetAI.sheet(answer);
           if (methods) {
             for (const chapter of methods.chapters) chapter.title = "Méthodes · " + chapter.title;
@@ -122,13 +127,12 @@ export async function makeRevisionSheet(course: Course, progress: (text: string)
       }
     }
   } else {
-    if (!claude) throw new Error("Pour un cours sans polycopié Botafogo, la fiche est écrite par Claude : installe Claude Code.");
     const material = await allMaterial(course, progress);
     if (material.length === 0) throw new Error("Aucun document lisible dans ce cours.");
     const pages = Math.round(material.reduce((sum, item) => sum + item.text.length, 0) / 2500);
-    progress(`Claude écrit la fiche (${material.length} documents, ~${pages} pages)…`);
-    const written = RevisionSheetAI.sheet(await askClaude(RevisionSheetAI.instructions, RevisionSheetAI.prompt(course.name, material), (activity) => progress(activity)));
-    if (!written) throw new Error("Claude n'a pas rendu de fiche lisible. Réessaie.");
+    progress(`Écriture de la fiche (${material.length} documents, ~${pages} pages)…`);
+    const written = RevisionSheetAI.sheet(await write(RevisionSheetAI.instructions, "sheet", RevisionSheetAI.prompt(course.name, material, 200_000), progress));
+    if (!written) throw new Error("Le modèle n'a pas rendu de fiche lisible. Réessaie.");
     sheet = written;
   }
   if (sheet.entries.length === 0) throw new Error("Rien à mettre sur la fiche.");
