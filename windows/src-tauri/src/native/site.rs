@@ -150,6 +150,35 @@ fn signed_in_back(home: &str, url: &Url, left_home: &AtomicBool) -> bool {
     left_home.load(Ordering::SeqCst)
 }
 
+/// Une page web **dans l'app** (une vidéo, un outil, un lien d'un cours) : une seule fenêtre,
+/// réutilisée. Sous le verrou d'étude, elle passe au-dessus comme le reste de StudyTrack :
+/// tout se fait dans l'app, rien n'oblige à sortir vers le navigateur.
+#[tauri::command]
+pub async fn web_open(app: AppHandle, url: String, title: String) -> Result<(), String> {
+    let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        return Err("Seules les adresses web s'ouvrent ici.".into());
+    }
+    const LABEL: &str = "web";
+    let locked = super::kiosk::is_locked();
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.navigate(parsed);
+        let _ = window.set_title(&title);
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_always_on_top(locked);
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, LABEL, WebviewUrl::External(parsed))
+        .title(title)
+        .inner_size(1100.0, 800.0)
+        .always_on_top(locked)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Ferme la fenêtre de connexion d'un site (la session reste dans WebView2).
 #[tauri::command]
 pub async fn site_login_close(app: AppHandle, label: String) {

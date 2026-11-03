@@ -4,12 +4,13 @@
 // volet porte des onglets (cahiers, PDF, Botafogo) ; ici, tout ce qui est du
 // web s'ouvre dans le navigateur du système, et le reste mène au centre.
 
+import { hasCourseSite } from "../coursesite/courseSites.ts";
 import type { ReactNode } from "react";
 import type { Course } from "../../models/course.ts";
 import type { ExerciseSeries } from "../../models/exercise.ts";
 import { StudyMode, type StudyTool } from "../../domain/studyMode.ts";
 import { seriesName, solutionAddress } from "./helpers.ts";
-import { openWebURL } from "./openers.ts";
+import { openInApp } from "./openers.ts";
 import type { StudyPane } from "./paneKind.ts";
 import { IconButton } from "../kit.tsx";
 import { Glyph, Kicker, tintOfCourse } from "./parts.tsx";
@@ -102,13 +103,22 @@ export function StudySidePanel({ course, series, now, onOpenPane, onClose }: {
                 title="Corrigé"
                 detail={seriesName(series)}
                 tint={tint}
-                onClick={() => { void openWebURL(solution); }}
+                onClick={() => { void openInApp(solution); }}
               />
             )}
           </Group>
         )}
 
         <Group title="Le cours">
+          {hasCourseSite(course) && (
+            <Row
+              icon="book"
+              title="Le site du cours"
+              detail="Semaines, polycopié, séries"
+              tint={tint}
+              onClick={() => onOpenPane("course")}
+            />
+          )}
           <Row
             icon="text.alignleft"
             title="Notes du cours"
@@ -135,7 +145,7 @@ export function StudySidePanel({ course, series, now, onOpenPane, onClose }: {
                 detail={tool.subtitle}
                 tint={tint}
                 onClick={() => {
-                  if (tool.kind.type === "web") void openWebURL(tool.kind.url.href);
+                  if (tool.kind.type === "web") void openInApp(tool.kind.url.href);
                 }}
               />
             ))}
@@ -153,7 +163,7 @@ export function StudySidePanel({ course, series, now, onOpenPane, onClose }: {
                   title={resource.title}
                   detail={openable ? "Gardé" : "Gardé — pas une adresse web"}
                   tint={tint}
-                  onClick={() => { if (openable) void openWebURL(resource.address); }}
+                  onClick={() => { if (openable) void openInApp(resource.address); }}
                 />
               );
             })}

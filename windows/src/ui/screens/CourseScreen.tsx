@@ -7,6 +7,9 @@
 // PDF (menu Ajouter, « Réimporter un PDF… », PDF déposé sur la page) ouvre
 // `SeriesImportSheet`.
 
+import { CourseSitePane } from "../coursesite/CourseSitePane.tsx";
+import { hasCourseSite } from "../coursesite/courseSites.ts";
+import { tintOfCourse } from "../studymode/parts.tsx";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { Course } from "../../models/index.ts";
 import type { ExerciseSeries } from "../../models/exercise.ts";
@@ -30,8 +33,8 @@ import { SeriesImportSheet } from "./course/import/SeriesImportSheet.tsx";
 import { CourseDialog, ExamDialog, PastExamDialog, SeriesDialog, TheoryDialog } from "./course/Dialogs.tsx";
 import "./course/course.css";
 
-type CourseTab = "theory" | "exercises" | "progress" | "exams" | "notes";
-const TABS: CourseTab[] = ["theory", "exercises", "progress", "exams", "notes"];
+type CourseTab = "site" | "theory" | "exercises" | "progress" | "exams" | "notes";
+const TABS: CourseTab[] = ["site", "theory", "exercises", "progress", "exams", "notes"];
 
 /** Ce qui est en cours d'édition dans une boîte de dialogue. */
 type Editor =
@@ -139,6 +142,7 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
 
   const examCount = course.exams.length + course.pastExams.length;
   const tabOptions: { value: CourseTab; label: React.ReactNode }[] = [
+    ...(hasCourseSite(course) ? [{ value: "site" as CourseTab, label: "Le cours" }] : []),
     { value: "theory", label: <>Théorie <span className="mono faint small">{progress.watchedCount}/{progress.videoCount}</span></> },
     { value: "exercises", label: <>Exercices <span className="mono faint small">{progress.doneCount}/{progress.exerciseCount}</span></> },
     { value: "progress", label: "Progression" },
@@ -225,6 +229,11 @@ export function CourseScreen({ course, focusTarget }: { course: Course; focusTar
         )}
       </div>
 
+      {tab === "site" && hasCourseSite(course) && (
+        <div className="card" style={{ height: "calc(100vh - 230px)", minHeight: 420, padding: 0, overflow: "hidden" }}>
+          <CourseSitePane course={course} tint={tintOfCourse(course)} />
+        </div>
+      )}
       {tab === "theory" && <TheoryTab course={course} week={week} saveAll={persistAll} actions={actions} focusID={focusTarget} />}
       {tab === "exercises" && <ExercisesTab course={course} week={week} saveAll={persistAll} actions={actions} focusID={focusTarget} />}
       {tab === "progress" && <ProgressTab course={course} saveAll={persistAll} />}

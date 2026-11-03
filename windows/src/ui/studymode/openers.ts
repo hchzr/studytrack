@@ -17,3 +17,20 @@ export async function openWebURL(url: string): Promise<void> {
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+/**
+ * Ouvre une adresse **dans l'app** (une fenêtre StudyTrack, au-dessus du mode étude) : rien
+ * n'oblige à passer par le navigateur. Hors de l'app, un onglet du navigateur.
+ */
+export async function openInApp(url: string, title = "StudyTrack"): Promise<void> {
+  if (isTauri()) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("web_open", { url, title });
+      return;
+    } catch {
+      // Une adresse que la fenêtre refuse : le navigateur.
+    }
+  }
+  await openWebURL(url);
+}

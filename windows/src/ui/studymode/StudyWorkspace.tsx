@@ -29,6 +29,8 @@ import { NotesPane } from "./panes/NotesPane.tsx";
 import { SheetPane } from "./panes/SheetPane.tsx";
 import { Glyph, tintOfCourse } from "./parts.tsx";
 import { ErrorBoundary } from "../ErrorBoundary.tsx";
+import { CourseSitePane } from "../coursesite/CourseSitePane.tsx";
+import { hasCourseSite } from "../coursesite/courseSites.ts";
 
 /** La série du moment : celle de l'exercice suivi, sinon celle de la semaine. */
 function currentSeriesOf(course: Course | null, targetID: string | undefined) {
@@ -46,7 +48,8 @@ function mapCenter(center: DeskCenter): StudyPane | null {
   switch (center) {
     case "desk": return "desk";
     case "exercise": return "exercise";
-    case "course": case "notes": return "notes";
+    case "course": return "course";
+    case "notes": return "notes";
     default: return null;
   }
 }
@@ -133,7 +136,9 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
     pins.current = { center: false, side: false };
     setDismissed(null);
     const wanted = DeskArrangement.layout(context);
-    const mapped = mapCenter(wanted.center);
+    let mapped = mapCenter(wanted.center);
+    // Sans site lisible, « le cours » se replie sur ses notes.
+    if (mapped === "course" && !hasCourseSite(course)) mapped = "notes";
     // Au premier passage, le bureau s'ouvre sur son accueil ; ensuite seulement
     // les changements déplacent le centre.
     if (!first && mapped !== null) setPane(mapped);
@@ -141,6 +146,9 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
     // Le contexte se déduit de l'état affiché ; seule sa clé (le moment)
     // relance la mise en place — pas chaque battement de l'horloge.
   }, [key]);
+
+  // « Le cours » n'apparaît que si l'app sait lire le site de ce cours.
+  const panes = STUDY_PANES.filter((entry) => entry.kind !== "course" || hasCourseSite(course));
 
   const openPane = (next: StudyPane) => {
     pins.current.center = true;
@@ -154,8 +162,8 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
 
   // Les raccourcis du Mac (⌘1…⌘4 : l'outil du centre ; ⌘\ : le volet d'à côté),
   // sur Ctrl : Ctrl+1…4 et Ctrl+\.
-  const shortcuts = useRef({ openPane, toggleSide });
-  shortcuts.current = { openPane, toggleSide };
+  const shortcuts = useRef({ openPane, toggleSide, panes });
+  shortcuts.current = { openPane, toggleSide, panes };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
@@ -165,9 +173,10 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
         return;
       }
       const index = Number(event.key) - 1;
-      if (Number.isInteger(index) && index >= 0 && index < STUDY_PANES.length) {
+      const shown = shortcuts.current.panes;
+      if (Number.isInteger(index) && index >= 0 && index < shown.length) {
         event.preventDefault();
-        shortcuts.current.openPane(STUDY_PANES[index].kind);
+        shortcuts.current.openPane(shown[index].kind);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -196,12 +205,12 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
           width: 76, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
           gap: 6, padding: "14px 0",
         }}>
-          {STUDY_PANES.map((entry) => (
+          {panes.map((entry) => (
             <RailButton
               key={entry.kind}
               label={entry.label}
               icon={entry.icon}
-              help={`${entry.help} (Ctrl+${STUDY_PANES.indexOf(entry) + 1})`}
+              help={`${entry.help} (Ctrl+${panes.indexOf(entry) + 1})`}
               selected={pane === entry.kind}
               onClick={() => openPane(entry.kind)}
             />
@@ -221,6 +230,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
             />
           )}
           {pane === "exercise" && <ExercisePane course={course} timer={timer} save={save} />}
+          {pane === "course" && <CourseSitePane course={course} tint={tint} />}
           {pane === "notes" && <NotesPane course={course} save={save} />}
           {pane === "sheet" && <SheetPane course={course} />}
           </ErrorBoundary>

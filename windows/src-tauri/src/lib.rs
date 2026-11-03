@@ -48,6 +48,7 @@ pub fn run() {
             native::oauth::oauth_cancel,
             native::site::site_login_open,
             native::site::site_login_close,
+            native::site::web_open,
             native::site::site_request,
             native::site::site_download,
             native::secrets::secrets_load,

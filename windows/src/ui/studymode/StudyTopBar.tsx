@@ -13,7 +13,7 @@ import { displaySecondsOf } from "../screens/focus/timerView.ts";
 import { timerController } from "../timerController.ts";
 import type { StudyTimerApi } from "./useStudyTimer.ts";
 import { Icon, IconButton, type IconName, type MenuItem } from "../kit.tsx";
-import { openWebURL } from "./openers.ts";
+import { openInApp } from "./openers.ts";
 import { releaseStudyLock } from "../../native/studyLock.ts";
 import { CourseTag, DropMenu, Glyph, HoldButton, SmallRing } from "./parts.tsx";
 
@@ -59,7 +59,7 @@ function ResourcesMenu({ course }: { course: Course }) {
       label: resource.title,
       icon: resource.isPinned ? "bookmark" : "link",
       disabled: resource.isFile || !/^https?:\/\//i.test(resource.address),
-      action: () => { void openWebURL(resource.address); },
+      action: () => { void openInApp(resource.address); },
     }));
   return (
     <DropMenu

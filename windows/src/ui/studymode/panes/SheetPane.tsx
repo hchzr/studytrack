@@ -6,7 +6,7 @@
 import type { Course } from "../../../models/course.ts";
 import { RevisionSheet, RevisionEntryKind } from "../../../domain/revisionSheet.ts";
 import { MathText } from "../../screens/course/common.tsx";
-import { openWebURL } from "../openers.ts";
+import { openInApp } from "../openers.ts";
 import { Glyph, Kicker, tintOfCourse } from "../parts.tsx";
 
 /** Le genre d'une entrée, en pastille discrète. */
@@ -85,7 +85,7 @@ export function SheetPane({ course }: { course: Course | null }) {
                     {entry.link !== "" && /^https?:\/\//i.test(entry.link) && (
                       <button
                         type="button"
-                        onClick={() => { void openWebURL(entry.link); }}
+                        onClick={() => { void openInApp(entry.link); }}
                         style={{
                           alignSelf: "flex-start", border: "none", background: "transparent", padding: 0,
                           fontSize: 12, color: tint, cursor: "pointer",

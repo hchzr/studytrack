@@ -14,7 +14,7 @@ import { CORRECTNESS_COLOR, MathText } from "../../screens/course/common.tsx";
 import { timerController } from "../../timerController.ts";
 import type { StudyTimerApi } from "../useStudyTimer.ts";
 import { seriesName, solutionAddress } from "../helpers.ts";
-import { openWebURL } from "../openers.ts";
+import { openInApp } from "../openers.ts";
 import { ExercisePDFView } from "../../pdf/PDFPane.tsx";
 import { PDFDownloadNotice } from "../../pdf/PDFDownloadNotice.tsx";
 import { useRemoteSeriesPDF } from "../../pdf/useRemoteSeriesPDF.ts";
@@ -410,7 +410,7 @@ export function ExercisePane({ course, timer, save }: {
                 </InkButton>
               )}
               {solution && (
-                <PaperButton onClick={() => { void openWebURL(solution); }}>Corrigé</PaperButton>
+                <PaperButton onClick={() => { void openInApp(solution); }}>Corrigé</PaperButton>
               )}
             </div>
           </div>

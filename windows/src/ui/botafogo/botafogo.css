@@ -1,0 +1,98 @@
+/* Botafogo dans l'app : la page lue comme un livre, aux couleurs du thème (clair ou mode étude). */
+
+.bf-blocks { display: flex; flex-direction: column; gap: 12px; }
+.bf-block { min-width: 0; }
+.bf-p { margin: 0; line-height: 1.65; color: var(--ink); }
+.bf-h { margin: 14px 0 0; color: var(--ink); font-weight: 600; }
+h2.bf-h { font-size: 24px; }
+h3.bf-h { font-size: 20px; }
+h4.bf-h { font-size: 17px; }
+.bf-list { margin: 0; padding-left: 22px; display: block; column-gap: 28px; }
+.bf-list > li { margin: 4px 0; break-inside: avoid; }
+.bf-list > li .bf-blocks { gap: 6px; }
+.bf-img { display: block; max-width: 100%; margin: 4px auto; border-radius: 8px; background: #fff; }
+.bf-video { margin: 0; }
+.bf-video video { width: 100%; border-radius: 10px; background: #000; }
+.bf-video figcaption { font-size: 12px; color: var(--ink-tertiary); margin-top: 4px; }
+.bf-media-link {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; cursor: pointer; text-align: left;
+  border: 1px solid var(--rule); border-radius: 12px; background: var(--sheet-raised, var(--sheet)); color: var(--ink); font: inherit;
+}
+.bf-media-link:hover { border-color: var(--ink-tertiary); }
+.bf-media-host { margin-left: auto; font-size: 12px; color: var(--ink-tertiary); }
+
+.bf-theorem, .bf-aside, .bf-exercise, .bf-fold, .bf-quiz {
+  border: 1px solid var(--rule); border-radius: 12px; padding: 12px 14px; background: var(--sheet-raised, var(--sheet));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.bf-theorem { border-left: 3px solid var(--bf-tint, var(--ink)); }
+.bf-theorem-definition { border-left-color: var(--review); }
+.bf-theorem-remark, .bf-theorem-example { border-left-color: var(--ink-tertiary); }
+.bf-theorem header { color: var(--ink); }
+.bf-aside header { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; color: var(--ink-secondary); }
+.bf-exercise header, .bf-quiz header { font-size: 17px; font-weight: 600; color: var(--ink); }
+.bf-fold { padding: 0; gap: 0; }
+.bf-fold-head {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; width: 100%; background: none; border: 0; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 13px; color: var(--ink-secondary); text-align: left;
+}
+.bf-fold-head:hover { color: var(--ink); }
+.bf-fold-body { padding: 0 14px 12px; }
+
+.bf-quiz-choices { display: grid; gap: 8px; }
+.bf-choice {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit;
+}
+.bf-choice.picked { border-color: var(--ink); }
+.bf-choice.correct { border-color: var(--correct); background: color-mix(in srgb, var(--correct) 12%, var(--sheet)); }
+.bf-choice.wrong { border-color: var(--wrong); background: color-mix(in srgb, var(--wrong) 12%, var(--sheet)); }
+.bf-choice-box { width: 18px; flex-shrink: 0; text-align: center; font-weight: 700; }
+.bf-choice-why { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-secondary); }
+.bf-quiz-actions { display: flex; justify-content: flex-end; }
+
+.rich-display-math { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.rich-code { font-size: 0.92em; padding: 1px 4px; border-radius: 4px; background: var(--sheet-raised, var(--sheet)); }
+.rich-link { color: var(--bf-tint, var(--ink)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+/* Le cours : sommaire à gauche, la page au centre. */
+.bf-course { display: flex; height: 100%; min-height: 0; color: var(--ink); }
+.bf-side {
+  width: 290px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--rule); background: color-mix(in srgb, var(--sheet) 35%, transparent);
+}
+.bf-side-top { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.bf-side-list { flex: 1; overflow-y: auto; padding: 0 8px 16px; }
+.bf-disclosure {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border: 0; background: none; cursor: pointer;
+  font: inherit; color: var(--ink); text-align: left; border-radius: 8px;
+}
+.bf-disclosure:hover, .bf-row:hover { background: var(--hover, color-mix(in srgb, var(--ink) 6%, transparent)); }
+.bf-disclosure .bf-title { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; }
+.bf-badge { font-size: 11px; color: var(--ink-tertiary); }
+.bf-badge.now { color: var(--bf-tint, var(--ink)); font-weight: 600; padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, var(--bf-tint, var(--ink)) 14%, transparent); }
+.bf-rows { padding-left: 12px; padding-bottom: 6px; display: flex; flex-direction: column; gap: 1px; }
+.bf-row {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--ink-secondary); text-align: left; border-radius: 8px;
+}
+.bf-row.selected { background: color-mix(in srgb, var(--bf-tint, var(--ink)) 14%, transparent); color: var(--ink); }
+.bf-row.read { color: var(--ink-tertiary); }
+.bf-row .bf-detail { display: block; font-size: 11px; color: var(--ink-tertiary); }
+.bf-group-title { padding: 10px 8px 2px; font-size: 14px; color: var(--ink); }
+
+.bf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.bf-page-bar { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--rule); }
+.bf-trail { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bf-scroll { flex: 1; overflow-y: auto; }
+.bf-page { max-width: 780px; margin: 0 auto; padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 16px; font-size: 15px; }
+.bf-page-title { margin: 0; font-size: 28px; }
+.bf-neighbours { display: flex; gap: 10px; margin-top: 18px; }
+.bf-neighbour {
+  flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px;
+  background: none; color: var(--ink); cursor: pointer; font: inherit; text-align: left;
+}
+.bf-neighbour.next { text-align: right; }
+.bf-neighbour small { color: var(--ink-tertiary); font-size: 11px; }
+.bf-neighbour:hover { border-color: var(--ink-tertiary); }
+.bf-center { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; color: var(--ink-secondary); }

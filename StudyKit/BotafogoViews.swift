@@ -79,12 +79,13 @@ final class BotafogoBook {
         guard let root else { return nil }
         let handout = BotafogoSite.isHandout(url)
         let raw = handout ? url : BotafogoProgram.contentPath(url)
-        let path = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-        guard let address = URL(string: root.absoluteString + "api/content/node?collection=\(handout ? "handout" : "content")&path=" + path),
-              let (data, _) = try? await URLSession.shared.data(from: address),
-              let body = BotafogoDocument.body(fromNodeJSON: data) else { return nil }
-        bodies[url] = body
-        return body
+        for address in BotafogoClient.nodeURLs(root: root, collection: handout ? "handout" : "content", path: raw) {
+            guard let (data, _) = try? await URLSession.shared.data(from: address),
+                  let body = BotafogoDocument.body(fromNodeJSON: data) else { continue }
+            bodies[url] = body
+            return body
+        }
+        return nil
     }
 
     /// Un document prêt à dessiner.

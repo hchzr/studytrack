@@ -389,20 +389,34 @@ enum BotafogoClient {
         return BotafogoProgram.extract(fromScript: script)
     }
 
+    /// Les adresses d'un document, la plus récente d'abord : `api/content/node/<collection><chemin>.json`
+    /// (le site depuis l'automne 2026 ; l'ancienne forme répond 404), puis `api/content/node?collection=…&path=…`.
+    static func nodeURLs(root: URL, collection: String, path: String) -> [URL] {
+        let base = root.absoluteString.hasSuffix("/") ? root.absoluteString : root.absoluteString + "/"
+        let slashed = path.hasPrefix("/") ? path : "/" + path
+        let encoded = slashed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slashed
+        let query = slashed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? slashed
+        return [URL(string: base + "api/content/node/" + collection + encoded + ".json"),
+                URL(string: base + "api/content/node?collection=" + collection + "&path=" + query)].compactMap { $0 }
+    }
+
     /// Les documents du site par l'API des contenus, huit à la fois.
     private static func nodes(_ urls: [String], root: URL, session: URLSession) async -> [String: Data] {
         await withTaskGroup(of: (String, Data?).self) { group in
             var iterator = Array(Set(urls)).makeIterator()
             func enqueue() {
                 guard let url = iterator.next() else { return }
-                let path = BotafogoProgram.contentPath(url)
-                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? url
-                guard let address = URL(string: root.absoluteString + "api/content/node?collection=content&path=" + path) else { return }
+                let addresses = nodeURLs(root: root, collection: "content", path: BotafogoProgram.contentPath(url))
                 group.addTask {
-                    var request = URLRequest(url: address)
-                    request.timeoutInterval = 20
-                    let data = try? await session.data(for: request).0
-                    return (url, data)
+                    for address in addresses {
+                        var request = URLRequest(url: address)
+                        request.timeoutInterval = 20
+                        if let (data, response) = try? await session.data(for: request),
+                           (response as? HTTPURLResponse)?.statusCode == 200, BotafogoDocument.body(fromNodeJSON: data) != nil {
+                            return (url, data)
+                        }
+                    }
+                    return (url, nil)
                 }
             }
             for _ in 0..<8 { enqueue() }
