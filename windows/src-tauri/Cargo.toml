@@ -39,6 +39,8 @@ windows-sys = { version = "0.59", features = [
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Input_KeyboardAndMouse",
 ] }
+# La musique du système (Spotify, Apple Music, un navigateur…) : ce qui joue, et la piloter.
+windows = { version = "0.62", features = ["Media_Control", "Foundation", "Win32_System_WinRT"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

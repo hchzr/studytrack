@@ -51,6 +51,8 @@ pub fn run() {
             native::site::site_login_close,
             native::site::web_open,
             native::ed::ed_sign_in,
+            native::media::media_state,
+            native::media::media_command,
             native::claude::claude_setup,
             native::claude::claude_start,
             native::claude::claude_send,

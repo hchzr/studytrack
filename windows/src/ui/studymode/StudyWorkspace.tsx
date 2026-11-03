@@ -32,6 +32,8 @@ import { ErrorBoundary } from "../ErrorBoundary.tsx";
 import { CourseSitePane } from "../coursesite/CourseSitePane.tsx";
 import { CalcPane } from "./panes/CalcPane.tsx";
 import { ClaudePane } from "./panes/ClaudePane.tsx";
+import { MusicPane } from "./panes/MusicPane.tsx";
+import { useSoundtrack } from "./useSoundtrack.ts";
 import { openInApp } from "./openers.ts";
 import { hasCourseSite } from "../coursesite/courseSites.ts";
 
@@ -54,6 +56,7 @@ function mapCenter(center: DeskCenter): StudyPane | null {
     case "course": return "course";
     case "notes": return "notes";
     case "calc": return "calc";
+    case "music": return "music";
     default: return null;
   }
 }
@@ -151,6 +154,9 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
     // relance la mise en place — pas chaque battement de l'horloge.
   }, [key]);
 
+  // La musique se tait pendant la pause du rythme et revient avec le travail.
+  useSoundtrack(phase, moment);
+
   // « Le cours » n'apparaît que si l'app sait lire le site de ce cours.
   const panes = STUDY_PANES.filter((entry) => entry.kind !== "course" || hasCourseSite(course));
 
@@ -237,6 +243,7 @@ export function StudyWorkspace({ courses, timer, save, initialPane = "desk" }: {
           {pane === "course" && <CourseSitePane course={course} tint={tint} />}
           {pane === "notes" && <NotesPane course={course} save={save} />}
           {pane === "sheet" && <SheetPane course={course} />}
+          {pane === "music" && <MusicPane />}
           {pane === "claude" && <ClaudePane course={course} series={series} exercise={exercise} tint={tint} />}
           {pane === "calc" && <CalcPane openWeb={(url) => { void openInApp(url, "GeoGebra"); }} />}
           </ErrorBoundary>

@@ -3,6 +3,7 @@
 pub mod claude;
 pub mod ed;
 pub mod kiosk;
+pub mod media;
 pub mod lock;
 pub mod mini;
 pub mod oauth;

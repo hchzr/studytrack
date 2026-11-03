@@ -4396,6 +4396,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-opener",
  "tauri-plugin-sql",
+ "windows",
  "windows-sys 0.59.0",
 ]
 
