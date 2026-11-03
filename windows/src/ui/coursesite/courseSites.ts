@@ -2,7 +2,10 @@
 // volet « Le cours » sait lire dans l'app (CoursePane.Source du Mac).
 
 import type { Course } from "../../models/course.ts";
+import { MoodleCourseMatcher } from "../../domain/moodleImport.ts";
 import { isBotafogo } from "../../services/botafogoBook.ts";
+
+export type CourseSource = "botafogo" | "moodle";
 
 /** Le site Botafogo du cours, s'il en a un. */
 export function botafogoSite(course: Course | null): string | null {
@@ -10,7 +13,21 @@ export function botafogoSite(course: Course | null): string | null {
   return course.contentSources.find((address) => isBotafogo(address)) ?? null;
 }
 
+/** L'identifiant du cours Moodle lié (son lien, ou une source Moodle). */
+export function moodleCourseID(course: Course | null): number | null {
+  if (!course) return null;
+  return MoodleCourseMatcher.linkedID([course.moodleURLString, ...course.contentSources].filter(Boolean));
+}
+
+/** Les sources que l'app sait lire pour ce cours, dans l'ordre du Mac. */
+export function courseSources(course: Course | null): CourseSource[] {
+  const out: CourseSource[] = [];
+  if (botafogoSite(course)) out.push("botafogo");
+  if (moodleCourseID(course) !== null) out.push("moodle");
+  return out;
+}
+
 /** Le cours a-t-il un site que l'app lit ? */
 export function hasCourseSite(course: Course | null): boolean {
-  return botafogoSite(course) !== null;
+  return courseSources(course).length > 0;
 }

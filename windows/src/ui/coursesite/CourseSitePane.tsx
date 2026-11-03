@@ -1,32 +1,61 @@
-// Le volet « Le cours » (CoursePane du Mac, restreint pour l'instant au site Botafogo) :
-// le site du cours lu dans l'app, sans navigateur. La page ouverte est retenue par cours.
+// Le volet « Le cours » (CoursePane du Mac) : les sites du cours lus dans l'app — Botafogo
+// (semaines, polycopié) et Moodle (sections, activités, documents, forums). Une source à la
+// fois ; ce qui est ouvert est retenu par cours le temps de la session.
 
 import { useState } from "react";
 import type { Course } from "../../models/course.ts";
 import { BotafogoCourse, type BotafogoLocation } from "../botafogo/BotafogoCourse.tsx";
+import { Segmented } from "../kit.tsx";
 import { openInApp } from "../studymode/openers.ts";
-import { botafogoSite } from "./courseSites.ts";
+import { MoodleCourseView, type MoodleReading } from "./MoodleCourseView.tsx";
+import { botafogoSite, courseSources, moodleCourseID, type CourseSource } from "./courseSites.ts";
+import "./coursesite.css";
 
-const opened = new Map<string, BotafogoLocation | null>();
+interface Remembered { source: CourseSource; botafogo: BotafogoLocation | null; moodle: MoodleReading | null }
+const remembered = new Map<string, Remembered>();
+
+const LABEL: Record<CourseSource, string> = { botafogo: "Le cours", moodle: "Moodle" };
 
 export function CourseSitePane({ course, tint }: { course: Course | null; tint: string }) {
-  const site = botafogoSite(course);
-  const [location, setLocation] = useState<BotafogoLocation | null>(() => (course ? opened.get(course.id) ?? null : null));
-  if (!course || !site) {
+  const sources = courseSources(course);
+  const [state, setState] = useState<Remembered>(() =>
+    (course ? remembered.get(course.id) : undefined) ?? { source: sources[0] ?? "botafogo", botafogo: null, moodle: null });
+  const update = (patch: Partial<Remembered>) => {
+    const next = { ...state, ...patch };
+    if (course) remembered.set(course.id, next);
+    setState(next);
+  };
+
+  if (!course || sources.length === 0) {
     return (
       <div className="bf-center">
         <span className="serif" style={{ fontSize: 20, color: "var(--ink)" }}>Pas de site pour ce cours</span>
-        <span>Ajoute l'adresse du site (Botafogo) dans « Modifier le cours › Sources ».</span>
+        <span>Ajoute le lien Moodle ou l'adresse du site (Botafogo) dans « Modifier le cours ».</span>
       </div>
     );
   }
+  const source = sources.includes(state.source) ? state.source : sources[0];
+  const openWeb = (url: string) => { void openInApp(url, course.displayCode); };
+  const site = botafogoSite(course);
+  const moodle = moodleCourseID(course);
   return (
-    <BotafogoCourse
-      site={site}
-      tint={tint}
-      openWeb={(url) => { void openInApp(url, course.displayCode); }}
-      location={location}
-      onLocation={(next) => { opened.set(course.id, next); setLocation(next); }}
-    />
+    <div className="cs-pane" style={{ ["--bf-tint" as string]: tint }}>
+      {sources.length > 1 && (
+        <div className="cs-sources">
+          <Segmented<CourseSource> ariaLabel="Source du cours" value={source} onChange={(value) => update({ source: value })}
+            options={sources.map((value) => ({ value, label: LABEL[value] }))} />
+        </div>
+      )}
+      <div className="cs-body">
+        {source === "botafogo" && site && (
+          <BotafogoCourse site={site} tint={tint} openWeb={openWeb}
+            location={state.botafogo} onLocation={(botafogo) => update({ botafogo })} />
+        )}
+        {source === "moodle" && moodle !== null && (
+          <MoodleCourseView courseID={moodle} title={course.name} openWeb={openWeb}
+            reading={state.moodle} onReading={(value) => update({ moodle: value })} />
+        )}
+      </div>
+    </div>
   );
 }
