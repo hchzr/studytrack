@@ -6,6 +6,7 @@
 // Rien ne tourne en arrière-plan : chaque bouton fait un geste, et l'app ne relit
 // l'horaire et les tâches qu'**une fois** au lancement (`launchSync`).
 
+import { openWebURL } from "../../studymode/openers.ts";
 import { useState, type ReactNode } from "react";
 import { useData } from "../../../data/dataContext.tsx";
 import { TaskProvider } from "../../../models/enums.ts";
@@ -46,7 +47,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 export function ConnectionsSection() {
   const { store, commit } = useData();
-  const [feed, setFeed] = useState(() => readConnection("timetableURLString"));
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [moodle, setMoodle] = useState<string>("");
@@ -74,21 +74,6 @@ export function ConnectionsSection() {
     <Section title="Connexions">
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card>
-        <SettingRow label="Horaire (.ics)"
-          hint={notes.timetable ?? "L'adresse d'abonnement de « Mon horaire » : les cours, exercices et leurs salles arrivent seuls. Relu au lancement."}>
-          <div className="settings-inline">
-            <input className="field" type="url" placeholder="https://… ou webcal://…" value={feed} aria-label="Adresse de l'horaire"
-              onChange={(e) => { setFeed(e.target.value); writeConnection("timetableURLString", e.target.value.trim()); }} />
-            <Button size="sm" disabled={busy !== null || feed.trim() === ""}
-              onClick={() => void run("timetable", (p) => refreshTimetableFeed(p, feed))}>
-              {busy === "timetable" ? "Lecture…" : "Importer"}
-            </Button>
-            <Button size="sm" disabled={busy !== null} onClick={() => void run("timetable", async (p) => {
-              const file = await pickTextFile("Horaire", ["ics"]);
-              return file ? importTimetableText(p, file.text) : "Aucun fichier choisi.";
-            })}>Fichier…</Button>
-          </div>
-        </SettingRow>
         <SettingRow label="Calendrier académique"
           hint={notes.academic ?? "Les dates du semestre, relues sur la page publique de l'EPFL (un instantané est déjà dans l'app)."}>
           <Button size="sm" disabled={busy !== null} onClick={() => void run("academic", refreshAcademicCalendar)}>
@@ -183,6 +168,52 @@ export function ConnectionsSection() {
         </SettingRow>
       </Card>
       </div>
+    </Section>
+  );
+}
+
+/**
+ * L'horaire (.ics) : une chose à faire, en étapes numérotées (comme l'accueil de l'iPhone).
+ * Le lien d'export de « Mon horaire » se colle ici ; un fichier `.ics` marche aussi.
+ */
+export function TimetableSection() {
+  const { store, commit } = useData();
+  const [feed, setFeed] = useState(() => readConnection("timetableURLString"));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const isEPFL = Institution.current.id === "epfl";
+  const run = async (work: (p: Persistence) => Promise<string>) => {
+    if (!store) return;
+    setBusy(true);
+    try { setNote(await work({ store, commit })); } catch (error) { setNote(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); }
+  };
+  return (
+    <Section title="Horaire">
+      <Card>
+        <ol className="timetable-steps">
+          <li>
+            {isEPFL ? "Ouvre ton horaire sur IS-Academia." : "Ouvre ton horaire sur le site de ton école."}
+            {isEPFL && <> <button type="button" className="btn btn-sm" onClick={() => { void openWebURL("https://isa.epfl.ch/"); }}>Ouvrir IS-Academia</button></>}
+          </li>
+          <li>Copie le lien d'export « iCal » (.ics) de l'horaire.</li>
+          <li>
+            Colle-le ici, puis « Importer ».
+            <div className="settings-inline" style={{ justifyContent: "flex-start", marginTop: 8 }}>
+              <input className="field" type="url" placeholder="https://… ou webcal://…" value={feed} aria-label="Lien de l'horaire"
+                onChange={(e) => { setFeed(e.target.value); writeConnection("timetableURLString", e.target.value.trim()); }} />
+              <Button size="sm" variant="primary" disabled={busy || feed.trim() === ""} onClick={() => void run((p) => refreshTimetableFeed(p, feed))}>
+                {busy ? "Lecture…" : "Importer"}
+              </Button>
+              <Button size="sm" disabled={busy} onClick={() => void run(async (p) => {
+                const file = await pickTextFile("Horaire", ["ics"]);
+                return file ? importTimetableText(p, file.text) : "Aucun fichier choisi.";
+              })}>Fichier .ics…</Button>
+            </div>
+          </li>
+        </ol>
+        {note && <p className="settings-hint" style={{ marginTop: 8 }}>{note}</p>}
+      </Card>
+      <p className="settings-footnote">Les cours, les séances d'exercices et leurs salles arrivent seuls ; l'horaire est relu au lancement.</p>
     </Section>
   );
 }

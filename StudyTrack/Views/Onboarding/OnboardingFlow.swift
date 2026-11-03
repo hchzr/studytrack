@@ -20,7 +20,7 @@ struct OnboardingFlow: View {
     var goManual: () -> Void
     var finish: () -> Void
 
-    enum Screen: Int { case welcome, courses, importing, semester, connections }
+    enum Screen: Int { case welcome, courses, importing, semester, timetable, connections }
 
     @State private var screen: Screen = .welcome
     @State private var showingLogin = false
@@ -41,7 +41,9 @@ struct OnboardingFlow: View {
                         advance(to: .semester)
                     }
                 case .semester:
-                    SemesterScreen(setup: setup) { advance(to: .connections) }
+                    SemesterScreen(setup: setup) { advance(to: .timetable) }
+                case .timetable:
+                    TimetableStepScreen { advance(to: .connections) }
                 case .connections:
                     ConnectionsScreen(setup: setup, proceed: finish)
                 }
@@ -358,14 +360,6 @@ private struct ConnectionsScreen: View {
                 .rise(appeared, delay: 0.12)
 
                 VStack(spacing: 10) {
-                    row(icon: "calendar", title: "Calendrier de l'iPhone",
-                        detail: "Ton horaire EPFL",
-                        connected: calendarGranted) {
-                        Task {
-                            calendarGranted = await app.calendar.requestAccess()
-                            if calendarGranted { Haptics.success() }
-                        }
-                    }
                     row(icon: "person.2", title: "Compte StudyTrack",
                         detail: "Pour étudier en groupe",
                         connected: app.social.isSignedIn) { sheet = .groups }

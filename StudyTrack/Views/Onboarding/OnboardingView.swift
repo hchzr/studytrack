@@ -109,7 +109,9 @@ struct OnboardingView: View {
                 CourseFormView(course: nil, defaultSectionCode: sectionCode)
             }
             .sheet(isPresented: $showingImport) {
-                ImportSheet(defaultSectionCode: sectionCode)
+                // Les mêmes étapes numérotées que l'accueil avec Moodle.
+                TimetableStepScreen { showingImport = false }
+                    .background(Carnet.ground)
             }
             .sheet(isPresented: $showingSeriesImport) {
                 SeriesImportSheet(course: nil)
