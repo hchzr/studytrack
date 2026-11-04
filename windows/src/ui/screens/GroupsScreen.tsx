@@ -10,7 +10,9 @@ import { DateUtils } from "../../domain/dateUtils.ts";
 import { Groups, type Group, type LeaderboardRow, type Member, type Presence } from "../../services/groupsService.ts";
 import { readGroupsDisplayName, refreshMyGroups, writeGroupsDisplayName } from "../groups/groupPresence.ts";
 import { Button, Card, EmptyState, PageHeader, Section } from "../kit.tsx";
-import { Icon } from "../icons.tsx";
+import { syncService } from "../../services/syncService.ts";
+import { SyncAccount } from "./settings/SyncAccount.tsx";
+import { Icon, type IconName } from "../icons.tsx";
 import { timerController } from "../timerController.ts";
 import { TaskType } from "../../models/enums.ts";
 import {
@@ -30,20 +32,29 @@ export function GroupsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Group | null>(null);
   const [form, setForm] = useState<"create" | "join" | null>(null);
+  // Connecté·e ou non (comme l'iPhone et le Mac : sans compte, la page dit ce que donnent les
+  // groupes et propose la connexion, pas des boutons qui échoueraient). `null` : on relit.
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    const refresh = () => { void syncService.status().then((status) => setSignedIn(status.signedIn)); };
+    refresh();
+    return syncService.subscribe(refresh);
+  }, []);
   const load = useCallback(async () => {
     setError(null);
     try { setGroups(await refreshMyGroups()); } catch (e) { setError(e instanceof Error ? e.message : String(e)); setGroups([]); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (signedIn) void load(); }, [load, signedIn]);
 
+  if (signedIn === false) return <GroupsSignIn />;
   if (open) return <GroupPage group={open} back={() => { setOpen(null); void load(); }} />;
   return (
     <div className="page">
       <PageHeader title="Groupes"
-        actions={<>
+        actions={signedIn ? <>
           <Button icon="plus" onClick={() => setForm("create")}>Créer</Button>
           <Button variant="primary" icon="person.2" onClick={() => setForm("join")}>Rejoindre</Button>
-        </>} />
+        </> : undefined} />
       {error && <p className="settings-error">{error}</p>}
       {form && <GroupForm mode={form} done={(group) => { setForm(null); if (group) setOpen(group); void load(); }} />}
       {groups === null ? <p className="faint">Chargement…</p> : groups.length === 0 && !error ? (
@@ -59,6 +70,30 @@ export function GroupsScreen() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Sans compte : ce que donnent les groupes, et la connexion (la même que dans les réglages). */
+function GroupsSignIn() {
+  const benefits: [IconName, string][] = [
+    ["person.2", "Qui travaille en ce moment"],
+    ["checklist", "Qui en est où, série par série"],
+    ["questionmark", "Entraide sur un exercice"],
+    ["calendar", "Sessions ensemble"],
+  ];
+  return (
+    <div className="page" style={{ maxWidth: 560 }}>
+      <PageHeader title="Travailler ensemble" />
+      <Card>
+        {benefits.map(([icon, label]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0" }}>
+            <Icon name={icon} size={18} />
+            <span>{label}</span>
+          </div>
+        ))}
+      </Card>
+      <Card style={{ marginTop: 12 }}><SyncAccount /></Card>
     </div>
   );
 }
