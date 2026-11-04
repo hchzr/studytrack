@@ -36,9 +36,18 @@ struct GroupsView: View {
         groups.first { $0.id.uuidString == selectedRaw } ?? groups.first
     }
 
+    /// Captures (Debug) : `-seedSampleData -group 0` montre les groupes d'exemple sans compte.
+    private var previewingGroups: Bool {
+        #if DEBUG
+        PreviewLaunch.isSet(PreviewLaunch.seedFlag) && PreviewLaunch.int(PreviewLaunch.groupFlag) != nil
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
-            if !app.social.isSignedIn {
+            if !app.social.isSignedIn && !previewingGroups {
                 // Un compte d'abord : sans lui, un groupe ne se partage pas.
                 GroupsSignInView()
             } else {
