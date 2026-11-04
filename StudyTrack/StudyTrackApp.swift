@@ -232,6 +232,11 @@ struct StudyTrackApp: App {
         StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: existingUser)
         // Les grands titres en serif, avant la première barre de navigation.
         Carnet.installAppearance()
+        // La fiche de révision et « Comprendre avec Claude » : le tuteur gratuit (comme Windows,
+        // et le Mac sans Claude Code), sans quoi ces boutons n'existeraient pas sur l'iPhone.
+        if SupabaseConfig.isConfigured {
+            RevisionSheetMaker.shared.writer = { try await FreeTutor.write(instructions: $0, prompt: $1) }
+        }
         let container = AppContainer()
         _container = State(initialValue: container)
         // Expose le conteneur aux App Intents (Siri, Raccourcis).

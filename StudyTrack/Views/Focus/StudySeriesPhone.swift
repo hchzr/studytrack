@@ -109,6 +109,8 @@ struct StudyExercisePhone: View {
     enum Panel: String, CaseIterable { case statement, sheet, copy }
     @State private var panel: Panel = .sheet
     @State private var choseStatement = false
+    /// Le tuteur gratuit, sans l'app Claude.
+    @State private var tutorQuestion: TutorQuestion?
     @Environment(\.openURL) private var openURL
     private var sites: SiteHub { .shared }
 
@@ -125,6 +127,14 @@ struct StudyExercisePhone: View {
     }
 
     var body: some View {
+        content
+            .sheet(item: $tutorQuestion) { question in
+                PhoneTutorChat(course: course, exercise: exercise, first: question.text)
+                    .presentationDetents([.medium, .large])
+            }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Picker("Afficher", selection: $panel) {
                 if !address.isEmpty || !exercise.statement.isEmpty || botafogoSite != nil { Text("Énoncé").tag(Panel.statement) }
@@ -191,10 +201,15 @@ struct StudyExercisePhone: View {
         }
     }
 
-    /// Claude sur l'iPhone : la question et le contexte copiés, l'app Claude ouverte.
+    /// Claude sur l'iPhone : l'app Claude si elle est là (la question et le contexte copiés),
+    /// sinon le tuteur gratuit dans l'app.
     private func ask(_ question: String, _ attachment: ClaudeTutor.Attachment?) {
-        UIPasteboard.general.string = StudyPhoneClaude.prompt(question, exercise: exercise, course: course)
-        if let url = URL(string: "claude://") { openURL(url) }
+        if PhoneClaude.hasClaudeApp || !PhoneClaude.hasFreeTutor {
+            UIPasteboard.general.string = StudyPhoneClaude.prompt(question, exercise: exercise, course: course)
+            if let url = URL(string: "claude://") { openURL(url) }
+        } else {
+            tutorQuestion = TutorQuestion(text: question)
+        }
     }
 }
 

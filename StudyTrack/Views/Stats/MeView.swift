@@ -113,7 +113,7 @@ struct MeView: View {
                 CarnetStat(label: "Travail", value: DateUtils.hoursLabel(seconds: seconds),
                            detail: Plural.count(weekSessions.count, "\(weekSessions.count) session", "\(weekSessions.count) sessions"))
                 CarnetStat(label: "Fait", value: total == 0 ? "—" : "\(done)/\(total)",
-                           detail: "prévu cette semaine")
+                           detail: "du programme")
                 CarnetStat(label: "Juste", value: corrected.isEmpty ? "—" : "\(Int((Double(right) / Double(corrected.count) * 100).rounded())) %",
                            detail: corrected.isEmpty ? "rien de corrigé" : Plural.count(corrected.count, "\(corrected.count) corrigé", "\(corrected.count) corrigés"))
             }

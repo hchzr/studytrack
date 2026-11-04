@@ -110,6 +110,8 @@ struct StudyModeScreen: View {
     @Environment(AppContainer.self) private var app
     @Query(sort: \Course.code) private var courses: [Course]
     @State private var browsing: BrowsedLink?
+    /// Le tuteur gratuit, sans l'app Claude.
+    @State private var tutorQuestion: TutorQuestion?
     @State private var tab: StudyTab = StudyTab(rawValue: StudyModeScreen.launchTab ?? "") ?? .desk
     /// L'onglet imposé par `-studyTab` (captures). `PreviewLaunch` n'existe
     /// qu'en Debug : sans ce garde, la build Release (l'archive) ne compile pas.
@@ -310,12 +312,26 @@ struct StudyModeScreen: View {
             }
         }
         .overlay { takeoverCard }
+        .sheet(item: $tutorQuestion) { question in
+            PhoneTutorChat(course: course, exercise: FocusController.target(of: focus.state?.targetID, in: course).exercise,
+                           first: question.text)
+                .presentationDetents([.medium, .large])
+        }
         .onChange(of: DeskArrangement.takeover(for: arrangementContext)) { _, _ in dismissedTakeover = nil }
         .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
         .sheet(item: Binding(get: { SiteHub.shared.signIn }, set: { SiteHub.shared.signIn = $0 })) { site in
             SignInSheet(site: site) { SiteHub.shared.signedIn(site) }
         }
+        #if DEBUG
+        .task {
+            // `-tutorAsk "question"` : la question posée à l'ouverture (captures du tuteur).
+            if let question = PreviewLaunch.string("-tutorAsk") {
+                try? await Task.sleep(for: .milliseconds(800))
+                askClaude(question)
+            }
+        }
+        #endif
         .task { if !SchoolConnect.shared.allConnected { await SchoolConnect.shared.connectAll(prompting: true) } }
         .task {
             while !Task.isCancelled {
@@ -638,10 +654,15 @@ struct StudyModeScreen: View {
     }
 
     /// Claude sur l'iPhone : la question et le contexte copiés, l'app Claude ouverte.
+    /// L'app Claude si elle est là (ton abonnement), sinon le tuteur gratuit dans l'app.
     private func askClaude(_ question: String) {
         let exercise = FocusController.target(of: focus.state?.targetID, in: course).exercise
-        UIPasteboard.general.string = StudyPhoneClaude.prompt(question, exercise: exercise, course: course)
-        if let url = URL(string: "claude://") { openURL(url) }
+        if PhoneClaude.hasClaudeApp || !PhoneClaude.hasFreeTutor {
+            UIPasteboard.general.string = StudyPhoneClaude.prompt(question, exercise: exercise, course: course)
+            if let url = URL(string: "claude://") { openURL(url) }
+        } else {
+            tutorQuestion = TutorQuestion(text: question)
+        }
     }
 
     /// Tenir pour terminer : une seconde et demie pour y penser. Sous verrou, la

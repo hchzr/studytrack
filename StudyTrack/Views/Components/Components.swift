@@ -211,10 +211,12 @@ struct EmptyCard: View {
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text(ui: title).font(.headline)
-            Text(ui: message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            if !message.isEmpty {
+                Text(ui: message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             if let actionTitle, let action {
                 Button(actionTitle) {
                     Haptics.tap()

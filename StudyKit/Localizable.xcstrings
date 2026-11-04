@@ -1,12 +1,7 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
-    "" : {
-
-    },
-    " " : {
-
-    },
+    "" : {},
     "–" : {
       "localizations" : {
         "en" : {
@@ -162,6 +157,7 @@
       }
     },
     "/" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -202,6 +198,7 @@
       }
     },
     "#%lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -232,6 +229,7 @@
       }
     },
     "%@\n%@ – %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -368,6 +366,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld"
           }
         }
       }
@@ -512,6 +516,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ %lld"
           }
         }
       }
@@ -976,6 +986,12 @@
             "state" : "new",
             "value" : "%1$@%2$@ · jusqu'à %3$@"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@%@ · until %@"
+          }
         }
       }
     },
@@ -1011,6 +1027,7 @@
       }
     },
     "%d ligne(s) illisible(s) ont été ignorées." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1853,6 +1870,7 @@
       }
     },
     "%lld h %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1889,10 +1907,17 @@
             "state" : "new",
             "value" : "%1$lld indice%2$@ de Claude · niveau %3$lld au plus"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Claude hint%@ · level %lld at most"
+          }
         }
       }
     },
     "%lld j" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2143,6 +2168,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld notions solides sur %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld concepts solid"
           }
         }
       }
@@ -2590,6 +2621,12 @@
             "state" : "new",
             "value" : "%1$lld sur %2$lld"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld"
+          }
         }
       }
     },
@@ -2599,6 +2636,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld sur %2$lld à faire"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld to do"
           }
         }
       }
@@ -2610,6 +2653,12 @@
             "state" : "new",
             "value" : "%1$lld sur %2$lld faits"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld done"
+          }
         }
       }
     },
@@ -2619,6 +2668,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld sur %2$lld lues"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld read"
           }
         }
       }
@@ -2660,6 +2715,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld vidéos · %2$@ encore à voir"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld videos · %@ left to watch"
           }
         }
       }
@@ -2752,6 +2813,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld/%2$lld juste%3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld right%@"
           }
         }
       }
@@ -2948,6 +3015,26 @@
         }
       }
     },
+    "1. Ouvre ton horaire sur IS-Academia." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Open your timetable on IS-Academia."
+          }
+        }
+      }
+    },
+    "1. Ouvre ton horaire sur le site de ton école." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Open your timetable on your school's site."
+          }
+        }
+      }
+    },
     "1(a-d) 2(a-e) 3 +" : {
       "localizations" : {
         "en" : {
@@ -2958,12 +3045,32 @@
         }
       }
     },
+    "2. Copie le lien d'export « iCal » (.ics) de l'horaire." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Copy the timetable's “iCal” export link (.ics)."
+          }
+        }
+      }
+    },
     "3 exercices" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "3 exercises"
+          }
+        }
+      }
+    },
+    "3. Colle-le ici" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Paste it here"
           }
         }
       }
@@ -3170,6 +3277,7 @@
       }
     },
     "À lire" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3180,6 +3288,7 @@
       }
     },
     "À n'utiliser que si tous tes appareils et ta clé de secours sont perdus. Les données chiffrées de ce compte seront effacées du serveur, définitivement, et les autres appareils ne pourront plus les lire. Cet appareil créera un coffre neuf et renverra ses propres données." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3251,7 +3360,14 @@
       }
     },
     "À reconnecter" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect"
+          }
+        }
+      }
     },
     "à refaire" : {
       "localizations" : {
@@ -3274,6 +3390,7 @@
       }
     },
     "À regarder" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3466,6 +3583,16 @@
         }
       }
     },
+    "absent : le tuteur gratuit répond" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "missing: the free tutor answers"
+          }
+        }
+      }
+    },
     "Actions pour la session de %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3498,6 +3625,7 @@
       }
     },
     "Activation…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3551,6 +3679,7 @@
       }
     },
     "Activer la synchronisation chiffrée" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3571,12 +3700,32 @@
         }
       }
     },
+    "Actualiser" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        }
+      }
+    },
     "Actualiser depuis l'EPFL" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh from EPFL"
+          }
+        }
+      }
+    },
+    "admin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "admin"
           }
         }
       }
@@ -3685,7 +3834,14 @@
       }
     },
     "Affiché" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shown"
+          }
+        }
+      }
     },
     "Afficher" : {
       "localizations" : {
@@ -3708,6 +3864,7 @@
       }
     },
     "Afficher la clé de secours" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3718,6 +3875,7 @@
       }
     },
     "Afficher la clé de secours ?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3819,9 +3977,6 @@
         }
       }
     },
-    "Ajoute l'onglet « Écouter » à la fiche : la fiche part dans NotebookLM et le podcast s'écoute ici. La connexion à Google est facultative (sinon, export manuel)." : {
-
-    },
     "Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. StudyTrack ne se connecte jamais à Google." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3829,6 +3984,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Adds a Listen tab to the sheet: sources ready for NotebookLM, and the podcast to play here. StudyTrack never connects to Google."
+          }
+        }
+      }
+    },
+    "Ajoute l'onglet « Écouter » à la fiche : un podcast NotebookLM de ta fiche." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds the “Listen” tab to the sheet: a NotebookLM podcast of your sheet."
           }
         }
       }
@@ -3997,6 +4162,7 @@
       }
     },
     "Ajouter un appareil" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4321,6 +4487,7 @@
       }
     },
     "Albums" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4503,6 +4670,16 @@
         }
       }
     },
+    "Anki, tâches, hors ligne, données et sauvegarde, revoir l'accueil." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anki, tasks, offline, data and backup, replay onboarding."
+          }
+        }
+      }
+    },
     "AnkiConnect" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4515,6 +4692,7 @@
       }
     },
     "AnkiWeb" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4658,6 +4836,7 @@
       }
     },
     "Appareil ajouté" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4788,6 +4967,7 @@
       }
     },
     "Artistes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4827,6 +5007,16 @@
         }
       }
     },
+    "au même point" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "at the same point"
+          }
+        }
+      }
+    },
     "Au prochain lancement de l'app." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4859,7 +5049,14 @@
       }
     },
     "Aucun appareil Spotify n'est ouvert. Ouvre Spotify sur ton ordinateur ou ton téléphone." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Spotify device is open. Open Spotify on your computer or phone."
+          }
+        }
+      }
     },
     "Aucun badge pour l'instant — continue !" : {
       "extractionState" : "stale",
@@ -4950,6 +5147,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No tracked courses."
+          }
+        }
+      }
+    },
+    "Aucun cours suivi. Ajoute-en un avec + dans la barre latérale." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No course tracked. Add one with + in the sidebar."
           }
         }
       }
@@ -5068,6 +5275,7 @@
       }
     },
     "Aucun membre" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5378,6 +5586,16 @@
         }
       }
     },
+    "Aucune séance trouvée dans cet horaire." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No classes found in this timetable."
+          }
+        }
+      }
+    },
     "Aucune séance. Importe ton horaire (.ics) depuis l'onglet Agenda ou le profil." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5437,6 +5655,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No session planned for this course."
+          }
+        }
+      }
+    },
+    "Aucune session prévue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No session planned."
           }
         }
       }
@@ -5627,8 +5855,25 @@
         }
       }
     },
+    "Autorise StudyTrack à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow StudyTrack to control Music: System Settings › Privacy & Security › Automation."
+          }
+        }
+      }
+    },
     "Autorise StudyTrack à piloter Spotify : Réglages Système › Confidentialité › Automatisation." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow StudyTrack to control Spotify: System Settings › Privacy › Automation."
+          }
+        }
+      }
     },
     "Autoriser" : {
       "localizations" : {
@@ -5701,6 +5946,16 @@
         }
       }
     },
+    "Autrement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otherwise"
+          }
+        }
+      }
+    },
     "Autres" : {
       "localizations" : {
         "en" : {
@@ -5732,7 +5987,14 @@
       }
     },
     "Avancé" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Advanced"
+          }
+        }
+      }
     },
     "Avancement" : {
       "extractionState" : "stale",
@@ -5850,7 +6112,14 @@
       }
     },
     "Barre des menus et clavier" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menu bar and keyboard"
+          }
+        }
+      }
     },
     "Barres flottantes" : {
       "localizations" : {
@@ -5987,7 +6256,14 @@
       }
     },
     "Blocage" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocking"
+          }
+        }
+      }
     },
     "Blocage pas activé" : {
       "localizations" : {
@@ -6274,6 +6550,7 @@
       }
     },
     "Calendrier autorisé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6289,6 +6566,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "EPFL calendar"
+          }
+        }
+      }
+    },
+    "Calendrier de l'iPhone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone calendar"
+          }
+        }
+      }
+    },
+    "Calendrier de l'iPhone relié" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone calendar linked"
+          }
+        }
+      }
+    },
+    "Calendrier de l'iPhone relié : l'horaire qui y est abonné sera lu." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone calendar linked: the timetable subscribed there will be read."
           }
         }
       }
@@ -6315,6 +6622,7 @@
       }
     },
     "Calendrier non autorisé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6385,6 +6693,7 @@
       }
     },
     "Ce compte est chiffré : ajoute cet appareil depuis un appareil déjà connecté." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6431,6 +6740,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This slot, every week"
+          }
+        }
+      }
+    },
+    "Ce fichier ne se lit pas." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file can't be read."
+          }
+        }
+      }
+    },
+    "Ce lien ne donne pas d'horaire : il faut le lien d'export iCal (.ics), pas celui de la page." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This link gives no timetable: use the iCal export link (.ics), not the page's link."
+          }
+        }
+      }
+    },
+    "Ce lien ne donne pas d'horaire. Vérifie que c'est bien le lien d'export iCal (.ics), pas celui de la page." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This link gives no timetable. Check that it's the iCal export link (.ics), not the page's link."
           }
         }
       }
@@ -6548,6 +6887,16 @@
         }
       }
     },
+    "Ce qui compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What counts"
+          }
+        }
+      }
+    },
     "Ce qui est tombé, ce qui a manqué…" : {
       "localizations" : {
         "en" : {
@@ -6558,8 +6907,15 @@
         }
       }
     },
-    "Ce qui joue sur tes appareils et tes playlists, pilotés depuis la musique du mode étude — gratuit ou Premium. Non officiel : StudyTrack parle à Spotify comme son lecteur web ; ton mot de passe reste chez Spotify." : {
-
+    "Ce qui joue, les commandes, le volume et tes playlists, gratuit ou Premium. Ton mot de passe reste chez Spotify." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What's playing, controls, volume and your playlists, free or Premium. Your password stays with Spotify."
+          }
+        }
+      }
     },
     "Ce qui n'est pas solide et sur quoi d'autres notions s'appuient." : {
       "localizations" : {
@@ -6622,7 +6978,14 @@
       }
     },
     "Ces réglages s'appliquent quand « Bloquer le reste » est activé." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These settings apply when “Block everything else” is on."
+          }
+        }
+      }
     },
     "Ces vidéos n'ont pas de transcription." : {
       "localizations" : {
@@ -7055,6 +7418,16 @@
         }
       }
     },
+    "Chiffré : seuls les membres du groupe peuvent lire." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encrypted: only group members can read it."
+          }
+        }
+      }
+    },
     "Choisir" : {
       "localizations" : {
         "en" : {
@@ -7096,7 +7469,14 @@
       }
     },
     "Choisir un appareil" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a device"
+          }
+        }
+      }
     },
     "Choisir un autre fichier" : {
       "localizations" : {
@@ -7124,6 +7504,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose a file"
+          }
+        }
+      }
+    },
+    "Choisir un fichier .ics" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an .ics file"
           }
         }
       }
@@ -7262,7 +7652,14 @@
       }
     },
     "Choisis une playlist ci-dessous, ou lance la lecture." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a playlist below, or start playback."
+          }
+        }
+      }
     },
     "Choisis-en un à gauche." : {
       "localizations" : {
@@ -7507,6 +7904,12 @@
             "state" : "new",
             "value" : "Claude Code · projets %1$@%2$@"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code · projects %@%@"
+          }
         }
       }
     },
@@ -7530,12 +7933,38 @@
         }
       }
     },
+    "Claude compare ta copie au corrigé ; rien n'est noté sans ton accord." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude compares your work with the solution; nothing is graded without your OK."
+          }
+        }
+      }
+    },
+    "Claude dessine les enchaînements, les méthodes et les pièges du cours à partir de la fiche." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude draws the course's flows, methods and pitfalls from the sheet."
+          }
+        }
+      }
+    },
     "Claude écrit la fiche (%lld documents, ~%lld pages)…" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Claude écrit la fiche (%1$lld documents, ~%2$lld pages)…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude is writing the sheet (%lld documents, ~%lld pages)…"
           }
         }
       }
@@ -7551,9 +7980,17 @@
       }
     },
     "Claude et IA" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude and AI"
+          }
+        }
+      }
     },
     "Claude lit la fiche et dessine ce qui s'enchaîne, ce qui découle de quoi, quelle méthode choisir, ce qu'il ne faut pas confondre — pour tout le cours ou un chapitre à la fois." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7685,6 +8122,7 @@
       }
     },
     "Clé de secours" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7695,6 +8133,7 @@
       }
     },
     "Clé de secours — garde-la hors de l'app" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7705,11 +8144,22 @@
       }
     },
     "Clé différente : %d ligne(s) chiffrée(s) avec une autre clé ont été ignorées." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Different key: %d row(s) encrypted with another key were ignored."
+          }
+        }
+      }
+    },
+    "Clic droit : j'y étais / manqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Right-click: attended / missed"
           }
         }
       }
@@ -7818,12 +8268,32 @@
         }
       }
     },
+    "Code %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code %@"
+          }
+        }
+      }
+    },
     "Code d'invitation" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invite code"
+          }
+        }
+      }
+    },
+    "Code reçu (EPFL-7K2Q)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code received (EPFL-7K2Q)"
           }
         }
       }
@@ -7860,7 +8330,34 @@
       }
     },
     "Colle un lien Spotify (playlist, album…)." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste a Spotify link (playlist, album…)."
+          }
+        }
+      }
+    },
+    "Colle-le ici." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste it here."
+          }
+        }
+      }
+    },
+    "Coller" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste"
+          }
+        }
+      }
     },
     "Coller le texte d'une série" : {
       "extractionState" : "stale",
@@ -8087,6 +8584,26 @@
         }
       }
     },
+    "Compté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counted"
+          }
+        }
+      }
+    },
+    "Compté — cliquer pour marquer manqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counted — click to mark missed"
+          }
+        }
+      }
+    },
     "Compte et groupes" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8109,11 +8626,22 @@
       }
     },
     "Compte ton temps de Claude Code. L'étude (tes dossiers d'étude) n'est jamais limitée, seulement comptée ; les projets suivent tes règles. Durcir s'applique tout de suite, assouplir le lendemain à 4 h : on ne lâche pas ses limites sur un coup de tête." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Counts your Claude Code time. Studying (your study folders) is never limited, only counted; projects follow your rules. Tightening applies immediately, relaxing the next day at 4 a.m.: limits aren't dropped on a whim."
+          }
+        }
+      }
+    },
+    "Compte ton temps de Claude Code. L'étude n'est jamais limitée ; les projets suivent tes règles (assouplir prend effet le lendemain)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts your Claude Code time. Study is never limited; projects follow your rules (loosening takes effect the next day)."
           }
         }
       }
@@ -8182,6 +8710,7 @@
       }
     },
     "Confirmer la suppression sur les autres appareils" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8223,6 +8752,7 @@
       }
     },
     "Connecte Claude" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8253,11 +8783,22 @@
       }
     },
     "Connecte ton compte Google : StudyTrack crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connect your Google account: StudyTrack creates the notebook, drops your sheet in it and brings the podcast back, without leaving the app. Your password stays with Google."
+          }
+        }
+      }
+    },
+    "Connecte ton compte StudyTrack" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect your StudyTrack account"
           }
         }
       }
@@ -8373,11 +8914,15 @@
         }
       }
     },
-    "Connecte-toi une fois : ce qui joue sur ton ordinateur ou ton téléphone, les commandes, le volume, tes playlists — gratuit ou Premium. StudyTrack ne voit jamais ton mot de passe." : {
-
-    },
-    "Connecté·e à Spotify (non officiel : StudyTrack parle à Spotify comme son lecteur web)." : {
-
+    "Connecté·e à Spotify." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected to Spotify."
+          }
+        }
+      }
     },
     "Connexion à %@" : {
       "localizations" : {
@@ -8420,7 +8965,14 @@
       }
     },
     "Connexion à Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify sign-in"
+          }
+        }
+      }
     },
     "Connexion EPFL" : {
       "localizations" : {
@@ -8507,6 +9059,7 @@
       }
     },
     "Continuer avec Google" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8606,6 +9159,16 @@
         }
       }
     },
+    "Copie le lien d'export « iCal » (.ics) de l'horaire." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy the timetable's “iCal” export link (.ics)."
+          }
+        }
+      }
+    },
     "copie pas envoyée" : {
       "localizations" : {
         "en" : {
@@ -8642,6 +9205,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copy address"
+          }
+        }
+      }
+    },
+    "Copier l'invitation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy invite"
           }
         }
       }
@@ -8830,6 +9403,7 @@
       }
     },
     "Corrigés" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9126,6 +9700,16 @@
         }
       }
     },
+    "Crée-en un et partage son code, ou rejoins celui d'un·e camarade." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create one and share its code, or join a classmate's."
+          }
+        }
+      }
+    },
     "Créer" : {
       "localizations" : {
         "en" : {
@@ -9269,6 +9853,7 @@
       }
     },
     "D" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9776,6 +10361,16 @@
         }
       }
     },
+    "Demander au groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask the group"
+          }
+        }
+      }
+    },
     "Demander de l'aide" : {
       "localizations" : {
         "en" : {
@@ -10012,6 +10607,7 @@
       }
     },
     "Dernière synchronisation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10184,6 +10780,7 @@
       }
     },
     "Diapositives et notes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10244,6 +10841,7 @@
       }
     },
     "Documents du cours" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10681,6 +11279,7 @@
       }
     },
     "Elle donne accès à toutes tes données chiffrées. Vérifie que personne ne regarde l'écran." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10962,6 +11561,12 @@
             "state" : "new",
             "value" : "Encore %1$lld min · pause à %2$@"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld min left · break at %@"
+          }
         }
       }
     },
@@ -11238,6 +11843,7 @@
       }
     },
     "Entrer un code d'appairage" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11288,6 +11894,7 @@
       }
     },
     "Envoie aussi à l'assistant les énoncés et corrigés déjà téléchargés sur l'iPhone, les fichiers que tu as ajoutés, tes notes de cours, ta fiche de révision et les corrigés rédigés. Coupé, le serveur efface ce qu'il avait reçu. Pour avoir toutes les séries, active « Garder les énoncés » dans les réglages hors ligne." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11414,6 +12021,7 @@
       }
     },
     "EPFL" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11636,6 +12244,7 @@
       }
     },
     "Évaluations" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11698,7 +12307,14 @@
       }
     },
     "Exécutable" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Executable"
+          }
+        }
+      }
     },
     "Exemple" : {
       "localizations" : {
@@ -11746,6 +12362,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "EXERCICE %1$lld.%2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EXERCISE %lld.%lld"
           }
         }
       }
@@ -12146,7 +12768,14 @@
       }
     },
     "Fenêtres" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Windows"
+          }
+        }
+      }
     },
     "Fermer" : {
       "localizations" : {
@@ -12256,6 +12885,12 @@
             "state" : "new",
             "value" : "Fiches de révision… %1$lld/%2$lld"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision sheets… %lld/%lld"
+          }
         }
       }
     },
@@ -12265,6 +12900,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "File"
+          }
+        }
+      }
+    },
+    "Fichier .ics…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ".ics file…"
           }
         }
       }
@@ -12402,6 +13047,7 @@
       }
     },
     "Flux iCalendar de ton horaire" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12739,7 +13385,14 @@
       }
     },
     "Google (NotebookLM)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google (NotebookLM)"
+          }
+        }
+      }
     },
     "Google a refusé la demande (code %@) : la limite du jour est peut-être atteinte, ou NotebookLM a changé son fonctionnement." : {
       "localizations" : {
@@ -12856,6 +13509,7 @@
       }
     },
     "h" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12979,7 +13633,6 @@
       }
     },
     "Horaire" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13407,6 +14060,16 @@
         }
       }
     },
+    "Importer des cours (JSON, CSV)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import courses (JSON, CSV)"
+          }
+        }
+      }
+    },
     "Importer du contenu" : {
       "localizations" : {
         "en" : {
@@ -13519,6 +14182,7 @@
       }
     },
     "Importer un horaire / JSON / CSV" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13658,6 +14322,12 @@
             "state" : "new",
             "value" : "Indice %1$lld · %2$@ noté"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hint %lld · %@ noted"
+          }
         }
       }
     },
@@ -13698,6 +14368,12 @@
             "state" : "new",
             "value" : "Indices donnés : niveau %1$lld sur 4 (%2$@)"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hints given: level %lld of 4 (%@)"
+          }
         }
       }
     },
@@ -13722,6 +14398,7 @@
       }
     },
     "Installe Claude Code, puis tape `claude` une fois dans le Terminal." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13732,7 +14409,14 @@
       }
     },
     "Installe l'app Spotify pour la piloter d'ici." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install the Spotify app to control it from here."
+          }
+        }
+      }
     },
     "Installée" : {
       "localizations" : {
@@ -13783,9 +14467,6 @@
           }
         }
       }
-    },
-    "introuvable — installe Claude Code" : {
-
     },
     "Invitation" : {
       "extractionState" : "stale",
@@ -13911,6 +14592,7 @@
       }
     },
     "J'ai noté la clé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13930,6 +14612,16 @@
         }
       }
     },
+    "J'y étais" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attended"
+          }
+        }
+      }
+    },
     "J%lld" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13942,11 +14634,22 @@
       }
     },
     "jamais" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "never"
+          }
+        }
+      }
+    },
+    "Jamais" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never"
           }
         }
       }
@@ -13977,6 +14680,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Je dépose la fiche (%1$lld/%2$lld)…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploading the sheet (%lld/%lld)…"
           }
         }
       }
@@ -14207,6 +14916,7 @@
       }
     },
     "Jour par jour" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14350,6 +15060,16 @@
         }
       }
     },
+    "L'assistant lit aussi tes énoncés, corrigés, fichiers, notes et fiche déjà sur l'iPhone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The assistant also reads your statements, solutions, files, notes and sheet already on the iPhone."
+          }
+        }
+      }
+    },
     "L'énoncé" : {
       "localizations" : {
         "en" : {
@@ -14464,6 +15184,7 @@
       }
     },
     "La clé de secours de 54 caractères, montrée à l'activation du chiffrement." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14730,7 +15451,14 @@
       }
     },
     "La session Spotify a expiré : reconnecte-toi." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Spotify session expired: sign in again."
+          }
+        }
+      }
     },
     "Lance un chrono ou ajoute une session manuelle : elle apparaîtra ici." : {
       "extractionState" : "stale",
@@ -14744,7 +15472,14 @@
       }
     },
     "Lancer dans Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play in Spotify"
+          }
+        }
+      }
     },
     "Lancer l'animation" : {
       "localizations" : {
@@ -14756,8 +15491,25 @@
         }
       }
     },
+    "Lancer ton chrono sur le même travail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start your timer on the same work"
+          }
+        }
+      }
+    },
     "Lancer un lien" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play a link"
+          }
+        }
+      }
     },
     "Lancer une activité d'essai" : {
       "localizations" : {
@@ -14831,6 +15583,7 @@
       }
     },
     "Le code a expiré : génères-en un autre." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15005,6 +15758,16 @@
         }
       }
     },
+    "Le même compte que sur ton iPhone (Réglages › Comptes)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The same account as on your iPhone (Settings › Accounts)."
+          }
+        }
+      }
+    },
     "Le mod n'est pas dans cette copie de StudyTrack." : {
       "localizations" : {
         "en" : {
@@ -15088,7 +15851,14 @@
       }
     },
     "Le projet Claude en détail (dossier, studytrack.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Claude project in detail (folder, studytrack.json, buttons, server), files for Claude, redo steps."
+          }
+        }
+      }
     },
     "Le reste" : {
       "localizations" : {
@@ -15199,6 +15969,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Time no longer counts."
+          }
+        }
+      }
+    },
+    "Le tuteur gratuit n'est pas disponible dans cette version." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The free tutor isn't available in this version."
+          }
+        }
+      }
+    },
+    "Le tuteur gratuit répond" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The free tutor answers"
+          }
+        }
+      }
+    },
+    "Le tuteur ne répond pas." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tutor isn't answering."
           }
         }
       }
@@ -15331,6 +16131,12 @@
             "state" : "new",
             "value" : "Lecture des documents… %1$lld/%2$lld"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading documents… %lld/%lld"
+          }
         }
       }
     },
@@ -15341,10 +16147,17 @@
             "state" : "new",
             "value" : "Lecture des transcriptions… %1$lld/%2$lld"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading transcripts… %lld/%lld"
+          }
         }
       }
     },
     "Lecture du coffre du compte…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15382,6 +16195,12 @@
             "state" : "new",
             "value" : "Lecture du polycopié… %1$lld/%2$lld"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading the handout… %lld/%lld"
+          }
         }
       }
     },
@@ -15395,12 +16214,42 @@
         }
       }
     },
+    "Lecture…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading…"
+          }
+        }
+      }
+    },
     "Lectures" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Readings"
+          }
+        }
+      }
+    },
+    "Les cours en amphi ne comptent pas, même chronométrés." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lectures don't count, even when timed."
+          }
+        }
+      }
+    },
+    "Les cours, les séances d'exercices et leurs salles arrivent seuls." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lectures, exercise sessions and their rooms come in on their own."
           }
         }
       }
@@ -15545,7 +16394,14 @@
       }
     },
     "Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redo steps are changed in studytrack.json (“redo”)."
+          }
+        }
+      }
     },
     "Les photos et questions passent chiffrées par le relais de StudyTrack, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route." : {
       "localizations" : {
@@ -15721,6 +16577,7 @@
       }
     },
     "Lien" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15751,7 +16608,14 @@
       }
     },
     "Lien d'une playlist ou d'un album (Partager › Copier le lien)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist or album link (Share › Copy link)"
+          }
+        }
+      }
     },
     "Lien du corrigé (optionnel)" : {
       "localizations" : {
@@ -15784,6 +16648,7 @@
       }
     },
     "Lier un compte Google" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15854,6 +16719,16 @@
         }
       }
     },
+    "Lire le calendrier de l'iPhone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read the iPhone calendar"
+          }
+        }
+      }
+    },
     "Lire les énoncés avec l'IA" : {
       "localizations" : {
         "en" : {
@@ -15905,6 +16780,7 @@
       }
     },
     "M" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15935,6 +16811,7 @@
       }
     },
     "macOS a refusé l'accès. Active Music pour StudyTrack dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage)." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16166,6 +17043,16 @@
         }
       }
     },
+    "Marquer manqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark missed"
+          }
+        }
+      }
+    },
     "Marquer non vu" : {
       "localizations" : {
         "en" : {
@@ -16207,7 +17094,14 @@
       }
     },
     "Masqué" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden"
+          }
+        }
+      }
     },
     "Masquées" : {
       "localizations" : {
@@ -16425,6 +17319,7 @@
       }
     },
     "Mes notes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16611,6 +17506,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Mod branché%1$@, vu %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mod connected%@, seen %@"
           }
         }
       }
@@ -17042,6 +17943,7 @@
       }
     },
     "moodle.epfl.ch" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17052,6 +17954,7 @@
       }
     },
     "Morceaux" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17421,9 +18324,17 @@
       }
     },
     "Non connecté" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not connected"
+          }
+        }
+      }
     },
     "Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17433,8 +18344,25 @@
         }
       }
     },
-    "Non officiel : StudyTrack parle à Spotify comme son lecteur web. Si Spotify change, le pilotage local ci-dessous reste là." : {
-
+    "Non officiel : si Google change NotebookLM, l'export manuel reste là." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unofficial: if Google changes NotebookLM, the manual export stays available."
+          }
+        }
+      }
+    },
+    "Non officiel : si Spotify change, le pilotage local ci-dessous reste là." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unofficial: if Spotify changes, the local control below stays available."
+          }
+        }
+      }
     },
     "Non planifié" : {
       "localizations" : {
@@ -17577,6 +18505,7 @@
       }
     },
     "NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18341,7 +19270,14 @@
       }
     },
     "Ouvre Spotify sur un appareil (ordinateur, téléphone…) : il se pilote ici." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Spotify on a device (computer, phone…): control it from here."
+          }
+        }
+      }
     },
     "Ouvre StudyTrack" : {
       "extractionState" : "stale",
@@ -18370,6 +19306,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open StudyTrack once before planning."
+          }
+        }
+      }
+    },
+    "Ouvre ton horaire sur IS-Academia." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open your timetable on IS-Academia."
+          }
+        }
+      }
+    },
+    "Ouvre ton horaire sur le site de ton école." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open your timetable on your school's site."
           }
         }
       }
@@ -18440,6 +19396,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open in Safari"
+          }
+        }
+      }
+    },
+    "Ouvrir IS-Academia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open IS-Academia"
           }
         }
       }
@@ -18544,6 +19510,16 @@
         }
       }
     },
+    "Ouvrir les réglages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
     "Ouvrir les Réglages Système" : {
       "localizations" : {
         "en" : {
@@ -18575,7 +19551,14 @@
       }
     },
     "Ouvrir Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Spotify"
+          }
+        }
+      }
     },
     "Ouvrir StudyTrack" : {
       "localizations" : {
@@ -18613,6 +19596,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "p. %1$lld / %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "p. %lld / %lld"
           }
         }
       }
@@ -18699,7 +19688,14 @@
       }
     },
     "Paliers de reprise" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redo steps"
+          }
+        }
+      }
     },
     "Panneau" : {
       "extractionState" : "stale",
@@ -18764,6 +19760,7 @@
       }
     },
     "Par matière" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19155,6 +20152,26 @@
         }
       }
     },
+    "Pas encore de groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No group yet"
+          }
+        }
+      }
+    },
+    "Pas encore de question." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No questions yet."
+          }
+        }
+      }
+    },
     "Pas encore de schéma pour ce chapitre" : {
       "localizations" : {
         "en" : {
@@ -19171,6 +20188,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No session yet."
+          }
+        }
+      }
+    },
+    "Pas encore de temps compté cette semaine." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No time counted this week yet."
           }
         }
       }
@@ -19257,7 +20284,18 @@
         }
       }
     },
+    "Passe par ton abonnement ; sans Claude Code, le tuteur gratuit prend le relais." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses your subscription; without Claude Code, the free tutor takes over."
+          }
+        }
+      }
+    },
     "Passe par ton abonnement, sans outils." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19500,6 +20538,26 @@
         }
       }
     },
+    "Pendant que le chrono tourne ; en pause, le Mac dort." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While the timer runs; on break, the Mac sleeps."
+          }
+        }
+      }
+    },
+    "Pendant que le chrono tourne ; l'écran peut s'éteindre en pause ou sur batterie faible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While the timer runs; the screen can turn off on break or on low battery."
+          }
+        }
+      }
+    },
     "Période" : {
       "localizations" : {
         "en" : {
@@ -19601,6 +20659,16 @@
         }
       }
     },
+    "Pilote Spotify depuis la musique du mode étude, gratuit ou Premium. Non officiel ; ton mot de passe reste chez Spotify." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control Spotify from study mode's music, free or Premium. Unofficial; your password stays with Spotify."
+          }
+        }
+      }
+    },
     "Place maximale" : {
       "localizations" : {
         "en" : {
@@ -19683,6 +20751,7 @@
       }
     },
     "Playlists" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19892,6 +20961,12 @@
             "state" : "new",
             "value" : "Pomodoro · %1$lld/%2$lld min"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomodoro · %lld/%lld min"
+          }
         }
       }
     },
@@ -19913,6 +20988,12 @@
             "state" : "new",
             "value" : "Pomodoro %1$lld/%2$lld min — cliquer pour un chrono libre"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomodoro %lld/%lld min — click for a free timer"
+          }
         }
       }
     },
@@ -19932,6 +21013,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Known weighting"
+          }
+        }
+      }
+    },
+    "Pose ta question ci-dessous. Pour Claude (ton abonnement, il lit le PDF de la série) : installe Claude Code, puis tape `claude` une fois dans le Terminal." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask your question below. For Claude (your subscription, it reads the series PDF): install Claude Code, then type `claude` once in Terminal."
           }
         }
       }
@@ -20005,6 +21096,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "To add some: Settings › Study mode."
+          }
+        }
+      }
+    },
+    "Pour l'agenda et tes heures d'amphi. Facultatif." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For the calendar and your lecture hours. Optional."
           }
         }
       }
@@ -20289,7 +21390,14 @@
       }
     },
     "Projet Claude" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude project"
+          }
+        }
+      }
     },
     "Projet EPFL" : {
       "extractionState" : "stale",
@@ -20328,6 +21436,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "projets %1$@%2$@ · étude %3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "projects %@%@ · study %@"
           }
         }
       }
@@ -20427,6 +21541,7 @@
       }
     },
     "QR code d'appairage" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -20442,6 +21557,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "QR code unavailable on this device."
+          }
+        }
+      }
+    },
+    "Quand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When"
           }
         }
       }
@@ -20466,9 +21591,6 @@
           }
         }
       }
-    },
-    "Quand tu clos une série, Claude compare ta copie au corrigé et te propose les corrections, les erreurs et les exercices à refaire. Rien n'est noté sans ton accord." : {
-
     },
     "Que choisir ?" : {
       "localizations" : {
@@ -21135,6 +22257,7 @@
       }
     },
     "Réinitialiser le coffre" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21170,6 +22293,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Join with a code"
+          }
+        }
+      }
+    },
+    "Rejoindre la session" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join the session"
           }
         }
       }
@@ -21742,6 +22875,7 @@
       }
     },
     "Restaurer" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21882,6 +23016,7 @@
       }
     },
     "retiré de l'énoncé" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22555,6 +23690,7 @@
       }
     },
     "S" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22584,6 +23720,16 @@
         }
       }
     },
+    "Saisies à la main" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual entries"
+          }
+        }
+      }
+    },
     "Saisir les exercices à la main" : {
       "localizations" : {
         "en" : {
@@ -22606,9 +23752,17 @@
       }
     },
     "Sans « Fermer les autres apps », elles sont juste cachées." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without “Close other apps”, they're just hidden."
+          }
+        }
+      }
     },
     "Sans cette clé ni un autre appareil connecté, tes données chiffrées sont perdues pour de bon. Note-la sur papier ou dans un gestionnaire de mots de passe." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22774,6 +23928,7 @@
       }
     },
     "Scanner le QR code" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22816,7 +23971,14 @@
       }
     },
     "Se connecte depuis l'onglet « Écouter » d'une fiche" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signs in from a sheet's “Listen” tab"
+          }
+        }
+      }
     },
     "Se connecter" : {
       "localizations" : {
@@ -22859,10 +24021,24 @@
       }
     },
     "Se connecter à Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to Spotify"
+          }
+        }
+      }
     },
     "Se connecter à Spotify…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to Spotify…"
+          }
+        }
+      }
     },
     "Se connecter avec EPFL" : {
       "localizations" : {
@@ -22885,7 +24061,14 @@
       }
     },
     "Se déconnecter de Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out of Spotify"
+          }
+        }
+      }
     },
     "Se reconnecter" : {
       "localizations" : {
@@ -22948,6 +24131,16 @@
         }
       }
     },
+    "Séances d'exercices de l'horaire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timetable exercise sessions"
+          }
+        }
+      }
+    },
     "Séances et cours" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -22970,7 +24163,14 @@
       }
     },
     "Secondes dans la barre des menus, raccourci global, cahiers de notes." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seconds in the menu bar, global shortcut, notebooks."
+          }
+        }
+      }
     },
     "Secret client (client Web uniquement)" : {
       "localizations" : {
@@ -23074,6 +24274,7 @@
       }
     },
     "semaine %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23119,6 +24320,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Semaine %1$lld sur %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Week %lld of %lld"
           }
         }
       }
@@ -23489,6 +24696,7 @@
       }
     },
     "Session libre" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23612,6 +24820,7 @@
       }
     },
     "Seulement pendant que le chrono tourne : la musique continue, l'écran s'éteint comme d'habitude. En pause, le Mac dort." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23622,6 +24831,7 @@
       }
     },
     "Seulement pendant que le chrono tourne. L'écran peut s'éteindre pendant une pause Pomodoro, en mode économie d'énergie ou sous 20 % de batterie. Fermer le capot endort toujours le Mac." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23682,7 +24892,14 @@
       }
     },
     "Seules les apps et les sites ci-dessous restent ouverts." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the apps and sites below stay open."
+          }
+        }
+      }
     },
     "Seules les séries sont comparées pour ce cours." : {
       "localizations" : {
@@ -23701,6 +24918,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Only admins manage members."
+          }
+        }
+      }
+    },
+    "Si confirmés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If confirmed"
+          }
+        }
+      }
+    },
+    "Si ton horaire est déjà abonné dans le calendrier de l'iPhone, StudyTrack peut le lire." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If your timetable is already subscribed in the iPhone calendar, StudyTrack can read it."
           }
         }
       }
@@ -23911,13 +25148,34 @@
       }
     },
     "Spotify" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify"
+          }
+        }
+      }
     },
     "Spotify a refusé la commande (code %lld)." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify refused the command (code %lld)."
+          }
+        }
+      }
     },
     "Spotify a répondu autrement que prévu (%@) : son lecteur web a peut-être changé. Le pilotage local reste possible." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify answered unexpectedly (%@): its web player may have changed. Local control still works."
+          }
+        }
+      }
     },
     "Spotlight, ⌘Tab et Mission Control : éteints" : {
       "localizations" : {
@@ -24034,6 +25292,16 @@
         }
       }
     },
+    "StudyTrack crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StudyTrack creates the notebook, uploads your sheet and brings back the podcast. Your password stays with Google."
+          }
+        }
+      }
+    },
     "StudyTrack ne peut pas contrôler Music" : {
       "localizations" : {
         "en" : {
@@ -24125,6 +25393,7 @@
       }
     },
     "Suivre la présence en amphi" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24581,7 +25850,14 @@
       }
     },
     "Sur ce Mac" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On this Mac"
+          }
+        }
+      }
     },
     "Sur cet exercice" : {
       "localizations" : {
@@ -24646,6 +25922,7 @@
       }
     },
     "Sur le nouvel appareil, connecte-toi au même compte, puis « Entrer un code d'appairage ». Le code est valable 10 minutes et ne sert qu'une fois." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24716,6 +25993,7 @@
       }
     },
     "Sur un appareil déjà connecté : Réglages › Synchronisation › Ajouter un appareil. Saisis le code affiché, ou scanne le QR code." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24779,6 +26057,7 @@
       }
     },
     "Synchronisation indisponible dans cette version" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24874,6 +26153,7 @@
       }
     },
     "Synchroniser mes données" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -24941,6 +26221,12 @@
             "state" : "new",
             "value" : "Ta copie a %1$lld pages : pas de page %2$@"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your work has %lld pages: no page %@"
+          }
         }
       }
     },
@@ -24965,7 +26251,14 @@
       }
     },
     "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your way of working is in studytrack.json (details in “Advanced”)."
+          }
+        }
+      }
     },
     "Ta façon de travailler est dans studytrack.json." : {
       "extractionState" : "stale",
@@ -25102,6 +26395,7 @@
       }
     },
     "Tape RÉINITIALISER pour confirmer" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25421,6 +26715,7 @@
       }
     },
     "Tes données sont chiffrées sur tes appareils ; le serveur ne peut pas les lire. Il voit seulement quand une ligne change et combien il y en a." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25457,6 +26752,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your tools"
+          }
+        }
+      }
+    },
+    "Tes PDF et documents de cours, lisibles par Claude (téléchargés à la demande avec ta session Moodle). L'adresse n'écoute que ce Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your PDFs and course documents, readable by Claude (downloaded on demand with your Moodle session). The address only listens on this Mac."
           }
         }
       }
@@ -25783,6 +27088,7 @@
       }
     },
     "Titres phares" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25802,13 +27108,38 @@
         }
       }
     },
+    "toi" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you"
+          }
+        }
+      }
+    },
     "Toi" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "You"
+          }
+        }
+      }
+    },
+    "Toi : %lld séries · %lld exercices · %lld théorie" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Toi : %1$lld séries · %2$lld exercices · %3$lld théorie"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You: %lld series · %lld exercises · %lld theory"
           }
         }
       }
@@ -25833,8 +27164,25 @@
         }
       }
     },
+    "Ton chrono suit le groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your timer follows the group"
+          }
+        }
+      }
+    },
     "Ton compte Spotify, piloté d'ici" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Spotify account, controlled from here"
+          }
+        }
+      }
     },
     "Ton compte, tes adhésions aux groupes et tout ce que tu y as partagé seront effacés du serveur. Tes cours et tes sessions restent sur cet appareil." : {
       "localizations" : {
@@ -25857,8 +27205,25 @@
         }
       }
     },
+    "Ton horaire" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your timetable"
+          }
+        }
+      }
+    },
     "Ton mot de passe reste chez Google." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your password stays with Google."
+          }
+        }
+      }
     },
     "Ton mot de passe se tape sur la page de l'EPFL, pas dans l'app." : {
       "localizations" : {
@@ -26088,6 +27453,7 @@
       }
     },
     "Tous tes PDF et documents (énoncés, corrigés, anciens examens, supports, notes) lisibles par Claude, sans limite de taille : ils sont téléchargés à la demande avec ta session Moodle et copiés dans le dossier ci-dessus. « Ajouter à l'app Claude » installe une extension (un clic de confirmation dans l'app Claude) : l'app Claude lit alors tout directement. L'adresse n'écoute que ce Mac et contient un code secret." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -26175,6 +27541,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tout est bloqué sauf %1$lld apps et %2$lld sites."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything is blocked except %lld apps and %lld sites."
           }
         }
       }
@@ -26321,6 +27693,16 @@
         }
       }
     },
+    "Tout seuls" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On their own"
+          }
+        }
+      }
+    },
     "Tout voir" : {
       "localizations" : {
         "en" : {
@@ -26387,6 +27769,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All series"
+          }
+        }
+      }
+    },
+    "Toutes matières" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All subjects"
           }
         }
       }
@@ -26503,7 +27895,14 @@
       }
     },
     "Trouvé" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found"
+          }
+        }
+      }
     },
     "Trouvés dans tes inscriptions Moodle. Décoche ceux que tu ne suis pas." : {
       "localizations" : {
@@ -26679,6 +28078,16 @@
         }
       }
     },
+    "Un chrono commun : les pauses tombent au même moment pour tout le monde, chacun sur son travail." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A shared timer: breaks fall at the same time for everyone, each on their own work."
+          }
+        }
+      }
+    },
     "Un code d'invitation et un QR code seront générés pour inviter vos camarades." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -26686,6 +28095,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An invite code and a QR code will be generated to invite your classmates."
+          }
+        }
+      }
+    },
+    "Un cours compte quand tu le coches dans l'agenda (« J'y étais »)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A lecture counts when you tick it in the calendar (“Attended”)."
+          }
+        }
+      }
+    },
+    "Un cours compte une fois fini, sauf marqué manqué. Jamais compté deux fois avec un chrono." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A lecture counts once it's over, unless marked missed. Never counted twice with a timer."
           }
         }
       }
@@ -26727,6 +28156,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A hint, or have your notes checked."
+          }
+        }
+      }
+    },
+    "un membre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a member"
           }
         }
       }
@@ -26779,6 +28218,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A PDF"
+          }
+        }
+      }
+    },
+    "Un podcast de ta fiche, par NotebookLM." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A podcast of your sheet, by NotebookLM."
           }
         }
       }
@@ -26958,6 +28407,7 @@
       }
     },
     "Utiliser la clé de secours" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -27031,6 +28481,7 @@
       }
     },
     "Vérification en cours…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -27052,6 +28503,7 @@
       }
     },
     "Vérification…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -27133,7 +28585,14 @@
       }
     },
     "Verrou système, fermer les autres apps, barres flottantes, écrans, gestes du trackpad, Dock." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System lock, close other apps, floating bars, displays, trackpad gestures, Dock."
+          }
+        }
+      }
     },
     "Verrouillé" : {
       "localizations" : {
@@ -27575,6 +29034,60 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zero"
+          }
+        }
+      }
+    },
+    "Qui travaille en ce moment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Who's working right now"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "Qui en est où, série par série" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Who's where, series by series"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "Entraide sur un exercice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help on an exercise"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "Sessions ensemble" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions together"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "du programme" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "of the plan"
           }
         }
       }

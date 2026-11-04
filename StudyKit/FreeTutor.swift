@@ -46,4 +46,22 @@ enum FreeTutor {
         }
         return Answer(text: text, model: json["model"] as? String ?? "")
     }
+
+    /// Une réponse d'un trait (fiche, méthodes, carte du cours) : le mode qui porte cette consigne,
+    /// le serveur n'en acceptant pas du client (il a la même copie). `nil` pour une autre consigne.
+    static func mode(for instructions: String) -> String? {
+        switch instructions {
+        case RevisionSheetAI.instructions: return "sheet"
+        case RevisionSheetAI.methodsInstructions: return "sheetMethods"
+        case StudyMapAI.instructions: return "studyMap"
+        case StudyMapAI.chapterInstructions: return "studyMapChapter"
+        default: return nil
+        }
+    }
+
+    /// L'écrivain de `RevisionSheetMaker` sans Claude Code (l'iPhone, un Mac sans lui).
+    static func write(instructions: String, prompt: String) async throws -> String {
+        guard let mode = mode(for: instructions) else { throw Failure.unavailable }
+        return try await ask(mode: mode, messages: [(role: "user", content: prompt)]).text
+    }
 }

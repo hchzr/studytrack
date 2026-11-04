@@ -8,9 +8,9 @@ import PDFKit
 ///   • **Cours Botafogo** : chaque section du polycopié est lue, ses énoncés
 ///     encadrés repris tels quels (partout, sans IA). Sur le Mac, Claude y
 ///     ajoute les méthodes et les pièges des séries.
-///   • **Autres cours** : sur le Mac, Claude (par l'abonnement) lit tout le
-///     matériel — diapositives, notes, documents, séries et corrigés — et
-///     écrit la fiche. L'iPhone montre celle du Mac.
+///   • **Autres cours** : Claude (l'abonnement, sur le Mac) ou le tuteur gratuit
+///     (l'iPhone, un Mac sans Claude Code) lit tout le matériel — diapositives,
+///     notes, documents, séries et corrigés — et écrit la fiche.
 @MainActor
 @Observable
 final class RevisionSheetMaker {
@@ -24,7 +24,7 @@ final class RevisionSheetMaker {
     /// Ce qui se passe pour chaque cours (absent : rien en cours).
     private(set) var states: [UUID: State] = [:]
 
-    /// Claude, sur le Mac : (consigne, message) → réponse. `nil` ailleurs.
+    /// (consigne, message) → réponse : Claude Code ou le tuteur gratuit sur le Mac, le tuteur sur l'iPhone.
     @ObservationIgnored var writer: ((_ instructions: String, _ prompt: String) async throws -> String)?
 
     var canWrite: Bool { writer != nil }
