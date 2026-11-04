@@ -3,6 +3,7 @@ import { DateUtils } from "../../../domain/dateUtils.ts";
 import { Course, LinkedCalendarEvent, PlannedSession } from "../../../models/index.ts";
 import type { Deadline } from "../../../domain/deadline.ts";
 import {
+  assignLanes,
   buildWeekEntries, deadlineGlyph, entryLayout, entryColor, fallbackWeekNumber, visibleWeekDays, weekDays, weekLabel,
   weekNumberFor, withAlpha,
 } from "./weekModel.ts";
@@ -160,5 +161,24 @@ describe("couleurs et libellés", () => {
 
   it("écrit la plage de la semaine en français", () => {
     expect(weekLabel(monday)).toBe("Du 15 septembre au 21 septembre");
+  });
+});
+
+describe("assignLanes", () => {
+  const base = new Date(2026, 10, 2, 0, 0);
+  const at = (hours: number) => new Date(base.getTime() + hours * 3_600_000);
+  const span = (from: number, to: number) => ({ start: at(from), end: at(to) });
+
+  it("met côte à côte ce qui se chevauche, le plus long d'abord", () => {
+    const lanes = assignLanes([span(8, 10), span(9, 11), span(12, 13), span(8, 20), span(10, 12)]);
+    expect(lanes[3]).toEqual({ lane: 0, lanes: 3 });
+    expect(lanes[0]).toEqual({ lane: 1, lanes: 3 });
+    expect(lanes[1]).toEqual({ lane: 2, lanes: 3 });
+    expect(lanes[4].lane).toBe(1);
+  });
+
+  it("laisse pleine largeur ce qui se suit bout à bout", () => {
+    expect(assignLanes([span(8, 9), span(9, 10)])).toEqual([{ lane: 0, lanes: 1 }, { lane: 0, lanes: 1 }]);
+    expect(assignLanes([])).toEqual([]);
   });
 });

@@ -13,9 +13,9 @@ import type { Deadline } from "../../../domain/deadline.ts";
 import type { LinkedCalendarEvent } from "../../../models/linkedCalendarEvent.ts";
 import { EmptyState, Icon, cx, type IconName } from "../../kit.tsx";
 import {
-  HOUR_HEIGHT, entryColor, entryLayout, hourRange, weekdayAbbrev,
+  HOUR_HEIGHT, assignLanes, entryColor, entryLayout, hourRange, weekdayAbbrev,
 } from "./weekModel.ts";
-import type { WeekEntry } from "./weekModel.ts";
+import type { Lane, WeekEntry } from "./weekModel.ts";
 
 interface WeekGridProps {
   days: Date[];
@@ -141,6 +141,7 @@ function DayColumn({ day, hours, height, firstHour, entries, now, onToggleSkippe
   const today = DateUtils.isSameDay(day, now);
   const nowTop = today ? (now.getHours() - firstHour + now.getMinutes() / 60) * HOUR_HEIGHT : null;
   const showNow = nowTop !== null && nowTop > 0 && nowTop < height;
+  const lanes = assignLanes(entries);
 
   return (
     <div className="wk-col" style={{ height }}>
@@ -148,8 +149,9 @@ function DayColumn({ day, hours, height, firstHour, entries, now, onToggleSkippe
         <div key={hour} className="wk-line" style={{ top: index * HOUR_HEIGHT }} />
       ))}
 
-      {entries.map((entry) => (
-        <EntryTile key={entry.id} entry={entry} firstHour={firstHour} now={now} onToggleSkipped={onToggleSkipped} />
+      {entries.map((entry, index) => (
+        <EntryTile key={entry.id} entry={entry} firstHour={firstHour} now={now} onToggleSkipped={onToggleSkipped}
+          lane={lanes[index]} gridHeight={height} />
       ))}
 
       {showNow && <div className="wk-now" style={{ top: nowTop }} />}
@@ -157,13 +159,23 @@ function DayColumn({ day, hours, height, firstHour, entries, now, onToggleSkippe
   );
 }
 
-function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
+function EntryTile({ entry, firstHour, now, onToggleSkipped, lane, gridHeight }: {
   entry: WeekEntry;
   firstHour: number;
   now: Date;
   onToggleSkipped: (event: LinkedCalendarEvent) => void;
+  lane: Lane;
+  gridHeight: number;
 }) {
-  const { top, height } = entryLayout(entry, firstHour);
+  const layout = entryLayout(entry, firstHour);
+  const top = layout.top;
+  // Coupée au bas de la grille : une entrée qui finit après la dernière heure, ou le lendemain.
+  const height = DateUtils.isSameDay(entry.start, entry.end)
+    ? Math.max(18, Math.min(layout.height, gridHeight - top - 2))
+    : Math.max(18, gridHeight - top - 2);
+  const inset = lane.lanes > 1 ? 1.5 : 3;
+  const left = `calc(${(lane.lane / lane.lanes) * 100}% + ${inset}px)`;
+  const width = `calc(${100 / lane.lanes}% - ${inset * 2}px)`;
   const tint = entryColor(entry);
   const past = entry.end.getTime() < now.getTime();
   const event = entry.event;
@@ -193,7 +205,7 @@ function EntryTile({ entry, firstHour, now, onToggleSkipped }: {
       title={tooltip}
       onClick={open && courseID ? () => open(courseID, null) : undefined}
       className={cx("wk-tile", open && courseID && "openable", (entry.isSkipped || past) && "dim", entry.isSkipped && "skipped")}
-      style={{ top, height, "--tint": tint, "--fill": entry.isLecture ? 0.16 : 0.09 } as CSSProperties}
+      style={{ top, height, left, width, right: "auto", "--tint": tint, "--fill": entry.isLecture ? 0.16 : 0.09 } as CSSProperties}
     >
       <div className={cx("wk-tile-title", canToggle && "padded")}>{title}</div>
 

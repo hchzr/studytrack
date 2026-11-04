@@ -7770,6 +7770,19 @@ do {
     check(HoldProgress(duration: -3).duration == 0, "tenir : un temps négatif ne fait pas tenir à l'envers")
 }
 
+do {
+    // L'agenda : les événements qui se chevauchent, côte à côte.
+    let base = Date(timeIntervalSince1970: 1_800_000_000)
+    func at(_ h: Double) -> Date { base.addingTimeInterval(h * 3600) }
+    let slots = AgendaLanes.assign([(at(8), at(10)), (at(9), at(11)), (at(12), at(13)), (at(8), at(20)), (at(10), at(12))])
+    check(slots[3] == .init(lane: 0, lanes: 3), "agenda : le plus long d'abord, en première colonne")
+    check(slots[0].lane == 1 && slots[1].lane == 2 && slots[0].lanes == 3, "agenda : chevauchement → colonnes suivantes, largeur partagée")
+    check(slots[4].lane == 1, "agenda : une colonne libérée se réutilise")
+    let apart = AgendaLanes.assign([(at(8), at(9)), (at(9), at(10))])
+    check(apart.allSatisfy { $0 == .init(lane: 0, lanes: 1) }, "agenda : bout à bout, pas de chevauchement")
+    check(AgendaLanes.assign([]).isEmpty, "agenda : un jour vide")
+}
+
 if failures == 0 {
     print("✅ TOUS LES CONTRÔLES SONT PASSÉS")
 } else {

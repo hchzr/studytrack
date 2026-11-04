@@ -252,9 +252,15 @@ private struct DayColumn: View {
                         .frame(height: hourHeight, alignment: .top)
                 }
             }
-            ForEach(events) { event in
+            GeometryReader { geometry in
+            let slots = AgendaLanes.assign(events.map { (start: $0.startsAt, end: $0.endsAt) })
+            ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                 let top = offset(event.startsAt)
-                let height = max(18, offset(event.endsAt) - top - 2)
+                // Coupé au bas de la grille (un événement qui finit après la dernière heure, ou le lendemain).
+                let bottom = Calendar.current.isDate(event.endsAt, inSameDayAs: day) ? offset(event.endsAt) : CGFloat(hours) * hourHeight
+                let height = max(18, min(bottom, CGFloat(hours) * hourHeight) - top - 2)
+                let slot = slots[index]
+                let width = geometry.size.width / CGFloat(slot.lanes)
                 let tint = Carnet.tint(event.course)
                 Button { tap(event) } label: {
                     VStack(alignment: .leading, spacing: 1) {
@@ -293,10 +299,11 @@ private struct DayColumn: View {
                         Button(on ? "Marquer manqué" : "J'y étais") { event.toggleChecked(); try? context.save() }
                     }
                 }
-                .frame(height: height)
-                .padding(.horizontal, 3)
-                .offset(y: top)
+                .padding(.horizontal, slot.lanes > 1 ? 1.5 : 3)
+                .frame(width: width, height: height)
+                .offset(x: width * CGFloat(slot.lane), y: top)
                 .help("\(event.title)\n\(DateUtils.time.string(from: event.startsAt)) – \(DateUtils.time.string(from: event.endsAt))" + (event.isCheckable() ? "\n" + String(localized: "Clic droit : j'y étais / manqué") : ""))
+            }
             }
             if Calendar.current.isDateInToday(day) {
                 let now = offset(Date())

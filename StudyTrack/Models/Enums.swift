@@ -70,7 +70,8 @@ enum TaskType: String, Codable, CaseIterable, Identifiable {
     /// portent un verdict (sureté, correction), pas une catégorie.
     var tint: Color {
         switch canonical {
-        case .lecture: return .gray
+        // Pas le gris d'« Autre » : les heures d'amphi se distinguent dans le bilan.
+        case .lecture: return .orange
         case .exercise: return .blue
         case .theory: return .purple
         case .flashcards: return .pink

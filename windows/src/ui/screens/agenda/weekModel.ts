@@ -120,6 +120,45 @@ export function entryLayout(entry: WeekEntry, firstHour: number = FIRST_HOUR): {
   return { top, height: Math.max(18, yFor(entry.end, firstHour) - top - 2) };
 }
 
+/** La colonne d'une entrée parmi celles qui la chevauchent, et combien de colonnes son groupe a. */
+export interface Lane { lane: number; lanes: number }
+
+/**
+ * Les entrées d'un jour qui se chevauchent, côte à côte (comme `AgendaLanes` du Mac) : chacune
+ * prend la première colonne libre, et tout ce qui se touche de proche en proche se partage la
+ * largeur. Même ordre que `items`.
+ */
+export function assignLanes(items: readonly { start: Date; end: Date }[]): Lane[] {
+  const order = items.map((_, index) => index).sort((a, b) =>
+    items[a].start.getTime() - items[b].start.getTime() || items[b].end.getTime() - items[a].end.getTime());
+  const result: Lane[] = items.map(() => ({ lane: 0, lanes: 1 }));
+  let group: number[] = [];
+  let laneEnds: number[] = [];
+  let groupEnd = -Infinity;
+  const close = () => {
+    for (const index of group) result[index].lanes = Math.max(1, laneEnds.length);
+    group = [];
+    laneEnds = [];
+  };
+  for (const index of order) {
+    const start = items[index].start.getTime();
+    const end = Math.max(start, items[index].end.getTime());
+    if (start >= groupEnd) close();
+    const free = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+    if (free >= 0) {
+      laneEnds[free] = end;
+      result[index].lane = free;
+    } else {
+      laneEnds.push(end);
+      result[index].lane = laneEnds.length - 1;
+    }
+    group.push(index);
+    groupEnd = group.length === 1 ? end : Math.max(groupEnd, end);
+  }
+  close();
+  return result;
+}
+
 /**
  * Les heures réellement montrées : la bande utile de la semaine (première heure
  * de cours → dernière), une heure de marge, six heures au moins. Le Mac fige
