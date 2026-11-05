@@ -287,7 +287,7 @@ final class ClaudeMeasureService {
             return
         }
         guard FileManager.default.fileExists(atPath: Self.pluginCopy.path) else {
-            installMessage = String(localized: "Le mod n'est pas dans cette copie de StudyTrack.")
+            installMessage = String(localized: "Le mod n'est pas dans cette copie de Polymestre.")
             return
         }
         installing = true

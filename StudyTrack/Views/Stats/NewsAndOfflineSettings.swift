@@ -94,7 +94,7 @@ struct MoodleNewsSettingsSections: View {
 
     /// « Dernier relevé il y a 2 h », ou ce qui bloque.
     private var statusLine: String {
-        if denied { return "Notifications refusées : active-les dans Réglages › StudyTrack." }
+        if denied { return "Notifications refusées : active-les dans Réglages › Polymestre." }
         if let result { return result }
         if linkedCourses.isEmpty { return "Aucun cours relié à Moodle pour l'instant." }
         switch MoodleWatcher.lastStatus {

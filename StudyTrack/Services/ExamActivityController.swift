@@ -75,7 +75,7 @@ enum ExamActivityController {
         }
 
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            lastError = "Les Live Activities sont désactivées pour StudyTrack."
+            lastError = "Les Live Activities sont désactivées pour Polymestre."
             return
         }
 
@@ -121,7 +121,7 @@ enum ExamActivityController {
                                                examDate: now.addingTimeInterval(2 * 3600),
                                                room: "CO 1")
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            lastError = "Les Live Activities sont désactivées pour StudyTrack."
+            lastError = "Les Live Activities sont désactivées pour Polymestre."
             examTrace.error("activité d'examen d'essai : activités désactivées")
             return
         }

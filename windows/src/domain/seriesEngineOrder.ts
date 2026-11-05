@@ -14,7 +14,7 @@ export const SeriesEngineKind = {
 
   label(kind: SeriesEngineKind): string {
     switch (kind) {
-      case "shared": return "IA StudyTrack";
+      case "shared": return "IA Polymestre";
       case "onDevice": return "IA sur l'appareil";
     }
   },

@@ -21,7 +21,7 @@ async function boot() {
   // Avant toute lecture d'un cours : fiche de révision et carte décodées en types du domaine.
   await import("./domain/registerCodecs.ts");
   const { default: App } = await import("./App");
-  root.render(<React.StrictMode><ErrorBoundary label="StudyTrack"><App /></ErrorBoundary></React.StrictMode>);
+  root.render(<React.StrictMode><ErrorBoundary label="Polymestre"><App /></ErrorBoundary></React.StrictMode>);
 }
 
 void boot();

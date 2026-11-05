@@ -47,7 +47,7 @@ final class MacUpdater {
             UserDefaults.standard.set(Date(), forKey: lastCheckKey)
             UserDefaults.standard.set(data, forKey: cachedKey)
             available = feed.isNewer(thanBuild: AppDistribution.build) ? feed : nil
-            status = available == nil && manual ? "StudyTrack est à jour." : nil
+            status = available == nil && manual ? "Polymestre est à jour." : nil
             if let available { log.notice("mise à jour disponible : \(available.version, privacy: .public) (\(available.build))") }
         } catch {
             status = manual ? "Pas de réponse du site : \(error.localizedDescription)" : nil

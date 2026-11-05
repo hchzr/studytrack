@@ -113,7 +113,7 @@ struct SchoolSection: View {
         } footer: {
             Text(isBuiltIn
                  ? String(localized: "Moodle, Courseware, MediaSpace et Ed se connectent tout seuls.")
-                 : String(localized: "Les sites de ton école. L'adresse complète se garde : StudyTrack ajoute « https:// » si tu l'as omise."))
+                 : String(localized: "Les sites de ton école. L'adresse complète se garde : Polymestre ajoute « https:// » si tu l'as omise."))
         }
     }
 

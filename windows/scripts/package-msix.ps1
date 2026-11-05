@@ -7,7 +7,7 @@
 #
 #   pwsh windows/scripts/package-msix.ps1 [-IdentityName …] [-Publisher "CN=…"] [-PublisherDisplayName …]
 #
-# Sortie : windows/src-tauri/target/release/bundle/msix/StudyTrack_<version>_x64.msix
+# Sortie : windows/src-tauri/target/release/bundle/msix/Polymestre_<version>_x64.msix
 # et, à côté, le dossier `layout/` (essai sans signature : Mode développeur, puis
 # `Add-AppxPackage -Register layout\AppxManifest.xml`).
 
@@ -30,7 +30,7 @@ if ($config.version -notmatch '^\d+\.\d+\.\d+$') { throw "Version Tauri inattend
 $version = "$($config.version).0"
 
 # L'exécutable : le binaire Cargo (`studytrack.exe`) ; le nom du produit en secours.
-$exe = @("studytrack.exe", "StudyTrack.exe") | ForEach-Object { Join-Path $release $_ } |
+$exe = @("Polymestre.exe", "polymestre.exe", "studytrack.exe", "StudyTrack.exe") | ForEach-Object { Join-Path $release $_ } |
   Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $exe) { throw "Pas d'exécutable dans $release : lancer d'abord « npm run tauri build »." }
 
@@ -42,7 +42,7 @@ if (-not $makeappx) { throw "makeappx.exe introuvable sous $kits (SDK Windows 10
 
 Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path (Join-Path $layout "Assets") | Out-Null
-Copy-Item $exe (Join-Path $layout "StudyTrack.exe")
+Copy-Item $exe (Join-Path $layout "Polymestre.exe")
 
 # Les tuiles : celles que `tauri icon` a tirées de l'icône de l'app (la même que le Mac).
 foreach ($name in "Square44x44Logo.png", "Square71x71Logo.png", "Square150x150Logo.png", "StoreLogo.png") {
@@ -61,7 +61,7 @@ function Esc([string]$value) { [System.Security.SecurityElement]::Escape($value)
   IgnorableNamespaces="uap rescap">
   <Identity Name="$(Esc $IdentityName)" Publisher="$(Esc $Publisher)" Version="$version" ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>StudyTrack</DisplayName>
+    <DisplayName>Polymestre</DisplayName>
     <PublisherDisplayName>$(Esc $PublisherDisplayName)</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -74,9 +74,9 @@ function Esc([string]$value) { [System.Security.SecurityElement]::Escape($value)
   </Resources>
   <Applications>
     <!-- Une app Win32 « entière » (Tauri) : FullTrustApplication + runFullTrust. -->
-    <Application Id="StudyTrack" Executable="StudyTrack.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="StudyTrack" Executable="Polymestre.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="StudyTrack"
+        DisplayName="Polymestre"
         Description="Ton semestre, tes séries et ton temps d'étude."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
@@ -92,7 +92,7 @@ function Esc([string]$value) { [System.Security.SecurityElement]::Escape($value)
 </Package>
 "@ | Set-Content -Path (Join-Path $layout "AppxManifest.xml") -Encoding utf8
 
-$msix = Join-Path $out "StudyTrack_$($config.version)_x64.msix"
+$msix = Join-Path $out "Polymestre_$($config.version)_x64.msix"
 & $makeappx pack /d $layout /p $msix /o
 if ($LASTEXITCODE -ne 0) { throw "makeappx a échoué ($LASTEXITCODE)." }
 Write-Host "MSIX : $msix (identité $IdentityName, éditeur $Publisher, version $version)"

@@ -1,7 +1,7 @@
 [package]
 name = "studytrack"
 version = "2.1.0"
-description = "StudyTrack for Windows"
+description = "Polymestre for Windows"
 authors = ["you"]
 edition = "2024"
 

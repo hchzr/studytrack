@@ -276,9 +276,9 @@ export const ClaudeProject = {
           redo: { code: string; exercise: string; step: string; due?: string | null; why: string }[] = [],
           features: Features | null = null): string {
     const lines = [
-      `## StudyTrack (mis à jour par l'app, le ${date})`,
+      `## Polymestre (mis à jour par l'app, le ${date})`,
       "",
-      "Étudiant en première année à l'EPFL. StudyTrack range chaque cours en semaines : la théorie (vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par l'app est entre [StudyTrack] et [/StudyTrack].",
+      "Étudiant en première année à l'EPFL. Polymestre range chaque cours en semaines : la théorie (vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par l'app est entre [StudyTrack] et [/StudyTrack].",
     ];
     if (week !== null) lines.push("", `Semaine du semestre : ${week}.`);
     if (courses.length !== 0) {
@@ -291,18 +291,18 @@ export const ClaudeProject = {
       }
     }
     if (redo.length !== 0) {
-      lines.push("", "File de reprise de StudyTrack (à refaire sur papier ; l'amorce reste dans l'app, à montrer seulement après une tentative) :");
+      lines.push("", "File de reprise de Polymestre (à refaire sur papier ; l'amorce reste dans l'app, à montrer seulement après une tentative) :");
       for (const line of redo) {
         lines.push(`- ${line.code} ${line.exercise} · ${line.step}${line.due !== undefined && line.due !== null ? ` · le ${line.due}` : ""} · ${line.why}`);
       }
     }
     if (features !== null) {
-      lines.push("", "Après une série (post-mortem) ou un indice, StudyTrack lit le bloc de fin de ta réponse :",
+      lines.push("", "Après une série (post-mortem) ou un indice, Polymestre lit le bloc de fin de ta réponse :",
         SeriesReview.instruction(features));
       if (features.hints) lines.push(SeriesReview.hintInstruction);
       lines.push("Si ta compétence tient aussi un carnet ailleurs (Notion…), fais-le comme d'habitude : le bloc est en plus.");
     }
-    lines.push("", "Ne modifie rien dans StudyTrack toi-même : propose, l'étudiant confirme dans l'app.");
+    lines.push("", "Ne modifie rien dans Polymestre toi-même : propose, l'étudiant confirme dans l'app.");
     return lines.join("\n");
   },
 
@@ -430,7 +430,7 @@ export const ClaudeProject = {
     if (file.allowedTools.some((rule) => rule.startsWith("Write") || rule.startsWith("Edit"))) parts.push("écriture limitée");
     parts.push(...connectors.map((server) => server.slice("claude.ai ".length)));
     parts.push(...Object.keys(file.mcpServers).sort().map((name) => ClaudeTutor.toolLabel("mcp__" + name)));
-    if (studyTrack) parts.push("StudyTrack");
+    if (studyTrack) parts.push("Polymestre");
     if (localFiles) parts.push("fichiers du Mac");
     return parts.join(", ");
   },

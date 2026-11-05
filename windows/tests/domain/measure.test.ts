@@ -106,7 +106,7 @@ describe("Avec mesure : temps de Claude Code et règles", () => {
     const first = evalP("projets", policy(std(), early), none, [], at(15));
     expect(first.rule === "studyFirst" && first.message.includes("25 min")).toBe(true);
   });
-  it("mesure : temps étudié inconnu (StudyTrack fermé) → « d'abord étudier » ne bloque pas", () => {
+  it("mesure : temps étudié inconnu (Polymestre fermé) → « d'abord étudier » ne bloque pas", () => {
     const stale: Context = { studyMode: null, classes: [], studied: { day: "2026-10-26", seconds: 0, accumulated: 0, runningSince: null } };
     expect(evalP("projets", policy(std(), stale), none, [], at(15)).allow
       && evalP("projets", policy(std(), CM.emptyContext()), none, [], at(15)).allow).toBe(true);

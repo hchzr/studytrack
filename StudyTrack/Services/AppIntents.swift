@@ -81,7 +81,7 @@ enum TaskTypeAppEnum: String, AppEnum {
 struct StartStudyTimerIntent: AppIntent {
     static var title: LocalizedStringResource = "Démarrer une session d'étude"
     static var description: IntentDescription = IntentDescription(
-        "Ouvre StudyTrack et démarre le chrono sur le cours choisi.")
+        "Ouvre Polymestre et démarre le chrono sur le cours choisi.")
     static var openAppWhenRun: Bool = true
 
     @Parameter(title: "Cours")
@@ -102,7 +102,7 @@ struct StartStudyTimerIntent: AppIntent {
                                         taskType: type,
                                         label: code.isEmpty ? "Session libre" : "\(code) · \(type.label)")
         }
-        return .result(dialog: "Chrono démarré dans StudyTrack.")
+        return .result(dialog: "Chrono démarré dans Polymestre.")
     }
 }
 
@@ -157,7 +157,7 @@ struct LogStudySessionIntent: AppIntent {
 struct AddCourseNoteIntent: AppIntent {
     static var title: LocalizedStringResource = "Ajouter une note à un cours"
     static var description: IntentDescription = IntentDescription(
-        "Ajoute une ligne datée aux notes d'un cours StudyTrack.")
+        "Ajoute une ligne datée aux notes d'un cours Polymestre.")
     static var openAppWhenRun: Bool = false
 
     @Parameter(title: "Cours")
@@ -189,7 +189,7 @@ struct AddCourseNoteIntent: AppIntent {
 struct AddStudyTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Ajouter une tâche d'étude"
     static var description: IntentDescription = IntentDescription(
-        "Crée une tâche StudyTrack, éventuellement liée à un cours et datée.")
+        "Crée une tâche Polymestre, éventuellement liée à un cours et datée.")
     static var openAppWhenRun: Bool = false
 
     @Parameter(title: "Titre")
@@ -307,7 +307,7 @@ struct PlanStudySessionIntent: AppIntent {
                                              startsAt: session.startsAt,
                                              endsAt: session.endsAt,
                                              notes: "Planifié depuis Raccourcis.",
-                                             calendarTitle: "StudyTrack")
+                                             calendarTitle: CalendarEventSpec.appCalendarTitle)
                 if let identifier = container.calendar.createEvent(spec) {
                     session.externalCalendarEventID = identifier
                 }
@@ -317,7 +317,7 @@ struct PlanStudySessionIntent: AppIntent {
         }
 
         guard planned else {
-            return .result(dialog: "Ouvre StudyTrack une fois avant de planifier.")
+            return .result(dialog: "Ouvre Polymestre une fois avant de planifier.")
         }
         let duration = DateUtils.durationLabel(seconds: clamped * 60)
         return .result(dialog: "Session de \(duration) planifiée le \(DateUtils.shortDay.string(from: start)) à \(DateUtils.time.string(from: start)).")

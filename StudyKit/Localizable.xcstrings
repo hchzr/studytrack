@@ -72,23 +72,23 @@
         }
       }
     },
-    "« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct." : {
+    "« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › Polymestre › Activités en direct." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“Test activity” should show a timer in the island and on the lock screen within seconds. “Exam day” puts a countdown there. If the activity count stays at zero, the system is refusing the activity — check Settings › StudyTrack › Live Activities."
+            "value" : "“Test activity” should show a timer in the island and on the lock screen within seconds. “Exam day” puts a countdown there. If the activity count stays at zero, the system is refusing the activity — check Settings › Polymestre › Live Activities."
           }
         }
       }
     },
-    "« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct." : {
+    "« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › Polymestre › Activités en direct." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“Test activity” should show a timer in the island and on the lock screen within seconds. If the activity count stays at zero, the system is refusing the activity — check Settings › StudyTrack › Live Activities."
+            "value" : "“Test activity” should show a timer in the island and on the lock screen within seconds. If the activity count stays at zero, the system is refusing the activity — check Settings › Polymestre › Live Activities."
           }
         }
       }
@@ -3308,12 +3308,12 @@
         }
       }
     },
-    "À noter dans StudyTrack" : {
+    "À noter dans Polymestre" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "To note in StudyTrack"
+            "value" : "To note in Polymestre"
           }
         }
       }
@@ -3338,12 +3338,12 @@
         }
       }
     },
-    "À propos de StudyTrack" : {
+    "À propos de Polymestre" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "About StudyTrack"
+            "value" : "About Polymestre"
           }
         }
       }
@@ -3977,13 +3977,13 @@
         }
       }
     },
-    "Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. StudyTrack ne se connecte jamais à Google." : {
+    "Ajoute l'onglet « Écouter » à la fiche : les sources prêtes pour NotebookLM, et le podcast à écouter ici. Polymestre ne se connecte jamais à Google." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adds a Listen tab to the sheet: sources ready for NotebookLM, and the podcast to play here. StudyTrack never connects to Google."
+            "value" : "Adds a Listen tab to the sheet: sources ready for NotebookLM, and the podcast to play here. Polymestre never connects to Google."
           }
         }
       }
@@ -4019,12 +4019,12 @@
         }
       }
     },
-    "Ajoute une ligne datée aux notes d'un cours StudyTrack." : {
+    "Ajoute une ligne datée aux notes d'un cours Polymestre." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adds a dated line to a StudyTrack course's notes."
+            "value" : "Adds a dated line to a Polymestre course's notes."
           }
         }
       }
@@ -5855,22 +5855,22 @@
         }
       }
     },
-    "Autorise StudyTrack à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation." : {
+    "Autorise Polymestre à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allow StudyTrack to control Music: System Settings › Privacy & Security › Automation."
+            "value" : "Allow Polymestre to control Music: System Settings › Privacy & Security › Automation."
           }
         }
       }
     },
-    "Autorise StudyTrack à piloter Spotify : Réglages Système › Confidentialité › Automatisation." : {
+    "Autorise Polymestre à piloter Spotify : Réglages Système › Confidentialité › Automatisation." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allow StudyTrack to control Spotify: System Settings › Privacy › Automation."
+            "value" : "Allow Polymestre to control Spotify: System Settings › Privacy › Automation."
           }
         }
       }
@@ -7742,12 +7742,12 @@
         }
       }
     },
-    "Chrono démarré dans StudyTrack." : {
+    "Chrono démarré dans Polymestre." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Timer started in StudyTrack."
+            "value" : "Timer started in Polymestre."
           }
         }
       }
@@ -7835,13 +7835,13 @@
         }
       }
     },
-    "Chrono StudyTrack" : {
+    "Chrono Polymestre" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack timer"
+            "value" : "Polymestre timer"
           }
         }
       }
@@ -8205,13 +8205,13 @@
         }
       }
     },
-    "Coche la prochaine tâche proposée par StudyTrack." : {
+    "Coche la prochaine tâche proposée par Polymestre." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check off the next task suggested by StudyTrack."
+            "value" : "Check off the next task suggested by Polymestre."
           }
         }
       }
@@ -8782,23 +8782,23 @@
         }
       }
     },
-    "Connecte ton compte Google : StudyTrack crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google." : {
+    "Connecte ton compte Google : Polymestre crée le carnet, y dépose ta fiche et te rapporte le podcast, sans que tu quittes l'app. Ton mot de passe reste chez Google." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect your Google account: StudyTrack creates the notebook, drops your sheet in it and brings the podcast back, without leaving the app. Your password stays with Google."
+            "value" : "Connect your Google account: Polymestre creates the notebook, drops your sheet in it and brings the podcast back, without leaving the app. Your password stays with Google."
           }
         }
       }
     },
-    "Connecte ton compte StudyTrack" : {
+    "Connecte ton compte Polymestre" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect your StudyTrack account"
+            "value" : "Connect your Polymestre account"
           }
         }
       }
@@ -9690,12 +9690,12 @@
         }
       }
     },
-    "Crée une tâche StudyTrack, éventuellement liée à un cours et datée." : {
+    "Crée une tâche Polymestre, éventuellement liée à un cours et datée." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Creates a StudyTrack task, optionally linked to a course and dated."
+            "value" : "Creates a Polymestre task, optionally linked to a course and dated."
           }
         }
       }
@@ -9934,12 +9934,12 @@
         }
       }
     },
-    "Dans cette version, l'iPhone ne bloque pas les autres apps : Apple doit encore autoriser le Temps d'écran pour StudyTrack. Le mode étude reste ton écran de travail, et le Mac, lui, bloque." : {
+    "Dans cette version, l'iPhone ne bloque pas les autres apps : Apple doit encore autoriser le Temps d'écran pour Polymestre. Le mode étude reste ton écran de travail, et le Mac, lui, bloque." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In this build the iPhone doesn't block other apps yet: Apple still has to approve Screen Time for StudyTrack. Study mode is still your work screen, and the Mac does block."
+            "value" : "In this build the iPhone doesn't block other apps yet: Apple still has to approve Screen Time for Polymestre. Study mode is still your work screen, and the Mac does block."
           }
         }
       }
@@ -11422,13 +11422,13 @@
         }
       }
     },
-    "En pause — rouvre StudyTrack pour finir l'import" : {
+    "En pause — rouvre Polymestre pour finir l'import" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paused — reopen StudyTrack to finish the import"
+            "value" : "Paused — reopen Polymestre to finish the import"
           }
         }
       }
@@ -11904,24 +11904,24 @@
         }
       }
     },
-    "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut." : {
+    "Envoie tes cours, séries, exercices et sessions à ton compte Polymestre pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sends your courses, series, exercises and sessions to your StudyTrack account so you find them on iPhone and on Windows, on top of iCloud. Off by default."
+            "value" : "Sends your courses, series, exercises and sessions to your Polymestre account so you find them on iPhone and on Windows, on top of iCloud. Off by default."
           }
         }
       }
     },
-    "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur le Mac et sur Windows, en plus d'iCloud. Désactivée par défaut." : {
+    "Envoie tes cours, séries, exercices et sessions à ton compte Polymestre pour les retrouver sur le Mac et sur Windows, en plus d'iCloud. Désactivée par défaut." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sends your courses, series, exercises and sessions to your StudyTrack account so you find them on the Mac and on Windows, on top of iCloud. Off by default."
+            "value" : "Sends your courses, series, exercises and sessions to your Polymestre account so you find them on the Mac and on Windows, on top of iCloud. Off by default."
           }
         }
       }
@@ -11947,13 +11947,13 @@
         }
       }
     },
-    "Envoyé à StudyTrack" : {
+    "Envoyé à Polymestre" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sent to StudyTrack"
+            "value" : "Sent to Polymestre"
           }
         }
       }
@@ -12141,12 +12141,12 @@
         }
       }
     },
-    "Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance StudyTrack s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout." : {
+    "Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance Polymestre s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Also turns off Spotlight, ⌘Tab and Mission Control during a block, and relaunches StudyTrack if it's killed. If a block ends badly, “Restore the system shortcuts” turns everything back on."
+            "value" : "Also turns off Spotlight, ⌘Tab and Mission Control during a block, and relaunches Polymestre if it's killed. If a block ends badly, “Restore the system shortcuts” turns everything back on."
           }
         }
       }
@@ -13068,13 +13068,13 @@
         }
       }
     },
-    "Fonction StudyTrack" : {
+    "Fonction Polymestre" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack function"
+            "value" : "Polymestre function"
           }
         }
       }
@@ -13435,13 +13435,13 @@
         }
       }
     },
-    "Gratuit, privé et hors ligne : le texte du PDF ne quitte pas le téléphone. Demande iOS 26 et Apple Intelligence activé. **Sert de relais** : quand la fonction StudyTrack n'est pas joignable — hors ligne, ou pas encore déployée. Sur une série d'exercices réels, ses lectures sont moins fiables que celles d'un modèle servi : relis l'écran de relecture d'autant plus attentivement." : {
+    "Gratuit, privé et hors ligne : le texte du PDF ne quitte pas le téléphone. Demande iOS 26 et Apple Intelligence activé. **Sert de relais** : quand la fonction Polymestre n'est pas joignable — hors ligne, ou pas encore déployée. Sur une série d'exercices réels, ses lectures sont moins fiables que celles d'un modèle servi : relis l'écran de relecture d'autant plus attentivement." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Free, private and offline: the PDF text never leaves the phone. Requires iOS 26 and Apple Intelligence turned on. **Acts as a fallback**: when the StudyTrack function can't be reached — offline, or not deployed yet. On real exercise series, its readings are less reliable than a hosted model's: review the check screen all the more carefully."
+            "value" : "Free, private and offline: the PDF text never leaves the phone. Requires iOS 26 and Apple Intelligence turned on. **Acts as a fallback**: when the Polymestre function can't be reached — offline, or not deployed yet. On real exercise series, its readings are less reliable than a hosted model's: review the check screen all the more carefully."
           }
         }
       }
@@ -15020,12 +15020,12 @@
         }
       }
     },
-    "L'accès à Apple Music a été refusé. Autorise StudyTrack dans les réglages (Confidentialité › Médias et Apple Music)." : {
+    "L'accès à Apple Music a été refusé. Autorise Polymestre dans les réglages (Confidentialité › Médias et Apple Music)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Access to Apple Music was denied. Allow StudyTrack in Settings (Privacy › Media & Apple Music)."
+            "value" : "Access to Apple Music was denied. Allow Polymestre in Settings (Privacy › Media & Apple Music)."
           }
         }
       }
@@ -15100,24 +15100,24 @@
         }
       }
     },
-    "L'EPFL n'ouvre pas d'API aux étudiant·e·s : le flux .ics « Mon horaire » est le moyen fiable d'importer ton emploi du temps. StudyTrack en déduit tes cours et détecte ceux qui ont des heures de cours." : {
+    "L'EPFL n'ouvre pas d'API aux étudiant·e·s : le flux .ics « Mon horaire » est le moyen fiable d'importer ton emploi du temps. Polymestre en déduit tes cours et détecte ceux qui ont des heures de cours." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "EPFL doesn't offer students an API: the “My timetable” .ics feed is the reliable way to import your schedule. StudyTrack derives your courses from it and detects which ones have lectures."
+            "value" : "EPFL doesn't offer students an API: the “My timetable” .ics feed is the reliable way to import your schedule. Polymestre derives your courses from it and detects which ones have lectures."
           }
         }
       }
     },
-    "L'événement est créé dans un calendrier « StudyTrack ». Supprimer la session ici le supprime aussi du calendrier." : {
+    "L'événement est créé dans un calendrier « Polymestre ». Supprimer la session ici le supprime aussi du calendrier." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The event is created in a “StudyTrack” calendar. Deleting the session here also deletes it from the calendar."
+            "value" : "The event is created in a “Polymestre” calendar. Deleting the session here also deletes it from the calendar."
           }
         }
       }
@@ -15768,12 +15768,12 @@
         }
       }
     },
-    "Le mod n'est pas dans cette copie de StudyTrack." : {
+    "Le mod n'est pas dans cette copie de Polymestre." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The mod isn't in this copy of StudyTrack."
+            "value" : "The mod isn't in this copy of Polymestre."
           }
         }
       }
@@ -15870,12 +15870,12 @@
         }
       }
     },
-    "Le reste est « projets » : StudyTrack lui-même, tes autres dépôts…" : {
+    "Le reste est « projets » : Polymestre lui-même, tes autres dépôts…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The rest is “projects”: StudyTrack itself, your other repositories…"
+            "value" : "The rest is “projects”: Polymestre itself, your other repositories…"
           }
         }
       }
@@ -16403,12 +16403,12 @@
         }
       }
     },
-    "Les photos et questions passent chiffrées par le relais de StudyTrack, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route." : {
+    "Les photos et questions passent chiffrées par le relais de Polymestre, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Photos and questions travel encrypted through StudyTrack's relay, with a key derived from your iCloud account; nothing is kept on the way."
+            "value" : "Photos and questions travel encrypted through Polymestre's relay, with a key derived from your iCloud account; nothing is kept on the way."
           }
         }
       }
@@ -16485,12 +16485,12 @@
         }
       }
     },
-    "Les sites de ton école. L'adresse complète se garde : StudyTrack ajoute « https:// » si tu l'as omise." : {
+    "Les sites de ton école. L'adresse complète se garde : Polymestre ajoute « https:// » si tu l'as omise." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your school's sites. The full address is kept: StudyTrack adds “https://” if you left it out."
+            "value" : "Your school's sites. The full address is kept: Polymestre adds “https://” if you left it out."
           }
         }
       }
@@ -16810,13 +16810,13 @@
         }
       }
     },
-    "macOS a refusé l'accès. Active Music pour StudyTrack dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage)." : {
+    "macOS a refusé l'accès. Active Music pour Polymestre dans Réglages Système › Confidentialité et sécurité › Automatisation (avant de commencer une session : les Réglages sont fermés pendant un blocage)." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "macOS refused access. Allow Music for StudyTrack in System Settings › Privacy & Security › Automation (before starting a session: Settings are closed during a block)."
+            "value" : "macOS refused access. Allow Music for Polymestre in System Settings › Privacy & Security › Automation (before starting a session: Settings are closed during a block)."
           }
         }
       }
@@ -18333,13 +18333,13 @@
         }
       }
     },
-    "Non officiel : NotebookLM n'a pas d'API pour les autres apps, StudyTrack lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste." : {
+    "Non officiel : NotebookLM n'a pas d'API pour les autres apps, Polymestre lui parle comme son site le fait. Si Google change son fonctionnement, ça peut cesser de marcher : l'export à la main, lui, reste." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unofficial: NotebookLM has no API for other apps, so StudyTrack talks to it the way its site does. If Google changes how it works, this may stop working: manual export always remains."
+            "value" : "Unofficial: NotebookLM has no API for other apps, so Polymestre talks to it the way its site does. If Google changes how it works, this may stop working: manual export always remains."
           }
         }
       }
@@ -18504,13 +18504,13 @@
         }
       }
     },
-    "NotebookLM transforme des sources en podcast. Connecté à Google, StudyTrack fait tout ; sinon, il prépare les sources et tu fais le lien." : {
+    "NotebookLM transforme des sources en podcast. Connecté à Google, Polymestre fait tout ; sinon, il prépare les sources et tu fais le lien." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "NotebookLM turns sources into a podcast. Signed in to Google, StudyTrack does everything; otherwise it prepares the sources and you make the link."
+            "value" : "NotebookLM turns sources into a podcast. Signed in to Google, Polymestre does everything; otherwise it prepares the sources and you make the link."
           }
         }
       }
@@ -19248,13 +19248,13 @@
         }
       }
     },
-    "Ouvre le chrono de StudyTrack." : {
+    "Ouvre le chrono de Polymestre." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens the StudyTrack timer."
+            "value" : "Opens the Polymestre timer."
           }
         }
       }
@@ -19279,33 +19279,33 @@
         }
       }
     },
-    "Ouvre StudyTrack" : {
+    "Ouvre Polymestre" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open StudyTrack"
+            "value" : "Open Polymestre"
           }
         }
       }
     },
-    "Ouvre StudyTrack et démarre le chrono sur le cours choisi." : {
+    "Ouvre Polymestre et démarre le chrono sur le cours choisi." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens StudyTrack and starts the timer on the chosen course."
+            "value" : "Opens Polymestre and starts the timer on the chosen course."
           }
         }
       }
     },
-    "Ouvre StudyTrack une fois avant de planifier." : {
+    "Ouvre Polymestre une fois avant de planifier." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open StudyTrack once before planning."
+            "value" : "Open Polymestre once before planning."
           }
         }
       }
@@ -19560,22 +19560,22 @@
         }
       }
     },
-    "Ouvrir StudyTrack" : {
+    "Ouvrir Polymestre" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open StudyTrack"
+            "value" : "Open Polymestre"
           }
         }
       }
     },
-    "Ouvrir StudyTrack à la connexion" : {
+    "Ouvrir Polymestre à la connexion" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open StudyTrack at login"
+            "value" : "Open Polymestre at login"
           }
         }
       }
@@ -23311,13 +23311,13 @@
         }
       }
     },
-    "Rien à configurer : l'analyse essaie, dans l'ordre, la **fonction StudyTrack** (modèle servi, meilleure qualité), puis le **modèle sur l'appareil** (hors ligne), puis ton service perso si tu en as saisi un. La lecture par motifs est toujours faite d'abord ; le modèle la complète et tout passe par l'écran de relecture." : {
+    "Rien à configurer : l'analyse essaie, dans l'ordre, la **fonction Polymestre** (modèle servi, meilleure qualité), puis le **modèle sur l'appareil** (hors ligne), puis ton service perso si tu en as saisi un. La lecture par motifs est toujours faite d'abord ; le modèle la complète et tout passe par l'écran de relecture." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing to set up: the analysis tries, in order, the **StudyTrack function** (hosted model, best quality), then the **on-device model** (offline), then your personal service if you entered one. Pattern matching always runs first; the model completes it and everything goes through the review screen."
+            "value" : "Nothing to set up: the analysis tries, in order, the **Polymestre function** (hosted model, best quality), then the **on-device model** (offline), then your personal service if you entered one. Pattern matching always runs first; the model completes it and everything goes through the review screen."
           }
         }
       }
@@ -23916,13 +23916,13 @@
         }
       }
     },
-    "Scanne ce code avec l'appareil photo : il ouvre StudyTrack avec le code déjà rempli." : {
+    "Scanne ce code avec l'appareil photo : il ouvre Polymestre avec le code déjà rempli." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scan this code with the camera: it opens StudyTrack with the code already filled in."
+            "value" : "Scan this code with the camera: it opens Polymestre with the code already filled in."
           }
         }
       }
@@ -24584,12 +24584,12 @@
         }
       }
     },
-    "Serveur StudyTrack (https://…)" : {
+    "Serveur Polymestre (https://…)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack server (https://…)"
+            "value" : "Polymestre server (https://…)"
           }
         }
       }
@@ -24932,12 +24932,12 @@
         }
       }
     },
-    "Si ton horaire est déjà abonné dans le calendrier de l'iPhone, StudyTrack peut le lire." : {
+    "Si ton horaire est déjà abonné dans le calendrier de l'iPhone, Polymestre peut le lire." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "If your timetable is already subscribed in the iPhone calendar, StudyTrack can read it."
+            "value" : "If your timetable is already subscribed in the iPhone calendar, Polymestre can read it."
           }
         }
       }
@@ -25230,84 +25230,84 @@
         }
       }
     },
-    "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde StudyTrack (Profil › Données) se restaure ici, avancement et sessions compris, sans doublon." : {
+    "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde Polymestre (Profil › Données) se restaure ici, avancement et sessions compris, sans doublon." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Structure: { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. A StudyTrack backup (Profile › Data) is restored here, progress and sessions included, without duplicates."
+            "value" : "Structure: { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. A Polymestre backup (Profile › Data) is restored here, progress and sessions included, without duplicates."
           }
         }
       }
     },
-    "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde StudyTrack (Réglages › Données et sauvegarde) se restaure ici, avancement et sessions compris, sans doublon." : {
+    "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde Polymestre (Réglages › Données et sauvegarde) se restaure ici, avancement et sessions compris, sans doublon." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Structure: { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. A StudyTrack backup (Settings › Data and backup) is restored here, progress and sessions included, without duplicates."
+            "value" : "Structure: { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. A Polymestre backup (Settings › Data and backup) is restored here, progress and sessions included, without duplicates."
           }
         }
       }
     },
-    "StudyTrack" : {
+    "Polymestre" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack"
+            "value" : "Polymestre"
           }
         }
       }
     },
-    "StudyTrack — suivi du temps d'étude EPFL : théorie par vidéos, exercices et corrections, charge attendue, agenda, groupes et intégrations." : {
+    "Polymestre — suivi du temps d'étude EPFL : théorie par vidéos, exercices et corrections, charge attendue, agenda, groupes et intégrations." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack — EPFL study time tracking: theory through videos, exercises and corrections, expected workload, calendar, groups and integrations."
+            "value" : "Polymestre — EPFL study time tracking: theory through videos, exercises and corrections, expected workload, calendar, groups and integrations."
           }
         }
       }
     },
-    "StudyTrack %@ est disponible — télécharger" : {
+    "Polymestre %@ est disponible — télécharger" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack %@ is available — download"
+            "value" : "Polymestre %@ is available — download"
           }
         }
       }
     },
-    "StudyTrack %@ est disponible." : {
+    "Polymestre %@ est disponible." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack %@ is available."
+            "value" : "Polymestre %@ is available."
           }
         }
       }
     },
-    "StudyTrack crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google." : {
+    "Polymestre crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack creates the notebook, uploads your sheet and brings back the podcast. Your password stays with Google."
+            "value" : "Polymestre creates the notebook, uploads your sheet and brings back the podcast. Your password stays with Google."
           }
         }
       }
     },
-    "StudyTrack ne peut pas contrôler Music" : {
+    "Polymestre ne peut pas contrôler Music" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "StudyTrack can't control Music"
+            "value" : "Polymestre can't control Music"
           }
         }
       }
@@ -27946,12 +27946,12 @@
         }
       }
     },
-    "Tu ne suis pas %@ : StudyTrack ne connaît pas ses séries et ne peut pas les comparer." : {
+    "Tu ne suis pas %@ : Polymestre ne connaît pas ses séries et ne peut pas les comparer." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You don't follow %@: StudyTrack doesn't know its series and can't compare them."
+            "value" : "You don't follow %@: Polymestre doesn't know its series and can't compare them."
           }
         }
       }

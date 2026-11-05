@@ -17,8 +17,8 @@ enum SeriesExtractionSource: Equatable {
         switch self {
         case .heuristic: return "détection par motifs"
         case .onDevice: return "IA sur l'appareil"
-        case .shared: return "IA StudyTrack (sans clé)"
-        case .vision: return "IA StudyTrack · lecture des pages"
+        case .shared: return "IA Polymestre (sans clé)"
+        case .vision: return "IA Polymestre · lecture des pages"
         }
     }
 
@@ -338,7 +338,7 @@ enum SeriesAIExtractor {
                 throw ExtractionError.sharedNotDeployed(http.statusCode)
             }
             let detail = String(data: data, encoding: .utf8)?.prefix(200) ?? ""
-            throw ExtractionError.remote("fonction StudyTrack : HTTP \(http.statusCode) \(detail)")
+            throw ExtractionError.remote("fonction Polymestre : HTTP \(http.statusCode) \(detail)")
         }
         guard let raw = String(data: data, encoding: .utf8) else { throw ExtractionError.remote("réponse illisible") }
         sharedVerdict = true

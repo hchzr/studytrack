@@ -107,7 +107,7 @@ struct MacGroupsView: View {
                 .buttonStyle(.paper)
                 if !social.isSignedIn {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Connecte ton compte StudyTrack").font(Carnet.serif(18)).foregroundStyle(Carnet.ink)
+                        Text("Connecte ton compte Polymestre").font(Carnet.serif(18)).foregroundStyle(Carnet.ink)
                         Text("Le même compte que sur ton iPhone (Réglages › Comptes).").foregroundStyle(Carnet.inkSecondary)
                         Button("Ouvrir les réglages") { UserDefaults.standard.set("accounts", forKey: "settings.page"); openSettings() }
                             .buttonStyle(.ink)

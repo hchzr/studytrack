@@ -101,7 +101,7 @@ export function oauthMessage(e: unknown, link = false, provider: OAuthProvider =
     const raw = e.message.toLowerCase();
     if (/manual.?linking|linking.*(disabled|not enabled)/.test(raw)) return LINK_DISABLED;
     if (/provider is not enabled|unsupported provider|not enabled/.test(raw)) return link ? LINK_DISABLED : NOT_ENABLED;
-    if (/already.*(linked|exists|registered)|identity_already_exists/.test(raw)) return `Ce compte ${name} est déjà lié à un autre compte StudyTrack.`;
+    if (/already.*(linked|exists|registered)|identity_already_exists/.test(raw)) return `Ce compte ${name} est déjà lié à un autre compte Polymestre.`;
     if (e.status >= 500) return `Le serveur a un problème (${e.status}) : réessaie dans un instant.`;
     return `Le serveur a refusé la connexion ${name} (${e.status}).`;
   }

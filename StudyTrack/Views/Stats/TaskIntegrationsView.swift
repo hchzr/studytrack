@@ -321,6 +321,6 @@ enum TaskConnector {
         let service = TaskServiceFactory.shared.service(for: .reminders, settings: settings)
         let granted = await service?.requestAccess() ?? false
         if granted { Haptics.success() }
-        return granted ? "Rappels autorisé." : "Accès refusé : autorise StudyTrack dans Réglages › Rappels."
+        return granted ? "Rappels autorisé." : "Accès refusé : autorise Polymestre dans Réglages › Rappels."
     }
 }

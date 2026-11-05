@@ -197,7 +197,7 @@ final class NotebookLMAccount {
         let label = scope.map { "\(course.name) — \($0)" } ?? course.name
 
         progress[key] = String(localized: "Je crée le carnet…")
-        let created = try await call(.createNotebook, NotebookLMWire.createNotebookParams(title: "StudyTrack · \(label)"))
+        let created = try await call(.createNotebook, NotebookLMWire.createNotebookParams(title: "Polymestre · \(label)"))
         guard let notebook = NotebookLMWire.firstID(in: created) else { throw Failure.noAnswer }
         let path = "/notebook/\(notebook)"
         let address = NotebookLMWire.notebookURL(id: notebook, host: host)

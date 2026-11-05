@@ -98,7 +98,7 @@ final class SpotifyLocal {
         if let error {
             let code = error[NSAppleScript.errorNumber] as? Int ?? 0
             lastError = code == -1743
-                ? String(localized: "Autorise StudyTrack à piloter Spotify : Réglages Système › Confidentialité › Automatisation.")
+                ? String(localized: "Autorise Polymestre à piloter Spotify : Réglages Système › Confidentialité › Automatisation.")
                 : nil
             return nil
         }

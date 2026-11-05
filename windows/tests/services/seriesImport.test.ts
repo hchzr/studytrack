@@ -92,9 +92,9 @@ describe("SeriesImportFlow", () => {
     const local = series(ex("3.1"), ex("3.2"), ex("3.3"));
     const merged = series(ex("3.1", ["1", "2"]), ex("3.2"));
     expect(SeriesImportFlow.summary(local, merged, "vision"))
-      .toBe("2 exercices, 3 cases · questions relues pour 1 · 1 repère douteux écarté — IA StudyTrack · lecture des pages");
+      .toBe("2 exercices, 3 cases · questions relues pour 1 · 1 repère douteux écarté — IA Polymestre · lecture des pages");
     expect(SeriesImportFlow.summary(series(ex("3.1")), series(ex("3.1"), ex("3.2")), "shared"))
-      .toBe("2 exercices, 2 cases · 1 ajouté — IA StudyTrack (sans clé)");
+      .toBe("2 exercices, 2 cases · 1 ajouté — IA Polymestre (sans clé)");
   });
 
   it("la lecture locale : un exercice repéré, au singulier", () => {
@@ -190,6 +190,6 @@ describe("SeriesAIExtractor", () => {
   it("un refus du service est rapporté avec son code", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("quota", { status: 429 })));
     await expect(SeriesAIExtractor.extract("texte", { aiExtractionEnabled: true }))
-      .rejects.toThrow("Le service distant a refusé : fonction StudyTrack : HTTP 429 quota");
+      .rejects.toThrow("Le service distant a refusé : fonction Polymestre : HTTP 429 quota");
   });
 });

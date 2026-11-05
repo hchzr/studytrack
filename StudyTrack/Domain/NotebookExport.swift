@@ -114,7 +114,7 @@ enum NotebookExport {
         - « Concentre-toi sur les liens entre les notions et sur ce qu'il faut comprendre avant chaque résultat. »
         - « Explique d'abord l'intuition, puis l'énoncé ; signale les pièges. »
 
-        Puis reviens dans StudyTrack : colle l'adresse du carnet, et glisse le podcast téléchargé pour l'écouter pendant que tu révises.
+        Puis reviens dans Polymestre : colle l'adresse du carnet, et glisse le podcast téléchargé pour l'écouter pendant que tu révises.
         """
     }
 }

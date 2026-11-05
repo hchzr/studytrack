@@ -134,7 +134,7 @@ struct StudyTrackMacApp: App {
     #endif
 
     var body: some Scene {
-        Window("StudyTrack", id: "main") {
+        Window("Polymestre", id: "main") {
             MacRootView()
                 .environment(timer)
                 .environment(store)
@@ -193,7 +193,7 @@ struct MacCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("À propos de StudyTrack") {
+            Button("À propos de Polymestre") {
                 NSApp.orderFrontStandardAboutPanel(options: [
                     .credits: NSAttributedString(
                         string: "Tes cours, tes séries, ton temps.",

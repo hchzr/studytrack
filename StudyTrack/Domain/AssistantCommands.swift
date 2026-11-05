@@ -198,7 +198,7 @@ enum AssistantCommandApplier {
             return "\(course.displayCode) : \(exam.title) le \(DateUtils.shortDay.string(from: date))"
 
         default:
-            throw Failure(message: "Commande inconnue « \(command.kind) ». Mets StudyTrack à jour.")
+            throw Failure(message: "Commande inconnue « \(command.kind) ». Mets Polymestre à jour.")
         }
     }
 

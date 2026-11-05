@@ -186,7 +186,7 @@ struct MenuBarTimerView: View {
             if let update = MacUpdater.shared.available {
                 PaperRule()
                 Button { MacUpdater.shared.download() } label: {
-                    Label("StudyTrack \(update.version) est disponible — télécharger", systemImage: "arrow.down.circle")
+                    Label("Polymestre \(update.version) est disponible — télécharger", systemImage: "arrow.down.circle")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.borderless)
@@ -482,7 +482,7 @@ struct MenuBarTimerView: View {
             Button {
                 MacWindows.openMain(openWindow)
             } label: {
-                Label("Ouvrir StudyTrack", systemImage: "macwindow")
+                Label("Ouvrir Polymestre", systemImage: "macwindow")
             }
             .labelStyle(.titleAndIcon)
             Spacer()

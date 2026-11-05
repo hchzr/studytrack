@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Distribuer StudyTrack (README §5, « Distribuer ») :
+# Distribuer Polymestre (README §5, « Distribuer ») :
 #
 #   ./release.sh ios           # archive → export App Store Connect → envoi (TestFlight)
-#   ./release.sh mac           # archive → Developer ID → notarisation → StudyTrack.dmg + latest.json
+#   ./release.sh mac           # archive → Developer ID → notarisation → Polymestre.dmg + latest.json
 #   ./release.sh publish-mac   # l'image sur une release du site et de l'app, latest.json poussé
 #
 # Signature et envoi : le compte de Xcode (Réglages › Comptes), celui du
@@ -28,7 +28,7 @@ AUTH=(-allowProvisioningUpdates)
 NOTARY=(--key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 TEAM=5GGDH5F3NG
 OUT=build-release
-SITE_RELEASES=hchzr/studytrack-site
+SITE_RELEASES=hczr-dev/studytrack-site
 mkdir -p "$OUT"
 
 setting() {
@@ -93,16 +93,16 @@ mac)
   rm -rf "$OUT/mac"
   xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/mac-export.plist" \
     -exportPath "$OUT/mac" "${AUTH[@]}"
-  APP="$OUT/mac/StudyTrack.app"
+  APP="$OUT/mac/Polymestre.app"
   # L'app d'abord (son ticket est agrafé : elle s'ouvre même hors ligne), puis l'image.
-  ditto -c -k --keepParent "$APP" "$OUT/StudyTrack-app.zip"
-  notarize "$OUT/StudyTrack-app.zip"
+  ditto -c -k --keepParent "$APP" "$OUT/Polymestre-app.zip"
+  notarize "$OUT/Polymestre-app.zip"
   xcrun stapler staple "$APP"
   STAGE="$OUT/dmg"; rm -rf "$STAGE"; mkdir -p "$STAGE"
-  ditto "$APP" "$STAGE/StudyTrack.app"
+  ditto "$APP" "$STAGE/Polymestre.app"
   ln -s /Applications "$STAGE/Applications"
-  DMG="$OUT/StudyTrack.dmg"; rm -f "$DMG"
-  hdiutil create -volname StudyTrack -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+  DMG="$OUT/Polymestre.dmg"; rm -f "$DMG"
+  hdiutil create -volname Polymestre -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
   # L'image n'est signée que si le certificat est dans le trousseau (avec la
   # signature dans le nuage, il n'y est pas) : macOS ouvre une image non signée,
   # et c'est l'app qu'elle contient, notarisée, que Gatekeeper vérifie.
@@ -112,7 +112,7 @@ mac)
   xcrun stapler staple "$DMG"
   TAG="mac-$VERSION-$BUILD"
   cat > "$OUT/latest.json" <<EOF
-{"version": "$VERSION", "build": $BUILD, "url": "https://github.com/$SITE_RELEASES/releases/download/$TAG/StudyTrack.dmg", "notes": "${NOTES:-}"}
+{"version": "$VERSION", "build": $BUILD, "url": "https://github.com/$SITE_RELEASES/releases/download/$TAG/Polymestre.dmg", "notes": "${NOTES:-}"}
 EOF
   echo "✅ $DMG notarisée. Puis : ./release.sh publish-mac (SITE_REPO=<clone de studytrack-site>)"
   ;;
@@ -120,9 +120,9 @@ publish-mac)
   : "${SITE_REPO:?SITE_REPO manquant : le chemin vers un clone de studytrack-site}"
   VERSION=$(setting StudyTrackMac MARKETING_VERSION); BUILD=$(setting StudyTrackMac CURRENT_PROJECT_VERSION)
   TAG="mac-$VERSION-$BUILD"
-  [ -f "$OUT/StudyTrack.dmg" ] && [ -f "$OUT/latest.json" ] || { echo "Lancer d'abord ./release.sh mac" >&2; exit 1; }
-  gh release create "$TAG" "$OUT/StudyTrack.dmg" --repo "$SITE_RELEASES" \
-    --title "StudyTrack pour Mac $VERSION ($BUILD)" --notes "${NOTES:-StudyTrack pour Mac $VERSION ($BUILD).}"
+  [ -f "$OUT/Polymestre.dmg" ] && [ -f "$OUT/latest.json" ] || { echo "Lancer d'abord ./release.sh mac" >&2; exit 1; }
+  gh release create "$TAG" "$OUT/Polymestre.dmg" --repo "$SITE_RELEASES" \
+    --title "Polymestre pour Mac $VERSION ($BUILD)" --notes "${NOTES:-Polymestre pour Mac $VERSION ($BUILD).}"
   mkdir -p "$SITE_REPO/mac"
   cp "$OUT/latest.json" "$SITE_REPO/mac/latest.json"
   git -C "$SITE_REPO" add mac/latest.json
@@ -131,10 +131,10 @@ publish-mac)
   # La même release dans le dépôt de l'app (privé : le lien de latest.json reste
   # celui du site, public). L'étiquette va sur HEAD, le commit construit par
   # `./release.sh mac`, et part seule : main n'a pas à être poussée pour autant.
-  git tag -a "$TAG" -m "StudyTrack $VERSION ($BUILD)"
+  git tag -a "$TAG" -m "Polymestre $VERSION ($BUILD)"
   git push origin "refs/tags/$TAG"
-  gh release create "$TAG" "$OUT/StudyTrack.dmg" --verify-tag \
-    --title "StudyTrack $VERSION ($BUILD)" --notes "${NOTES:-StudyTrack pour Mac $VERSION ($BUILD).}"
+  gh release create "$TAG" "$OUT/Polymestre.dmg" --verify-tag \
+    --title "Polymestre $VERSION ($BUILD)" --notes "${NOTES:-Polymestre pour Mac $VERSION ($BUILD).}"
   echo "✅ Publiée : https://github.com/$SITE_RELEASES/releases/tag/$TAG"
   ;;
 *)

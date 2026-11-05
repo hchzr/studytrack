@@ -470,7 +470,7 @@ struct MusicAccessView: View {
             Label("Apple Music", systemImage: "music.note")
         } description: {
             Text(music.authorization == .denied
-                 ? "L'accès à Apple Music a été refusé. Autorise StudyTrack dans les réglages (Confidentialité › Médias et Apple Music)."
+                 ? "L'accès à Apple Music a été refusé. Autorise Polymestre dans les réglages (Confidentialité › Médias et Apple Music)."
                  : "Écoute ta musique sans quitter le mode étude.")
         } actions: {
             if music.authorization == .notDetermined {

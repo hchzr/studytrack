@@ -1,4 +1,16 @@
-# StudyTrack — suivi du temps d'étude EPFL (iOS)
+# Polymestre — suivi du temps d'étude EPFL (iOS)
+
+> **Nom.** L'app s'appelle **Polymestre** (Poly + semestre) depuis novembre 2026 ;
+> elle s'appelait StudyTrack. Seul ce que l'on voit a changé : le nom sous
+> l'icône, les textes, `Polymestre.app` sur Mac, l'installeur Windows, le site.
+> Les identifiants gardent l'ancien nom **exprès**, car les changer couperait
+> les données existantes : bundle IDs (`com.hczr.studytrack…`), conteneur
+> iCloud, App Group, schéma d'URL `studytrack://`, module Swift et cibles Xcode
+> (`StudyTrack`, `PRODUCT_MODULE_NAME = StudyTrack` sur Mac), dossiers
+> `Application Support/StudyTrack`, trousseau Windows (« StudyTrack »), info de
+> chiffrement de la synchronisation, marqueurs `[StudyTrack]` du tuteur, champ
+> `source` des webhooks, serveur MCP `studytrack`. Le calendrier Apple
+> « StudyTrack » est renommé « Polymestre » au premier usage.
 
 Application iOS (SwiftUI + SwiftData) qui structure un semestre EPFL, suit la
 progression théorie/exercices, mesure le temps de travail réel, le compare à la
@@ -232,7 +244,7 @@ Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 | Intégration | État | Détail |
 |---|---|---|
 | **Horaire EPFL (.ics)** | ✅ **nouveau, chemin principal** | `ICSParser` (RFC 5545 : `VEVENT`, `TZID`, `RRULE` hebdo/quotidienne, `BYDAY`, `EXDATE`), import par URL (`https://`, `webcal://`), fichier ou copier-coller. Crée les cours, **détecte ceux qui ont des heures de cours**, lie les séances, et est idempotent (par `UID`). |
-| **Calendrier Apple** (EventKit) | ✅ | Import, liaison automatique aux cours par code, création de sessions planifiées. Une session planifiée est écrite dans un calendrier « StudyTrack » et supprimée avec elle |
+| **Calendrier Apple** (EventKit) | ✅ | Import, liaison automatique aux cours par code, création de sessions planifiées. Une session planifiée est écrite dans un calendrier « Polymestre » (l'ancien « StudyTrack » est renommé) et supprimée avec elle |
 | **Rappels Apple** | ✅ | Lecture, création, terminaison, suppression |
 | **Todoist** | ✅ | API unifiée v1 (`api.todoist.com/api/v1`) |
 | **Things 3** | ✅ **nouveau** | Schéma d'URL, écriture seule (signalé comme tel dans l'interface) |

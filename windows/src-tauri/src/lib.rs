@@ -69,13 +69,13 @@ pub fn run() {
             // Les sites où l'on s'est déjà connecté (les cookies, eux, sont dans WebView2).
             app.state::<native::site::SiteState>().load(app.handle());
             // Le plateau (zone de notification) : l'icône de l'app, ouvrir, quitter.
-            let open = MenuItem::with_id(app, "open", "Ouvrir StudyTrack", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Ouvrir Polymestre", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini chrono", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quitter StudyTrack", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quitter Polymestre", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &mini, &quit])?;
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().expect("icône de l'app").clone())
-                .tooltip("StudyTrack")
+                .tooltip("Polymestre")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {

@@ -47,7 +47,7 @@ struct GroupSeriesProgressView: View {
                     let all = boards
                     if course == nil {
                         Card {
-                            Label("Tu ne suis pas \(subject) : StudyTrack ne connaît pas ses séries et ne peut pas les comparer.",
+                            Label("Tu ne suis pas \(subject) : Polymestre ne connaît pas ses séries et ne peut pas les comparer.",
                                   systemImage: "info.circle")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)

@@ -98,7 +98,7 @@ struct ReviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("À noter dans StudyTrack", systemImage: "tray.and.arrow.down")
+                Label("À noter dans Polymestre", systemImage: "tray.and.arrow.down")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Carnet.ink)
                 Spacer()

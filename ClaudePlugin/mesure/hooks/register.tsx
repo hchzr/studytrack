@@ -163,7 +163,7 @@ async function refresh($: EngineInterface) {
 
 async function askPass($: EngineInterface, reason: string): Promise<string> {
   const { verdict, policy, passes, now } = await verdictNow($)
-  if (!policy || !effectiveEnabled(policy, now)) return "Avec mesure n'est pas réglé : StudyTrack › Réglages › Claude Code."
+  if (!policy || !effectiveEnabled(policy, now)) return "Avec mesure n'est pas réglé : Polymestre › Réglages › Claude Code."
   const rules = effectiveRules(policy, now)
   const result = requestPass(reason, verdict, rules, passes, record?.session ?? '', now)
   if (typeof result === 'string') return result
@@ -172,7 +172,7 @@ async function askPass($: EngineInterface, reason: string): Promise<string> {
   await show($, { ...verdict, message: `${verdict.message.split(' /mesure')[0]} Ton pass s'ouvre à ${clock(result.from)}.` }, now)
   return `Pass noté : il s'ouvre à ${clock(result.from)} (${rules.passDelay} min pour y repenser) et dure ${rules.passMinutes} min, `
     + `jusqu'à ${clock(result.until)}. Raison : « ${result.reason} ». `
-    + `${passesLeft(rules, all, now)} pass restant aujourd'hui. StudyTrack le garde dans ton bilan.`
+    + `${passesLeft(rules, all, now)} pass restant aujourd'hui. Polymestre le garde dans ton bilan.`
 }
 
 async function today($: EngineInterface): Promise<string> {
@@ -186,12 +186,12 @@ async function today($: EngineInterface): Promise<string> {
     + ` · étude : ${duration(use.etudeMs)} · libre : ${duration(use.libreMs)}`)
   if (policy) {
     lines.push(studiedKnown(policy.context, now)
-      ? `Étudié dans StudyTrack : ${duration(studiedSeconds(policy.context, now) * 1000)}`
-      : 'Étudié dans StudyTrack : inconnu (StudyTrack ne tourne pas sur ce Mac) — « d\'abord étudier » ne bloque pas.')
+      ? `Étudié dans Polymestre : ${duration(studiedSeconds(policy.context, now) * 1000)}`
+      : 'Étudié dans Polymestre : inconnu (Polymestre ne tourne pas sur ce Mac) — « d\'abord étudier » ne bloque pas.')
   }
   lines.push(`Cette séance : ${CATEGORY_LABEL[record?.category ?? 'projets']} (${record?.cwd ?? ''})`)
   if (!policy || !effectiveEnabled(policy, now)) {
-    lines.push('Pas encore réglé : StudyTrack › Réglages › Claude Code. En attendant, Avec mesure compte et ne bloque rien.')
+    lines.push('Pas encore réglé : Polymestre › Réglages › Claude Code. En attendant, Avec mesure compte et ne bloque rien.')
     return lines.join('\n')
   }
   lines.push(verdict.allow ? `Maintenant : permis.${verdict.warn ? ' ' + verdict.warn : ''}` : `Maintenant : ${verdict.message}`)
@@ -204,7 +204,7 @@ async function today($: EngineInterface): Promise<string> {
   if (policy.pending && now < policy.pending.from) {
     lines.push(`Assouplissement en attente : appliqué le ${new Date(policy.pending.from).toLocaleDateString('fr-CH')} à ${clock(policy.pending.from)} (durcir s'applique tout de suite, assouplir le lendemain).`)
   }
-  lines.push('Réglages : StudyTrack › Réglages › Claude Code · /mesure semaine · /mesure aide')
+  lines.push('Réglages : Polymestre › Réglages › Claude Code · /mesure semaine · /mesure aide')
   return lines.join('\n')
 }
 
@@ -230,7 +230,7 @@ async function week($: EngineInterface): Promise<string> {
     const bar = '█'.repeat(Math.min(24, Math.round(use.projetsMs / (15 * 60_000))))
     lines.push(`${label.padEnd(8)} ${duration(use.projetsMs).padStart(8)} · ${duration(use.etudeMs).padStart(8)}  ${bar}`)
   }
-  lines.push('Un █ : 15 min de projets. Le détail (et les raisons des passes) : StudyTrack › Bilan.')
+  lines.push('Un █ : 15 min de projets. Le détail (et les raisons des passes) : Polymestre › Bilan.')
   return lines.join('\n')
 }
 
@@ -318,13 +318,13 @@ export const register: Register = on => {
 }
 
 const HELP = [
-  'Avec mesure — Claude Code, compté et réglé avec StudyTrack',
+  'Avec mesure — Claude Code, compté et réglé avec Polymestre',
   '/mesure            aujourd\'hui : le temps, ce qui bloque, les passes',
   '/mesure encore <raison>   un pass : s\'ouvre après le délai de réflexion, raison gardée',
   '/mesure semaine    les 7 derniers jours',
   'Étude : les dossiers d\'étude (par défaut ~/EPFL) ne sont jamais limités, seulement comptés.',
   'Projets : tout le reste — budget, couvre-feu, cours, mode étude, d\'abord étudier, pauses.',
-  'Les règles se règlent dans StudyTrack (Mac) › Réglages › Claude Code. Durcir s\'applique',
+  'Les règles se règlent dans Polymestre (Mac) › Réglages › Claude Code. Durcir s\'applique',
   'tout de suite ; assouplir, le lendemain à 4 h : on ne lâche pas ses limites sur un coup de tête.',
 ].join('\n')
 

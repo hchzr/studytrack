@@ -304,7 +304,7 @@ export const ClaudeTutor = {
     if (name === "Read") return "lecture";
     if (name.startsWith("mcp__")) {
       const server = name.slice(5).split("_")[0] || name;
-      return server === "studytrack" ? "StudyTrack" : server.slice(0, 1).toUpperCase() + server.slice(1);
+      return server === "studytrack" ? "Polymestre" : server.slice(0, 1).toUpperCase() + server.slice(1);
     }
     return name;
   },
@@ -442,7 +442,7 @@ export const ClaudeTutor = {
 
   verdictFence: "studytrack",
 
-  verdictInstruction: `Termine par un bloc de code \`\`\`studytrack avec une ligne par exercice corrigé, au format « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). StudyTrack le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.`,
+  verdictInstruction: `Termine par un bloc de code \`\`\`studytrack avec une ligne par exercice corrigé, au format « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). Polymestre le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.`,
 
   /** « Post-mortem de la série » (quand la série est finie). */
   postMortemPrompt(useSkill: boolean, features: Features = new Features()): string {
@@ -523,7 +523,7 @@ export const ClaudeTutor = {
 };
 
 function systemPromptBody(mode: "tutor" | "explain"): string {
-  const common = `Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app StudyTrack, en mode étude. Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [StudyTrack] et [/StudyTrack] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.`;
+  const common = `Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app Polymestre, en mode étude. Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [StudyTrack] et [/StudyTrack] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.`;
   return common + "\n\n" + TutorFramework.contract + "\n\n" + (mode === "tutor" ? TutorFramework.tutor : TutorFramework.explain);
 }
 

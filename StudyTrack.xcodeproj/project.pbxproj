@@ -110,7 +110,7 @@
 		B10000000000000000000002 /* StudyTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D10000000000000000000001 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Support/Supabase.xcconfig; sourceTree = "<group>"; };
 		E10000000000000000000002 /* StudyTrackShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		F10000000000000000000002 /* StudyTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StudyTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000002 /* Polymestre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Polymestre.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F20000000000000000000001 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = StudyTrack/App/Theme.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000002 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseConfig.swift; path = StudyTrack/App/SupabaseConfig.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000003 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DataExporter.swift; path = StudyTrack/Services/DataExporter.swift; sourceTree = SOURCE_ROOT; };
@@ -241,7 +241,7 @@
 				A10000000000000000000005 /* StudyTrack.app */,
 				B10000000000000000000002 /* StudyTrackWidgets.appex */,
 				E10000000000000000000002 /* StudyTrackShare.appex */,
-				F10000000000000000000002 /* StudyTrack.app */,
+				F10000000000000000000002 /* Polymestre.app */,
 				G10000000000000000000002 /* StudyTrackMacWidgets.appex */,
 				H10000000000000000000002 /* StudyTrackLock.appex */,
 			);
@@ -386,7 +386,7 @@
 				M10000000000000000000004 /* SwiftMath */,
 			);
 			productName = StudyTrackMac;
-			productReference = F10000000000000000000002 /* StudyTrack.app */;
+			productReference = F10000000000000000000002 /* Polymestre.app */;
 			productType = "com.apple.product-type.application";
 		};
 		G10000000000000000000003 /* StudyTrackMacWidgets */ = {
@@ -865,7 +865,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Support/StudyTrackMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = fr;
-				INFOPLIST_KEY_CFBundleDisplayName = StudyTrack;
+				INFOPLIST_KEY_CFBundleDisplayName = Polymestre;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -875,7 +875,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac;
-				PRODUCT_NAME = StudyTrack;
+				PRODUCT_MODULE_NAME = StudyTrack;
+				PRODUCT_NAME = Polymestre;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -899,7 +900,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Support/StudyTrackMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = fr;
-				INFOPLIST_KEY_CFBundleDisplayName = StudyTrack;
+				INFOPLIST_KEY_CFBundleDisplayName = Polymestre;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -909,7 +910,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac;
-				PRODUCT_NAME = StudyTrack;
+				PRODUCT_MODULE_NAME = StudyTrack;
+				PRODUCT_NAME = Polymestre;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -338,7 +338,7 @@ export function ExercisePane({ course, timer, save }: {
             {fromSite && site && series ? (
               <BotafogoExerciseStatement site={site} seriesURL={series.urlString} statementURL={exercise.statementURLString}
                 position={series.sortedExercises.findIndex((item) => item.id === exercise.id)} tint={tint}
-                openWeb={(url) => { void openInApp(url, course?.displayCode ?? "StudyTrack"); }} />
+                openWeb={(url) => { void openInApp(url, course?.displayCode ?? "Polymestre"); }} />
             ) : (
               <>
             {exercise.statement !== "" ? (

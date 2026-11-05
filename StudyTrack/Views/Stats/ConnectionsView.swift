@@ -72,7 +72,7 @@ struct ConnectionsList: View {
             siteRow(.mediaspace, icon: "video", title: "MediaSpace",
                     purpose: "Enregistrements des cours, lus dans l'app")
             CarnetRule()
-            row(icon: "person.2", title: "Compte StudyTrack",
+            row(icon: "person.2", title: "Compte Polymestre",
                 purpose: "Groupes, entraide, progression partagée",
                 status: app.social.isSignedIn ? "Connecté·e" : (center.state(of: .groups) == .expired ? "Session expirée" : "Pas de compte"),
                 connected: app.social.isSignedIn,

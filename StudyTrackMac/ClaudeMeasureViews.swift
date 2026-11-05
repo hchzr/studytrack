@@ -74,7 +74,7 @@ struct ClaudeMeasureSettingsPane: View {
             } header: {
                 Text("Dossiers")
             } footer: {
-                Text("Le reste est « projets » : StudyTrack lui-même, tes autres dépôts…")
+                Text("Le reste est « projets » : Polymestre lui-même, tes autres dépôts…")
             }
 
             Section {

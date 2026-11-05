@@ -105,7 +105,7 @@ final class NotificationScheduler {
     func scheduleDailyReminder(hour: Int, body: String) {
         center.removePendingNotificationRequests(withIdentifiers: ["daily-reminder"])
         let content = UNMutableNotificationContent()
-        content.title = "StudyTrack"
+        content.title = "Polymestre"
         content.body = body
         content.sound = .default
         var components = DateComponents()

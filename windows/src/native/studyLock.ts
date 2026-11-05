@@ -15,7 +15,7 @@ export interface LockReport {
 }
 
 export const KIOSK_NOTE =
-  "StudyTrack occupe l'écran ; les autres apps sont inaccessibles jusqu'à la fin de la session. Ctrl+Alt+Suppr reste disponible.";
+  "Polymestre occupe l'écran ; les autres apps sont inaccessibles jusqu'à la fin de la session. Ctrl+Alt+Suppr reste disponible.";
 
 let lastReport: LockReport | null = null;
 const listeners = new Set<() => void>();
@@ -49,7 +49,7 @@ export function lockStatusLine(report: LockReport | null, wanted: boolean, nativ
   if (report === null) return "Blocage : démarrage…";
   if (!report.supported || !report.active) return `Blocage : ${report.note ?? "indisponible sur ce système"}.`;
   if (!report.keysBlocked) return `Blocage : écran tenu, mais ${report.note ?? "les raccourcis du système restent actifs"}.`;
-  return "Blocage : StudyTrack occupe l'écran, les raccourcis du système sont bloqués. Ctrl+Alt+Suppr reste disponible.";
+  return "Blocage : Polymestre occupe l'écran, les raccourcis du système sont bloqués. Ctrl+Alt+Suppr reste disponible.";
 }
 
 /** Ce que `startStudyLock` lit du chrono. */

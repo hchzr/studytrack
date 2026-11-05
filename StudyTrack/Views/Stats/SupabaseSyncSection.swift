@@ -117,7 +117,7 @@ struct SupabaseSyncSection: View {
         } header: {
             CarnetFormHeader("Synchronisation")
         } footer: {
-            Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur le Mac et sur Windows, en plus d'iCloud. Désactivée par défaut.")
+            Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte Polymestre pour les retrouver sur le Mac et sur Windows, en plus d'iCloud. Désactivée par défaut.")
         }
     }
 

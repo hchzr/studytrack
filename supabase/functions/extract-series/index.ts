@@ -836,7 +836,7 @@ function callProvider(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      ...(baseURL.includes("openrouter.ai") ? { "X-Title": "StudyTrack" } : {}),
+      ...(baseURL.includes("openrouter.ai") ? { "X-Title": "Polymestre" } : {}),
     },
     body: JSON.stringify(payload),
   });

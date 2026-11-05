@@ -87,7 +87,7 @@ final class StudyGroup {
     /// Le code seul oblige à un aller-retour (« et je le mets où ? ») ; le lien seul
     /// ne fonctionne pas partout. Les deux ensemble marchent dans tous les cas.
     var inviteMessage: String {
-        var text = "Rejoins « \(name) » sur StudyTrack avec le code \(inviteCode)."
+        var text = "Rejoins « \(name) » sur Polymestre avec le code \(inviteCode)."
         if !subjectCodes.isEmpty {
             text += "\nMatières : \(subjectCodes.joined(separator: ", "))."
         }

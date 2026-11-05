@@ -102,7 +102,7 @@ export const LocalMCPRPC = {
         return reply({
           protocolVersion: LocalMCPRPC.protocols.includes(asked) ? asked : LocalMCPRPC.protocols[0],
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: provider.serverName, title: "StudyTrack (fichiers, Mac)", version: "1.0.0" },
+          serverInfo: { name: provider.serverName, title: "Polymestre (fichiers, Mac)", version: "1.0.0" },
           instructions: provider.instructions,
         });
       }
@@ -190,7 +190,7 @@ export class LocalMCPServer {
     const parts = path.split("/").filter((part) => part !== "");
     const last = parts[parts.length - 1] ?? "";
     if (!LocalMCPServer.constantTimeEqual(last, this.token)) {
-      return LocalMCPServer.http(401, { error: "adresse incomplète : copie l'adresse complète depuis StudyTrack (Réglages › Claude)." });
+      return LocalMCPServer.http(401, { error: "adresse incomplète : copie l'adresse complète depuis Polymestre (Réglages › Claude)." });
     }
     switch (request.method) {
       case "POST": {

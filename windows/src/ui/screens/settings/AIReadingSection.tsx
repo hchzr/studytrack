@@ -37,7 +37,7 @@ export function AIReadingSection() {
           <Switch checked={enabled} ariaLabel="Analyser les PDF avec l'IA"
             onChange={(value) => { writeAIExtraction(value); setEnabled(value); }} />
         </SettingRow>
-        <SettingRow label="Service" hint={result ?? "IA StudyTrack, sans clé à saisir."}>
+        <SettingRow label="Service" hint={result ?? "IA Polymestre, sans clé à saisir."}>
           <Button size="sm" onClick={() => void test()} disabled={testing || !enabled}>{testing ? "Test…" : "Tester"}</Button>
         </SettingRow>
       </Card>

@@ -15,7 +15,7 @@ export const TaskProviderGuide = {
       case "todoist":
         return "Lecture et création de tâches dans ton compte Todoist, via l'API v1.";
       case "things":
-        return "Création de tâches dans Things 3, par son schéma d'URL. Things n'expose aucune API de lecture : StudyTrack ne verra jamais ce que tu y fais.";
+        return "Création de tâches dans Things 3, par son schéma d'URL. Things n'expose aucune API de lecture : Polymestre ne verra jamais ce que tu y fais.";
       case "notion":
         return "Lecture et création de tâches dans une base de données Notion.";
       case "webhook":
@@ -49,7 +49,7 @@ export const TaskProviderGuide = {
         return [
           "Autorise l'accès aux Rappels quand l'app le demande.",
           "Rien d'autre : les listes existantes sont reconnues automatiquement.",
-          "Les tâches créées depuis StudyTrack arrivent dans ta liste par défaut.",
+          "Les tâches créées depuis Polymestre arrivent dans ta liste par défaut.",
         ];
       case "todoist":
         return [
@@ -62,7 +62,7 @@ export const TaskProviderGuide = {
         return [
           "Installe Things 3 sur cet appareil (Mac, iPhone ou iPad).",
           "Active l'interrupteur ci-dessus : il n'y a ni compte ni jeton à saisir.",
-          "Les tâches créées depuis StudyTrack arrivent dans la boîte de réception de Things.",
+          "Les tâches créées depuis Polymestre arrivent dans la boîte de réception de Things.",
         ];
       case "notion":
         return [
@@ -76,7 +76,7 @@ export const TaskProviderGuide = {
         return [
           "Prépare une URL qui accepte un POST JSON (Raccourci, n8n, Zapier, Home Assistant…).",
           "Colle-la ci-dessus.",
-          "À chaque tâche créée, StudyTrack envoie un objet JSON avec le titre, les notes, l'échéance, la priorité et le code du cours.",
+          "À chaque tâche créée, Polymestre envoie un objet JSON avec le titre, les notes, l'échéance, la priorité et le code du cours.",
         ];
       case "googleTasks":
         return [
@@ -90,7 +90,7 @@ export const TaskProviderGuide = {
           "Va sur developer.ticktick.com et crée une application.",
           "Récupère un jeton d'accès par le flux OAuth2 de TickTick, avec les portées tasks:read et tasks:write.",
           "Colle le jeton ci-dessus.",
-          "StudyTrack lit et crée alors des tâches dans ton projet par défaut.",
+          "Polymestre lit et crée alors des tâches dans ton projet par défaut.",
         ];
     }
   },
@@ -117,11 +117,11 @@ export const TaskProviderGuide = {
   setupCaveat(p: TaskProvider): string | null {
     switch (p) {
       case "reminders":
-        return "StudyTrack ne lit que les listes auxquelles tu as donné accès ; retire l'autorisation dans Réglages ▸ Confidentialité à tout moment.";
+        return "Polymestre ne lit que les listes auxquelles tu as donné accès ; retire l'autorisation dans Réglages ▸ Confidentialité à tout moment.";
       case "todoist":
         return "Le jeton donne un accès complet à ton compte Todoist. Si tu le révoques, la synchronisation s'arrête sans rien casser : les tâches déjà importées restent locales.";
       case "things":
-        return "Écriture seule : une tâche terminée dans Things restera « à faire » dans StudyTrack. Coche-la des deux côtés.";
+        return "Écriture seule : une tâche terminée dans Things restera « à faire » dans Polymestre. Coche-la des deux côtés.";
       case "notion":
         return "Un jeton d'intégration ne voit que les bases que tu lui as explicitement partagées.";
       case "webhook":

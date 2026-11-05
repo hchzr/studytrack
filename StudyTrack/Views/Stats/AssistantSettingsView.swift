@@ -149,7 +149,7 @@ struct AssistantSettingsView: View {
 
         Section("Brancher ton assistant") {
             instruction("Claude (app, web, Desktop)",
-                        "Réglages › Connecteurs › Ajouter un connecteur personnalisé. Nom : StudyTrack. Colle l'adresse.")
+                        "Réglages › Connecteurs › Ajouter un connecteur personnalisé. Nom : Polymestre. Colle l'adresse.")
             instruction("ChatGPT",
                         "Réglages › Applications et connecteurs › Avancé : active le mode développeur, puis Créer. Colle l'adresse, sans authentification.")
             VStack(alignment: .leading, spacing: Layout.tight) {

@@ -62,9 +62,9 @@ pub fn is_error(target: &str) -> bool {
 /// La page montrée dans le navigateur, une fois le retour reçu.
 pub fn page(target: &str) -> String {
     let (title, text) = if is_error(target) {
-        ("Connexion impossible", "La connexion a échoué. Tu peux fermer cet onglet et réessayer dans StudyTrack.")
+        ("Connexion impossible", "La connexion a échoué. Tu peux fermer cet onglet et réessayer dans Polymestre.")
     } else {
-        ("Connexion réussie", "Connexion réussie — tu peux revenir dans StudyTrack.")
+        ("Connexion réussie", "Connexion réussie — tu peux revenir dans Polymestre.")
     };
     format!(
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><title>{title}</title>\
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn page_tells_success_or_failure_in_french() {
-        assert!(page("/auth-callback?code=1").contains("Connexion réussie — tu peux revenir dans StudyTrack."));
+        assert!(page("/auth-callback?code=1").contains("Connexion réussie — tu peux revenir dans Polymestre."));
         assert!(is_error("/auth-callback?error=access_denied"));
         assert!(!is_error("/auth-callback?code=1"));
         assert!(page("/auth-callback?error_description=x").contains("a échoué"));

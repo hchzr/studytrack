@@ -102,7 +102,7 @@ enum OAuthPKCE {
             return link ? linkDisabledMessage : notEnabledMessage
         }
         if raw.contains("identity_already_exists") || (raw.contains("already") && raw.contains("linked")) {
-            return "Ce compte Google est déjà lié à un autre compte StudyTrack."
+            return "Ce compte Google est déjà lié à un autre compte Polymestre."
         }
         if status >= 500 { return "Le serveur a un problème (\(status)) : réessaie dans un instant." }
         return "Le serveur a refusé la connexion Google (\(status))."

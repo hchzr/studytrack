@@ -24,8 +24,8 @@ export const SeriesExtractionSource = {
     switch (source) {
       case "heuristic": return "détection par motifs";
       case "onDevice": return "IA sur l'appareil";
-      case "shared": return "IA StudyTrack (sans clé)";
-      case "vision": return "IA StudyTrack · lecture des pages";
+      case "shared": return "IA Polymestre (sans clé)";
+      case "vision": return "IA Polymestre · lecture des pages";
     }
   },
   /// Le moteur a-t-il vu la mise en page ? Sa lecture des sous-questions l'emporte
@@ -174,7 +174,7 @@ async function callShared(body: Record<string, unknown>, timeoutSeconds: number,
         throw new ExtractionError("sharedNotDeployed", response.status);
       }
       const detail = (await response.text()).slice(0, 200);
-      throw new ExtractionError("remote", `fonction StudyTrack : HTTP ${response.status} ${detail}`);
+      throw new ExtractionError("remote", `fonction Polymestre : HTTP ${response.status} ${detail}`);
     }
     const raw = await response.text();
     sharedVerdict = true;

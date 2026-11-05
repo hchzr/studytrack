@@ -77,7 +77,7 @@ struct ImportSheet: View {
                     Text(mode == .timetable
                          ? "Colle le contenu du fichier .ics (il commence par BEGIN:VCALENDAR)."
                          : mode == .json
-                         ? "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde StudyTrack (Réglages › Données et sauvegarde) se restaure ici, avancement et sessions compris, sans doublon."
+                         ? "Structure : { \"courses\": [ { \"code\": …, \"videos\": […], \"series\": […] } ] }. Une sauvegarde Polymestre (Réglages › Données et sauvegarde) se restaure ici, avancement et sessions compris, sans doublon."
                          : "Une ligne par élément, avec les colonnes : course_code, course_name, kind, number, title, duration_seconds, week, is_bonus, date, weight.")
                 }
 

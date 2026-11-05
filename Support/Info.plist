@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>fr</string>
 	<key>CFBundleDisplayName</key>
-	<string>StudyTrack</string>
+	<string>Polymestre</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,19 +48,19 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>StudyTrack cherche dans Apple Music et ta bibliothèque pour faire jouer ta musique pendant le mode étude.</string>
+	<string>Polymestre cherche dans Apple Music et ta bibliothèque pour faire jouer ta musique pendant le mode étude.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>StudyTrack numérise ta copie pour l'envoyer à ton bureau du Mac (et à Claude), pendant une session.</string>
+	<string>Polymestre numérise ta copie pour l'envoyer à ton bureau du Mac (et à Claude), pendant une session.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>StudyTrack utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude, et pour y ajouter tes sessions planifiées.</string>
+	<string>Polymestre utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude, et pour y ajouter tes sessions planifiées.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>StudyTrack utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude.</string>
+	<string>Polymestre utilise ton calendrier pour afficher tes cours, tes midterms et tes sessions d'étude.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>StudyTrack ajoute tes sessions d'étude planifiées à ton calendrier.</string>
+	<string>Polymestre ajoute tes sessions d'étude planifiées à ton calendrier.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>StudyTrack synchronise tes tâches avec l'app Rappels.</string>
+	<string>Polymestre synchronise tes tâches avec l'app Rappels.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>StudyTrack synchronise tes tâches avec l'app Rappels.</string>
+	<string>Polymestre synchronise tes tâches avec l'app Rappels.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NotionClientID</key>

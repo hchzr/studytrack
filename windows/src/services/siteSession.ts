@@ -94,7 +94,7 @@ export async function openSiteLogin(label: string, url: string, title: string): 
   // Un bouton qui « ne fait rien » est pire qu'une erreur : sans réponse de Rust, on le dit.
   let timer: ReturnType<typeof setTimeout> | undefined;
   const silence = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new SiteError("failed", "La fenêtre de connexion ne s'est pas ouverte. Relance StudyTrack et réessaie.")), loginOpenTimeoutMs);
+    timer = setTimeout(() => reject(new SiteError("failed", "La fenêtre de connexion ne s'est pas ouverte. Relance Polymestre et réessaie.")), loginOpenTimeoutMs);
   });
   try {
     await Promise.race([callNativeOrThrow("site_login_open", { label, url, title }), silence]);

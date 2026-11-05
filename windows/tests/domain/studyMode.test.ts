@@ -103,7 +103,7 @@ describe("Mode étude : apps (Mac)", () => {
   check(!SM.shouldBlock("com.goodnotesapp.x", true, "me", apps), "GoodNotes permis");
   check(SM.shouldBlock("com.apple.Safari", true, "me", apps), "Safari bloqué (le navigateur du mode étude le remplace)");
   check(SM.shouldBlock("com.spotify.client", true, "me", apps), "Spotify bloqué");
-  check(!SM.shouldBlock("me", true, "me", apps), "StudyTrack jamais bloqué");
+  check(!SM.shouldBlock("me", true, "me", apps), "Polymestre jamais bloqué");
   check(!SM.shouldBlock("com.apple.loginwindow", true, "me", apps), "le système jamais bloqué");
   check(!SM.shouldBlock("com.example.agent", false, "me", apps), "un agent sans fenêtre n'est pas bloqué");
   check(!SM.shouldBlock("com.anthropic.claudefordesktop.helper", true, "me", apps), "l'assistant d'une app permise l'est avec elle");

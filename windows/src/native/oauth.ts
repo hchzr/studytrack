@@ -6,7 +6,7 @@ import { callNativeOrThrow, inNative } from "./tauri.ts";
 import type { Loopback } from "../services/oauth.ts";
 
 export async function startLoopback(fixedPort?: number): Promise<Loopback> {
-  if (!inNative()) throw new Error("La connexion Google s'ouvre dans l'app StudyTrack pour Windows.");
+  if (!inNative()) throw new Error("La connexion Google s'ouvre dans l'app Polymestre pour Windows.");
   const { listen } = await import("@tauri-apps/api/event");
   const unlisten: (() => void)[] = [];
   let fail: (e: Error) => void = () => {};

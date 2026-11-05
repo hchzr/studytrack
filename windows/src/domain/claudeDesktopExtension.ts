@@ -17,11 +17,11 @@ export const ClaudeDesktopExtension = {
     const manifest: Record<string, unknown> = {
       manifest_version: "0.4",
       name: ClaudeDesktopExtension.name,
-      display_name: "StudyTrack",
+      display_name: "Polymestre",
       version: ClaudeDesktopExtension.version,
-      description: "Tes cours, séries, corrigés, examens et notes, lus depuis StudyTrack sur ce Mac.",
-      long_description: "Donne à Claude tous tes PDF et documents d'étude : énoncés et corrigés de séries, anciens examens, supports de cours, ressources, cahiers de notes, notes et fiche de révision. Les pages des PDF arrivent en images (formules intactes). Demande « Fichiers pour Claude » dans les réglages de StudyTrack ; l'app s'ouvre toute seule si besoin.",
-      author: { name: "StudyTrack" },
+      description: "Tes cours, séries, corrigés, examens et notes, lus depuis Polymestre sur ce Mac.",
+      long_description: "Donne à Claude tous tes PDF et documents d'étude : énoncés et corrigés de séries, anciens examens, supports de cours, ressources, cahiers de notes, notes et fiche de révision. Les pages des PDF arrivent en images (formules intactes). Demande « Fichiers pour Claude » dans les réglages de Polymestre ; l'app s'ouvre toute seule si besoin.",
+      author: { name: "Polymestre" },
       server: {
         type: "node",
         entry_point: "server/index.js",
@@ -63,7 +63,7 @@ const APP_ID = '__APP_ID__';
 // Réglables pour les essais : ne pas ouvrir l'app, et combien de temps l'attendre.
 const NO_LAUNCH = process.env.STUDYTRACK_MCP_NO_LAUNCH === '1';
 const WAIT_MS = Number(process.env.STUDYTRACK_MCP_WAIT_MS || 20000);
-const HINT = "StudyTrack ne répond pas. Ouvre l'app StudyTrack sur ce Mac et active Réglages › Mode étude › « Serveur local des fichiers », puis réessaie.";
+const HINT = "Polymestre ne répond pas. Ouvre l'app Polymestre sur ce Mac et active Réglages › Mode étude › « Serveur local des fichiers », puis réessaie.";
 
 function readURL() {
   try { return JSON.parse(fs.readFileSync(INFO, 'utf8')).url || null; } catch (e) { return null; }

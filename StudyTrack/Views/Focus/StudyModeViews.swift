@@ -790,7 +790,7 @@ struct StudyModeSettingsView: View {
                 }
             } else {
                 Section {
-                    Text("Dans cette version, l'iPhone ne bloque pas les autres apps : Apple doit encore autoriser le Temps d'écran pour StudyTrack. Le mode étude reste ton écran de travail, et le Mac, lui, bloque.")
+                    Text("Dans cette version, l'iPhone ne bloque pas les autres apps : Apple doit encore autoriser le Temps d'écran pour Polymestre. Le mode étude reste ton écran de travail, et le Mac, lui, bloque.")
                         .font(.subheadline)
                 } header: {
                     CarnetFormHeader("Temps d'écran")

@@ -18,7 +18,7 @@ final class LocalFilesMirror {
         case missing
         var errorDescription: String? {
             switch self {
-            case .notADocument: return "l'adresse ne mène pas à un document (une page web, ou la session Moodle a expiré : reconnecte-toi dans StudyTrack)."
+            case .notADocument: return "l'adresse ne mène pas à un document (une page web, ou la session Moodle a expiré : reconnecte-toi dans Polymestre)."
             case .download(let reason): return "téléchargement impossible : \(reason)"
             case .missing: return "le fichier n'existe plus à sa source."
             }

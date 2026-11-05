@@ -159,7 +159,7 @@ describe("chrono flottant", () => {
     // Sous le verrou d'étude, le chrono flottant reste caché.
     expect(miniWanted(true, { studyUntil: new Date(Date.now() + 3600_000) } as never)).toBe(false);
   });
-  it("cachée tant que StudyTrack est devant (fin du mode étude, récapitulatif)", () => {
+  it("cachée tant que Polymestre est devant (fin du mode étude, récapitulatif)", () => {
     expect(miniWanted(true, {} as never, true)).toBe(false);
     expect(miniWanted(true, {} as never, false)).toBe(true);
   });

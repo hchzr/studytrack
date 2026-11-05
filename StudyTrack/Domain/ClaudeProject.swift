@@ -38,9 +38,9 @@ enum ClaudeProject {
     static func context(courses: [CourseLine], week: Int?, date: String, redo: [RedoLine] = [],
                         features: SeriesReview.Features? = nil) -> String {
         var lines = [
-            "## StudyTrack (mis à jour par l'app, le \(date))",
+            "## Polymestre (mis à jour par l'app, le \(date))",
             "",
-            "Étudiant en première année à l'EPFL. StudyTrack range chaque cours en semaines : la théorie " +
+            "Étudiant en première année à l'EPFL. Polymestre range chaque cours en semaines : la théorie " +
             "(vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), " +
             "le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par " +
             "l'app est entre [StudyTrack] et [/StudyTrack].",
@@ -56,18 +56,18 @@ enum ClaudeProject {
             }
         }
         if !redo.isEmpty {
-            lines += ["", "File de reprise de StudyTrack (à refaire sur papier ; l'amorce reste dans l'app, à montrer seulement après une tentative) :"]
+            lines += ["", "File de reprise de Polymestre (à refaire sur papier ; l'amorce reste dans l'app, à montrer seulement après une tentative) :"]
             lines += redo.map { line in
                 "- \(line.code) \(line.exercise) · \(line.step)\(line.due.map { " · le \($0)" } ?? "") · \(line.why)"
             }
         }
         if let features {
-            lines += ["", "Après une série (post-mortem) ou un indice, StudyTrack lit le bloc de fin de ta réponse :",
+            lines += ["", "Après une série (post-mortem) ou un indice, Polymestre lit le bloc de fin de ta réponse :",
                       SeriesReview.instruction(features: features)]
             if features.hints { lines += [SeriesReview.hintInstruction] }
             lines += ["Si ta compétence tient aussi un carnet ailleurs (Notion…), fais-le comme d'habitude : le bloc est en plus."]
         }
-        lines += ["", "Ne modifie rien dans StudyTrack toi-même : propose, l'étudiant confirme dans l'app."]
+        lines += ["", "Ne modifie rien dans Polymestre toi-même : propose, l'étudiant confirme dans l'app."]
         return lines.joined(separator: "\n")
     }
 
@@ -340,7 +340,7 @@ enum ClaudeProject {
         if file.allowedTools.contains(where: { $0.hasPrefix("Write") || $0.hasPrefix("Edit") }) { parts.append("écriture limitée") }
         parts += connectors.map { String($0.dropFirst("claude.ai ".count)) }
         parts += file.mcpServers.keys.sorted().map { ClaudeTutor.toolLabel("mcp__" + $0) }
-        if studyTrack { parts.append("StudyTrack") }
+        if studyTrack { parts.append("Polymestre") }
         if localFiles { parts.append("fichiers du Mac") }
         return parts.joined(separator: ", ")
     }

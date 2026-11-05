@@ -546,11 +546,11 @@ struct FocusControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "StudyTrackFocusControl") {
             ControlWidgetButton(action: OpenURLIntent(WidgetLink.focus)) {
-                Label("Chrono StudyTrack", systemImage: "timer")
+                Label("Chrono Polymestre", systemImage: "timer")
             }
         }
-        .displayName("Chrono StudyTrack")
-        .description("Ouvre le chrono de StudyTrack.")
+        .displayName("Chrono Polymestre")
+        .description("Ouvre le chrono de Polymestre.")
     }
 }
 

@@ -26,7 +26,7 @@ final class ConnectionCenter {
         var label: String {
             switch self {
             case .moodle: return "Moodle"
-            case .groups: return "Compte StudyTrack"
+            case .groups: return "Compte Polymestre"
             case .ankiweb: return "AnkiWeb"
             }
         }

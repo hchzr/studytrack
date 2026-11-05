@@ -259,14 +259,14 @@ function instruction(features: Features): string {
   if (features.redo) {
     lines.push(`- « reprise numéro | type d'erreur et ce qui a coincé | le premier geste (jamais la solution) » pour les exercices à refaire sur papier : seulement des erreurs de méthode ou des lacunes de cours, que l'étudiant·e ne saurait pas refaire sans ses notes, ${features.redoPerSeries} au plus pour la série.`);
   }
-  lines.push("StudyTrack le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.");
+  lines.push("Polymestre le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.");
   return lines.join("\n");
 }
 
 /// La consigne des indices, pendant la résolution.
 const hintInstruction = "Quand tu donnes un indice sur un exercice, ajoute à la fin de ta réponse un bloc ```studytrack "
   + "d'une ligne, **avec le mot « indice »** : « indice 6.3 | 2 | l'indice en une phrase », niveau 1 (orientation), "
-  + "2 (outil), 3 (amorce) ou 4 (solution). StudyTrack le note pour la reprise et le post-mortem.";
+  + "2 (outil), 3 (amorce) ou 4 (solution). Polymestre le note pour la reprise et le post-mortem.";
 
 // MARK: La file de reprise
 

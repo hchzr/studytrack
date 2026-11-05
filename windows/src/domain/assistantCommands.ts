@@ -296,7 +296,7 @@ function applyOne(command: AssistantCommand, courses: Course[], now: Date): stri
     }
 
     default:
-      throw new Failure(`Commande inconnue « ${command.kind} ». Mets StudyTrack à jour.`);
+      throw new Failure(`Commande inconnue « ${command.kind} ». Mets Polymestre à jour.`);
   }
 }
 

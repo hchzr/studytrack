@@ -134,7 +134,7 @@ describe("Ordre des moteurs d'analyse", () => {
   });
   it("le service seul suffit", () => { expect(engines(true, false)).toEqual(["shared"]); });
   it("les libellés des moteurs", () => {
-    expect(SeriesEngineKind.label("shared")).toBe("IA StudyTrack");
+    expect(SeriesEngineKind.label("shared")).toBe("IA Polymestre");
     expect(SeriesEngineKind.label("onDevice")).toBe("IA sur l'appareil");
   });
 });

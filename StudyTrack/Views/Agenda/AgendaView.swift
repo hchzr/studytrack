@@ -864,7 +864,7 @@ struct AgendaView: View {
         if !app.calendar.hasAccess {
             let granted = await app.calendar.requestAccess()
             guard granted else {
-                syncMessage = "Accès au calendrier refusé. Autorise-le dans Réglages › StudyTrack."
+                syncMessage = "Accès au calendrier refusé. Autorise-le dans Réglages › Polymestre."
                 return
             }
         }

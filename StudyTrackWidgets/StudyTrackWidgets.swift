@@ -692,7 +692,7 @@ struct ImportActivityLine: View {
         HStack(spacing: 6) {
             switch state.phase {
             case .paused:
-                Text("En pause — rouvre StudyTrack pour finir l'import")
+                Text("En pause — rouvre Polymestre pour finir l'import")
                     .font(.caption.weight(.semibold))
             case .done:
                 Text("Ton semestre est prêt · \(state.coursesTotal) cours")

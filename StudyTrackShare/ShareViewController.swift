@@ -104,7 +104,7 @@ struct ShareResultView: View {
                 .font(.largeTitle)
                 .foregroundStyle(item == nil ? Color.orange : Color.green)
 
-            Text(item == nil ? "Rien à importer" : "Envoyé à StudyTrack")
+            Text(item == nil ? "Rien à importer" : "Envoyé à Polymestre")
                 .font(.headline)
 
             Text(message)
@@ -125,6 +125,6 @@ struct ShareResultView: View {
         guard let item else {
             return "Aucun PDF ni texte n'a pu être lu dans ce partage."
         }
-        return "\(item.displayName) t'attend dans StudyTrack. Ouvre l'app : la relecture de la série s'affichera, et rien ne sera créé avant que tu valides."
+        return "\(item.displayName) t'attend dans Polymestre. Ouvre l'app : la relecture de la série s'affichera, et rien ne sera créé avant que tu valides."
     }
 }

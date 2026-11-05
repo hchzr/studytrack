@@ -58,7 +58,7 @@ enum LocalMCPRPC {
             return reply([
                 "protocolVersion": protocols.contains(asked) ? asked : protocols[0],
                 "capabilities": ["tools": ["listChanged": false]],
-                "serverInfo": ["name": provider.serverName, "title": "StudyTrack (fichiers, Mac)", "version": "1.0.0"],
+                "serverInfo": ["name": provider.serverName, "title": "Polymestre (fichiers, Mac)", "version": "1.0.0"],
                 "instructions": provider.instructions,
             ])
         case "ping": return reply([String: Any]())
@@ -223,7 +223,7 @@ final class LocalMCPServer: @unchecked Sendable {
         let path = request.path.split(separator: "?").first.map(String.init) ?? request.path
         let last = path.split(separator: "/").last.map(String.init) ?? ""
         guard Self.constantTimeEqual(last, token) else {
-            return Self.http(401, ["error": "adresse incomplète : copie l'adresse complète depuis StudyTrack (Réglages › Claude)."])
+            return Self.http(401, ["error": "adresse incomplète : copie l'adresse complète depuis Polymestre (Réglages › Claude)."])
         }
         switch request.method {
         case "POST":

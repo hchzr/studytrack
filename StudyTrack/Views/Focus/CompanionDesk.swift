@@ -258,7 +258,7 @@ struct CompanionDesk: View {
     }
 
     private var footer: some View {
-        Text("Les photos et questions passent chiffrées par le relais de StudyTrack, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route.")
+        Text("Les photos et questions passent chiffrées par le relais de Polymestre, avec une clé tirée de ton compte iCloud ; rien n'est gardé en route.")
             .font(.caption2)
             .foregroundStyle(Carnet.inkTertiary)
             .multilineTextAlignment(.center)

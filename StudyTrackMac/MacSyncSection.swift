@@ -64,7 +64,7 @@ struct MacSupabaseSyncSection: View {
             } header: {
                 Text(ui: "Synchronisation Supabase")
             } footer: {
-                Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte StudyTrack pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut.")
+                Text(ui: "Envoie tes cours, séries, exercices et sessions à ton compte Polymestre pour les retrouver sur l'iPhone et sur Windows, en plus d'iCloud. Désactivée par défaut.")
             }
             .task(id: sync.isSignedIn) { await sync.refreshProviders() }
         }

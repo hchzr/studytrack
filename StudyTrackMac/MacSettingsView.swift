@@ -71,7 +71,7 @@ private struct GeneralSettings: View {
             SchoolSection()
             TimetableSettingsSection(settings: settings.shared)
             Section {
-                Toggle("Ouvrir StudyTrack à la connexion", isOn: Binding(
+                Toggle("Ouvrir Polymestre à la connexion", isOn: Binding(
                     get: { _ = settings.launchAtLoginRevision; return settings.launchAtLogin },
                     set: { settings.launchAtLogin = $0 }))
                 if let error = settings.launchAtLoginError {
@@ -116,7 +116,7 @@ private struct AboutSection: View {
             LabeledContent("Version", value: AppDistribution.versionLabel)
             if let update = updater.available {
                 HStack {
-                    Text("StudyTrack \(update.version) est disponible.")
+                    Text("Polymestre \(update.version) est disponible.")
                     Spacer()
                     Button("Télécharger") { updater.download() }
                 }
@@ -338,7 +338,7 @@ private struct StudySettingsPane: View {
                 Section {
                     Toggle("Verrou système (expérimental)", isOn: $settings.studySystemLock)
                         .disabled(!settings.studyBlocking)
-                        .help("Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance StudyTrack s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout.")
+                        .help("Éteint aussi Spotlight, ⌘Tab et Mission Control pendant un blocage, et relance Polymestre s'il est tué. Si un blocage se finit mal, « Rétablir les raccourcis du système » rallume tout.")
                     Toggle("Fermer les autres apps", isOn: $settings.studyCloseApps)
                         .disabled(!settings.studyBlocking)
                     Toggle("Poser les apps permises dans le bureau", isOn: $settings.studyPlaceApps)
@@ -472,7 +472,7 @@ private struct ClaudeSettingsPane: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.trailing)
                         }
-                        TextField("Serveur StudyTrack (https://…)", text: $settings.claudeStudyTrackMCP)
+                        TextField("Serveur Polymestre (https://…)", text: $settings.claudeStudyTrackMCP)
                         LabeledContent("Permis") {
                             Text(ClaudeProject.permissionSummary(file: file ?? ClaudeProject.File(),
                                                                  studyTrack: settings.claudeStudyTrackMCP.hasPrefix("https://")))

@@ -146,10 +146,10 @@ struct MusicNowPlayingCard: View {
                     .padding(.top, 16)
             } else if music.automationDenied {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("StudyTrack ne peut pas contrôler Music")
+                    Text("Polymestre ne peut pas contrôler Music")
                         .font(Carnet.serif(.title3, weight: .semibold))
                         .foregroundStyle(StudyPalette.ink)
-                    Text("Autorise StudyTrack à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation.")
+                    Text("Autorise Polymestre à piloter Music : Réglages Système › Confidentialité et sécurité › Automatisation.")
                         .font(.callout)
                         .foregroundStyle(StudyPalette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)

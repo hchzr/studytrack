@@ -363,7 +363,7 @@ export const TaskProvider = {
       case "notion":
         return "Créez une intégration Notion, partagez-lui une base de données, puis collez le jeton et l'ID de la base.";
       case "webhook":
-        return "StudyTrack envoie un JSON à cette URL (compatible Shortcuts, Home Assistant, Zapier, n8n).";
+        return "Polymestre envoie un JSON à cette URL (compatible Shortcuts, Home Assistant, Zapier, n8n).";
       case "googleTasks":
         return "Identifiant client, secret et refresh token OAuth : l'app renouvelle ensuite l'accès toute seule.";
       case "tickTick":

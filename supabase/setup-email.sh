@@ -64,12 +64,12 @@ fi
 # 2. Supabase : le serveur d'envoi, l'expéditeur, et le message de confirmation avec le code.
 read -r -d '' TEMPLATE <<'HTML' || true
 <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#1c1c1e">
-  <h2 style="font-weight:600;margin:0 0 12px">Bienvenue sur StudyTrack</h2>
+  <h2 style="font-weight:600;margin:0 0 12px">Bienvenue sur Polymestre</h2>
   <p style="margin:0 0 16px">Ton code de confirmation :</p>
   <p style="font-size:32px;letter-spacing:8px;font-weight:700;margin:0 0 16px;font-family:SFMono-Regular,Consolas,monospace">{{ .Token }}</p>
   <p style="margin:0 0 16px">Tape-le dans l'app. Il est valable une heure.</p>
   <p style="margin:0 0 24px;color:#6e6e73;font-size:13px">Ou confirme d'un clic : <a href="{{ .ConfirmationURL }}">confirmer mon adresse</a>.</p>
-  <p style="margin:0;color:#8e8e93;font-size:12px">Tu n'as pas créé de compte StudyTrack ? Ignore ce message.</p>
+  <p style="margin:0;color:#8e8e93;font-size:12px">Tu n'as pas créé de compte Polymestre ? Ignore ce message.</p>
 </div>
 HTML
 
@@ -85,11 +85,11 @@ body="$(jq -n \
     smtp_user: "resend",
     smtp_pass: $pass,
     smtp_admin_email: $admin,
-    smtp_sender_name: "StudyTrack",
+    smtp_sender_name: "Polymestre",
     smtp_max_frequency: 60,
     rate_limit_email_sent: 60,
     mailer_otp_exp: 3600,
-    mailer_subjects_confirmation: "Ton code StudyTrack",
+    mailer_subjects_confirmation: "Ton code Polymestre",
     mailer_templates_confirmation_content: $tpl
   }')"
 

@@ -23,7 +23,7 @@ struct DiagnosticsView: View {
 
     private var liveTitle: String {
         guard StudyActivityController.isEnabledBySystem else {
-            return "Les activités en direct sont refusées pour StudyTrack (Réglages du système)."
+            return "Les activités en direct sont refusées pour Polymestre (Réglages du système)."
         }
         let total = liveCount + examCount
         if total == 0 { return "Aucune activité en cours — l'îlot est vide, c'est normal." }
@@ -110,7 +110,7 @@ struct DiagnosticsView: View {
             } header: {
                 Text("Îlot et écran verrouillé")
             } footer: {
-                Text("« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › StudyTrack › Activités en direct.")
+                Text("« Activité d'essai » doit faire apparaître un chrono dans l'îlot et sur l'écran verrouillé en quelques secondes. « Jour d'examen » y met un compte à rebours. Si le compteur d'activités reste à zéro, le système refuse l'activité — regarde alors Réglages › Polymestre › Activités en direct.")
             }
 
             Section {

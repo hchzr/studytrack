@@ -263,7 +263,7 @@ enum ClaudeTutor {
         if name == "Read" { return "lecture" }
         if name.hasPrefix("mcp__") {
             let server = name.dropFirst(5).split(separator: "_").first.map(String.init) ?? name
-            return server == "studytrack" ? "StudyTrack" : server.prefix(1).uppercased() + server.dropFirst()
+            return server == "studytrack" ? "Polymestre" : server.prefix(1).uppercased() + server.dropFirst()
         }
         return name
     }
@@ -346,7 +346,7 @@ enum ClaudeTutor {
 
     private static func systemPromptBody(mode: Mode) -> String {
         let common = """
-        Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app StudyTrack, en mode étude. \
+        Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app Polymestre, en mode étude. \
         Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars \
         ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. \
         Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. \
@@ -453,7 +453,7 @@ enum ClaudeTutor {
     static let verdictInstruction = """
     Termine par un bloc de code ```\(verdictFence) avec une ligne par exercice corrigé, au format \
     « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). \
-    StudyTrack le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.
+    Polymestre le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.
     """
 
     /// « Post-mortem de la série » (quand la série est finie).

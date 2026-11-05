@@ -447,7 +447,7 @@ enum ClaudeMeasure {
         let studied = studiedSeconds(context, now: now)
         if needed > 0, studiedKnown(context, now: now), studied < needed {
             return Block(rule: .studyFirst, until: nil,
-                         message: "D'abord étudier : encore \(duration(needed - studied)) dans StudyTrack (\(duration(studied)) sur \(duration(needed)) aujourd'hui).",
+                         message: "D'abord étudier : encore \(duration(needed - studied)) dans Polymestre (\(duration(studied)) sur \(duration(needed)) aujourd'hui).",
                          passable: true)
         }
         if let streak = rules.streak, let run = use.streak, run.end - run.start >= Double(streak) * 60_000 {

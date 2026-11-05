@@ -393,7 +393,7 @@ struct ProfileView: View {
                 Label("Importer des cours (JSON, CSV)", systemImage: "square.and.arrow.down")
             }
         } footer: {
-            Text("Si ton horaire est déjà abonné dans le calendrier de l'iPhone, StudyTrack peut le lire.")
+            Text("Si ton horaire est déjà abonné dans le calendrier de l'iPhone, Polymestre peut le lire.")
         }
     }
 
@@ -440,7 +440,7 @@ struct ProfileView: View {
         Task {
             let granted = await app.notifications.requestAuthorization()
             if !granted {
-                message = "Notifications refusées. Active-les dans Réglages › StudyTrack."
+                message = "Notifications refusées. Active-les dans Réglages › Polymestre."
             }
         }
     }
@@ -464,7 +464,7 @@ struct ProfileView: View {
                 Task {
                     let granted = await app.notifications.requestAuthorization()
                     guard granted else {
-                        message = "Notifications refusées. Active-les dans Réglages › StudyTrack."
+                        message = "Notifications refusées. Active-les dans Réglages › Polymestre."
                         return
                     }
                     await reschedule(settings)

@@ -664,7 +664,7 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
     { kind: "finished", error: null, contextTokens: 1002 }), "fin : taille du contexte");
   check(eq(ClaudeTutor.parse('{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","name":"mcp__notion__notion-search"}}}'),
     { kind: "tool", name: "mcp__notion__notion-search" }), "flux : un outil");
-  check(ClaudeTutor.toolLabel("mcp__notion__notion-search") === "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") === "StudyTrack",
+  check(ClaudeTutor.toolLabel("mcp__notion__notion-search") === "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") === "Polymestre",
     "outil : nom lisible");
   const jsonl = [
     '{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\\n<command-name>/epfl-serie</command-name>\\n<command-args>On attaque.\\n\\n[StudyTrack]\\nCours : X\\n[/StudyTrack]\\n\\nPar où ?</command-args>"}}',
@@ -710,7 +710,7 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
     const mcp = JSON.parse(ClaudeProject.mcpConfig(file, "https://x.supabase.co/functions/v1/mcp/T")) as Record<string, unknown>;
     const serverNames = Object.keys(mcp["mcpServers"] as Record<string, unknown>);
     check(serverNames.length === 3 && ["notion", "todoist", "studytrack"].every((name) => serverNames.includes(name)),
-      "MCP : les serveurs du fichier et StudyTrack");
+      "MCP : les serveurs du fichier et Polymestre");
     check(!ClaudeProject.mcpConfig(file, "http://pas-sur").includes("studytrack"), "MCP : une adresse non chiffrée est refusée");
     const withLocal = JSON.parse(ClaudeProject.mcpConfig(file, null, "http://127.0.0.1:47821/TOKEN")) as Record<string, unknown>;
     const localEntry = (withLocal["mcpServers"] as Record<string, Record<string, unknown>>)["studytrack-files"];
@@ -721,7 +721,7 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
     check(ClaudeProject.allowedTools(file, false, [], true).includes("mcp__studytrack-files")
       && !ClaudeProject.allowedTools(file, false).includes("mcp__studytrack-files"), "MCP : ses outils ne sont permis que s'il tourne");
     check(ClaudeProject.permissionSummary(file, false, [], true).includes("fichiers du Mac"), "MCP : les permis le disent");
-    check(ClaudeProject.permissionSummary(file, true) === "lecture, compétences, écriture limitée, Notion, Todoist, StudyTrack",
+    check(ClaudeProject.permissionSummary(file, true) === "lecture, compétences, écriture limitée, Notion, Todoist, Polymestre",
       "permissions en clair");
     check(ClaudeProject.expand(file.commands[1].prompt, { code: "MATH-101", course: "analyse", seriesNumber: "4" }) === "post-mortem série 4 analyse",
       "commande : série et cours remplis");

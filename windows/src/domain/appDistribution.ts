@@ -63,8 +63,8 @@ export const FeedbackMail = {
   maxBody: 6000,
 
   url(to: string, version: string, device: string, entries: LogEntry[]): URL | null {
-    const subject = `StudyTrack ${version} — retour`;
-    let body = `Ce qui s'est passé (et ce que tu attendais) :\n\n\n\n— StudyTrack ${version} · ${device}\n`;
+    const subject = `Polymestre ${version} — retour`;
+    let body = `Ce qui s'est passé (et ce que tu attendais) :\n\n\n\n— Polymestre ${version} · ${device}\n`;
     if (entries.length > 0) {
       const room = FeedbackMail.maxBody - characters(body).length - 20;
       // La fin du journal : les dernières lignes sont celles qui expliquent.

@@ -166,7 +166,7 @@ export function SyncAccount() {
   return (
     <div className="account">
       <div className="account-head">
-        <h3 className="serif">Ton compte StudyTrack</h3>
+        <h3 className="serif">Ton compte Polymestre</h3>
         <p className="settings-hint">
           Pour retrouver tes cours, séries et sessions sur ton iPhone, ton Mac ou un autre PC.
           Tout est chiffré sur tes appareils : le serveur ne peut rien lire.

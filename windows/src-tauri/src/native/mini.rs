@@ -71,7 +71,7 @@ fn ensure(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         return Ok(window);
     }
     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?window=mini".into()))
-        .title("Chrono StudyTrack")
+        .title("Chrono Polymestre")
         .inner_size(WIDTH, HEIGHT)
         .decorations(false)
         .resizable(false)

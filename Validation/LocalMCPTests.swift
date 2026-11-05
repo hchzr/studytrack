@@ -198,9 +198,9 @@ func desktopBridgeResults() -> [(Bool, String)] {
         // Rien n'écoute : un message clair, pas un blocage.
         let down = await Task.detached { run([entry], env: env, input: [lines[3], lines[2]], expecting: 2, timeout: 20) }.value
         let callError = down.first { $0["id"] as? Int == 3 }?["result"] as? [String: Any]
-        note(callError?["isError"] as? Bool == true && ((callError?["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("StudyTrack") == true,
+        note(callError?["isError"] as? Bool == true && ((callError?["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("Polymestre") == true,
              "pont : serveur éteint → un outil répond par un message clair")
-        note(((down.first { $0["id"] as? Int == 2 }?["error"] as? [String: Any])?["message"] as? String)?.contains("StudyTrack") == true,
+        note(((down.first { $0["id"] as? Int == 2 }?["error"] as? [String: Any])?["message"] as? String)?.contains("Polymestre") == true,
              "pont : serveur éteint → une erreur JSON-RPC lisible")
         _ = port
         semaphore.signal()

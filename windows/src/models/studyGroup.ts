@@ -85,7 +85,7 @@ export class StudyGroup {
    * le lien seul ne fonctionne pas partout).
    */
   get inviteMessage(): string {
-    let text = `Rejoins « ${this.name} » sur StudyTrack avec le code ${this.inviteCode}.`;
+    let text = `Rejoins « ${this.name} » sur Polymestre avec le code ${this.inviteCode}.`;
     if (this.subjectCodes.length !== 0) {
       text += `\nMatières : ${this.subjectCodes.join(", ")}.`;
     }

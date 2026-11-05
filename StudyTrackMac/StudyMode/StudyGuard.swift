@@ -134,7 +134,7 @@ private final class Watcher {
         guard others.isEmpty else { return }
         if let relaunchedAt, Date().timeIntervalSince(relaunchedAt) < 6 { return }
         relaunchedAt = Date()
-        StudyGuard.log.notice("gardien : StudyTrack fermé sous verrou, relancé")
+        StudyGuard.log.notice("gardien : Polymestre fermé sous verrou, relancé")
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         // Le gardien porte le même identifiant : sans ça, le système croirait

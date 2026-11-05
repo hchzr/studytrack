@@ -160,7 +160,7 @@ struct OnboardingView: View {
     }
 
     private var titles: [String] {
-        ["Bienvenue sur StudyTrack", "Tes cours", "Tes comptes", "Le contenu de tes cours"]
+        ["Bienvenue sur Polymestre", "Tes cours", "Tes comptes", "Le contenu de tes cours"]
     }
 
     private var subtitles: [String] {

@@ -97,7 +97,7 @@ struct NotebookLMPanel: View {
             case .unknown, .checking:
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Je regarde si tu es connecté·e à Google…").font(.callout).foregroundStyle(Carnet.inkSecondary) }
             case .signedOut:
-                Text("StudyTrack crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google.")
+                Text("Polymestre crée le carnet, y dépose ta fiche et rapporte le podcast. Ton mot de passe reste chez Google.")
                     .font(.callout).foregroundStyle(Carnet.inkSecondary).fixedSize(horizontal: false, vertical: true)
                 Button { signingIn = true } label: { Label("Se connecter à Google", systemImage: "person.crop.circle.badge.checkmark") }.buttonStyle(.ink)
             case .ready:

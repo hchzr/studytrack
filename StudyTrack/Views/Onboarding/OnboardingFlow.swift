@@ -144,7 +144,7 @@ private struct WelcomeScreen: View {
                 .animation(.smooth(duration: 0.8), value: appeared)
             Spacer(minLength: 16)
             VStack(alignment: .leading, spacing: 10) {
-                Text("StudyTrack")
+                Text("Polymestre")
                     .font(Carnet.serif(.largeTitle, weight: .semibold))
                     .foregroundStyle(Carnet.ink)
                 Text("Connecte ton compte EPFL : l'app lit tes cours Moodle et range chaque série, vidéo et échéance dans sa semaine.")
@@ -360,7 +360,7 @@ private struct ConnectionsScreen: View {
                 .rise(appeared, delay: 0.12)
 
                 VStack(spacing: 10) {
-                    row(icon: "person.2", title: "Compte StudyTrack",
+                    row(icon: "person.2", title: "Compte Polymestre",
                         detail: "Pour étudier en groupe",
                         connected: app.social.isSignedIn) { sheet = .groups }
                 }
@@ -376,7 +376,7 @@ private struct ConnectionsScreen: View {
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom) {
             Button(action: proceed) {
-                Label("Ouvrir StudyTrack", systemImage: "arrow.right")
+                Label("Ouvrir Polymestre", systemImage: "arrow.right")
             }
             .buttonStyle(.carnetPrimaryWide)
             .padding(.horizontal, 20)

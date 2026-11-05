@@ -22,7 +22,7 @@ export async function openWebURL(url: string): Promise<void> {
  * Ouvre une adresse **dans l'app** (une fenêtre StudyTrack, au-dessus du mode étude) : rien
  * n'oblige à passer par le navigateur. Hors de l'app, un onglet du navigateur.
  */
-export async function openInApp(url: string, title = "StudyTrack"): Promise<void> {
+export async function openInApp(url: string, title = "Polymestre"): Promise<void> {
   if (isTauri()) {
     try {
       const { invoke } = await import("@tauri-apps/api/core");

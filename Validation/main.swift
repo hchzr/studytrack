@@ -5630,7 +5630,7 @@ do {
     let stale = CM.Context(studyMode: nil, classes: [], studied: CM.Studied(day: "2026-10-26", seconds: 0, accumulated: 0, runningSince: nil))
     check(CM.evaluate(.projets, headless: false, policy: policy(.standard, stale), use: none, passes: [], now: at(15)).allow
           && CM.evaluate(.projets, headless: false, policy: policy(.standard, .empty), use: none, passes: [], now: at(15)).allow,
-          "mesure : temps étudié inconnu (StudyTrack fermé) → « d'abord étudier » ne bloque pas")
+          "mesure : temps étudié inconnu (Polymestre fermé) → « d'abord étudier » ne bloque pas")
     check(CM.evaluate(.projets, headless: false, policy: policy(), use: none, passes: [], now: at(23, 50)).rule == .curfew
           && CM.evaluate(.etude, headless: false, policy: policy(), use: none, passes: [], now: at(23, 50)).allow,
           "mesure : couvre-feu pour les projets, pas pour l'étude")
@@ -5821,7 +5821,7 @@ do {
     check(!StudyMode.shouldBlock(bundleID: "com.goodnotesapp.x", isRegular: true, own: "me", allowed: apps), "GoodNotes permis")
     check(StudyMode.shouldBlock(bundleID: "com.apple.Safari", isRegular: true, own: "me", allowed: apps), "Safari bloqué (le navigateur du mode étude le remplace)")
     check(StudyMode.shouldBlock(bundleID: "com.spotify.client", isRegular: true, own: "me", allowed: apps), "Spotify bloqué")
-    check(!StudyMode.shouldBlock(bundleID: "me", isRegular: true, own: "me", allowed: apps), "StudyTrack jamais bloqué")
+    check(!StudyMode.shouldBlock(bundleID: "me", isRegular: true, own: "me", allowed: apps), "Polymestre jamais bloqué")
     check(!StudyMode.shouldBlock(bundleID: "com.apple.loginwindow", isRegular: true, own: "me", allowed: apps), "le système jamais bloqué")
     check(!StudyMode.shouldBlock(bundleID: "com.example.agent", isRegular: false, own: "me", allowed: apps), "un agent sans fenêtre n'est pas bloqué")
     check(!StudyMode.shouldBlock(bundleID: "com.anthropic.claudefordesktop.helper", isRegular: true, own: "me", allowed: apps),
@@ -6060,7 +6060,7 @@ do {
           == .finished(error: nil, contextTokens: 1002), "fin : taille du contexte")
     check(ClaudeTutor.parse(line: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","name":"mcp__notion__notion-search"}}}"#)
           == .tool("mcp__notion__notion-search"), "flux : un outil")
-    check(ClaudeTutor.toolLabel("mcp__notion__notion-search") == "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") == "StudyTrack",
+    check(ClaudeTutor.toolLabel("mcp__notion__notion-search") == "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") == "Polymestre",
           "outil : nom lisible")
     let jsonl = [
         #"{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\n<command-name>/epfl-serie</command-name>\n<command-args>On attaque.\n\n[StudyTrack]\nCours : X\n[/StudyTrack]\n\nPar où ?</command-args>"}}"#,
@@ -6102,7 +6102,7 @@ do {
                                                                            "Write(./memoire/**)", "Edit(./memoire/**)"], "fichier : règles permises")
         let mcp = ClaudeProject.mcpConfig(file: file, studyTrackURL: "https://x.supabase.co/functions/v1/mcp/T")
         if let object = try? JSONSerialization.jsonObject(with: Data(mcp.utf8)) as? [String: Any], let servers = object["mcpServers"] as? [String: Any] {
-            check(Set(servers.keys) == ["notion", "todoist", "studytrack"], "MCP : les serveurs du fichier et StudyTrack")
+            check(Set(servers.keys) == ["notion", "todoist", "studytrack"], "MCP : les serveurs du fichier et Polymestre")
         } else { check(false, "MCP : JSON lisible") }
         check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: "http://pas-sur").contains("studytrack"), "MCP : une adresse non chiffrée est refusée")
         let withLocal = ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: "http://127.0.0.1:47821/TOKEN")
@@ -6115,7 +6115,7 @@ do {
         check(ClaudeProject.allowedTools(file: file, studyTrack: false, localFiles: true).contains("mcp__studytrack-files")
               && !ClaudeProject.allowedTools(file: file, studyTrack: false).contains("mcp__studytrack-files"), "MCP : ses outils ne sont permis que s'il tourne")
         check(ClaudeProject.permissionSummary(file: file, studyTrack: false, localFiles: true).contains("fichiers du Mac"), "MCP : les permis le disent")
-        check(ClaudeProject.permissionSummary(file: file, studyTrack: true) == "lecture, compétences, écriture limitée, Notion, Todoist, StudyTrack",
+        check(ClaudeProject.permissionSummary(file: file, studyTrack: true) == "lecture, compétences, écriture limitée, Notion, Todoist, Polymestre",
               "permissions en clair")
         check(ClaudeProject.expand(file.commands[1].prompt, .init(code: "MATH-101", course: "analyse", seriesNumber: "4")) == "post-mortem série 4 analyse",
               "commande : série et cours remplis")

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "StudyTrack",
+  "productName": "Polymestre",
   "version": "2.1.0",
   "identifier": "com.hczr.studytrack.windows",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "StudyTrack",
+        "title": "Polymestre",
         "width": 1200,
         "height": 800,
         "minWidth": 900,

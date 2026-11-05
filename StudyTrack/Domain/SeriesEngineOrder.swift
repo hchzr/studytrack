@@ -14,7 +14,7 @@ enum SeriesEngineKind: String, Equatable, CaseIterable {
 
     var label: String {
         switch self {
-        case .shared: return "IA StudyTrack"
+        case .shared: return "IA Polymestre"
         case .onDevice: return "IA sur l'appareil"
         }
     }

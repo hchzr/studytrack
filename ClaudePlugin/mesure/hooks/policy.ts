@@ -335,7 +335,7 @@ function firstBlock(category: Category, rules: Rules, context: StudyContext, use
   const studied = studiedSeconds(context, now)
   if (needed > 0 && studiedKnown(context, now) && studied < needed) {
     return { rule: 'studyFirst', until: null, passable: true,
-             message: `D'abord étudier : encore ${duration((needed - studied) * 1000)} dans StudyTrack (${duration(studied * 1000)} sur ${duration(needed * 1000)} aujourd'hui).` }
+             message: `D'abord étudier : encore ${duration((needed - studied) * 1000)} dans Polymestre (${duration(studied * 1000)} sur ${duration(needed * 1000)} aujourd'hui).` }
   }
   if (rules.streak != null && use.streak && use.streak.end - use.streak.start >= rules.streak * MINUTE) {
     const until = use.streak.end + rules.pause * MINUTE

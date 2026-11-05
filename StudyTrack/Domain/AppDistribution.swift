@@ -40,8 +40,8 @@ enum FeedbackMail {
     static let maxBody = 6000
 
     static func url(to address: String, version: String, device: String, entries: [LogEntry]) -> URL? {
-        let subject = "StudyTrack \(version) — retour"
-        var body = "Ce qui s'est passé (et ce que tu attendais) :\n\n\n\n— StudyTrack \(version) · \(device)\n"
+        let subject = "Polymestre \(version) — retour"
+        var body = "Ce qui s'est passé (et ce que tu attendais) :\n\n\n\n— Polymestre \(version) · \(device)\n"
         if !entries.isEmpty {
             let room = maxBody - body.count - 20
             // La fin du journal : les dernières lignes sont celles qui expliquent.

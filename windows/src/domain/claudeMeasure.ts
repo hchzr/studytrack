@@ -412,7 +412,7 @@ function firstBlock(category: Category, rules: Rules, context: Context, use: Usa
   const studied = studiedSeconds(context, now);
   if (needed > 0 && studiedKnown(context, now) && studied < needed) {
     return { rule: "studyFirst", until: null,
-      message: `D'abord étudier : encore ${duration(needed - studied)} dans StudyTrack (${duration(studied)} sur ${duration(needed)} aujourd'hui).`,
+      message: `D'abord étudier : encore ${duration(needed - studied)} dans Polymestre (${duration(studied)} sur ${duration(needed)} aujourd'hui).`,
       passable: true };
   }
   if (rules.streak !== null && use.streak && use.streak.end - use.streak.start >= rules.streak * 60_000) {

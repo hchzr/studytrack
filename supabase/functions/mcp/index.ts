@@ -31,7 +31,7 @@ declare const Deno: {
   serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
-const SERVER_INFO = { name: "studytrack", title: "StudyTrack", version: "3.0.0" };
+const SERVER_INFO = { name: "studytrack", title: "Polymestre", version: "3.0.0" };
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 // L'instantané porte maintenant les notes et les fiches : de la marge.
 const MAX_BODY = 8 * 1024 * 1024;
@@ -41,7 +41,7 @@ const MAX_FILE = 10 * 1024 * 1024;
 const BUCKET = "assistant-files";
 const SHA = /^[0-9a-f]{64}$/;
 
-const INSTRUCTIONS = `StudyTrack suit les études d'un·e étudiant·e de l'EPFL : cours, séries d'exercices (avec sous-questions et correction vert/orange/rouge), théorie (vidéos, sections de polycopié), évaluations et temps de travail.
+const INSTRUCTIONS = `Polymestre suit les études d'un·e étudiant·e de l'EPFL : cours, séries d'exercices (avec sous-questions et correction vert/orange/rouge), théorie (vidéos, sections de polycopié), évaluations et temps de travail.
 
 - Commence par get_overview. Pour agir sur un exercice précis, lis d'abord get_course : il donne les identifiants (id) à passer aux outils d'écriture.
 - Les fichiers : list_files donne les énoncés et corrigés (PDF), les notes de cours, la fiche de révision, les corrigés rédigés et les fichiers ajoutés ; read_file(id) les rend (texte, ou PDF/image à ouvrir avec Read). Un fichier « pas disponible » n'est pas encore passé par l'app : la raison est donnée.
@@ -556,11 +556,11 @@ function fileIndex(data: any): FileEntry[] {
   return entries;
 }
 
-const NOT_SENT = "pas encore envoyé par l'app : ouvre StudyTrack sur le téléphone (il envoie les fichiers à l'ouverture), puis réessaie.";
+const NOT_SENT = "pas encore envoyé par l'app : ouvre Polymestre sur le téléphone (il envoie les fichiers à l'ouverture), puis réessaie.";
 
 function unavailableReason(data: any, entry: FileEntry): string {
   if (entry.skipped) return entry.skipped;
-  return data.sharing?.files === false ? "l'envoi des fichiers est désactivé dans StudyTrack (Profil › Assistant IA › Fichiers et notes)." : NOT_SENT;
+  return data.sharing?.files === false ? "l'envoi des fichiers est désactivé dans Polymestre (Profil › Assistant IA › Fichiers et notes)." : NOT_SENT;
 }
 
 function describeFile(entry: FileEntry, stored: Map<string, number> | null, data: any) {
@@ -587,7 +587,7 @@ function listFiles(data: any, stored: Map<string, number>, args: any) {
     total: files.length,
     disponibles: files.filter((f) => f.disponible).length,
     avis: !files.length && data.sharing?.files === false
-      ? "L'envoi des fichiers et des notes est désactivé : StudyTrack (Profil › Assistant IA › Fichiers et notes) l'active."
+      ? "L'envoi des fichiers et des notes est désactivé : Polymestre (Profil › Assistant IA › Fichiers et notes) l'active."
       : undefined,
     fichiers: files,
   };
@@ -852,7 +852,7 @@ async function callTool(hash: string, name: string, args: any): Promise<unknown>
     });
   }
   if (!link?.snapshot) {
-    return textResult("Aucune donnée pour l'instant : ouvre StudyTrack sur le téléphone (Profil › Assistant IA) pour synchroniser, puis réessaie.", true);
+    return textResult("Aucune donnée pour l'instant : ouvre Polymestre sur le téléphone (Profil › Assistant IA) pour synchroniser, puis réessaie.", true);
   }
   const data = link.snapshot;
   try {
@@ -877,7 +877,7 @@ async function callTool(hash: string, name: string, args: any): Promise<unknown>
       body: JSON.stringify({ token_hash: hash, kind: write.kind, payload: write.payload, summary: write.summary }),
     });
     await saveSnapshot(hash, data, false);
-    return textResult(`Enregistré : ${write.summary}. StudyTrack l'appliquera à sa prochaine ouverture (généralement dans la minute si l'app est ouverte) ; la lecture en tient déjà compte.`);
+    return textResult(`Enregistré : ${write.summary}. Polymestre l'appliquera à sa prochaine ouverture (généralement dans la minute si l'app est ouverte) ; la lecture en tient déjà compte.`);
   } catch (error) {
     if (error instanceof UserError) return textResult(error.message, true);
     throw error;
@@ -1006,7 +1006,7 @@ Deno.serve(async (request) => {
   const action = rest[1] ?? "";
 
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) {
-    return json({ error: "Adresse incomplète : copie l'adresse complète depuis StudyTrack (Profil › Assistant IA)." }, 401);
+    return json({ error: "Adresse incomplète : copie l'adresse complète depuis Polymestre (Profil › Assistant IA)." }, 401);
   }
   const hash = await sha256(token);
 

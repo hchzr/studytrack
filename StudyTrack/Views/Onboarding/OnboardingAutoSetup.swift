@@ -378,7 +378,7 @@ final class OnboardingAutoSetup {
     }
 
     private func notifyPaused() {
-        post("Import en pause", "iOS a mis StudyTrack en pause. Rouvre l'app : l'import reprend là où il s'est arrêté.")
+        post("Import en pause", "iOS a mis Polymestre en pause. Rouvre l'app : l'import reprend là où il s'est arrêté.")
     }
 
     private func post(_ title: String, _ body: String) {

@@ -50,7 +50,7 @@ enum StudyActivityController {
         publishedTitle = state.title
         publishedSubtitle = state.subtitle
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            lastError = "Les Live Activities sont désactivées pour StudyTrack."
+            lastError = "Les Live Activities sont désactivées pour Polymestre."
             AppLog.record(.warning, "îlot", "Live Activities désactivées dans les réglages")
             return
         }

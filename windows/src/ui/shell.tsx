@@ -144,7 +144,7 @@ export function Shell() {
     <div className="shell">
       <nav className="sidebar" aria-label="Navigation">
         <div className="sidebar-scroll">
-          <div className="sidebar-brand serif">StudyTrack</div>
+          <div className="sidebar-brand serif">Polymestre</div>
           <div className="sidebar-group">
             {TABS.map((t) => (
               <SidebarRow key={t.kind} icon={t.icon} label={t.label} active={activeKey === t.kind}

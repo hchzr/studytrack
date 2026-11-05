@@ -216,7 +216,7 @@ function GroupPage({ group, back }: { group: Group; back: () => void }) {
       <PageHeader title={group.name} subtitle={group.courses.join(" · ") || "Toutes matières"}
         actions={<>
           <Button icon="chevron.left" onClick={back}>Groupes</Button>
-          <Button icon="doc.on.doc" onClick={() => { void navigator.clipboard?.writeText(`Rejoins « ${group.name} » sur StudyTrack avec le code ${group.inviteCode}.`); setCopied(true); }}>
+          <Button icon="doc.on.doc" onClick={() => { void navigator.clipboard?.writeText(`Rejoins « ${group.name} » sur Polymestre avec le code ${group.inviteCode}.`); setCopied(true); }}>
             {copied ? "Copié" : `Code ${group.inviteCode}`}
           </Button>
         </>} />

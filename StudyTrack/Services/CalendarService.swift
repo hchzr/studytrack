@@ -21,7 +21,12 @@ struct CalendarEventSpec {
     var endsAt: Date
     var location: String = ""
     var notes: String = ""
-    var calendarTitle: String = "StudyTrack"
+    var calendarTitle: String = CalendarEventSpec.appCalendarTitle
+
+    /// Le calendrier où l'app écrit ses sessions planifiées.
+    static let appCalendarTitle = "Polymestre"
+    /// Son nom avant le changement de nom de l'app : renommé au premier usage.
+    static let legacyCalendarTitle = "StudyTrack"
 }
 
 /// Abstraction du calendrier (EventKit aujourd'hui, CalDAV demain).
@@ -96,8 +101,16 @@ final class EventKitCalendarService: CalendarService {
     }
 
     private func calendar(named title: String) -> EKCalendar? {
-        if let existing = store.calendars(for: .event).first(where: { $0.title == title }) {
+        let calendars = store.calendars(for: .event)
+        if let existing = calendars.first(where: { $0.title == title }) {
             return existing
+        }
+        // L'app s'appelait StudyTrack : son calendrier garde ses sessions, il change seulement de nom.
+        if title == CalendarEventSpec.appCalendarTitle,
+           let legacy = calendars.first(where: { $0.title == CalendarEventSpec.legacyCalendarTitle && $0.allowsContentModifications }) {
+            legacy.title = title
+            try? store.saveCalendar(legacy, commit: true)
+            return legacy
         }
         guard let source = store.defaultCalendarForNewEvents?.source else {
             return store.defaultCalendarForNewEvents
