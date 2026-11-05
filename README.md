@@ -732,8 +732,11 @@ numéro pour annoncer une mise à jour).
   du Mac avec `-initCloudKitSchema` (tout le schéma dans Development), puis console
   CloudKit › Deploy Schema Changes.
 - **Retours et site** : `FEEDBACK_EMAIL` et `SITE_HOST` (xcconfig). Le site
-  (dépôt `studytrack-site`) porte la confidentialité, `mac.html` et
-  `mac/latest.json`, lu par le Mac une fois par jour (`MacUpdater`).
+  (dépôt `studytrack-site`, servi sur **polymestre.ch**) porte la confidentialité,
+  `mac.html` et `mac/latest.json`, lu par le Mac une fois par jour (`MacUpdater`).
+  L'ancienne adresse `studytrack.hczr.ch` doit **rester une redirection 301**
+  vers `polymestre.ch` (règle Cloudflare, chemin conservé) : les Mac installés
+  avant le changement lisent encore `studytrack.hczr.ch/mac/latest.json`.
 - Une build TestFlight **expire au bout de 90 jours** : en refaire une à
   mi-semestre.
 

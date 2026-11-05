@@ -48,7 +48,7 @@ TIMER_RELAY_HOST = studytrack-relay.apnsprobe.workers.dev
 //  « https:// ». Vides = pas de bouton, pas de recherche de mise à jour.
 // ─────────────────────────────────────────────────────────────────────────────
 FEEDBACK_EMAIL = studytrack@hczr.ch
-SITE_HOST = studytrack.hczr.ch
+SITE_HOST = polymestre.ch
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Temps d'écran (blocage de l'iPhone pendant le mode étude, FamilyControls).
