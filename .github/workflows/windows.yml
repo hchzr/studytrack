@@ -3,9 +3,9 @@ name: Windows
 on:
   push:
     branches: [main, windows-port]
-    paths: ["windows/**", "StudyTrack/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
+    paths: ["windows/**", "Polymestre/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
   pull_request:
-    paths: ["windows/**", "StudyTrack/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
+    paths: ["windows/**", "Polymestre/Models/**", "supabase/migrations/**", ".github/workflows/windows.yml"]
   workflow_dispatch:
 
 jobs:
@@ -54,13 +54,13 @@ jobs:
         run: ./scripts/package-msix.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: studytrack-windows
+          name: polymestre-windows
           path: |
             windows/src-tauri/target/release/bundle/msi/*.msi
             windows/src-tauri/target/release/bundle/nsis/*.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: studytrack-msix
+          name: polymestre-msix
           path: |
             windows/src-tauri/target/release/bundle/msix/*.msix
             windows/src-tauri/target/release/bundle/msix/layout/
