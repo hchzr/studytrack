@@ -19,8 +19,8 @@ l'ancien : réinstaller StudyTrack rend tout tel quel. Code : `StudyKit/Identity
    - **MusicKit** (onglet App Services) sur `ch.polymestre.app` et `ch.polymestre.mac` : sans lui,
      Apple Music ne répond pas ;
    - Sign in with Apple sur `ch.polymestre.app` : **groupé avec `com.hczr.studytrack.app`** ;
-   - **Family Controls (Distribution)** à redemander pour `ch.polymestre.app` et `.lock`. En
-     attendant : `POLYMESTRE_SCREEN_TIME = NO` dans `Support/Supabase.xcconfig`.
+   - **Family Controls (Distribution)** : accordé au compte, à cocher sur `ch.polymestre.app` et `.lock`
+     (pas de nouvelle demande).
 4. **App Store Connect** : nouvelle app sur `ch.polymestre.app`, nouveau lien TestFlight.
 5. **Schéma iCloud** : une build Debug signée du Mac avec `-initCloudKitSchema`, puis *Deploy
    Schema Changes* vers Production dans la console CloudKit, pour `iCloud.ch.polymestre.app`.

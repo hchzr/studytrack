@@ -33,3 +33,6 @@ build-sim/
 
 # Distribution (./release.sh)
 build-release/
+
+# Build signée de contrôle (Mac)
+build-mac-signed/
