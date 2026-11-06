@@ -12,14 +12,13 @@ l'ancien : réinstaller StudyTrack rend tout tel quel. Code : `StudyKit/Identity
    la faire) : `git worktree add ../polymestre-bridge studytrack-bridge`, puis `./release.sh ios`
    là-bas, avec un numéro de build neuf. Chaque testeur l'ouvre une fois : ses réglages privés
    passent dans le groupe d'app. Sans cela, il garde données et connexion mais perd ces réglages.
-3. **Portail Apple** (developer.apple.com) :
-   - App IDs : `ch.polymestre.app` (+ `.widgets`, `.share`, `.lock`), `ch.polymestre.mac` (+ `.widgets`) ;
-   - iCloud : conteneur `iCloud.ch.polymestre.app`, et l'**ancien aussi** sur les deux apps ;
-   - App Groups : `group.ch.polymestre.app` + `group.com.studytracker.app` (iPhone),
-     `5GGDH5F3NG.ch.polymestre` + `5GGDH5F3NG.com.hczr.studytrack` (Mac) ;
-   - Sign in with Apple sur `ch.polymestre.app`, **groupé avec `com.hczr.studytrack.app` comme
-     App ID principal** : sinon les comptes existants reviennent comme de nouveaux comptes ;
-   - Push Notifications ;
+3. **Portail Apple** : une build signée (`-allowProvisioningUpdates`) a créé les App IDs
+   `ch.polymestre.app` (+ `.widgets`, `.share`, `.lock`) et `ch.polymestre.mac`, le conteneur
+   iCloud et les groupes (les widgets du Mac n'ont pas d'App ID, comme avant). L'API d'App Store
+   Connect refuse le reste, à faire sur developer.apple.com :
+   - **MusicKit** (onglet App Services) sur `ch.polymestre.app` et `ch.polymestre.mac` : sans lui,
+     Apple Music ne répond pas ;
+   - Sign in with Apple sur `ch.polymestre.app` : **groupé avec `com.hczr.studytrack.app`** ;
    - **Family Controls (Distribution)** à redemander pour `ch.polymestre.app` et `.lock`. En
      attendant : `POLYMESTRE_SCREEN_TIME = NO` dans `Support/Supabase.xcconfig`.
 4. **App Store Connect** : nouvelle app sur `ch.polymestre.app`, nouveau lien TestFlight.
