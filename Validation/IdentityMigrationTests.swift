@@ -58,6 +58,33 @@ private func coreDataStore(_ url: URL, readOnly: Bool) throws -> NSPersistentCon
 
 private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     func note(_ ok: Bool, _ label: String) { results.append((ok, label)) }
+
+    // 0. Les décisions entre appareils (IdentityMigrationPlan).
+    do {
+        typealias Plan = IdentityMigrationPlan
+        let now = Date(timeIntervalSince1970: 1_793_000_000)
+        let a = UUID(), b = UUID(), c = UUID()
+        let done = Plan.Lock(owner: "iPhone", startedAt: now.addingTimeInterval(-600), completedAt: now.addingTimeInterval(-500), ids: [a, b])
+        note(Plan.decide(legacyIDs: [a, b], lock: done, storeIDs: [], me: "Mac", now: now) == .nothing,
+             "migration (plan) : un appareil qui n'a rien de plus que le verrou ne copie rien")
+        if case .wait = Plan.decide(legacyIDs: [a, b, c], lock: done, storeIDs: [a], me: "Mac", now: now) {
+            note(true, "migration (plan) : ses objets propres attendent que la nouvelle base ait reçu ceux du verrou")
+        } else { note(false, "migration (plan) : ses objets propres attendent que la nouvelle base ait reçu ceux du verrou") }
+        note(Plan.decide(legacyIDs: [a, b, c], lock: done, storeIDs: [a, b], me: "Mac", now: now) == .copyOnly([c]),
+             "migration (plan) : une fois tout reçu, il ne copie que ce qu'il est seul à avoir")
+        let running = Plan.Lock(owner: "iPhone", startedAt: now.addingTimeInterval(-60), completedAt: nil, ids: [])
+        if case .wait = Plan.decide(legacyIDs: [a], lock: running, storeIDs: [], me: "Mac", now: now) {
+            note(!Plan.takeOver(running, me: "Mac", now: now), "migration (plan) : pendant qu'un autre copie, on attend")
+        } else { note(false, "migration (plan) : pendant qu'un autre copie, on attend") }
+        let abandoned = Plan.Lock(owner: "iPhone", startedAt: now.addingTimeInterval(-3_600), completedAt: nil, ids: [])
+        note(Plan.takeOver(abandoned, me: "Mac", now: now) && Plan.decide(legacyIDs: [a], lock: abandoned, storeIDs: [], me: "Mac", now: now) == .copyAll,
+             "migration (plan) : un verrou abandonné depuis une heure est repris")
+        note(Plan.decide(legacyIDs: [a], lock: running, storeIDs: [], me: "iPhone", now: now) == .copyAll,
+             "migration (plan) : l'appareil qui tenait le verrou reprend sa copie après un arrêt")
+        let many = Set((0..<2_500).map { _ in UUID() })
+        let blob = Plan.encode(many)
+        note(blob.count == 40_000 && Plan.decode(blob) == many, "migration (plan) : 2 500 identifiants tiennent en 40 Ko et se relisent à l'identique")
+    }
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("studytrack-migration-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -185,6 +212,19 @@ private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     note(try parentID(lone) == rightParent, "migration : une copie sans parent ne fait pas perdre le parent de l'autre")
     note(try parentID(stray) == rightParent,
          "migration : deux parents différents → celui du même exercice est gardé")
+    // 6. Copie limitée (appareil qui n'a pas le verrou) : seulement ses objets, reliés à ceux déjà là.
+    let limited = try coreDataStore(dir.appendingPathComponent("limited.store"), readOnly: false)
+    _ = try StoreCopier.copyMissing(from: dupSource.viewContext, to: limited.viewContext, only: [exerciseA, rightParent])
+    let onlyMine = try StoreCopier.copyMissing(from: dupSource.viewContext, to: limited.viewContext, only: [lone])
+    let limitedIDs = try StoreCopier.allIDs(in: limited.viewContext)
+    note(onlyMine.copied == 1 && limitedIDs == [exerciseA, rightParent, lone],
+         "migration : une copie limitée ne copie que les identifiants demandés")
+    let loneCopy = try limited.viewContext.fetch({ () -> NSFetchRequest<NSManagedObject> in
+        let r = NSFetchRequest<NSManagedObject>(entityName: "SubQuestion"); r.predicate = NSPredicate(format: "id == %@", lone as CVarArg); return r }()).first
+    note(((loneCopy?.value(forKey: "parent") as? NSManagedObject)?.value(forKey: "id") as? UUID) == rightParent
+         && ((loneCopy?.value(forKey: "exercise") as? NSManagedObject)?.value(forKey: "id") as? UUID) == exerciseA,
+         "migration : l'objet copié seul se rattache à sa question et à son exercice déjà présents")
+
     note(merged.conflicts == [StoreCopier.Conflict(entity: "SubQuestion", id: stray, key: "parent")],
          "migration : ce désaccord est rapporté comme conflit, et c'est le seul (\(merged.conflicts.map { "\($0.key)" }))")
 }

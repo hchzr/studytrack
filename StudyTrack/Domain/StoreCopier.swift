@@ -65,9 +65,14 @@ enum StoreCopier {
 
     /// Copie dans `destination` tout ce qui y manque, puis enregistre `destination`.
     ///
+    /// `only` limite la copie à ces identifiants (les autres objets de la source servent
+    /// seulement à relier : un objet copié pointe vers l'objet de même `id` déjà présent
+    /// dans la destination). Les entités sans `id` ne sont alors pas copiées.
+    ///
     /// Les deux contextes doivent être utilisés depuis le fil qui appelle (contextes
     /// privés : appeler à l'intérieur de `performAndWait`, ou contextes du fil principal).
-    static func copyMissing(from source: NSManagedObjectContext, to destination: NSManagedObjectContext) throws -> Report {
+    static func copyMissing(from source: NSManagedObjectContext, to destination: NSManagedObjectContext,
+                            only: Set<UUID>? = nil) throws -> Report {
         guard let sourceModel = source.persistentStoreCoordinator?.managedObjectModel,
               let destinationModel = destination.persistentStoreCoordinator?.managedObjectModel else {
             throw CopyError.noCoordinator
@@ -108,6 +113,8 @@ enum StoreCopier {
                     if let already = existing[id] {
                         for object in group { mapped[object.objectID] = already }
                         count.alreadyThere += 1
+                    } else if let only, !only.contains(id) {
+                        continue  // pas à cet appareil de le copier
                     } else {
                         let copy = insertCopy(of: group, entity: destinationEntity, into: destination,
                                               id: id, conflicts: &report.conflicts)
@@ -117,7 +124,7 @@ enum StoreCopier {
                         count.copied += 1
                     }
                 }
-            } else if try destination.count(for: request(destinationEntity)) == 0 {
+            } else if only == nil, try destination.count(for: request(destinationEntity)) == 0 {
                 count.unique = sourceObjects.count
                 for object in sourceObjects {
                     let copy = insertCopy(of: [object], entity: destinationEntity, into: destination,
@@ -232,6 +239,17 @@ enum StoreCopier {
             out[name] = entity.attributesByName[idKey] != nil
                 ? Set(try ids(entity, in: context)).count
                 : try context.count(for: request(entity))
+        }
+        return out
+    }
+
+    /// Tous les identifiants de la base, toutes entités confondues (des UUID aléatoires :
+    /// deux entités ne se les partagent pas).
+    static func allIDs(in context: NSManagedObjectContext) throws -> Set<UUID> {
+        guard let model = context.persistentStoreCoordinator?.managedObjectModel else { throw CopyError.noCoordinator }
+        var out = Set<UUID>()
+        for entity in model.entities where !entity.isAbstract && entity.attributesByName[idKey] != nil {
+            out.formUnion(try ids(entity, in: context))
         }
         return out
     }
