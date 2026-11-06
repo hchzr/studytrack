@@ -20,7 +20,8 @@ struct PolymestreMacApp: App {
         // Avant tout : ce que StudyTrack (l'ancienne identité) a laissé — réglages,
         // trousseau, fichiers, base — copié une fois, l'ancien n'est pas touché.
         #if DEBUG
-        let trial = CommandLine.arguments.contains("-memoryStore")
+        // Les essais et les outils iCloud ne touchent jamais à la reprise.
+        let trial = !Set(CommandLine.arguments).isDisjoint(with: ["-memoryStore", "-cloudCheck", "-initCloudKitSchema"])
         #else
         let trial = false
         #endif
