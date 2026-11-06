@@ -28,7 +28,7 @@ AUTH=(-allowProvisioningUpdates)
 NOTARY=(--key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 TEAM=5GGDH5F3NG
 OUT=build-release
-SITE_RELEASES=hczr-dev/studytrack-site
+SITE_RELEASES=hczr-dev/polymestre-site
 mkdir -p "$OUT"
 
 setting() {
