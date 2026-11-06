@@ -1,5 +1,5 @@
 // Un cours tel que Moodle le décrit, et comment on le relie à l'app
-// (StudyTrack/Domain/MoodleImport.swift).
+// (Polymestre/Domain/MoodleImport.swift).
 
 import {
   ScrapedCourse, ScrapedItem, ScrapedSection,

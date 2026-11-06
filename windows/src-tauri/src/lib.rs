@@ -24,6 +24,8 @@ fn show_main(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Avant les fenêtres : les dossiers de StudyTrack (ancien identifiant) copiés sous le nouveau.
+    native::rename::adopt_legacy_folders();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         // SQLite de l'app, ouverte depuis la webview (`Database.load`).

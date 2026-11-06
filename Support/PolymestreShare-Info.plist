@@ -20,8 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>StudyTrackAppGroup</key>
-	<string>$(STUDYTRACK_APP_GROUP)</string>
+	<key>PolymestreAppGroup</key>
+	<string>$(POLYMESTRE_APP_GROUP)</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>

@@ -1,5 +1,5 @@
 // Les transcriptions des vidéos Courseware : ce que dit chaque vidéo, phrase par
-// phrase, avec son instant (StudyTrack/Domain/CoursewareTranscripts.swift).
+// phrase, avec son instant (Polymestre/Domain/CoursewareTranscripts.swift).
 
 export interface Cue {
   start: number;

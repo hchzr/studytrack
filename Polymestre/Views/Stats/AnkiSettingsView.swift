@@ -341,7 +341,7 @@ struct AnkiCardComposer: View {
         let fields = isCloze ? [html(front), html(back)] : [html(front), html(back)]
         sending = true
         sync.enqueue(AnkiDraftNote(deckID: deckID, notetypeID: type.id, fields: fields,
-                                   tags: ["studytrack"] + tags, origin: origin))
+                                   tags: ["polymestre"] + tags, origin: origin))
         await sync.pushPending()
         sending = false
         if let failure = sync.lastError {

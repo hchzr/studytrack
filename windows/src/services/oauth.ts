@@ -8,13 +8,13 @@
 //   4. GoTrue renvoie vers `http://127.0.0.1:<port>/auth-callback?code=…` (événement `oauth:callback`) ;
 //   5. `POST /auth/v1/token?grant_type=pkce` `{auth_code, code_verifier}` rend la session.
 //
-// Même flux que `StudyTrack/Domain/OAuthPKCE.swift` (iPhone, Mac). Lier Google à un compte
+// Même flux que `Polymestre/Domain/OAuthPKCE.swift` (iPhone, Mac). Lier Google à un compte
 // déjà connecté passe par `GET /auth/v1/user/identities/authorize` avec le jeton de l'utilisateur.
 
 import { SupabaseError, type SupabaseClient } from "./supabase.ts";
 
 // Le chemin que GoTrue rappelle sur la boucle locale. À déclarer dans Authentication › URL Configuration
-// › Redirect URLs : `http://127.0.0.1:*/auth-callback` (avec `studytrack://auth-callback` pour Apple).
+// › Redirect URLs : `http://127.0.0.1:*/auth-callback` (avec `polymestre://auth-callback` pour Apple).
 export const OAUTH_CALLBACK_PATH = "/auth-callback";
 
 /** L'adresse de rappel pour un port donné. */
@@ -77,7 +77,7 @@ export function parseCallback(raw: string): OAuthCallback | null {
     return null;
   }
   const ours = (url.protocol === "http:" && url.hostname === "127.0.0.1" && url.pathname === OAUTH_CALLBACK_PATH)
-    || (url.protocol === "studytrack:" && url.hostname === "auth-callback");
+    || (url.protocol === "polymestre:" && url.hostname === "auth-callback");
   if (!ours) return null;
   const params = new URLSearchParams(url.search);
   if (url.hash.length > 1) for (const [k, v] of new URLSearchParams(url.hash.slice(1))) if (!params.has(k)) params.set(k, v);

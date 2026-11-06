@@ -1,6 +1,6 @@
 /// Le chiffrement de bout en bout de la synchronisation, **pur** : aucune clé
 /// n'est rangée ici, aucun réseau. Le pendant octet pour octet de
-/// `StudyTrack/Domain/SyncCrypto.swift` (CryptoKit) ; `supabase/e2ee-vectors.json`
+/// `Polymestre/Domain/SyncCrypto.swift` (CryptoKit) ; `supabase/e2ee-vectors.json`
 /// est lu par les deux suites de tests. Voir docs/sync-e2ee.md.
 ///
 ///   • `AK`, la clé du compte : 32 octets aléatoires, jamais envoyés au serveur ;
@@ -180,11 +180,13 @@ export const pairingCodeBytes = 16;
 export const newPairingSecret = (): Uint8Array => globalThis.crypto.getRandomValues(new Uint8Array(pairingCodeBytes));
 export const encodePairingCode = (s: Uint8Array): string => group(crockfordEncode(s));
 export const decodePairingCode = (text: string): Uint8Array | null => crockfordDecode(text, pairingCodeBytes);
-export const pairingQRText = (s: Uint8Array): string => `studytrack-pair:${encodePairingCode(s)}`;
-/// Le texte d'un QR (« studytrack-pair:… ») ou un code nu.
+export const pairingQRText = (s: Uint8Array): string => `polymestre-pair:${encodePairingCode(s)}`;
+/// Le texte d'un QR (« polymestre-pair:… », ou « studytrack-pair:… » d'un appareil pas
+/// encore à jour) ou un code nu.
 export function parsePairingInput(text: string): Uint8Array | null {
   const trimmed = text.trim();
-  const body = trimmed.toLowerCase().startsWith("studytrack-pair:") ? trimmed.slice("studytrack-pair:".length) : trimmed;
+  const prefix = ["polymestre-pair:", "studytrack-pair:"].find((p) => trimmed.toLowerCase().startsWith(p));
+  const body = prefix ? trimmed.slice(prefix.length) : trimmed;
   return decodePairingCode(body);
 }
 

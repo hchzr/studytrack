@@ -1,4 +1,4 @@
-// Ce que le chrono propose dans « Sur » (StudyTrack/Domain/FocusTargets.swift),
+// Ce que le chrono propose dans « Sur » (Polymestre/Domain/FocusTargets.swift),
 // la géométrie des exercices dans le PDF de leur série, et ce que l'horaire dit
 // du moment.
 //

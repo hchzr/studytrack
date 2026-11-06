@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-// Contrôles de la synchronisation Supabase (StudyTrack/Domain/Sync*.swift).
+// Contrôles de la synchronisation Supabase (Polymestre/Domain/Sync*.swift).
 //
 // Reprend les cas de windows/tests/sync.test.ts (arrivée d'un appareil à l'autre,
 // plus récent gagne, local plus récent non écrasé, cascade / mise à nul, orphelin
@@ -73,8 +73,8 @@ struct SyncTestDevice {
 
     /// `keys` : l'appareil chiffre de bout en bout (`EncryptingSyncTransport` devant le serveur simulé).
     init(server: FakeSyncServer, clock: SyncTestClock, batch: Int = 200, keys: SyncCrypto.Keys? = nil, stats: SyncSkipStats = SyncSkipStats()) throws {
-        container = try ModelContainer(for: StudyTrackSchema.current,
-                                       configurations: [ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true)])
+        container = try ModelContainer(for: PolymestreSchema.current,
+                                       configurations: [ModelConfiguration(schema: PolymestreSchema.current, isStoredInMemoryOnly: true)])
         store = SyncStateStore(url: nil)
         let transport: SyncTransport = keys.map { EncryptingSyncTransport(inner: server, keys: $0, stats: stats) } ?? server
         engine = SyncEngine(container: container, transport: transport, store: store, batch: batch, clock: { clock.now() })
@@ -134,7 +134,7 @@ func syncChecks(_ results: inout [(Bool, String)]) throws {
     // dans `payload`, chiffrés — voir SyncCryptoTests.swift et 20261103000000_sync_e2ee.sql.)
 
     do {
-        let root = ProcessInfo.processInfo.environment["STUDYTRACK_ROOT"] ?? ""
+        let root = ProcessInfo.processInfo.environment["POLYMESTRE_ROOT"] ?? ""
         let path = root + "/supabase/migrations/20261030000000_user_data_sync.sql"
         if let sql = try? String(contentsOfFile: path, encoding: .utf8) {
             var sqlTables: [String: [String: String]] = [:]
@@ -168,7 +168,7 @@ func syncChecks(_ results: inout [(Bool, String)]) throws {
             note(allColumnsMatch, "sync : chaque table a exactement les colonnes de la migration\(detail)")
             note(typesMatch, "sync : le type de chaque colonne (texte, entier, réel, booléen, date, uuid) est celui de la migration")
         } else {
-            note(false, "sync : migration introuvable (STUDYTRACK_ROOT=\(root))")
+            note(false, "sync : migration introuvable (POLYMESTRE_ROOT=\(root))")
         }
         note(SyncSchema.tables.count == 15, "sync : quinze tables synchronisées (15 @Model hors groupes et balise)")
         let linked = SyncSchema.tables.first { $0.name == "sync_linked_tasks" }
@@ -208,14 +208,14 @@ func syncChecks(_ results: inout [(Bool, String)]) throws {
         let url = OAuthPKCE.authorizeURL(base: URL(string: "https://x.supabase.co")!, challenge: "CHAL")!
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
         func q(_ n: String) -> String? { items.first { $0.name == n }?.value }
-        note(url.path == "/auth/v1/authorize" && q("provider") == "google" && q("redirect_to") == "studytrack://auth-callback"
+        note(url.path == "/auth/v1/authorize" && q("provider") == "google" && q("redirect_to") == "polymestre://auth-callback"
              && q("code_challenge") == "CHAL" && q("code_challenge_method") == "s256", "google : l'adresse d'autorisation porte provider, rappel et défi S256")
         let link = OAuthPKCE.authorizeURL(base: URL(string: "https://x.supabase.co")!, challenge: "C", link: true, skipRedirect: true)!
         note(link.path == "/auth/v1/user/identities/authorize" && link.query?.contains("skip_http_redirect=true") == true, "google : lier une identité passe par /user/identities/authorize")
-        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback?code=abc123")!) == .code("abc123"), "google : le retour donne son code")
-        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback?error=access_denied&error_description=Nope")!) == .error("Nope"), "google : le retour en erreur (requête) est lu")
-        note(OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback#error_code=400&error_description=bad")!) == .error("bad"), "google : le retour en erreur (fragment) est lu")
-        note(OAuthPKCE.parseCallback(URL(string: "https://x.supabase.co/?code=1")!) == nil && OAuthPKCE.parseCallback(URL(string: "studytrack://auth-callback")!) == nil, "google : ce qui n'est pas notre retour est ignoré")
+        note(OAuthPKCE.parseCallback(URL(string: "polymestre://auth-callback?code=abc123")!) == .code("abc123"), "google : le retour donne son code")
+        note(OAuthPKCE.parseCallback(URL(string: "polymestre://auth-callback?error=access_denied&error_description=Nope")!) == .error("Nope"), "google : le retour en erreur (requête) est lu")
+        note(OAuthPKCE.parseCallback(URL(string: "polymestre://auth-callback#error_code=400&error_description=bad")!) == .error("bad"), "google : le retour en erreur (fragment) est lu")
+        note(OAuthPKCE.parseCallback(URL(string: "https://x.supabase.co/?code=1")!) == nil && OAuthPKCE.parseCallback(URL(string: "polymestre://auth-callback")!) == nil, "google : ce qui n'est pas notre retour est ignoré")
         let body = OAuthPKCE.exchangeBody(code: "C1", verifier: "V1").flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }
         note(body == ["auth_code": "C1", "code_verifier": "V1"] && OAuthPKCE.exchangePath == "/auth/v1/token" && OAuthPKCE.exchangeQuery.first?.value == "pkce", "google : la requête d'échange est POST /auth/v1/token?grant_type=pkce {auth_code, code_verifier}")
         note(OAuthPKCE.message(status: 400, body: "{\"msg\":\"Unsupported provider: provider is not enabled\"}") == "La connexion Google n'est pas encore activée sur le serveur.", "google : fournisseur éteint → message clair")

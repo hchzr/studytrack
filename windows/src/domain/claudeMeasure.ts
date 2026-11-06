@@ -1,12 +1,12 @@
 /// **Avec mesure** : le temps passé avec Claude Code, et les règles qu'on s'y donne.
 ///
-/// Deux moitiés, un contrat de fichiers (le dossier `StudyTrack/Claude/` des
+/// Deux moitiés, un contrat de fichiers (le dossier `Polymestre/Claude/` des
 /// données de l'app) :
 ///
 /// - le mod Claude Code (`ClaudePlugin/mesure`) compte chaque séance
 ///   (`sessions/<jour>/<séance>.json`), note les passes (`passes/<jour>/…`) et
 ///   applique les règles à chaque demande ;
-/// - StudyTrack écrit les règles et le contexte (`policy.json` : mode étude,
+/// - Polymestre écrit les règles et le contexte (`policy.json` : mode étude,
 ///   cours de la semaine, temps étudié) et montre le bilan.
 ///
 /// Le calcul est le même des deux côtés : `ClaudePlugin/mesure/hooks/policy.ts` en
@@ -406,7 +406,7 @@ function firstBlock(category: Category, rules: Rules, context: Context, use: Usa
   if (curfew) {
     return { rule: "curfew", until: curfew, message: `Couvre-feu jusqu'à ${clock(curfew)}. Dors : le code sera là demain.`, passable: true };
   }
-  // Le temps étudié n'est connu que si StudyTrack l'a écrit aujourd'hui : sinon
+  // Le temps étudié n'est connu que si Polymestre l'a écrit aujourd'hui : sinon
   // (l'app fermée depuis hier), la règle ne peut pas se vérifier et ne bloque pas.
   const needed = (isWeekend(now) ? rules.studyFirstWeekend : rules.studyFirstWeekday) * 60;
   const studied = studiedSeconds(context, now);

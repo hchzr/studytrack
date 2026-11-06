@@ -1,4 +1,4 @@
-// Le bureau prend la forme du moment (StudyTrack/Domain/DeskMoment.swift).
+// Le bureau prend la forme du moment (Polymestre/Domain/DeskMoment.swift).
 //
 // `Calendar.current` devient l'heure locale de la machine. Les dates sont des `Date` ;
 // les intervalles de temps, des secondes. `Data` (l'encodage des repères) devient une

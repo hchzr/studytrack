@@ -41,6 +41,9 @@ enum IdentityMigrationPlan {
     /// s'est arrêté en route) : un autre peut le reprendre.
     static let staleAfter: TimeInterval = 15 * 60
 
+    /// Le temps laissé à iCloud pour apporter une copie finie à un autre appareil.
+    static let settleAfter: TimeInterval = 3 * 24 * 3_600
+
     /// Ce que doit faire cet appareil, le verrou étant déjà là (créé par un autre, ou
     /// par lui à un lancement précédent).
     ///
@@ -54,13 +57,16 @@ enum IdentityMigrationPlan {
             if now.timeIntervalSince(lock.startedAt) > staleAfter { return .copyAll }  // à reprendre (voir `takeOver`)
             return .wait("un autre appareil recopie les données (« \(lock.owner) »)")
         }
-        let mine = legacyIDs.subtracting(lock.ids)
-        guard !mine.isEmpty else { return .nothing }
+        // D'abord que la nouvelle base ait reçu la copie : c'est ce qui relie ses objets, et
+        // ce qui retient la synchronisation Supabase (voir `IdentityMigration.holdsBackSync`).
+        // Passé `settleAfter`, ce qui manque encore a été supprimé depuis, pas perdu en route.
         let arrived = lock.ids.intersection(storeIDs).count
-        guard arrived == lock.ids.count else {
+        let settled = lock.completedAt.map { now.timeIntervalSince($0) > settleAfter } ?? false
+        guard arrived == lock.ids.count || settled else {
             return .wait("iCloud apporte encore les données recopiées par « \(lock.owner) » (\(arrived)/\(lock.ids.count))")
         }
-        return .copyOnly(mine)
+        let mine = legacyIDs.subtracting(lock.ids)
+        return mine.isEmpty ? .nothing : .copyOnly(mine)
     }
 
     /// Faut-il **reprendre** ce verrou (pris par un autre, jamais fini, trop ancien) ?

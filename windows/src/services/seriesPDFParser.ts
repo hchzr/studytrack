@@ -1,5 +1,5 @@
 // Repère les séries et les exercices dans le texte d'un PDF EPFL
-// (StudyTrack/Services/SeriesPDFParser.swift).
+// (Polymestre/Services/SeriesPDFParser.swift).
 //
 // `NSRegularExpression` devient `RegExp` (voir icuRegExp.ts) ; les positions sont des
 // indices UTF-16, comme les `NSRange` ; `Character.count` est compté en graphèmes.

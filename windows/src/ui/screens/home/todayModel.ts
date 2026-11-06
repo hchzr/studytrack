@@ -1,5 +1,5 @@
 // Tout ce qu'« Aujourd'hui » dérive de l'état persisté, calculé une fois par
-// rendu (StudyTrack/Views/Home/TodayView.swift, `TodayState`). Les écrans ne
+// rendu (Polymestre/Views/Home/TodayView.swift, `TodayState`). Les écrans ne
 // font plus que dessiner : planning du jour, semaine, sessions et prochain geste.
 
 import type { ModelStore } from "../../../models/store.ts";

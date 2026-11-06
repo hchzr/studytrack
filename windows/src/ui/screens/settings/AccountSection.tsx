@@ -1,5 +1,5 @@
 // Réglages › Comptes : les sites des cours (une fenêtre de connexion chacun, la session reste dans
-// l'app), et Spotify. Le compte StudyTrack et la synchronisation sont juste au-dessus
+// l'app), et Spotify. Le compte Polymestre et la synchronisation sont juste au-dessus
 // (`SyncSection`). Le pendant de `ConnectionsView` (iPhone) et de « Comptes » (Mac).
 
 import { useEffect, useState, useSyncExternalStore } from "react";

@@ -9,7 +9,7 @@ import Security
 /// après le premier déverrouillage, pour qu'une passe en arrière-plan puisse déchiffrer.
 /// Une clé par compte Supabase : se connecter avec un autre compte n'ouvre pas celle du précédent.
 enum SyncKeyStore {
-    private static let service = "com.hczr.studytrack.syncvault"
+    private static let service = "ch.polymestre.syncvault"
 
     private static func baseQuery(_ userID: String) -> [String: Any] {
         [

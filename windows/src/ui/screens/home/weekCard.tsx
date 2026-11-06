@@ -1,4 +1,4 @@
-// La semaine en un coup d'œil (StudyTrack/Views/Home/TodayWeekCard.swift) :
+// La semaine en un coup d'œil (Polymestre/Views/Home/TodayWeekCard.swift) :
 // les heures depuis lundi, jour par jour, et l'avancement de la semaine — théorie,
 // séries, corrigés, tous cours confondus. Puis une carte par cours suivi.
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Prépare le « projet EPFL » de Claude Code avant une conversation : le
-/// dossier, la partie StudyTrack du `CLAUDE.md`, les compétences, le fichier
+/// dossier, la partie Polymestre du `CLAUDE.md`, les compétences, le fichier
 /// des serveurs MCP. Le texte et les choix sont dans `ClaudeProject` (pur).
 @MainActor
 enum ClaudeProjectSetup {
@@ -9,7 +9,13 @@ enum ClaudeProjectSetup {
     /// Le fichier de configuration du projet (la façon de travailler de
     /// l'étudiant·e) : compétences, serveurs MCP, outils, modèles, boutons.
     static func fileURL(settings: MacSettings) -> URL {
-        folder(settings).appendingPathComponent("studytrack.json")
+        let url = folder(settings).appendingPathComponent("polymestre.json")
+        // Le fichier d'avant le changement de nom : copié sous le nouveau (l'ancien reste).
+        let legacy = folder(settings).appendingPathComponent("studytrack.json")
+        if !FileManager.default.fileExists(atPath: url.path), FileManager.default.fileExists(atPath: legacy.path) {
+            try? FileManager.default.copyItem(at: legacy, to: url)
+        }
+        return url
     }
 
     static func folder(_ settings: MacSettings) -> URL {
@@ -34,16 +40,16 @@ enum ClaudeProjectSetup {
         let file = file(settings: settings) ?? ClaudeProject.File()
         writeClaudeMD(in: folder, courses: courses, settings: settings)
         linkSkills(file.skills, into: folder)
-        let studyTrack = settings.claudeStudyTrackMCP.hasPrefix("https://") ? settings.claudeStudyTrackMCP : nil
+        let polymestre = settings.claudePolymestreMCP.hasPrefix("https://") ? settings.claudePolymestreMCP : nil
         let mcpFile = supportFolder.appendingPathComponent("claude-mcp.json")
         let localFiles = MacLocalMCP.shared.url?.absoluteString
-        try? ClaudeProject.mcpConfig(file: file, studyTrackURL: studyTrack, localFilesURL: localFiles).write(to: mcpFile, atomically: true, encoding: .utf8)
+        try? ClaudeProject.mcpConfig(file: file, polymestreURL: polymestre, localFilesURL: localFiles).write(to: mcpFile, atomically: true, encoding: .utf8)
         return ClaudeChat.Config(profile: .project, folder: folder, mcpConfigPath: mcpFile.path,
-                                 allowedTools: ClaudeProject.allowedTools(file: file, studyTrack: studyTrack != nil,
+                                 allowedTools: ClaudeProject.allowedTools(file: file, polymestre: polymestre != nil,
                                                                           connectors: servers.connectors, localFiles: localFiles != nil),
                                  tools: ClaudeProject.tools(file: file),
                                  deniedServers: servers.local.filter { file.mcpServers[$0] == nil },
-                                 permissions: ClaudeProject.permissionSummary(file: file, studyTrack: studyTrack != nil,
+                                 permissions: ClaudeProject.permissionSummary(file: file, polymestre: polymestre != nil,
                                                                               connectors: servers.connectors, localFiles: localFiles != nil),
                                  file: file, review: settings.reviewFeatures(file))
     }
@@ -100,10 +106,10 @@ enum ClaudeProjectSetup {
     }
 
     /// Hors du dossier du projet : le fichier MCP porte l'adresse secrète du
-    /// serveur de StudyTrack.
+    /// serveur de Polymestre.
     private static var supportFolder: URL {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack", isDirectory: true)
+            .appendingPathComponent("Polymestre", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }

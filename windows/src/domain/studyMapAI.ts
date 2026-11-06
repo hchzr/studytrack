@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/StudyMapAI.swift : ce qu'on demande à Claude pour
+// Port de Polymestre/Domain/StudyMapAI.swift : ce qu'on demande à Claude pour
 // **comprendre** la fiche — une phrase en clair par notion, ses liens avec les
 // autres, des schémas, une question — et la lecture de sa réponse, sans rien
 // croire sur parole : un lien vers une notion qui n'existe pas tombe.

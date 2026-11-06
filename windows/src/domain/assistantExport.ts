@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/AssistantExport.swift : un instantané de l'état
+// Port de Polymestre/Domain/AssistantExport.swift : un instantané de l'état
 // d'étude, lisible par un **assistant**. C'est la source du serveur MCP. Aucune
 // donnée de compte, aucun jeton, aucune adhésion de groupe : un fichier qu'on
 // partage ne doit pas transporter d'identités.
@@ -25,7 +25,7 @@ export interface AssistantExportInit {
 }
 
 export const AssistantExport = {
-  fileName: "studytrack-assistant.json",
+  fileName: "polymestre-assistant.json",
   /** v2 : identifiants partout et étape de chaque exercice. v3 : contenu sur demande. */
   formatVersion: 3,
 
@@ -40,7 +40,7 @@ export const AssistantExport = {
     const tracked = o.courses.filter((course) => course.isTracked);
 
     const payload: Record<string, unknown> = {
-      format: "studytrack.assistant",
+      format: "polymestre.assistant",
       version: AssistantExport.formatVersion,
       generatedAt: iso8601(new Date()),
     };

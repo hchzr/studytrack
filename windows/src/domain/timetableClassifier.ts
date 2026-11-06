@@ -1,5 +1,5 @@
 // Amphi, exercices ou autre : le type d'une séance de l'horaire, décidé une fois
-// pour toutes au même endroit (StudyTrack/Domain/TimetableClassifier.swift).
+// pour toutes au même endroit (Polymestre/Domain/TimetableClassifier.swift).
 //
 // Le bilan affichait 35 h d'amphi pour une semaine qui en compte une douzaine. Deux
 // causes, cumulées :

@@ -14,7 +14,7 @@ set -euo pipefail
 P8="${1:?Usage : $0 <chemin du fichier AuthKey_XXXXXXXXXX.p8>}"
 [[ -f "$P8" ]] || { echo "Fichier introuvable : $P8" >&2; exit 1; }
 TEAM_ID="${APPLE_TEAM_ID:-5GGDH5F3NG}"
-SERVICES_ID="${APPLE_SERVICES_ID:-com.hczr.studytrack.web}"
+SERVICES_ID="${APPLE_SERVICES_ID:-ch.polymestre.web}"
 # L'identifiant de la clé est dans le nom du fichier (AuthKey_<KEY_ID>.p8).
 KEY_ID="${APPLE_KEY_ID:-$(basename "$P8" | sed -n 's/^AuthKey_\([A-Z0-9]*\)\.p8$/\1/p')}"
 [[ -n "$KEY_ID" ]] || { echo "Identifiant de clé introuvable : passe APPLE_KEY_ID=…" >&2; exit 1; }

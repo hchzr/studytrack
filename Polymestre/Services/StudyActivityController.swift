@@ -16,7 +16,7 @@ import os
 /// `end()` ne trouvait plus rien à terminer et `sync()` créait une **seconde**
 /// activité au lieu de mettre à jour la première.
 /// Trace d'exécution de l'îlot, lisible dans le journal unifié.
-private let activityTrace = Logger(subsystem: "com.hczr.studytrack", category: "îlot")
+private let activityTrace = Logger(subsystem: "ch.polymestre", category: "îlot")
 
 @MainActor
 enum StudyActivityController {

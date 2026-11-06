@@ -1,4 +1,4 @@
-// Un document Botafogo, lu comme le site le montre (StudyTrack/Domain/BotafogoPage.swift).
+// Un document Botafogo, lu comme le site le montre (Polymestre/Domain/BotafogoPage.swift).
 //
 // Un morceau d'un document Botafogo (Nuxt Content, « minimark »), prêt à dessiner :
 // texte avec ses formules et ses liens, listes (en colonnes comme sur le site),
@@ -64,21 +64,22 @@ export type BotafogoJSONNode = Record<string, any>;
 
 export const BotafogoPage = {
   /** Le schéma des liens vers une section du polycopié, interceptés par l'app. */
-  polyScheme: "studytrack-poly",
+  polyScheme: "polymestre-poly",
 
   /** `m_suites_Cauchy` → `/handout/matiere/m_suites_cauchy` (les chemins du site sont en minuscules). */
   handoutPath(target: string): string {
     return "/handout/matiere/" + target.toLowerCase();
   },
 
-  /** L'adresse d'un lien vers le polycopié : `studytrack-poly:///handout/matiere/m_…`. */
+  /** L'adresse d'un lien vers le polycopié : `polymestre-poly:///handout/matiere/m_…`. */
   polyLink(target: string): string {
     return BotafogoPage.polyScheme + "://" + BotafogoPage.handoutPath(target);
   },
 
   /** Le chemin du polycopié derrière un lien de l'app, s'il en est un. */
   handoutPathFromLink(link: URL): string | null {
-    if (link.protocol !== BotafogoPage.polyScheme + ":") return null;
+    // `studytrack-poly:` : les liens écrits avant le changement de nom (fiches, réponses gardées).
+    if (link.protocol !== BotafogoPage.polyScheme + ":" && link.protocol !== "studytrack-poly:") return null;
     const path = link.pathname === "" ? (link.hostname !== "" ? "/" + link.hostname : "") : link.pathname;
     return path.startsWith("/handout/") ? path : null;
   },

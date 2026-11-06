@@ -12,7 +12,7 @@ import SwiftData
 @MainActor
 @Observable
 final class MacStore {
-    static let cloudContainerID = "iCloud.com.hczr.studytrack.app"
+    static let cloudContainerID = AppIdentity.cloudContainer
 
     let container: ModelContainer
     let isCloudSynced: Bool
@@ -35,11 +35,11 @@ final class MacStore {
     @ObservationIgnored var onDataChange: (() -> Void)?
     @ObservationIgnored private var pendingMerge: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "sync")
+    @ObservationIgnored private let log = Logger(subsystem: "ch.polymestre.mac", category: "sync")
 
     init(preferences: SettingsStore) {
         self.preferences = preferences
-        let schema = StudyTrackSchema.current
+        let schema = PolymestreSchema.current
         #if DEBUG
         // `-memoryStore` : une base vide en mémoire, sans iCloud (essais,
         // captures à côté de l'app réelle, sans toucher à ses données).
@@ -79,7 +79,7 @@ final class MacStore {
             : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL,
                                  cloudKitDatabase: .private(Self.cloudContainerID))
         var failure: String?
-        if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+        if let container = try? ModelContainer(for: schema, migrationPlan: PolymestreMigrationPlan.self,
                                                configurations: [cloud]) {
             self.container = container
             isCloudSynced = true
@@ -89,7 +89,7 @@ final class MacStore {
             let local = MacSandboxMigration.isSandboxed
                 ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
                 : ModelConfiguration(schema: schema, url: MacSandboxMigration.storeURL, cloudKitDatabase: .none)
-            if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self, configurations: [local]) {
+            if let container = try? ModelContainer(for: schema, migrationPlan: PolymestreMigrationPlan.self, configurations: [local]) {
                 self.container = container
                 failure = "iCloud indisponible : base locale, rien ne se synchronise."
             } else if let container = try? ModelContainer(for: schema, configurations: [local]) {

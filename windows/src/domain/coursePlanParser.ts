@@ -1,5 +1,5 @@
 // Le plan d'un cours, lu **sans modèle** quand sa forme le permet
-// (StudyTrack/Domain/CoursePlanParser.swift).
+// (Polymestre/Domain/CoursePlanParser.swift).
 //
 // Les plans de l'EPFL sont souvent des tableaux : une ligne par semaine, puis ce
 // qu'il y a à faire. Ici, la semaine courante est suivie ligne par ligne.

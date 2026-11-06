@@ -1,4 +1,4 @@
-// Un nombre et ce qu'il compte, accordé (StudyTrack/Domain/Plural.swift).
+// Un nombre et ce qu'il compte, accordé (Polymestre/Domain/Plural.swift).
 //
 // Les pluriels s'écrivaient à la main (`série${n > 1 ? "s" : ""}`) : justes en
 // français, faux en anglais. Ici l'appelant donne les deux formes, et la règle de

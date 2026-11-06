@@ -1,6 +1,6 @@
 // La partie **pure** de l'extraction assistée par un modèle de langage :
 // préparer le texte, relire la réponse JSON, fusionner avec l'heuristique
-// (StudyTrack/Domain/SeriesAIParsing.swift).
+// (Polymestre/Domain/SeriesAIParsing.swift).
 //
 // Rien ici ne touche au réseau ni au modèle : tout est testable sur des chaînes.
 

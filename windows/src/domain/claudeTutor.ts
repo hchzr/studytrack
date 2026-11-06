@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/ClaudeTutor.swift : Claude dans le mode étude,
+// Port de Polymestre/Domain/ClaudeTutor.swift : Claude dans le mode étude,
 // **avec l'abonnement Claude** (pas une clé d'API). Ici, ce qui est pur : les
 // arguments de `claude`, le message à envoyer, la lecture du flux, la consigne
 // du tuteur et la mise en page des réponses (`RichMarkup`).
@@ -304,7 +304,7 @@ export const ClaudeTutor = {
     if (name === "Read") return "lecture";
     if (name.startsWith("mcp__")) {
       const server = name.slice(5).split("_")[0] || name;
-      return server === "studytrack" ? "Polymestre" : server.slice(0, 1).toUpperCase() + server.slice(1);
+      return server === "polymestre" ? "Polymestre" : server.slice(0, 1).toUpperCase() + server.slice(1);
     }
     return name;
   },
@@ -427,7 +427,8 @@ export const ClaudeTutor = {
 
   /** Ce que l'étudiant·e a écrit, sans le contexte ajouté par l'app. */
   displayText(sent: string): string {
-    let text = sent;
+    // Les conversations d'avant le changement de nom portent « [StudyTrack] ».
+    let text = sent.split("[StudyTrack]").join(contextOpen).split("[/StudyTrack]").join(contextClose);
     for (;;) {
       const open = text.indexOf(contextOpen);
       if (open < 0) break;
@@ -440,9 +441,9 @@ export const ClaudeTutor = {
 
   // MARK: Post-mortem et rapport
 
-  verdictFence: "studytrack",
+  verdictFence: "polymestre",
 
-  verdictInstruction: `Termine par un bloc de code \`\`\`studytrack avec une ligne par exercice corrigé, au format « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). Polymestre le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.`,
+  verdictInstruction: `Termine par un bloc de code \`\`\`polymestre avec une ligne par exercice corrigé, au format « numéro : juste », « numéro : moyen » ou « numéro : faux » (par exemple « 2 : faux »). Polymestre le propose à l'étudiant·e, qui confirme avant que rien ne soit noté.`,
 
   /** « Post-mortem de la série » (quand la série est finie). */
   postMortemPrompt(useSkill: boolean, features: Features = new Features()): string {
@@ -455,7 +456,7 @@ export const ClaudeTutor = {
   /** « Rapport » : les erreurs et ce qu'il faut revoir. */
   reportPrompt: `Fais-moi le rapport de la série : mes erreurs, regroupées par type, les notions à revoir (avec où les revoir dans le cours), et les exercices à refaire. Court, en listes.`,
 
-  /** Les verdicts du bloc ```studytrack d'une réponse. */
+  /** Les verdicts du bloc ```polymestre d'une réponse. */
   verdicts(inText: string): ClaudeVerdict[] {
     const block = verdictBlock(inText);
     if (block === null) return [];
@@ -523,7 +524,7 @@ export const ClaudeTutor = {
 };
 
 function systemPromptBody(mode: "tutor" | "explain"): string {
-  const common = `Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app Polymestre, en mode étude. Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [StudyTrack] et [/StudyTrack] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.`;
+  const common = `Tu es le tuteur d'un·e étudiant·e de première année à l'EPFL, dans l'app Polymestre, en mode étude. Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [Polymestre] et [/Polymestre] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.`;
   return common + "\n\n" + TutorFramework.contract + "\n\n" + (mode === "tutor" ? TutorFramework.tutor : TutorFramework.explain);
 }
 
@@ -547,7 +548,9 @@ function integerString(text: string): number | null {
   return /^[+-]?\d+$/.test(text) ? Number(text) : null;
 }
 
-function verdictBlock(text: string): { start: number; end: number; text: string } | null {
+function verdictBlock(original: string): { start: number; end: number; text: string } | null {
+  // ```studytrack (avant le changement de nom) se lit comme ```polymestre — même longueur.
+  const text = original.split("```studytrack").join("```" + ClaudeTutor.verdictFence);
   const open = text.indexOf("```" + ClaudeTutor.verdictFence);
   if (open < 0) return null;
   const afterOpen = open + 3 + ClaudeTutor.verdictFence.length;

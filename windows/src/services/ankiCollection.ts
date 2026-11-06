@@ -1,4 +1,4 @@
-// La copie locale de la collection AnkiWeb (StudyTrack/Services/AnkiWeb/AnkiCollection.swift).
+// La copie locale de la collection AnkiWeb (Polymestre/Services/AnkiWeb/AnkiCollection.swift).
 //
 // Le fichier SQLite téléchargé (schéma 11 — paquets, types de notes et réglages en JSON dans
 // la table `col`). Windows **lit** seulement : paquets et historique de révision. La

@@ -118,7 +118,7 @@ final class SiteHub {
 
     static func cacheURL(for address: String) -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/pdf", isDirectory: true)
+            .appendingPathComponent("Polymestre/pdf", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let digest = SHA256.hash(data: Data(address.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent(digest + ".pdf")

@@ -1,5 +1,5 @@
 // Comprend un cours Moodle comme un·e étudiant·e le lit
-// (StudyTrack/Domain/MoodleCourseAnalyzer.swift).
+// (Polymestre/Domain/MoodleCourseAnalyzer.swift).
 //
 // Une page Moodle est une liste d'activités posées par l'enseignant·e, dans ses
 // mots. L'analyse **regroupe** ce qui va ensemble, **distingue** ce qu'on suit de

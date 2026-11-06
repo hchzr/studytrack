@@ -48,8 +48,8 @@ final class MiniTimerPanel {
             let host = NSHostingView(rootView: root)
             host.frame = panel.contentRect(forFrameRect: panel.frame)
             panel.contentView = host
-            panel.setFrameAutosaveName("StudyTrack.MiniTimer")
-            if !panel.setFrameUsingName("StudyTrack.MiniTimer"), let screen = NSScreen.main {
+            panel.setFrameAutosaveName("Polymestre.MiniTimer")
+            if !panel.setFrameUsingName("Polymestre.MiniTimer"), let screen = NSScreen.main {
                 let frame = screen.visibleFrame
                 panel.setFrameOrigin(NSPoint(x: frame.maxX - 236 - 24, y: frame.maxY - 52 - 24))
             }

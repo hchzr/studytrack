@@ -1,4 +1,4 @@
-// Spotify comme son lecteur web se parle à lui-même (StudyTrack/Domain/SpotifyWire.swift, d'après
+// Spotify comme son lecteur web se parle à lui-même (Polymestre/Domain/SpotifyWire.swift, d'après
 // SpotAPI) : session du site (`sp_dc`), jeton du lecteur web protégé par un TOTP, jeton client,
 // puis Spotify Connect (`connect-state`) pour lire ce qui joue et piloter n'importe quel appareil
 // du compte, gratuit ou Premium. Pur : aucun réseau (il vit dans `services/spotifyAccount.ts`).

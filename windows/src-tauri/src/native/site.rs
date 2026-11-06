@@ -151,7 +151,7 @@ fn signed_in_back(home: &str, url: &Url, left_home: &AtomicBool) -> bool {
 }
 
 /// Une page web **dans l'app** (une vidéo, un outil, un lien d'un cours) : une seule fenêtre,
-/// réutilisée. Sous le verrou d'étude, elle passe au-dessus comme le reste de StudyTrack :
+/// réutilisée. Sous le verrou d'étude, elle passe au-dessus comme le reste de Polymestre :
 /// tout se fait dans l'app, rien n'oblige à sortir vers le navigateur.
 #[tauri::command]
 pub async fn web_open(app: AppHandle, url: String, title: String) -> Result<(), String> {

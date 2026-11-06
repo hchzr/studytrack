@@ -1,5 +1,5 @@
 // Lit la charge `__NUXT_DATA__` d'une page Nuxt — ce que servent cinq des six
-// polycopiés de Botafogo (StudyTrack/Domain/NuxtPayload.swift).
+// polycopiés de Botafogo (Polymestre/Domain/NuxtPayload.swift).
 //
 // La table des matières n'est pas dans le HTML sous une forme lisible : elle est
 // dans un bloc JSON au format **devalue**, un tableau plat où chaque objet ne

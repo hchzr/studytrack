@@ -409,14 +409,14 @@ extension AnkiWebSync {
         let back = [exercise.correctionNote ?? "", exercise.solution].filter { !$0.isEmpty }
             .joined(separator: "<br><br>").replacingOccurrences(of: "\n", with: "<br>")
         enqueue(AnkiDraftNote(deckID: deck.id, notetypeID: type.id, fields: [front, back],
-                              tags: ["studytrack", "à_refaire"], origin: origin))
+                              tags: ["polymestre", "à_refaire"], origin: origin))
         Task { await pushPending() }
     }
 }
 
 /// La clé d'hôte AnkiWeb, dans le trousseau.
 enum AnkiKeychain {
-    private static let service = "com.hczr.studytrack.ankiweb"
+    private static let service = "ch.polymestre.ankiweb"
 
     static var hostKey: String? {
         get {

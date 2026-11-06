@@ -1,6 +1,6 @@
 # Supabase — mode opératoire complet
 
-Tout ce qui suit est **facultatif**. Sans projet Supabase, StudyTrack fonctionne
+Tout ce qui suit est **facultatif**. Sans projet Supabase, Polymestre fonctionne
 entièrement hors ligne : cours, séries, exercices, théorie, chrono, statistiques,
 agenda, annales, plan de révision, widgets et Live Activity.
 
@@ -18,7 +18,7 @@ Ce que Supabase apporte, et rien d'autre :
 
 1. Va sur <https://supabase.com/dashboard> et connecte-toi.
 2. **New project**.
-   - **Name** : `studytrack`.
+   - **Name** : `polymestre`.
    - **Database Password** : clique sur *Generate a password* et **conserve-le**
      quelque part. Il ne sert pas à l'app, mais tu en auras besoin pour tout accès
      direct à la base.
@@ -133,16 +133,16 @@ Trois étapes, dans cet ordre.
 **5.1 — Dans le portail Apple Developer** (<https://developer.apple.com/account>) :
 
 1. **Certificates, Identifiers & Profiles** ▸ **Identifiers**.
-2. Sélectionne l'App ID de StudyTrack (`com.hczr.studytrack.app`) et coche
+2. Sélectionne l'App ID de Polymestre (`ch.polymestre.app`) et coche
    **Sign in with Apple**, puis **Save**.
 3. **Identifiers** ▸ **+** ▸ **Services IDs** ▸ Continue.
-   - Description : `StudyTrack Supabase`
-   - Identifier : `com.hczr.studytrack.app.service`
+   - Description : `Polymestre Supabase`
+   - Identifier : `ch.polymestre.app.service`
    - **Register**, puis rouvre-le et coche **Sign in with Apple** ▸ **Configure**.
-   - **Primary App ID** : celui de StudyTrack.
+   - **Primary App ID** : celui de Polymestre.
    - **Return URLs** : `https://<ton-projet>.supabase.co/auth/v1/callback`
    - **Save**.
-4. **Keys** ▸ **+** : nomme-la `StudyTrack Supabase`, coche **Sign in with Apple**,
+4. **Keys** ▸ **+** : nomme-la `Polymestre Supabase`, coche **Sign in with Apple**,
    **Configure** ▸ Primary App ID, **Save**.
    - **Download** le fichier `.p8` — tu ne pourras plus le télécharger ensuite.
    - Note le **Key ID** (10 caractères) et ton **Team ID** (en haut à droite).
@@ -152,13 +152,13 @@ Trois étapes, dans cet ordre.
 | Champ | Valeur |
 |---|---|
 | Enable Sign in with Apple | activé |
-| Services ID | `com.hczr.studytrack.app.service` |
+| Services ID | `ch.polymestre.app.service` |
 | Team ID | ton Team ID Apple |
 | Key ID | le Key ID de la clé `.p8` |
 | Private Key | le **contenu** du fichier `.p8`, `-----BEGIN PRIVATE KEY-----` inclus |
 
-**5.3 — Dans l'app** : `Support/StudyTrack.entitlements` contient déjà
-`com.apple.developer.applesignin`. Vérifie dans Xcode ▸ cible **StudyTrack** ▸
+**5.3 — Dans l'app** : `Support/Polymestre.entitlements` contient déjà
+`com.apple.developer.applesignin`. Vérifie dans Xcode ▸ cible **Polymestre** ▸
 **Signing & Capabilities** que la capacité *Sign in with Apple* est bien listée.
 
 > Dans le **simulateur**, Sign in with Apple exige un compte iCloud connecté
@@ -196,10 +196,10 @@ La CLI cherche la fonction à **`supabase/functions/<nom>/index.ts`**, relativem
 au dossier d'où tu lances la commande. Le fichier est donc à la racine du dépôt,
 dans `supabase/functions/extract-series/index.ts`.
 
-**Lance la commande depuis la racine du dépôt StudyTrack** :
+**Lance la commande depuis la racine du dépôt Polymestre** :
 
 ```bash
-cd /chemin/vers/studytrack
+cd /chemin/vers/polymestre
 supabase functions deploy extract-series --project-ref <ta-ref>
 ```
 
@@ -359,7 +359,7 @@ L'adresse de retour des fournisseurs à secret est la fonction `oauth` :
 | Todoist | developer.todoist.com › App Management | `https://<SUPABASE_HOST>/functions/v1/oauth` | `TODOIST_CLIENT_ID` | `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET` |
 | TickTick | developer.ticktick.com › Manage Apps | idem | `TICKTICK_CLIENT_ID` | `TICKTICK_CLIENT_ID`, `TICKTICK_CLIENT_SECRET` |
 | Notion | notion.so/my-integrations › Public integration | idem | `NOTION_CLIENT_ID` | `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` |
-| Google Tasks | console.cloud.google.com › Identifiants › ID client **iOS** (bundle `com.hczr.studytrack.app`), API Tasks activée, écran de consentement | (automatique : schéma inversé du client) | `GOOGLE_CLIENT_ID` | — (client public, PKCE) |
+| Google Tasks | console.cloud.google.com › Identifiants › ID client **iOS** (bundle `ch.polymestre.app`), API Tasks activée, écran de consentement | (automatique : schéma inversé du client) | `GOOGLE_CLIENT_ID` | — (client public, PKCE) |
 
     supabase secrets set TODOIST_CLIENT_ID=… TODOIST_CLIENT_SECRET=… \
         TICKTICK_CLIENT_ID=… TICKTICK_CLIENT_SECRET=… \

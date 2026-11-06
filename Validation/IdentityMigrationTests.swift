@@ -24,8 +24,8 @@ private struct MigrationFixture {
 }
 
 private func writeFixture(_ f: MigrationFixture, to url: URL) throws {
-    let container = try ModelContainer(for: StudyTrackSchema.current,
-                                       configurations: [ModelConfiguration(schema: StudyTrackSchema.current, url: url, cloudKitDatabase: .none)])
+    let container = try ModelContainer(for: PolymestreSchema.current,
+                                       configurations: [ModelConfiguration(schema: PolymestreSchema.current, url: url, cloudKitDatabase: .none)])
     let context = ModelContext(container)
     let term = AcademicTerm.syncBlank(); term.id = f.term; term.name = "Automne 2026"
     let course = Course.syncBlank(); course.id = f.course; course.code = "MATH-101"; course.name = "Analyse I"; course.term = term
@@ -59,14 +59,41 @@ private func coreDataStore(_ url: URL, readOnly: Bool) throws -> NSPersistentCon
 private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     func note(_ ok: Bool, _ label: String) { results.append((ok, label)) }
 
+    // Les anciens noms restent lus (appareils pas à jour, textes gardés, projets Claude).
+    do {
+        let secret = Data((0..<16).map { UInt8($0) })
+        let code = SyncCrypto.encodePairingCode(secret)
+        note(SyncCrypto.pairingQRText(secret).hasPrefix("polymestre-pair:")
+             && SyncCrypto.parsePairingInput("studytrack-pair:" + code) == secret
+             && SyncCrypto.parsePairingInput("polymestre-pair:" + code) == secret,
+             "nouveau nom : le QR s'écrit « polymestre-pair: », l'ancien « studytrack-pair: » se lit encore")
+        note(ClaudeTutor.displayText("[StudyTrack]\nsérie 3\n[/StudyTrack]\n\nPourquoi ?") == "Pourquoi ?"
+             && ClaudeTutor.displayText("\(ClaudeTutor.contextOpen)\nx\n\(ClaudeTutor.contextClose)\nOui") == "Oui",
+             "nouveau nom : le contexte « [StudyTrack] » des anciennes conversations est caché comme le nouveau")
+        let old = ClaudeTutor.verdicts(in: "Bien.\n```studytrack\n2 : juste\n```")
+        note(old == [ClaudeTutor.Verdict(exercise: "2", result: .correct)] && ClaudeTutor.withoutVerdicts("Bien.\n```studytrack\n2 : juste\n```") == "Bien.",
+             "nouveau nom : un bloc ```studytrack de Claude se lit et se retire comme ```polymestre")
+        note(BotafogoPage.handoutPath(link: URL(string: "studytrack-poly:///handout/matiere/m_x")!) == "/handout/matiere/m_x"
+             && BotafogoPage.polyLink(target: "matiere/m_x").hasPrefix("polymestre-poly:"),
+             "nouveau nom : un lien « studytrack-poly: » gardé mène encore au polycopié")
+        let md = ClaudeProject.claudeMD(existing: "# Moi\n\n<!-- studytrack:début -->\nancien\n<!-- studytrack:fin -->\n", context: "neuf")
+        note(md.contains("neuf") && !md.contains("ancien") && !md.contains("studytrack:") && md.hasPrefix("# Moi"),
+             "nouveau nom : la partie « studytrack » du CLAUDE.md est remplacée, pas doublée")
+    }
+
     // 0. Les décisions entre appareils (IdentityMigrationPlan).
     do {
         typealias Plan = IdentityMigrationPlan
         let now = Date(timeIntervalSince1970: 1_793_000_000)
         let a = UUID(), b = UUID(), c = UUID()
         let done = Plan.Lock(owner: "iPhone", startedAt: now.addingTimeInterval(-600), completedAt: now.addingTimeInterval(-500), ids: [a, b])
-        note(Plan.decide(legacyIDs: [a, b], lock: done, storeIDs: [], me: "Mac", now: now) == .nothing,
+        note(Plan.decide(legacyIDs: [a, b], lock: done, storeIDs: [a, b], me: "Mac", now: now) == .nothing,
              "migration (plan) : un appareil qui n'a rien de plus que le verrou ne copie rien")
+        if case .wait = Plan.decide(legacyIDs: [a, b], lock: done, storeIDs: [], me: "Mac", now: now) {
+            note(true, "migration (plan) : tant qu'iCloud n'a pas apporté la copie, l'appareil attend (la synchronisation Supabase aussi)")
+        } else { note(false, "migration (plan) : tant qu'iCloud n'a pas apporté la copie, l'appareil attend (la synchronisation Supabase aussi)") }
+        note(Plan.decide(legacyIDs: [a, b, c], lock: done, storeIDs: [a], me: "Mac", now: now.addingTimeInterval(Plan.settleAfter + 1)) == .copyOnly([c]),
+             "migration (plan) : trois jours après, un objet supprimé depuis ne bloque plus l'appareil")
         if case .wait = Plan.decide(legacyIDs: [a, b, c], lock: done, storeIDs: [a], me: "Mac", now: now) {
             note(true, "migration (plan) : ses objets propres attendent que la nouvelle base ait reçu ceux du verrou")
         } else { note(false, "migration (plan) : ses objets propres attendent que la nouvelle base ait reçu ceux du verrou") }
@@ -116,8 +143,8 @@ private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     for store in fresh.persistentStoreCoordinator.persistentStores { try fresh.persistentStoreCoordinator.remove(store) }
     do {
         // Comme l'app l'ouvre : avec le plan de migration.
-        let container = try ModelContainer(for: StudyTrackSchema.current, migrationPlan: StudyTrackMigrationPlan.self,
-                                           configurations: [ModelConfiguration(schema: StudyTrackSchema.current, url: newURL, cloudKitDatabase: .none)])
+        let container = try ModelContainer(for: PolymestreSchema.current, migrationPlan: PolymestreMigrationPlan.self,
+                                           configurations: [ModelConfiguration(schema: PolymestreSchema.current, url: newURL, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let courses = try context.fetch(FetchDescriptor<Course>())
         let course = courses.first
@@ -170,8 +197,8 @@ private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     let stamp = Date(timeIntervalSince1970: 1_793_000_000)
     let rightParent = UUID(), wrongParent = UUID(), exerciseA = UUID(), exerciseB = UUID()
     do {
-        let container = try ModelContainer(for: StudyTrackSchema.current,
-                                           configurations: [ModelConfiguration(schema: StudyTrackSchema.current, url: dupURL, cloudKitDatabase: .none)])
+        let container = try ModelContainer(for: PolymestreSchema.current,
+                                           configurations: [ModelConfiguration(schema: PolymestreSchema.current, url: dupURL, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let a = Exercise.syncBlank(); a.id = exerciseA; a.title = "A"
         let b = Exercise.syncBlank(); b.id = exerciseB; b.title = "B"

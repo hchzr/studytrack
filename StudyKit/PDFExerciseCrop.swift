@@ -63,7 +63,7 @@ enum PDFExerciseCrop {
         let digest = SHA256.hash(data: Data(("v2|" + source.path + "|\(stamp)|" + terms.joined(separator: ",") + "|" + nextTerms.joined(separator: ",")).utf8))
             .prefix(12).map { String(format: "%02x", $0) }.joined()
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/crops", isDirectory: true)
+            .appendingPathComponent("Polymestre/crops", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let target = directory.appendingPathComponent(digest + ".pdf")
         if FileManager.default.fileExists(atPath: target.path) { return target }

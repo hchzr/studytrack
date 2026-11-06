@@ -6,7 +6,7 @@ import Foundation
 /// (la session, l'exercice, la suite, la musique, l'horaire…) sont choisies
 /// selon ce qu'on fait, puis rangées comme l'étudiant·e le veut — masquer,
 /// agrandir, déplacer — et retenues **par moment**. Pur et testé ; les cartes
-/// elles-mêmes sont dans `StudyTrackMac/StudyMode/DeskWidgetViews.swift`.
+/// elles-mêmes sont dans `PolymestreMac/StudyMode/DeskWidgetViews.swift`.
 enum DeskWidgets {
 
     enum Kind: String, Codable, CaseIterable, Identifiable {

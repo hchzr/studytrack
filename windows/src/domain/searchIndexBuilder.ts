@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/SearchIndexBuilder.swift : construit l'index de
+// Port de Polymestre/Domain/SearchIndexBuilder.swift : construit l'index de
 // recherche à partir des modèles. Toute la correspondance est dans
 // `SearchEngine` (pur) ; ici, seulement la lecture et la mise en forme.
 

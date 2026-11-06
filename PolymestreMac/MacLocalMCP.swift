@@ -7,7 +7,7 @@ import SwiftData
 /// session Moodle de l'app et le dossier miroir (`LocalFilesMirror`).
 ///
 /// Éteint par défaut. Allumé, il écoute sur 127.0.0.1 (aucune interrogation) ; le
-/// projet Claude de l'app le déclare comme serveur `studytrack-files`.
+/// projet Claude de l'app le déclare comme serveur `polymestre-files`.
 @MainActor
 final class MacLocalMCP {
     static let shared = MacLocalMCP()
@@ -43,7 +43,15 @@ final class MacLocalMCP {
     }
 
     private func writeInfo(_ url: URL?) {
-        let file = infoURL
+        write(url, to: infoURL)
+        // L'extension d'avant le changement de nom lit l'ancien dossier : tenu à jour tant
+        // qu'elle est installée (réinstaller l'extension depuis les réglages la remplace).
+        if infoURL == ClaudeDesktopExtension.infoFile(), ClaudeDesktopSetup.isLegacyInstalled {
+            write(url, to: ClaudeDesktopExtension.legacyInfoFile())
+        }
+    }
+
+    private func write(_ url: URL?, to file: URL) {
         guard let url else { try? FileManager.default.removeItem(at: file); return }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let body = (try? JSONSerialization.data(withJSONObject: ["url": url.absoluteString], options: [.sortedKeys])) ?? Data()
@@ -108,14 +116,14 @@ final class MacFilesProvider: LocalMCPProvider, @unchecked Sendable {
         self.container = container
     }
 
-    let serverName = "studytrack-files"
+    let serverName = "polymestre-files"
 
     let instructions = """
     Les fichiers d'étude d'un·e étudiant·e de l'EPFL, sur son Mac : énoncés et corrigés de séries, anciens examens, transparents et documents des cours, fichiers ajoutés, cahiers du dossier de notes (copies, corrigés), notes de cours, fiche de révision, corrigés rédigés.
     - list_files (filtres : course, type, series, query) dit ce qui existe ; chaque ligne a un identifiant.
     - read_file(id) met le fichier sur le disque (téléchargé au besoin, aucune limite de taille) et rend son CHEMIN : ouvre-le avec Read (un PDF de plus de 10 pages : passe `pages`, ex. « 1-5 »). Un petit fichier texte est aussi rendu en texte.
     - fetch_all_files prépare tout un cours (ou tout) d'avance, par lots : rappelle-le tant qu'il reste des fichiers.
-    - Le code d'un cours est celui de list_files (ex. MATH-101) ; l'état d'avancement (exercices, corrections) est dans le serveur « studytrack ».
+    - Le code d'un cours est celui de list_files (ex. MATH-101) ; l'état d'avancement (exercices, corrections) est dans le serveur « polymestre ».
     """
 
     var tools: [[String: Any]] {

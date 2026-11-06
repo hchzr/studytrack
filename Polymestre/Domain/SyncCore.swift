@@ -401,7 +401,7 @@ final class SyncStateStore {
 
     static var defaultURL: URL? {
         guard let base = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true) else { return nil }
-        let dir = base.appendingPathComponent("StudyTrack", isDirectory: true)
+        let dir = base.appendingPathComponent("Polymestre", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("supabase-sync-state.json")
     }

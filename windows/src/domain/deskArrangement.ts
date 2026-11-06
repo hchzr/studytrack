@@ -1,5 +1,5 @@
 // Comment le bureau s'arrange selon le moment
-// (StudyTrack/Domain/DeskArrangement.swift).
+// (Polymestre/Domain/DeskArrangement.swift).
 //
 // `DeskMoment` ne choisissait que l'accueil. Ici : l'outil du centre, ce qu'on
 // garde à côté, et ce qui prend l'écran un instant (la pause, la fin qui

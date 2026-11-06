@@ -190,7 +190,7 @@ final class SyncPairingJoiner: @unchecked Sendable {
         self.makeSocket = makeSocket
     }
 
-    /// `code` : ce que l'étudiant·e a saisi ou lu (« studytrack-pair:… » accepté).
+    /// `code` : ce que l'étudiant·e a saisi ou lu (« polymestre-pair:… » accepté).
     static func join(code: String, expectedKeyID: String, ephemeral: SyncCrypto.Ephemeral? = nil, timeout: Duration = .seconds(30),
                      makeSocket: @escaping SyncPairSocketFactory) async throws -> Data {
         guard let secret = SyncCrypto.parsePairingInput(code) else { throw SyncPairingError.invalidCode }

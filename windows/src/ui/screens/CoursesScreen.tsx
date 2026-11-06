@@ -1,4 +1,4 @@
-// « Mes cours » (StudyTrack/Views/Courses/CoursesView.swift) : le plan du
+// « Mes cours » (Polymestre/Views/Courses/CoursesView.swift) : le plan du
 // semestre, groupé par semestre, une carte par cours avec son avancement.
 //
 // Sur Mac, le volet de détail ouvre `MacCourseView` ; ici `onOpenCourse` fait le

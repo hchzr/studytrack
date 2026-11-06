@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/AssistantCommands.swift : une modification demandée
+// Port de Polymestre/Domain/AssistantCommands.swift : une modification demandée
 // par un assistant, par le serveur MCP. L'assistant n'écrit jamais directement
 // dans les données : l'app applique la commande avec les mêmes règles que
 // l'interface. Une commande qui ne trouve pas sa cible échoue proprement.

@@ -1,4 +1,4 @@
-// L'horaire lié aux cours (StudyTrack/Services/CalendarService.swift, **sans** EventKit).
+// L'horaire lié aux cours (Polymestre/Services/CalendarService.swift, **sans** EventKit).
 //
 // Le calendrier système (EventKit) n'a pas d'équivalent sur Windows : l'horaire arrive
 // par l'abonnement `.ics` (`timetableImport.ts`). Ce qui est portable est ici : le type

@@ -1,5 +1,5 @@
 // Le temps de travail **réel**, compté partout de la même façon
-// (StudyTrack/Domain/StudyTime.swift) : les sessions (chrono, saisies, Anki)
+// (Polymestre/Domain/StudyTime.swift) : les sessions (chrono, saisies, Anki)
 // **plus** les cours suivis.
 //
 // Ce qui compte, l'étudiant·e le choisit (`studyCounting.ts`, Réglages › Chrono) ; une séance

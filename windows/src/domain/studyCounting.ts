@@ -1,4 +1,4 @@
-// Ce qui compte dans les « heures travaillées » (StudyTime.Counting, StudyTrack/Domain/StudyTime.swift) :
+// Ce qui compte dans les « heures travaillées » (StudyTime.Counting, Polymestre/Domain/StudyTime.swift) :
 // l'étudiant·e choisit — cours en amphi de l'horaire (tout seuls, si confirmés, jamais), séances
 // d'exercices de l'horaire, chrono, saisies à la main, Anki. Même clé et même JSON que le Mac.
 

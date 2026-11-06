@@ -1,4 +1,4 @@
-// Client Supabase minimal (Auth + PostgREST), pendant de StudyTrack/Services/SupabaseClient.swift.
+// Client Supabase minimal (Auth + PostgREST), pendant de Polymestre/Services/SupabaseClient.swift.
 //
 // Même règle que côté Swift : **un seul rafraîchissement de jeton à la fois**.
 // Supabase fait tourner le jeton de rafraîchissement à chaque usage ; deux

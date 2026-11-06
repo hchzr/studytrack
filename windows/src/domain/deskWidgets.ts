@@ -1,4 +1,4 @@
-// Les cartes du bureau d'étude (StudyTrack/Domain/DeskWidgets.swift) : ce qu'on
+// Les cartes du bureau d'étude (Polymestre/Domain/DeskWidgets.swift) : ce qu'on
 // pose sur la table selon le moment, rangé par l'étudiant·e — masquer, agrandir,
 // déplacer — et retenu **par moment**.
 //

@@ -1,4 +1,4 @@
-// Le parseur du calendrier académique de l'EPFL (StudyTrack/Domain/AcademicCalendar.swift).
+// Le parseur du calendrier académique de l'EPFL (Polymestre/Domain/AcademicCalendar.swift).
 //
 // Portés : `AcademicCalendarParser` en entier. `MilestoneKind` vit dans models/enums.ts et
 // `AcademicMilestoneValue` dans models/academicMilestone.ts (leurs `label`, `icon`, `isStructural`

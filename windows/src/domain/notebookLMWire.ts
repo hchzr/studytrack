@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/NotebookLMWire.swift : le protocole de NotebookLM,
+// Port de Polymestre/Domain/NotebookLMWire.swift : le protocole de NotebookLM,
 // sans réseau. Son site parle à Google par `batchexecute` (tableaux JSON
 // imbriqués, identifiés par un code court). Les formes peuvent changer sans
 // préavis : tout ce qui en dépend est ici, isolé et testé.

@@ -1,4 +1,4 @@
-// Lit un PDF en **conservant sa mise en page** (StudyTrack/Services/PDFLayoutExtractor.swift).
+// Lit un PDF en **conservant sa mise en page** (Polymestre/Services/PDFLayoutExtractor.swift).
 //
 // `PDFPage.string` aplatit tout : les titres et les énoncés deviennent un seul
 // flux, et plus rien ne les distingue. C'est la cause directe des faux intitulés

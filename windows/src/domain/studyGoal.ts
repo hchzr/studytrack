@@ -1,5 +1,5 @@
 // L'objectif d'étude : **un seul**, de la semaine, sur tous les appareils
-// (StudyTrack/Domain/StudyGoal.swift). Réglé à la main, ou, à défaut, la charge
+// (Polymestre/Domain/StudyGoal.swift). Réglé à la main, ou, à défaut, la charge
 // EPFL des cours suivis pour la semaine.
 
 import { Course } from "../models/course.ts";

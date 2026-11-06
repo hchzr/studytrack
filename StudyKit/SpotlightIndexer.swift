@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 /// le bon cours, sans passer par l'app.
 @MainActor
 enum SpotlightIndexer {
-    private nonisolated static let domain = "com.hczr.studytrack.content"
+    private nonisolated static let domain = "ch.polymestre.content"
     private static var pending: Task<Void, Never>?
     /// L'empreinte du dernier index : rien n'est réécrit si rien n'a changé.
     private static var lastFingerprint: Int?

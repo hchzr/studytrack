@@ -3,7 +3,7 @@
 // La webview ne touche jamais à la base elle-même : chaque `execute`/`select`
 // est un appel IPC vers Rust, qui tient la vraie base (sqlx + SQLite embarqué)
 // dans le dossier de l'app (`BaseDirectory::App` : chez l'utilisateur final,
-// `~/Library/Application Support/com.hczr.studytrack.windows/` sur macOS,
+// `~/Library/Application Support/ch.polymestre.windows/` sur macOS,
 // `%APPDATA%\…` sur Windows). Même fichier à chaque lancement — c'est la
 // persistance.
 //
@@ -19,7 +19,7 @@ import Database from "@tauri-apps/plugin-sql";
 import type { Db, Value } from "../sync/store.ts";
 
 /** Fichier de la base, relatif au dossier de l'app ; créé au premier lancement. */
-export const SQLITE_PATH = "sqlite:studytrack.db";
+export const SQLITE_PATH = "sqlite:polymestre.db";
 
 export class TauriDb implements Db {
   private opened: Promise<Database> | null = null;

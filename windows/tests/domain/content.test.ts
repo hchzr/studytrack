@@ -368,12 +368,12 @@ describe("Botafogo : les documents lus comme le site les montre", () => {
 
   const ref = page(fixture("ref"))[0];
   if (ref?.type === "paragraph") {
-    check(ref.text === "[Suites de Cauchy](studytrack-poly:///handout/matiere/m_suites_cauchy)",
+    check(ref.text === "[Suites de Cauchy](polymestre-poly:///handout/matiere/m_suites_cauchy)",
       `renvoi : lien vers la section du polycopié (${ref.text})`);
   } else {
     check(false, "renvoi : lu comme un lien");
   }
-  check(BotafogoPage.handoutPathFromLink(new URL("studytrack-poly:///handout/matiere/m_suites_cauchy")) === "/handout/matiere/m_suites_cauchy",
+  check(BotafogoPage.handoutPathFromLink(new URL("polymestre-poly:///handout/matiere/m_suites_cauchy")) === "/handout/matiere/m_suites_cauchy",
     "renvoi : l'adresse du lien redonne le chemin");
 });
 

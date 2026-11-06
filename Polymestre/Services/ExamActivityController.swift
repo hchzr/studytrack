@@ -9,7 +9,7 @@ import os
 /// Même raison que pour le chrono : le simulateur ne photographie pas l'îlot, et
 /// c'est la seule façon de savoir, depuis un terminal, si le **système** a accepté
 /// l'activité.
-private let examTrace = Logger(subsystem: "com.hczr.studytrack", category: "îlot")
+private let examTrace = Logger(subsystem: "ch.polymestre", category: "îlot")
 
 /// Pilote la Live Activity du jour d'examen.
 ///

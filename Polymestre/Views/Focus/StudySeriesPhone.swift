@@ -222,7 +222,7 @@ enum StudyPhoneClaude {
             statement: exercise?.statement,
             questions: exercise?.leafSubQuestions.map { "\($0.path) \($0.text)" } ?? [],
             doneQuestions: exercise?.subQuestionDoneCount ?? 0))
-        return ClaudeTutor.displayText(context).isEmpty ? question : context.replacingOccurrences(of: "[StudyTrack]\n", with: "")
-            .replacingOccurrences(of: "[/StudyTrack]", with: "") + question
+        return ClaudeTutor.displayText(context).isEmpty ? question : context.replacingOccurrences(of: "[Polymestre]\n", with: "")
+            .replacingOccurrences(of: "[/Polymestre]", with: "") + question
     }
 }

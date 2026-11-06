@@ -17,7 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F10000000000000000000003"
                BuildableName = "Polymestre.app"
-               ReferencedContainer = "container:StudyTrack.xcodeproj">
+               ReferencedContainer = "container:Polymestre.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,7 +46,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F10000000000000000000003"
             BuildableName = "Polymestre.app"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,7 +62,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F10000000000000000000003"
             BuildableName = "Polymestre.app"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

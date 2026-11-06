@@ -79,7 +79,7 @@ final class StudyGroup {
 
     /// Lien d'invitation partageable, compris par l'app elle-même.
     var inviteLink: String {
-        "studytrack://join?code=\(inviteCode)"
+        "polymestre://join?code=\(inviteCode)"
     }
 
     /// Message prêt à envoyer : le code **et** le lien.

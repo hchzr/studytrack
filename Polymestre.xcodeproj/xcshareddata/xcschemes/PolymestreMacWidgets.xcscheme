@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "G10000000000000000000003"
-               BuildableName = "StudyTrackMacWidgets.appex"
-               ReferencedContainer = "container:StudyTrack.xcodeproj">
+               BuildableName = "PolymestreMacWidgets.appex"
+               ReferencedContainer = "container:Polymestre.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -30,7 +30,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F10000000000000000000003"
                BuildableName = "Polymestre.app"
-               ReferencedContainer = "container:StudyTrack.xcodeproj">
+               ReferencedContainer = "container:Polymestre.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -61,7 +61,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F10000000000000000000003"
             BuildableName = "Polymestre.app"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <EnvironmentVariables>
@@ -96,7 +96,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F10000000000000000000003"
             BuildableName = "Polymestre.app"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

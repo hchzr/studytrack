@@ -1,5 +1,5 @@
 {
-  "name": "studytrack-windows",
+  "name": "polymestre-windows",
   "private": true,
   "version": "2.1.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "build:win": "PATH=\"/opt/homebrew/opt/llvm/bin:$PATH\" tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis && cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Polymestre_${npm_package_version}_x64-setup.exe ~/Downloads/Polymestre-setup.exe && echo \"→ ~/Downloads/StudyTrack-setup.exe\""
+    "build:win": "PATH=\"/opt/homebrew/opt/llvm/bin:$PATH\" tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis && cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Polymestre_${npm_package_version}_x64-setup.exe ~/Downloads/Polymestre-setup.exe && echo \"→ ~/Downloads/Polymestre-setup.exe\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

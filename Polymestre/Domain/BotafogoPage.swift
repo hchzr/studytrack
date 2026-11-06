@@ -67,21 +67,22 @@ struct BotafogoQuizChoice: Equatable {
 
 enum BotafogoPage {
     /// Le schéma des liens vers une section du polycopié, interceptés par l'app.
-    static let polyScheme = "studytrack-poly"
+    static let polyScheme = "polymestre-poly"
 
     /// `m_suites_Cauchy` → `/handout/matiere/m_suites_cauchy` (les chemins du site sont en minuscules).
     static func handoutPath(target: String) -> String {
         "/handout/matiere/" + target.lowercased()
     }
 
-    /// L'adresse d'un lien vers le polycopié : `studytrack-poly:///handout/matiere/m_…`.
+    /// L'adresse d'un lien vers le polycopié : `polymestre-poly:///handout/matiere/m_…`.
     static func polyLink(target: String) -> String {
         polyScheme + "://" + handoutPath(target: target)
     }
 
     /// Le chemin du polycopié derrière un lien de l'app, s'il en est un.
     static func handoutPath(link: URL) -> String? {
-        guard link.scheme == polyScheme else { return nil }
+        // `studytrack-poly:` : les liens écrits avant le changement de nom (fiches, réponses gardées).
+        guard link.scheme == polyScheme || link.scheme == "studytrack-poly" else { return nil }
         let path = link.path.isEmpty ? (link.host.map { "/" + $0 } ?? "") : link.path
         return path.hasPrefix("/handout/") ? path : nil
     }

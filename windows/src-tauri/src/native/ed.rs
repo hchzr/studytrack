@@ -1,7 +1,7 @@
 //! Ed Discussion : la connexion dans une fenêtre d'edstem.org, puis la clé de l'app Ed rendue
-//! à StudyTrack. Ed garde sa clé dans le stockage de sa propre page ; une page distante n'a pas
+//! à Polymestre. Ed garde sa clé dans le stockage de sa propre page ; une page distante n'a pas
 //! le droit d'appeler l'app, alors on lui fait **naviguer** vers une adresse sentinelle
-//! (`https://studytrack.invalid/ed#région|clé`) que la fenêtre intercepte et annule : la clé
+//! (`https://polymestre.invalid/ed#région|clé`) que la fenêtre intercepte et annule : la clé
 //! ne quitte jamais l'ordinateur. Elle est rangée dans le Gestionnaire d'identification
 //! (`secrets.rs`, entrée `ed.token`) ; la fenêtre se ferme seule.
 
@@ -9,15 +9,15 @@ use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
 const LABEL: &str = "site-ed";
-const SENTINEL_HOST: &str = "studytrack.invalid";
+const SENTINEL_HOST: &str = "polymestre.invalid";
 pub const SECRET_KEY: &str = "ed.token";
 
 /// Lit la clé dans la page d'Ed, chaque seconde pendant un quart d'heure : Ed change de page sans
 /// recharger (la connexion finit sur le tableau de bord sans nouveau chargement). Rien n'est envoyé
 /// ailleurs que vers l'adresse sentinelle.
-const PROBE: &str = r#"(function(){if(window.__studytrackProbe)return;window.__studytrackProbe=true;var tries=0;var look=function(){try{var t=null,r='eu';for(var k=0;k<localStorage.length;k++){var key=localStorage.key(k);var v=(localStorage.getItem(key)||'').replace(/^"|"$/g,'');if(/authRegion/.test(key)&&v)r=v;if(/authToken/.test(key)&&!/device/i.test(key)&&v)t=v;}if(t){location.href='https://studytrack.invalid/ed#'+encodeURIComponent(r)+'|'+encodeURIComponent(t);return;}}catch(e){}if(++tries<900)setTimeout(look,1000);};look();})();"#;
+const PROBE: &str = r#"(function(){if(window.__polymestreProbe)return;window.__polymestreProbe=true;var tries=0;var look=function(){try{var t=null,r='eu';for(var k=0;k<localStorage.length;k++){var key=localStorage.key(k);var v=(localStorage.getItem(key)||'').replace(/^"|"$/g,'');if(/authRegion/.test(key)&&v)r=v;if(/authToken/.test(key)&&!/device/i.test(key)&&v)t=v;}if(t){location.href='https://polymestre.invalid/ed#'+encodeURIComponent(r)+'|'+encodeURIComponent(t);return;}}catch(e){}if(++tries<900)setTimeout(look,1000);};look();})();"#;
 
-/// `https://studytrack.invalid/ed#eu|abc` → (« eu », « abc »).
+/// `https://polymestre.invalid/ed#eu|abc` → (« eu », « abc »).
 pub fn parse_sentinel(url: &Url) -> Option<(String, String)> {
     if url.host_str() != Some(SENTINEL_HOST) {
         return None;
@@ -106,10 +106,10 @@ mod tests {
 
     #[test]
     fn reads_only_the_sentinel() {
-        let ok = Url::parse("https://studytrack.invalid/ed#eu|abc%2Edef").unwrap();
+        let ok = Url::parse("https://polymestre.invalid/ed#eu|abc%2Edef").unwrap();
         assert_eq!(parse_sentinel(&ok), Some(("eu".into(), "abc.def".into())));
         assert_eq!(parse_sentinel(&Url::parse("https://evil.example/ed#eu|abc").unwrap()), None);
-        assert_eq!(parse_sentinel(&Url::parse("https://studytrack.invalid/ed#EU!|abc").unwrap()), None);
-        assert_eq!(parse_sentinel(&Url::parse("https://studytrack.invalid/ed#eu|").unwrap()), None);
+        assert_eq!(parse_sentinel(&Url::parse("https://polymestre.invalid/ed#EU!|abc").unwrap()), None);
+        assert_eq!(parse_sentinel(&Url::parse("https://polymestre.invalid/ed#eu|").unwrap()), None);
     }
 }

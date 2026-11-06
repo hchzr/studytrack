@@ -1,5 +1,5 @@
 // Importer le contenu d'un cours depuis Moodle : se connecter, retrouver le cours,
-// le lire, le ranger (règles + IA), relire, écrire (StudyTrack/Views/Courses/
+// le lire, le ranger (règles + IA), relire, écrire (Polymestre/Views/Courses/
 // ContentImport.swift › ContentImportView / ContentReviewView, et StudyKit/
 // MoodleCourseViews.swift).
 //

@@ -3,7 +3,7 @@ import SwiftData
 
 /// Le bureau du mode étude : une barre en haut (ce qui reste, sur quoi, les
 /// gestes), une colonne d'outils à gauche, l'outil choisi au centre. Tout est
-/// natif — la série en PDF, le cours (StudyTrack, Moodle, Botafogo), Claude
+/// natif — la série en PDF, le cours (Polymestre, Moodle, Botafogo), Claude
 /// par l'abonnement, la calculatrice ; le navigateur reste pour le reste.
 struct StudyWorkspace: View {
     @Bindable var screen: StudyModeController.Screen
@@ -85,7 +85,7 @@ struct StudyWorkspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .studyTidyDesk)) { _ in arrange(force: true) }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)) { note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            // StudyTrack lui-même qui revient devant ne change rien : on garde l'état d'avant.
+            // Polymestre lui-même qui revient devant ne change rien : on garde l'état d'avant.
             guard app?.bundleIdentifier != Bundle.main.bundleIdentifier else { frontWriting = false; return }
             frontWriting = app?.bundleIdentifier.map(StudyMode.writingApps.contains) ?? false
         }

@@ -183,7 +183,7 @@ private struct PomodoroSettingsPane: View {
     }
 }
 
-/// Les comptes : la synchronisation (iCloud, compte StudyTrack), Spotify, Google pour NotebookLM.
+/// Les comptes : la synchronisation (iCloud, compte Polymestre), Spotify, Google pour NotebookLM.
 private struct AccountsSettings: View {
     @Environment(MacStore.self) private var store
     @State private var notebook = NotebookLMAccount.shared
@@ -423,7 +423,7 @@ private struct ClaudeSettingsPane: View {
             } header: {
                 Text("Claude")
             } footer: {
-                Text(settings.claudeProject ? "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : "Passe par ton abonnement ; sans Claude Code, le tuteur gratuit prend le relais.")
+                Text(settings.claudeProject ? "Ta façon de travailler est dans polymestre.json (détails dans « Avancé »)." : "Passe par ton abonnement ; sans Claude Code, le tuteur gratuit prend le relais.")
             }
 
             Section {
@@ -438,7 +438,7 @@ private struct ClaudeSettingsPane: View {
 
             NotebookLMSection()
 
-            AdvancedSettingsToggle(isOn: $advanced, summary: "Le projet Claude en détail (dossier, studytrack.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise.")
+            AdvancedSettingsToggle(isOn: $advanced, summary: "Le projet Claude en détail (dossier, polymestre.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise.")
             if advanced {
                 Section {
                     LabeledContent("Exécutable") {
@@ -456,7 +456,7 @@ private struct ClaudeSettingsPane: View {
                         let file = ClaudeProjectSetup.file(settings: settings)
                         LabeledContent("Fichier") {
                             HStack {
-                                Text(file == nil ? "aucun" : "studytrack.json").foregroundStyle(.secondary)
+                                Text(file == nil ? "aucun" : "polymestre.json").foregroundStyle(.secondary)
                                 Button(file == nil ? "Créer" : "Ouvrir") { openProjectFile(exists: file != nil) }
                             }
                         }
@@ -472,10 +472,10 @@ private struct ClaudeSettingsPane: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.trailing)
                         }
-                        TextField("Serveur Polymestre (https://…)", text: $settings.claudeStudyTrackMCP)
+                        TextField("Serveur Polymestre (https://…)", text: $settings.claudePolymestreMCP)
                         LabeledContent("Permis") {
                             Text(ClaudeProject.permissionSummary(file: file ?? ClaudeProject.File(),
-                                                                 studyTrack: settings.claudeStudyTrackMCP.hasPrefix("https://")))
+                                                                 polymestre: settings.claudePolymestreMCP.hasPrefix("https://")))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -495,7 +495,7 @@ private struct ClaudeSettingsPane: View {
                 } header: {
                     Text("Projet Claude")
                 } footer: {
-                    Text("Les paliers de la reprise se changent dans studytrack.json (« redo »).")
+                    Text("Les paliers de la reprise se changent dans polymestre.json (« redo »).")
                 }
 
                 Section {
@@ -514,7 +514,7 @@ private struct ClaudeSettingsPane: View {
                                     Text("http://127.0.0.1:\(url.port ?? 0)/…").foregroundStyle(.secondary)
                                     Button("Copier la commande") {
                                         NSPasteboard.general.clearContents()
-                                        NSPasteboard.general.setString("claude mcp add --transport http studytrack-files \(url.absoluteString)", forType: .string)
+                                        NSPasteboard.general.setString("claude mcp add --transport http polymestre-files \(url.absoluteString)", forType: .string)
                                     }
                                 }
                             }
@@ -553,7 +553,7 @@ private struct ClaudeSettingsPane: View {
         }
     }
 
-    /// Ouvre `studytrack.json` (le crée vide d'abord).
+    /// Ouvre `polymestre.json` (le crée vide d'abord).
     private func openProjectFile(exists: Bool) {
         let url = ClaudeProjectSetup.fileURL(settings: settings)
         if !exists {

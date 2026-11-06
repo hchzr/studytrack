@@ -86,7 +86,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
     /// Le dernier masquage que nous avons fait : macOS met alors le Finder devant
     /// (plus rien de visible), ce qui n'est pas un clic de l'étudiant·e.
     private var lastHideAt: Date?
-    private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "study")
+    private let log = Logger(subsystem: "ch.polymestre.mac", category: "study")
     #if DEBUG
     /// `-studyPreview` : l'écran dans une fenêtre ordinaire, sans rien bloquer.
     private let previewOnly = CommandLine.arguments.contains("-studyPreview")
@@ -354,11 +354,11 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         desk.lastSignature = nil
     }
 
-    /// Dock et barre des menus cachés tant que StudyTrack est au premier plan.
+    /// Dock et barre des menus cachés tant que Polymestre est au premier plan.
     /// Sous blocage, en plus : ni ⌘Tab, ni ⌘H, ni menu Pomme. Sous verrou
     /// encore : ni « Forcer à quitter » (⌥⌘⎋), ni fermeture de session ou
     /// redémarrage. Ces options
-    /// ne valent que quand StudyTrack est au premier plan ; ailleurs (une app
+    /// ne valent que quand Polymestre est au premier plan ; ailleurs (une app
     /// permise), le voile et le gardien (`StudyGuard`) prennent le relais.
     private func applyPresentation() {
         guard window?.isVisible == true, !previewOnly else { return }
@@ -406,7 +406,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         MiniTimerPanel.shared.update()
-        // Une autre fenêtre de StudyTrack (le cours, les réglages) : sous
+        // Une autre fenêtre de Polymestre (le cours, les réglages) : sous
         // blocage, rien ne se relâche.
         guard timer?.studyLocks != true else { return }
         NSApp.presentationOptions = []
@@ -423,7 +423,7 @@ final class StudyModeController: NSObject, NSWindowDelegate {
         // Le verrou système (expérimental, `studySystemLock`) : sans lui, rien
         // n'est écrit dans les raccourcis du système ni dans `LaunchAgents`.
         let systemLock = settings?.studySystemLock ?? false
-        // Tué de force depuis une app permise, StudyTrack revient (`StudyGuard`).
+        // Tué de force depuis une app permise, Polymestre revient (`StudyGuard`).
         if systemLock { StudyGuard.arm() }
         // Les raccourcis du système (Spotlight, ⌘Tab, Mission Control…) éteints,
         // la fiche pour les rallumer écrite d'abord.

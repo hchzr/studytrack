@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build StudyTrack pour le simulateur iOS.
+# Build Polymestre pour le simulateur iOS.
 #
 #   ./build.sh              # Debug
 #   CONFIGURATION=Release ./build.sh
@@ -22,8 +22,8 @@ set -euo pipefail
 CONFIGURATION="${CONFIGURATION:-Debug}"
 
 xcodebuild \
-  -project StudyTrack.xcodeproj \
-  -scheme StudyTrack \
+  -project Polymestre.xcodeproj \
+  -scheme Polymestre \
   -sdk iphonesimulator \
   -configuration "$CONFIGURATION" \
   -derivedDataPath build \

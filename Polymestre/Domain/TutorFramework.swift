@@ -34,7 +34,7 @@ enum TutorFramework {
     copie avant de dire que quelque chose n'a pas été tenté.
     - Les numéros de page sont ceux du cahier. Le PDF joint peut ne contenir que certaines pages ; le \
     message dit lesquelles.
-    - À chaque message, l'app te donne l'état entre [StudyTrack] et [/StudyTrack] : fie-toi à lui, \
+    - À chaque message, l'app te donne l'état entre [Polymestre] et [/Polymestre] : fie-toi à lui, \
     pas à ta mémoire.
     """
 

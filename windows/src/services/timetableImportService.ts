@@ -1,5 +1,5 @@
 // Analyseur iCalendar (RFC 5545), volontairement autonome et sans dépendance
-// (StudyTrack/Services/TimetableImportService.swift).
+// (Polymestre/Services/TimetableImportService.swift).
 //
 // L'EPFL publie l'horaire personnel des étudiant·e·s au format `.ics` (« Mon horaire »).
 // C'est la seule intégration d'emploi du temps réaliste : aucune API n'est ouverte aux

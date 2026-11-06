@@ -1,4 +1,4 @@
-// Le protocole de synchronisation d'AnkiWeb, côté client (StudyTrack/Services/AnkiWeb/
+// Le protocole de synchronisation d'AnkiWeb, côté client (Polymestre/Services/AnkiWeb/
 // AnkiWebClient.swift) — **connexion, métadonnées, téléchargement**.
 //
 // Version **10** du protocole (formulaire `multipart`, JSON non compressé) : le serveur de
@@ -91,7 +91,7 @@ export class AnkiWebClient {
   }
 
   private async post(method: string, data: Uint8Array, timeout: number, redirects: number): Promise<Uint8Array> {
-    const boundary = `StudyTrack-${randomKey(16)}`;
+    const boundary = `Polymestre-${randomKey(16)}`;
     const encoder = new TextEncoder();
     const parts: Uint8Array[] = [];
     const field = (name: string, value: Uint8Array, file = false) => {

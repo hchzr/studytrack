@@ -1,4 +1,4 @@
-// Les notifications du bureau d'étude (StudyTrack/Domain/DeskNotice.swift) :
+// Les notifications du bureau d'étude (Polymestre/Domain/DeskNotice.swift) :
 // une file, pas des bulles qui se marchent dessus.
 //
 // Pur et testé : les règles de la file ; l'affichage est dans l'app.

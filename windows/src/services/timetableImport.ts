@@ -1,5 +1,5 @@
 // Import d'un emploi du temps iCalendar (« Mon horaire » EPFL ou tout autre flux)
-// (StudyTrack/Services/TimetableImport.swift).
+// (Polymestre/Services/TimetableImport.swift).
 //
 // Ce chemin fonctionne réellement à l'EPFL : l'étudiant·e exporte/colle son flux
 // `.ics` (ou s'y abonne par son adresse), l'app en déduit ses cours, détecte lesquels
@@ -60,7 +60,7 @@ export async function fetchFeed(urlString: string, fetcher: (url: string, init?:
   try { url = new URL(raw); } catch { throw new TimetableError("invalidURL"); }
   let response: Response;
   try {
-    response = await fetcher(url.href, { headers: { "User-Agent": "StudyTrack/1.0" } });
+    response = await fetcher(url.href, { headers: { "User-Agent": "Polymestre/1.0" } });
   } catch (error) {
     throw new TimetableError("network", error instanceof Error ? error.message : String(error));
   }

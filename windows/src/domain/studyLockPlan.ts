@@ -1,5 +1,5 @@
 // Ce que le blocage du Mac change dans le système, et comment le défaire
-// (StudyTrack/Domain/StudyLockPlan.swift).
+// (Polymestre/Domain/StudyLockPlan.swift).
 //
 // Tant qu'une autre app est devant, les raccourcis du système marchent comme
 // d'habitude. Pendant un blocage, on les éteint un par un — et il faut pouvoir

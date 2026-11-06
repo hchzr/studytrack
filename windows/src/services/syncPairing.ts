@@ -13,7 +13,7 @@
 // `S` ne transite jamais : le relais ne voit que deux clés publiques et des
 // chiffrés. Une tentative par code : A ignore tout `hello` après le premier.
 // La WebSocket n'est ouverte que le temps de l'écran d'appairage.
-// Le pendant Swift est `StudyTrack/Domain/SyncPairing.swift`.
+// Le pendant Swift est `Polymestre/Domain/SyncPairing.swift`.
 
 import {
   base64Decode, base64Encode, deriveKeys, encodePairingCode, newEphemeral, newPairingSecret,
@@ -176,7 +176,7 @@ export class PairingError extends Error {
 }
 
 export interface JoinInputs {
-  /** Ce que l'étudiant·e a saisi ou lu (« studytrack-pair:… » accepté). */
+  /** Ce que l'étudiant·e a saisi ou lu (« polymestre-pair:… » accepté). */
   code: string;
   /** Le `key_id` du coffre du compte connecté. */
   expectedKeyId: string;

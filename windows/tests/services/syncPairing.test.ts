@@ -30,10 +30,10 @@ describe("appairage", () => {
     expect(relay.urls[0]).toMatch(/^wss:\/\/relay\.test\/v1\/pair-[0-9a-f]{32}\?device=[0-9a-f-]{36}$/);
   });
 
-  it("le QR (« studytrack-pair:… ») et la saisie approximative marchent", async () => {
+  it("le QR (« polymestre-pair:… ») et la saisie approximative marchent", async () => {
     const { ak, keyId, relay } = await setup();
     const host = await PairingHost.start({ accountKey: ak, host: "r", makeSocket: relay.factory });
-    const typed = "studytrack-pair:" + host.code.toLowerCase().replace(/-/g, " ");
+    const typed = "polymestre-pair:" + host.code.toLowerCase().replace(/-/g, " ");
     expect(toHex(await joinPairing({ code: typed, expectedKeyId: keyId, host: "r", makeSocket: relay.factory }))).toBe(toHex(ak));
   });
 

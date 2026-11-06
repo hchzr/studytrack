@@ -45,7 +45,7 @@ enum ResourceLibrary {
     static func fileURL(_ resource: SavedResource) -> URL? {
         guard let data = resource.fileData else { return nil }
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/resources", isDirectory: true)
+            .appendingPathComponent("Polymestre/resources", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let ext = (resource.fileName as NSString).pathExtension
         let file = directory.appendingPathComponent(resource.id.uuidString + (ext.isEmpty ? "" : "." + ext))

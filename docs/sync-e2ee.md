@@ -76,7 +76,7 @@ existe et laquelle, pour vérifier la clé reçue. Aucun secret.
 Pour un compte qui a déjà un coffre. L'appareil B doit être connecté au même compte.
 
 1. A : « Ajouter un appareil » → `S` (16 octets aléatoires), montré en code Crockford base32
-   (26 caractères, `XXXX-XXXX-…-XX`) et en QR `studytrack-pair:<code>`. Valable 10 minutes.
+   (26 caractères, `XXXX-XXXX-…-XX`) et en QR `polymestre-pair:<code>`. Valable 10 minutes.
 2. B saisit (ou scanne) le code. Canal du relais : `pair-` + hex(HKDF(S, info `studytrack/pair/channel/v1`, 16)).
 3. A et B ouvrent une WebSocket `wss://<relais>/v1/<canal>?device=<uuid>`.
 4. B → `hello {pubB}` (X25519 éphémère). A → `offer {pubA, box}`.
@@ -119,9 +119,9 @@ clé de secours et code. Seul le chiffrement doit coïncider octet pour octet ; 
 
 | | Windows | Apple |
 |---|---|---|
-| Primitives | `windows/src/domain/syncCrypto.ts` | `StudyTrack/Domain/SyncCrypto.swift` |
-| Lignes chiffrées | `windows/src/sync/encryptedTransport.ts` | `StudyTrack/Domain/SyncEncryption.swift` |
-| Appairage | `windows/src/services/syncPairing.ts` | `StudyTrack/Domain/SyncPairing.swift`, `Services/SyncDeviceLink.swift` |
-| Service | `windows/src/services/syncService.ts` | `StudyTrack/Services/SupabaseSync.swift` |
+| Primitives | `windows/src/domain/syncCrypto.ts` | `Polymestre/Domain/SyncCrypto.swift` |
+| Lignes chiffrées | `windows/src/sync/encryptedTransport.ts` | `Polymestre/Domain/SyncEncryption.swift` |
+| Appairage | `windows/src/services/syncPairing.ts` | `Polymestre/Domain/SyncPairing.swift`, `Services/SyncDeviceLink.swift` |
+| Service | `windows/src/services/syncService.ts` | `Polymestre/Services/SupabaseSync.swift` |
 | Écrans | `…/settings/SyncEncryption.tsx` | `Views/Stats/SyncEncryptionViews.swift` |
 | Relais | `relay/src/index.ts` | |

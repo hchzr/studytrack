@@ -193,7 +193,7 @@ struct MacRootView: View {
             #endif
         }
         .onDisappear {
-            // Fenêtre fermée : StudyTrack vit dans la barre des menus.
+            // Fenêtre fermée : Polymestre vit dans la barre des menus.
             if !settings.keepInDock { NSApp.setActivationPolicy(.accessory) }
         }
         .onChange(of: page) { _, value in storedPage = Self.encode(value) }

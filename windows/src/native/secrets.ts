@@ -22,10 +22,10 @@ export const SECRET_KEYS: readonly string[] = [
   // Une adresse de webhook porte souvent son jeton dans le chemin.
   "settings.webhookURL",
   "ankiweb.hostKey",
-  "studytrack.supabase.session",
+  "polymestre.supabase.session",
   // La clé du compte de la synchronisation chiffrée (« <user id>:<hex> »).
-  "studytrack.sync.accountKey",
-  "studytrack.groups.keys",
+  "polymestre.sync.accountKey",
+  "polymestre.groups.keys",
 ];
 
 const secretSet = new Set(SECRET_KEYS);

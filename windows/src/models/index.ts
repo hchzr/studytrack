@@ -1,4 +1,4 @@
-// Les modèles de StudyTrack (StudyTrack/Models/*.swift) en TypeScript.
+// Les modèles de Polymestre (Polymestre/Models/*.swift) en TypeScript.
 // Le schéma synchronisé (champs, règles de suppression) est décrit à part par schema.ts.
 
 export * from "./enums.ts";

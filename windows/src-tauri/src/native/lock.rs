@@ -1,4 +1,4 @@
-//! Le blocage d'étude (StudyLock du Mac) : StudyTrack occupe l'écran et garde le focus
+//! Le blocage d'étude (StudyLock du Mac) : Polymestre occupe l'écran et garde le focus
 //! (voir `kiosk.rs`). Rien n'est fermé, rien n'est écrit hors de l'app, aucun droit
 //! administrateur : il n'y a donc rien à défaire après un plantage.
 

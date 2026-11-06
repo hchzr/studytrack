@@ -1,5 +1,5 @@
 // Réparations de données, nommées et jouées une seule fois par version
-// (`DataRepair`, StudyTrackSchema.swift).
+// (`DataRepair`, PolymestreSchema.swift).
 //
 // Ce ne sont pas des migrations — le schéma est déjà à jour — mais des corrections de
 // **contenu** rendues nécessaires par un défaut passé. Les nommer permet de dire ce qui a
@@ -11,7 +11,7 @@ import { ExerciseSeries } from "./exercise.ts";
 import { Plural } from "../domain/plural.ts";
 import type { ModelStore } from "./store.ts";
 
-/** Version du schéma (`StudyTrackSchema.currentVersion`). */
+/** Version du schéma (`PolymestreSchema.currentVersion`). */
 export const schemaCurrentVersion = 1;
 export const schemaVersionKey = "schema.version";
 

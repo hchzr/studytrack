@@ -6,7 +6,7 @@ import WebKit
 /// joue, à suivre, et tes playlists. Gratuit ou Premium, sans compte développeur.
 ///
 /// **Comment** (d'après SpotAPI, Aran404/SpotAPI) : la vraie page de connexion de Spotify dans une
-/// fenêtre de l'app (StudyTrack ne voit jamais ton mot de passe : seule la session reste, dans le
+/// fenêtre de l'app (Polymestre ne voit jamais ton mot de passe : seule la session reste, dans le
 /// stockage web de l'app), puis le protocole du lecteur web — `SpotifyWire`. Le « dealer » de
 /// Spotify pousse chaque changement : rien n'est redemandé en boucle, et tout s'arrête quand le
 /// volet se ferme. **Non officiel** : si Spotify change ce protocole, l'app le dit, et le pilotage

@@ -1,4 +1,4 @@
-// « Marquer la semaine faite » d'un geste (StudyTrack/Domain/WeekCompletion.swift).
+// « Marquer la semaine faite » d'un geste (Polymestre/Domain/WeekCompletion.swift).
 //
 // Le fichier Swift n'est pas porté dans `src/domain` : il vit ici, avec l'écran
 // qui s'en sert, et suit la règle exacte de `mark` / `undo` / `summary`.

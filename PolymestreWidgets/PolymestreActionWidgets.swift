@@ -15,7 +15,7 @@ struct WeekCoursesWidget: Widget {
     let kind = "WeekCoursesWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
+        StaticConfiguration(kind: kind, provider: PolymestreProvider()) { entry in
             WeekWidgetView(entry: entry)
                 .containerBackground(Paper.ground, for: .widget)
                 .widgetURL(WidgetLink.today)
@@ -28,7 +28,7 @@ struct WeekCoursesWidget: Widget {
 }
 
 struct WeekWidgetView: View {
-    let entry: StudyTrackEntry
+    let entry: PolymestreEntry
     @Environment(\.widgetFamily) private var family
 
     private var week: WidgetWeek? { entry.snapshot?.week }
@@ -328,7 +328,7 @@ struct TodayScheduleWidget: Widget {
     let kind = "TodayScheduleWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StudyTrackProvider()) { entry in
+        StaticConfiguration(kind: kind, provider: PolymestreProvider()) { entry in
             TodayWidgetView(entry: entry)
                 .containerBackground(Paper.ground, for: .widget)
                 .widgetURL(WidgetLink.agenda)
@@ -340,7 +340,7 @@ struct TodayScheduleWidget: Widget {
 }
 
 struct TodayWidgetView: View {
-    let entry: StudyTrackEntry
+    let entry: PolymestreEntry
     @Environment(\.widgetFamily) private var family
 
     /// Les créneaux du jour de l'entrée, pas encore finis.
@@ -540,11 +540,11 @@ struct TodayWidgetView: View {
 // MARK: - Centre de contrôle
 
 /// Un bouton « Chrono » pour le Centre de contrôle, l'écran verrouillé et le
-/// bouton Action : ouvre StudyTrack sur Focus, sans chercher l'app.
+/// bouton Action : ouvre Polymestre sur Focus, sans chercher l'app.
 @available(iOS 18.0, *)
 struct FocusControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "StudyTrackFocusControl") {
+        StaticControlConfiguration(kind: "PolymestreFocusControl") {
             ControlWidgetButton(action: OpenURLIntent(WidgetLink.focus)) {
                 Label("Chrono Polymestre", systemImage: "timer")
             }
@@ -562,7 +562,7 @@ struct FocusControl: ControlWidget {
 @available(iOS 18.0, *)
 struct FocusPauseControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "StudyTrackFocusPauseControl",
+        StaticControlConfiguration(kind: "PolymestreFocusPauseControl",
                                    provider: FocusTimerValueProvider()) { value in
             ControlWidgetToggle(isOn: value.isRunning, action: ToggleFocusTimerIntent()) {
                 Text(value.label)

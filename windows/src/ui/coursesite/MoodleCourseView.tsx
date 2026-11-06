@@ -1,7 +1,7 @@
 // La page Moodle du cours, lue dans l'app (CoursePane › moodleList + MoodleActivityReader du
 // Mac) : les sections à gauche (la semaine en cours en évidence), au centre la section ou
 // l'activité ouverte — page, dossier, devoir, forum et ses discussions, document PDF.
-// Rien ne sort vers le navigateur : un lien hors de Moodle s'ouvre dans une fenêtre StudyTrack.
+// Rien ne sort vers le navigateur : un lien hors de Moodle s'ouvre dans une fenêtre Polymestre.
 
 import { useCallback, useEffect, useState } from "react";
 import type { MoodleActivityContent, MoodleCoursePage, MoodleCoursePageActivity } from "../../domain/siteContent.ts";

@@ -1,4 +1,4 @@
-// Un seul lecteur pour le Mac et l'iPhone (StudyTrack/Domain/MusicLink.swift) :
+// Un seul lecteur pour le Mac et l'iPhone (Polymestre/Domain/MusicLink.swift) :
 // ce qui joue sur l'un se voit et se pilote depuis l'autre.
 //
 // Les messages voyagent par le lien du chrono, chiffrés de la même clé. Chaque

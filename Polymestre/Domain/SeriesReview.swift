@@ -3,7 +3,7 @@ import SwiftData
 
 // MARK: - Ce que Claude rapporte d'une série
 
-/// Ce que Claude rapporte d'une série, lu dans le bloc ```studytrack qui
+/// Ce que Claude rapporte d'une série, lu dans le bloc ```polymestre qui
 /// termine sa réponse : les corrections (vert / orange / rouge), les erreurs
 /// du carnet, les exercices admis dans la file de reprise, et les indices
 /// donnés pendant la résolution. Rien n'est noté sans que l'étudiant·e le
@@ -12,7 +12,7 @@ import SwiftData
 /// Le format est fait pour être écrit par Claude et relu sans ambiguïté, une
 /// ligne par fait :
 ///
-/// ```studytrack
+/// ```polymestre
 /// 2 : faux
 /// erreur 2 | méthode | oubli de vérifier la continuité en 0 | vérifier f continue en 0 avant le TAF | continuité
 /// reprise 2 | méthode : n'a pas vu le critère | Pose M_n = sup |f_n(x)|
@@ -108,8 +108,9 @@ enum SeriesReview {
         var needsConfirmation: Bool { !verdicts.isEmpty || !mistakes.isEmpty || !admissions.isEmpty }
     }
 
-    /// Tous les blocs ```studytrack d'une réponse, lus ligne à ligne.
-    static func parse(_ text: String) -> Report {
+    /// Tous les blocs ```polymestre d'une réponse, lus ligne à ligne.
+    static func parse(_ original: String) -> Report {
+        let text = ClaudeTutor.currentFences(original)
         var report = Report()
         for block in blocks(in: text) {
             for raw in block.components(separatedBy: "\n") {
@@ -156,7 +157,7 @@ enum SeriesReview {
 
     /// La réponse sans ses blocs (ils s'affichent en carte à part).
     static func withoutBlocks(_ text: String) -> String {
-        var copy = text
+        var copy = ClaudeTutor.currentFences(text)
         while let open = copy.range(of: "```" + ClaudeTutor.verdictFence) {
             let end = copy.range(of: "```", range: open.upperBound..<copy.endIndex)
             copy.removeSubrange(open.lowerBound..<(end?.upperBound ?? copy.endIndex))
@@ -211,7 +212,7 @@ enum SeriesReview {
     2 (outil), 3 (amorce) ou 4 (solution). Polymestre le note pour la reprise et le post-mortem.
     """
 
-    /// Ce qui est allumé (réglages de l'app, et `studytrack.json` du projet).
+    /// Ce qui est allumé (réglages de l'app, et `polymestre.json` du projet).
     struct Features: Equatable {
         var mistakes = true
         var redo = true
@@ -226,7 +227,7 @@ enum SeriesReview {
 /// défaut ; trois passes. Réussi sans notes à n'importe quelle passe : sorti.
 /// Raté : la même passe, une semaine plus tard ; deux échecs de suite, c'est
 /// une lacune de cours (on le dit). Le projet de l'étudiant·e peut changer
-/// les paliers et les plafonds (`studytrack.json` › `redo`). Pur, testé.
+/// les paliers et les plafonds (`polymestre.json` › `redo`). Pur, testé.
 enum RedoLadder {
 
     enum Step: Equatable, Codable {

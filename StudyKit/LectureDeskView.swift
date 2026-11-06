@@ -271,7 +271,7 @@ struct LectureDeskView: View {
                 openCourse(SiteHub.Request(courseID: course.id, source: .ed, reading: nil))
             }
             toolRow(String(localized: "Tout le cours"), detail: "Moodle, Botafogo, Courseware", icon: "books.vertical") {
-                openCourse(SiteHub.Request(courseID: course.id, source: moodleID != nil ? .moodle : .studytrack, reading: nil))
+                openCourse(SiteHub.Request(courseID: course.id, source: moodleID != nil ? .moodle : .polymestre, reading: nil))
             }
         }
     }

@@ -1,6 +1,6 @@
-# StudyTrack pour Windows
+# Polymestre pour Windows
 
-Le portage de l'app Mac (StudyTrackMac + StudyKit + Models + Domain) sur Windows :
+Le portage de l'app Mac (PolymestreMac + StudyKit + Models + Domain) sur Windows :
 **Tauri 2** (shell Rust) + **React 19 / TypeScript** (webview), base locale **SQLite**
 (tauri-plugin-sql) et **synchronisation Supabase** (les apps Apple la rejoignent).
 
@@ -20,7 +20,7 @@ npm run tauri build    # .msi / .exe (CI sur windows-latest : .github/workflows/
 
 ## La source des données (au lancement)
 
-- **Dans l'app Tauri** : la base SQLite locale (`studytrack.db` dans le dossier de
+- **Dans l'app Tauri** : la base SQLite locale (`polymestre.db` dans le dossier de
   l'app), lue et écrite par `Repository` (src/data/repository.ts) au-dessus du
   moteur de synchronisation.
 - **Dans le navigateur** (`npm run dev`) : source en mémoire amorcée par
@@ -34,7 +34,7 @@ npm run tauri build    # .msi / .exe (CI sur windows-latest : .github/workflows/
 ```
 src-tauri/   shell Rust : fenêtre, plugins (sql, opener) ; le reste viendra ici
 src/
-  domain/    portage 1:1 de StudyTrack/Domain (pur, sans UI, testé)
+  domain/    portage 1:1 de Polymestre/Domain (pur, sans UI, testé)
   models/    les 20 modèles de SchemaV1 + store + SeedData
   data/      bridge base ↔ graphe d'objets : hydrate, Repository, sources
   sync/      base locale (SQLite) + moteur d'envoi/lecture + transport Supabase

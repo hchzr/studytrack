@@ -1,5 +1,5 @@
 // Les sites du cours lus **en natif** dans le mode étude : une page Moodle, un
-// texte de Courseware, une vidéo MediaSpace (StudyTrack/Domain/SiteContent.swift).
+// texte de Courseware, une vidéo MediaSpace (Polymestre/Domain/SiteContent.swift).
 //
 // Ici, ce qui est pur — le HTML découpé en blocs, l'aiguillage d'un lien,
 // l'adresse d'une vidéo Kaltura ou edX, les réponses des scripts Moodle.

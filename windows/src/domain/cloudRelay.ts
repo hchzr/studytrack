@@ -1,4 +1,4 @@
-// Ce que les appareils se disent **vite** (StudyTrack/Domain/CloudRelay.swift).
+// Ce que les appareils se disent **vite** (Polymestre/Domain/CloudRelay.swift).
 //
 // La base synchronise les données en quelques secondes à quelques minutes. Le
 // chrono, lui, ne peut pas attendre : démarré sur le Mac, il doit tourner sur

@@ -1,5 +1,5 @@
 // Ce qu'un modèle de langage a compris d'une activité Moodle que les règles ne
-// savent pas lire (StudyTrack/Domain/MoodleAIHint.swift).
+// savent pas lire (Polymestre/Domain/MoodleAIHint.swift).
 
 import { Plural } from "./plural.ts";
 import { swiftInt } from "../services/seriesPDFParser.ts";

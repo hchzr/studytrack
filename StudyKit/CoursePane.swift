@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Le cours, dans le bureau, en natif : ce que StudyTrack en sait (semaine
+/// Le cours, dans le bureau, en natif : ce que Polymestre en sait (semaine
 /// par semaine, avec ce qui est vu et fait), le plan Moodle en direct (pages,
 /// dossiers, devoirs, liens, annonces lus ici), Courseware (vidéos et textes)
 /// et le site Botafogo lu comme un livre. PDF (PDFKit), autres fichiers
@@ -48,13 +48,13 @@ struct CoursePane: View {
     }
 
     enum Source: String, CaseIterable, Identifiable {
-        case studytrack, botafogo, sheet, saved, notes, moodle, courseware, ed
+        case polymestre, botafogo, sheet, saved, notes, moodle, courseware, ed
         var id: String { rawValue }
         var label: String {
             switch self {
             case .sheet: return "Fiche"
             case .saved: return "Gardés"
-            case .studytrack: return "Semaine"
+            case .polymestre: return "Semaine"
             case .notes: return "Mes notes"
             case .moodle: return "Moodle"
             case .courseware: return "Courseware"
@@ -66,7 +66,7 @@ struct CoursePane: View {
             switch self {
             case .sheet: return "rectangle.stack"
             case .saved: return "bookmark"
-            case .studytrack: return "calendar"
+            case .polymestre: return "calendar"
             case .notes: return "pencil.and.scribble"
             case .moodle: return "graduationcap"
             case .courseware: return "play.rectangle"
@@ -76,7 +76,7 @@ struct CoursePane: View {
         }
     }
 
-    @State private var source: Source = .studytrack
+    @State private var source: Source = .polymestre
     /// Le chapitre de la fiche demandé depuis la semaine.
     @State private var sheetChapter: String?
     @Query private var allCourses: [Course]
@@ -152,7 +152,7 @@ struct CoursePane: View {
         Source.allCases.filter {
             // La semaine d'abord, pour tous les cours (Botafogo compris) : ce
             // qu'il y a à voir et à lire, d'où que ça vienne.
-            ($0 == .studytrack && (course.map { !$0.theoryItems.isEmpty || !$0.series.isEmpty } ?? false)) || $0 == .sheet || $0 == .saved || ($0 == .notes && !hasNotesTool && !notes.isEmpty) || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
+            ($0 == .polymestre && (course.map { !$0.theoryItems.isEmpty || !$0.series.isEmpty } ?? false)) || $0 == .sheet || $0 == .saved || ($0 == .notes && !hasNotesTool && !notes.isEmpty) || ($0 == .moodle && moodleID != nil) || ($0 == .courseware && coursewareKey != nil)
                 || ($0 == .botafogo && botafogoURL != nil)
                 || ($0 == .ed && (edCourse != nil || desk.edNeedsLogin))
         }
@@ -291,7 +291,7 @@ struct CoursePane: View {
                     .padding(.horizontal, 12).padding(.vertical, compact ? 8 : 12)
             }
             switch source {
-            case .studytrack: studyTrackList(course)
+            case .polymestre: polymestreList(course)
             case .moodle: moodleList(course)
             case .courseware: coursewareList
             case .botafogo: botafogoList
@@ -356,7 +356,7 @@ struct CoursePane: View {
     private var savedButton: some View {
         let count = course?.savedResources.count ?? 0
         let active = source == .saved
-        Button { source = active ? (sources.first { $0 != .saved } ?? .studytrack) : .saved } label: {
+        Button { source = active ? (sources.first { $0 != .saved } ?? .polymestre) : .saved } label: {
             HStack(spacing: 5) {
                 Image(systemName: active || count > 0 ? "bookmark.fill" : "bookmark")
                 if count > 0 { Text("\(count)").font(.caption.weight(.semibold).monospacedDigit()) }
@@ -371,7 +371,7 @@ struct CoursePane: View {
         .accessibilityLabel("Gardés")
     }
 
-    // MARK: StudyTrack
+    // MARK: Polymestre
 
     /// La semaine choisie (`nil` : celle en cours).
     @State private var week: Int?
@@ -392,7 +392,7 @@ struct CoursePane: View {
     /// La semaine : où reprendre, puis à regarder, à lire, les documents et la série — chacun
     /// s'ouvre ici, se coche quand on arrive au bout, et mène à la fiche (le chapitre qu'il couvre),
     /// à la série (l'exercice) et à tes notes.
-    private func studyTrackList(_ course: Course) -> some View {
+    private func polymestreList(_ course: Course) -> some View {
         let tint = Carnet.tint(course.colorHex)
         let all = weeks(course)
         let shown = shownWeek(course, in: all)

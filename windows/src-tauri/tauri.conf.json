@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Polymestre",
   "version": "2.1.0",
-  "identifier": "com.hczr.studytrack.windows",
+  "identifier": "ch.polymestre.windows",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

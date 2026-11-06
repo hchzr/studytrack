@@ -1,5 +1,5 @@
 /**
- * Relais du chrono partagé de StudyTrack.
+ * Relais du chrono partagé de Polymestre.
  *
  * Un Durable Object par compte (le nom du canal, déduit de l'identité iCloud
  * dans l'app) : il garde les WebSocket des appareils ouverts et leur relaie
@@ -57,7 +57,7 @@ type Inbound =
   | { t: "timer"; d: string; u: number; live?: LivePush; wake?: boolean }
   | { t: "music"; d: string; keep?: boolean; wake?: boolean }
   | { t: "drop"; d: string }
-  | { t: "apns"; kind: "update" | "start" | "device"; token: string | null; sandbox: boolean };
+  | { t: "apns"; kind: "update" | "start" | "device"; token: string | null; sandbox: boolean; topic?: string };
 
 /** Ce qu'il faut pousser à l'îlot de l'iPhone. */
 interface LivePush {
@@ -67,7 +67,12 @@ interface LivePush {
   stale?: number; // secondes depuis 1970
 }
 
+/** Les apps dont le relais accepte de pousser (l'identifiant annoncé par l'appareil). */
+const TOPICS = new Set(["ch.polymestre.app", "ch.polymestre.mac", "com.hczr.studytrack.app", "com.hczr.studytrack.mac"]);
+
 interface Tokens {
+  /** L'identifiant de l'app de cet appareil (absent : `APNS_BUNDLE_ID`, l'ancienne app). */
+  topic?: string;
   update?: string;
   start?: string;
   /** Le jeton de l'appareil (notifications silencieuses). */
@@ -132,6 +137,7 @@ export class Relay extends DurableObject<Env> {
       const key = `tokens:${device}`;
       const tokens = (await this.ctx.storage.get<Tokens>(key)) ?? { sandbox: message.sandbox };
       tokens.sandbox = message.sandbox;
+      if (message.topic && TOPICS.has(message.topic)) tokens.topic = message.topic;
       if (message.kind === "update") tokens.update = message.token ?? undefined;
       else if (message.kind === "device") tokens.device = message.token ?? undefined;
       else tokens.start = message.token ?? undefined;
@@ -237,7 +243,7 @@ export class Relay extends DurableObject<Env> {
     for (const [key, tokens] of entries) {
       const device = key.slice("tokens:".length);
       if (device === sender || !tokens.device) continue;
-      const status = await apns.push(tokens.device, tokens.sandbox, body, "background");
+      const status = await apns.push(tokens.device, tokens.sandbox, body, "background", tokens.topic);
       console.log(`réveil → ${device.slice(0, 8)} : ${status}`);
       if (status === 410 || status === 400) {
         tokens.device = undefined;
@@ -254,7 +260,7 @@ export class Relay extends DurableObject<Env> {
     for (const [key, tokens] of entries) {
       const device = key.slice("tokens:".length);
       if (device === sender || !tokens.device) continue;
-      const status = await apns.push(tokens.device, tokens.sandbox, body, "background");
+      const status = await apns.push(tokens.device, tokens.sandbox, body, "background", tokens.topic);
       console.log(`musique → ${device.slice(0, 8)} : ${status}`);
     }
   }
@@ -295,7 +301,7 @@ export class Relay extends DurableObject<Env> {
         await this.ctx.storage.put(key, tokens);
       }
       if (!token) continue;
-      const status = await this.sendAPNs(token, tokens.sandbox, event, live);
+      const status = await this.sendAPNs(token, tokens.sandbox, event, live, tokens.topic);
       console.log(`îlot ${event} → ${device.slice(0, 8)} (${token === tokens.start ? "jeton de démarrage" : "jeton de mise à jour"}) : ${status}`);
       if (status === 410 || status === 400) {
         // Jeton mort (activité terminée, app supprimée) : on l'oublie.
@@ -312,7 +318,7 @@ export class Relay extends DurableObject<Env> {
     }
   }
 
-  private async sendAPNs(token: string, sandbox: boolean, event: string, live: LivePush): Promise<number> {
+  private async sendAPNs(token: string, sandbox: boolean, event: string, live: LivePush, topic?: string): Promise<number> {
     const now = Math.floor(Date.now() / 1000);
     const aps: Record<string, unknown> = { timestamp: now, event, "content-state": live.state };
     if (live.stale) aps["stale-date"] = Math.floor(live.stale);
@@ -326,7 +332,7 @@ export class Relay extends DurableObject<Env> {
     // d'APNs. Apple refuse (429) un jeton renouvelé plus d'une fois toutes
     // les ~20 minutes — or chaque relais qui se réveille le refaisait.
     const sender = this.env.APNS.get(this.env.APNS.idFromName("apns"));
-    return sender.push(token, sandbox, JSON.stringify({ aps }), "liveactivity");
+    return sender.push(token, sandbox, JSON.stringify({ aps }), "liveactivity", topic);
   }
 }
 
@@ -337,14 +343,16 @@ export class ApnsSender extends DurableObject<Env> {
    * silencieuse (`content-available`), que l'app traite en arrière-plan ;
    * Apple exige la priorité 5 et le sujet nu (l'identifiant de l'app).
    */
-  async push(token: string, sandbox: boolean, body: string, type: "liveactivity" | "background"): Promise<number> {
+  async push(token: string, sandbox: boolean, body: string, type: "liveactivity" | "background", topic?: string): Promise<number> {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
     const live = type === "liveactivity";
+    // L'app de l'appareil ; une app d'avant le changement de nom ne le dit pas.
+    const bundle = topic ?? this.env.APNS_BUNDLE_ID;
     const response = await fetch(`https://${host}/3/device/${token}`, {
       method: "POST",
       headers: {
         authorization: `bearer ${await this.jwt()}`,
-        "apns-topic": live ? `${this.env.APNS_BUNDLE_ID}.push-type.liveactivity` : this.env.APNS_BUNDLE_ID,
+        "apns-topic": live ? `${bundle}.push-type.liveactivity` : bundle,
         "apns-push-type": type,
         "apns-priority": live ? "10" : "5",
       },

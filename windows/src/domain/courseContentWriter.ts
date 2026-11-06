@@ -1,4 +1,4 @@
-// Écrit un brouillon relu dans un cours (StudyTrack/Domain/CourseContentWriter.swift).
+// Écrit un brouillon relu dans un cours (Polymestre/Domain/CourseContentWriter.swift).
 //
 // **Ne supprime jamais rien** : réimporter Moodle en semaine 8 doit ajouter la
 // série 8, pas effacer l'avancement des sept premières. Un élément déjà présent

@@ -16,7 +16,7 @@ import OSLog
 ///   réglages.
 @MainActor
 enum SystemLock {
-    private static let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "systemlock")
+    private static let log = Logger(subsystem: "ch.polymestre.mac", category: "systemlock")
 
     /// Les essais de débogage (`-isolatedTimer`, `-studyPreview`) ne touchent à rien.
     private static var untouched: Bool {
@@ -30,7 +30,7 @@ enum SystemLock {
     static var hasRecord: Bool { StudyLockStore.load() != nil }
 
     /// ⌘Tab du système est bel et bien éteint (relu après coup) : sinon, la
-    /// présentation de StudyTrack reste le seul frein quand il est devant.
+    /// présentation de Polymestre reste le seul frein quand il est devant.
     private(set) static var processSwitchingOff = false
 
     /// Début de blocage : raccourcis éteints (si `shortcuts`), Dock et barre des
@@ -94,7 +94,7 @@ enum SystemLock {
 enum StudyLockStore {
     static var url: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Application Support/StudyTrack/lock-restore.json")
+            .appending(path: "Library/Application Support/Polymestre/lock-restore.json")
     }
 
     static func load() -> StudyLockPlan.Record? {
@@ -153,7 +153,7 @@ enum SystemHotKeys {
 
 /// Le Dock et la barre des menus cachés pendant un blocage : sans cela, ils
 /// reviennent dès qu'une app permise (GoodNotes…) est devant, puisque la
-/// présentation de StudyTrack ne vaut que quand il y est lui-même. Passe par
+/// présentation de Polymestre ne vaut que quand il y est lui-même. Passe par
 /// System Events : une permission (« contrôler System Events »), demandée avant
 /// de commencer — une fois le blocage en route, les Réglages sont fermés.
 enum SystemChrome {

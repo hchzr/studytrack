@@ -20,7 +20,7 @@ import AppKit
 /// catalogue (`SearchView`, `CatalogLookup`, `TrackMatcher`) — réduits à ce
 /// qu'il faut pour écouter en travaillant.
 ///
-/// **Où ça joue.** Dans Music, pas dans StudyTrack : sur l'iPhone et l'iPad,
+/// **Où ça joue.** Dans Music, pas dans Polymestre : sur l'iPhone et l'iPad,
 /// le lecteur système (la musique continue après la session, et se pilote
 /// aussi depuis le centre de contrôle) ; sur le Mac, l'app Music, que le mode
 /// étude laisse tourner en arrière-plan sans jamais la montrer.
@@ -104,13 +104,13 @@ final class StudyMusic {
     private(set) var authorization = MusicAuthorization.currentStatus
     /// La dernière chose qui n'a pas marché (lecture refusée, Music fermé…).
     var lastError: String?
-    /// Remet à zéro le refus d'Automatisation de Music pour StudyTrack, puis refait une
+    /// Remet à zéro le refus d'Automatisation de Music pour Polymestre, puis refait une
     /// demande : macOS reposera la question. Réversible, sans droits d'administration.
     func askAutomationAgain() {
         #if os(macOS)
         let reset = Process()
         reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        reset.arguments = ["reset", "AppleEvents", Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"]
+        reset.arguments = ["reset", "AppleEvents", Bundle.main.bundleIdentifier ?? "ch.polymestre.mac"]
         try? reset.run()
         reset.waitUntilExit()
         automation = .undetermined
@@ -119,7 +119,7 @@ final class StudyMusic {
         #endif
     }
 
-    /// L'Automatisation de Music pour StudyTrack : pas encore demandée, accordée (un
+    /// L'Automatisation de Music pour Polymestre : pas encore demandée, accordée (un
     /// script a répondu) ou refusée (erreur -1743) — sans cela, l'écran disait seulement
     /// « Rien ne joue ».
     enum Automation: Equatable { case undetermined, granted, denied }
@@ -613,7 +613,7 @@ private enum Command {
     case volume(Double)
 }
 
-private let log = Logger(subsystem: "com.hczr.studytrack", category: "music")
+private let log = Logger(subsystem: "ch.polymestre", category: "music")
 
 // MARK: - iPhone, iPad : le lecteur système
 
@@ -1509,7 +1509,7 @@ private final class Backend {
 
 /// Les scripts envoyés à Music, sur une file à eux (repris de Tournesol).
 private final class MusicScript: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "com.hczr.studytrack.music-script", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "ch.polymestre.music-script", qos: .userInitiated)
 
     /// Dernier état connu, lu et écrit sur la file seulement.
     private var state = StudyMusic.Automation.undetermined

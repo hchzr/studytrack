@@ -1,5 +1,5 @@
 // Les vidéos d'un cours (Explique, listes de lecture MediaSpace), rangées dans
-// ses semaines (StudyTrack/Domain/CourseVideos.swift) : chaque semaine a un
+// ses semaines (Polymestre/Domain/CourseVideos.swift) : chaque semaine a un
 // élément de théorie, et ses vidéos en sont les liens.
 
 import { DateUtils } from "./dateUtils.ts";

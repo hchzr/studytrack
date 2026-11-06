@@ -10,7 +10,7 @@ import ManagedSettings
 final class StudyLockMonitor: DeviceActivityMonitor {
     override func intervalDidEnd(for activity: DeviceActivityName) {
         super.intervalDidEnd(for: activity)
-        guard activity.rawValue == "studytrack.studyMode" else { return }
-        ManagedSettingsStore(named: ManagedSettingsStore.Name("studytrack.studyMode")).clearAllSettings()
+        guard activity.rawValue == "polymestre.studyMode" else { return }
+        ManagedSettingsStore(named: ManagedSettingsStore.Name("polymestre.studyMode")).clearAllSettings()
     }
 }

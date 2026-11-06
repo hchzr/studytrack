@@ -29,7 +29,7 @@ describe("secrets", () => {
   it("les jetons et la session sont secrets, pas les réglages ordinaires", () => {
     expect(isSecretKey("settings.todoistToken")).toBe(true);
     expect(isSecretKey("ankiweb.hostKey")).toBe(true);
-    expect(isSecretKey("studytrack.supabase.session")).toBe(true);
+    expect(isSecretKey("polymestre.supabase.session")).toBe(true);
     expect(isSecretKey("settings.timetableURLString")).toBe(false);
     expect(isSecretKey("ankiweb.username")).toBe(false);
     expect(new Set(SECRET_KEYS).size).toBe(SECRET_KEYS.length);

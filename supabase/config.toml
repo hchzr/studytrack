@@ -2,7 +2,7 @@
 #
 # `project_id` nomme le projet **local** (celui de `supabase start`) ; le projet
 # distant lié, lui, est retenu dans `supabase/.temp/`, créé par `supabase link`.
-project_id = "studytrack"
+project_id = "polymestre"
 
 [functions.extract-series]
 # La fonction est appelée avec la clé `anon` compilée dans l'app, qui est un JWT

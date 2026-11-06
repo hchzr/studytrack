@@ -14,7 +14,7 @@ import Security
 /// Rien ici ne part sur le réseau : seule la clé **publique** est publiée.
 enum GroupKeyStore {
 
-    private static let service = "com.hczr.studytrack.e2ee"
+    private static let service = "ch.polymestre.e2ee"
 
     // MARK: Identité
 

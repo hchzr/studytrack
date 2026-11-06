@@ -1,4 +1,4 @@
-// Le programme d'un site de cours Botafogo (StudyTrack/Domain/BotafogoProgram.swift).
+// Le programme d'un site de cours Botafogo (Polymestre/Domain/BotafogoProgram.swift).
 //
 // Le programme n'est ni dans le HTML ni dans une API : il est **écrit dans le
 // code** du site, un littéral JavaScript que la barre latérale déplie. On le

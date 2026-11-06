@@ -30,11 +30,11 @@ export interface MiniTimer {
 
 /**
  * Faut-il montrer la fenêtre flottante ? (MiniTimerPanel.update : réglage + une session.)
- * Elle sert quand on est **ailleurs** : tant que la fenêtre de StudyTrack est devant, son
+ * Elle sert quand on est **ailleurs** : tant que la fenêtre de Polymestre est devant, son
  * chrono est déjà à l'écran (mode étude, récapitulatif), la pilule par-dessus ne ferait que gêner.
  */
 export function miniWanted(enabled: boolean, state: FocusTimerState | null, mainFocused = false): boolean {
-  // Sous le verrou d'étude, rien ne doit flotter par-dessus l'écran de StudyTrack.
+  // Sous le verrou d'étude, rien ne doit flotter par-dessus l'écran de Polymestre.
   return enabled && state !== null && !mainFocused && !StudyMode.blocks(state);
 }
 

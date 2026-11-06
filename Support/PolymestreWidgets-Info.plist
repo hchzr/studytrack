@@ -14,8 +14,8 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>StudyTrackAppGroup</key>
-	<string>$(STUDYTRACK_APP_GROUP)</string>
+	<key>PolymestreAppGroup</key>
+	<string>$(POLYMESTRE_APP_GROUP)</string>
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>

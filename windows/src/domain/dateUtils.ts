@@ -1,4 +1,4 @@
-// Utilitaires de dates, semaines et formats (StudyTrack/Domain/DateUtils.swift).
+// Utilitaires de dates, semaines et formats (Polymestre/Domain/DateUtils.swift).
 //
 // `Calendar.current` devient l'heure locale de la machine ; les semaines sont celles
 // d'ISO 8601 (lundi d'abord), comme `startOfWeek` côté Swift. Les tests tournent à

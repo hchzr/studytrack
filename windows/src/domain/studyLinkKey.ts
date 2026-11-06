@@ -1,5 +1,5 @@
 // Ce qui identifie un document du cours, quelle que soit la forme de son lien
-// (StudyTrack/Domain/StudyLinkKey.swift) : la même section du polycopié s'écrit
+// (Polymestre/Domain/StudyLinkKey.swift) : la même section du polycopié s'écrit
 // `…?polycopie=matiere/m_x`, `…?cours=&polycopie=/handout/matiere/m_x` ou
 // `/handout/matiere/m_x` ; la même vidéo Courseware, `…/xblock/block-v1:…` ou
 // `block-v1:…`. Pur, testé.

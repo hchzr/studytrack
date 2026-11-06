@@ -19,7 +19,7 @@ import OSLog
 final class AppPlacement {
     static let shared = AppPlacement()
 
-    private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "placement")
+    private let log = Logger(subsystem: "ch.polymestre.mac", category: "placement")
     private(set) var hole: DeskGeometry.Rect?
     private var active = false
     private var allowed: Set<String> = []

@@ -1,5 +1,5 @@
 // Port des sections de Validation/main.swift qui ne portent que sur les modèles
-// (StudyTrack/Models), DateUtils et Plural. Chaque `check` Swift devient un `it` du
+// (Polymestre/Models), DateUtils et Plural. Chaque `check` Swift devient un `it` du
 // même libellé ; la condition est évaluée à la collecte, dans l'ordre du fichier Swift,
 // parce que les sections se suivent sur le même contexte (comme dans main.swift).
 //
@@ -136,13 +136,13 @@ describe("Matières multiples d'un groupe", () => {
     `affectation normalisée et dédupliquée — ${JSON.stringify(absorbed.subjectCodes)}`);
 
   const invitationGroup = new StudyGroup({ name: "Buddies", courseCodes: ["CS-250"], inviteCode: "EPFL-4F2A" });
-  check(invitationGroup.inviteLink === "studytrack://join?code=EPFL-4F2A",
+  check(invitationGroup.inviteLink === "polymestre://join?code=EPFL-4F2A",
     `lien d'invitation — ${invitationGroup.inviteLink}`);
   check(StudyGroup.normalizeInviteCode(" epfl-4f2a ") === "EPFL-4F2A", "code d'invitation reçu par lien, normalisé");
   check(StudyGroup.normalizeInviteCode("EPFL 4F2A") === "EPFL4F2A", "espaces internes retirés");
   check(invitationGroup.inviteMessage.includes("EPFL-4F2A")
     && invitationGroup.inviteMessage.includes("CS-250")
-    && invitationGroup.inviteMessage.includes("studytrack://"),
+    && invitationGroup.inviteMessage.includes("polymestre://"),
   "message d'invitation : nom, matières, code et lien");
 });
 

@@ -229,13 +229,14 @@ enum SyncCrypto {
     static func newPairingSecret() -> Data { randomBytes(pairingCodeBytes) }
     static func encodePairingCode(_ secret: Data) -> String { grouped(crockfordEncode(secret)) }
     static func decodePairingCode(_ text: String) -> Data? { crockfordDecode(text, byteLength: pairingCodeBytes) }
-    static func pairingQRText(_ secret: Data) -> String { "studytrack-pair:" + encodePairingCode(secret) }
+    static func pairingQRText(_ secret: Data) -> String { "polymestre-pair:" + encodePairingCode(secret) }
 
-    /// Le texte d'un QR (« studytrack-pair:… ») ou un code nu.
+    /// Le texte d'un QR (« polymestre-pair:… », ou « studytrack-pair:… » d'un appareil pas
+    /// encore à jour) ou un code nu.
     static func parsePairingInput(_ text: String) -> Data? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prefix = "studytrack-pair:"
-        let body = trimmed.lowercased().hasPrefix(prefix) ? String(trimmed.dropFirst(prefix.count)) : trimmed
+        let prefix = ["polymestre-pair:", "studytrack-pair:"].first { trimmed.lowercased().hasPrefix($0) }
+        let body = prefix.map { String(trimmed.dropFirst($0.count)) } ?? trimmed
         return decodePairingCode(body)
     }
 

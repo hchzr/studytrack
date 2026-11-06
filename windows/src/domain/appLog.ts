@@ -1,4 +1,4 @@
-// Le journal de l'app (StudyTrack/Domain/AppLog.swift).
+// Le journal de l'app (Polymestre/Domain/AppLog.swift).
 //
 // Le tampon est **pur** : ajouter, borner, filtrer, formater. Séparé du stockage
 // pour être testable sans toucher au disque — c'est là que se trouvent les règles

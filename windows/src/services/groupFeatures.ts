@@ -8,7 +8,7 @@
 //   • les **sessions prévues** (`planned_sessions`) ;
 //   • l'**avancement** série par série et par matière (`item_completion`, `series_completion`),
 //     que je publie aussi (seulement les matières du groupe).
-// Les identités et clés de groupe restent au coffre de Windows (`studytrack.groups.keys`).
+// Les identités et clés de groupe restent au coffre de Windows (`polymestre.groups.keys`).
 
 import { syncService } from "./syncService.ts";
 import { SupabaseError, type SupabaseClient } from "./supabase.ts";
@@ -31,7 +31,7 @@ async function client(): Promise<{ api: SupabaseClient; me: string }> {
 
 // MARK: - Coffre des clés
 
-const VAULT = "studytrack.groups.keys";
+const VAULT = "polymestre.groups.keys";
 interface Vault { identities: Record<string, { priv: string; pub: string }>; groups: Record<string, Record<string, string>> }
 
 function readVault(): Vault {

@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/NotebookExport.swift : les sources à donner à
+// Port de Polymestre/Domain/NotebookExport.swift : les sources à donner à
 // NotebookLM — la fiche, ses liens, ses schémas et ses questions, en Markdown.
 // NotebookLM n'a pas d'interface pour une app tierce : on **prépare** les
 // sources, l'étudiant·e les dépose, puis rapporte le podcast ici.

@@ -1,5 +1,5 @@
 // Schéma synchronisé : la copie, champ pour champ, de `SchemaV1`
-// (StudyTrack/Models/StudyTrackSchema.swift).
+// (Polymestre/Models/PolymestreSchema.swift).
 //
 // C'est la **seule** description des données côté Windows : la migration Supabase
 // et la base SQLite locale en sont générées (scripts/gen-schema.ts), et

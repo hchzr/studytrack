@@ -40,7 +40,7 @@ final class TimerLink {
     /// le relais le pousse aux iPhone verrouillés.
     var livePayload: ((CloudRelay.TimerSnapshot) -> Data?)?
 
-    private let log = Logger(subsystem: "com.hczr.studytrack", category: "timerlink")
+    private let log = Logger(subsystem: "ch.polymestre", category: "timerlink")
     private var endpoint: URL?
     private var key: SymmetricKey?
     private var socket: URLSessionWebSocketTask?
@@ -192,7 +192,8 @@ final class TimerLink {
         #else
         let sandbox = false
         #endif
-        write(["t": "apns", "kind": kind.rawValue, "token": token ?? NSNull(), "sandbox": sandbox])
+        write(["t": "apns", "kind": kind.rawValue, "token": token ?? NSNull(), "sandbox": sandbox,
+               "topic": Bundle.main.bundleIdentifier ?? ""])
     }
 
     // MARK: Connexion

@@ -54,7 +54,7 @@ enum TimetableImport {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        request.setValue("StudyTrack/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Polymestre/1.0", forHTTPHeaderField: "User-Agent")
 
         let data: Data
         let response: URLResponse

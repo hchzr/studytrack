@@ -506,6 +506,8 @@ final class SupabaseSync {
     // MARK: - Une passe
 
     private func run(pull: Bool, accept: Bool) async {
+        // La reprise des données de StudyTrack d'abord (bornée à quelques jours).
+        guard !IdentityMigration.holdsBackSync else { return }
         guard isEnabled else { return }
         guard let client else {
             lastError = "La synchronisation n'est pas configurée dans cette version."

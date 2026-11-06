@@ -45,7 +45,7 @@ describe("Export pour un assistant (source du serveur MCP)", () => {
     hoursPerCredit: 30, displayName: "Test",
   };
   const exportData = AssistantExport.make(base);
-  check(exportData["format"] === "studytrack.assistant", `le format est annoncé — ${String(exportData["format"] ?? "-")}`);
+  check(exportData["format"] === "polymestre.assistant", `le format est annoncé — ${String(exportData["format"] ?? "-")}`);
   check(exportData["version"] === AssistantExport.formatVersion, "la version du format est portée");
   check(typeof exportData["generatedAt"] === "string", "l'horodatage est présent");
 
@@ -72,14 +72,14 @@ describe("Export pour un assistant (source du serveur MCP)", () => {
   check(exportJSON !== null, "l'instantané est sérialisable");
   if (exportJSON !== null) {
     const reparsed = JSON.parse(exportJSON) as Record<string, unknown>;
-    check(reparsed["format"] === "studytrack.assistant", "…et se relit après un aller-retour JSON");
+    check(reparsed["format"] === "polymestre.assistant", "…et se relit après un aller-retour JSON");
     check((reparsed["courses"] as Record<string, unknown>[]).length !== 0, "les cours survivent");
   }
   // Un export sans cours ne doit pas produire un objet vide mais valide.
   const emptyExport = AssistantExport.make({
     courses: [], sessions: [], milestones: [], groups: [], hoursPerCredit: 25, displayName: "",
   });
-  check(emptyExport["format"] === "studytrack.assistant", "un export vide garde son format");
+  check(emptyExport["format"] === "polymestre.assistant", "un export vide garde son format");
   check((emptyExport["courses"] as Record<string, unknown>[]).length === 0, "…et une liste de cours vide plutôt qu'absente");
 
   // v3 : notes, fiche, corrigés rédigés et fichiers — seulement sur demande.
@@ -154,7 +154,7 @@ describe("Serveur MCP local (fichiers du Mac)", () => {
   // Le portage garde le protocole et le contrôle d'accès ; la couche socket
   // (Network.framework) est remplacée par un hôte Node dans ce test.
   class FakeFilesProvider implements LocalMCPProvider {
-    serverName = "studytrack-files";
+    serverName = "polymestre-files";
     instructions = "essai";
     get tools(): Record<string, unknown>[] {
       return [{ name: "list_files", inputSchema: { type: "object" } }, { name: "read_file", inputSchema: { type: "object" } }];
@@ -260,7 +260,7 @@ describe("Serveur MCP local (fichiers du Mac)", () => {
   it("initialize : version et nom du serveur", async () => {
     const initialize = await result({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
     expect(initialize?.["protocolVersion"] === "2025-06-18"
-      && ((initialize?.["serverInfo"] as Record<string, unknown>)?.["name"] === "studytrack-files")).toBe(true);
+      && ((initialize?.["serverInfo"] as Record<string, unknown>)?.["name"] === "polymestre-files")).toBe(true);
   });
 
   it("…et les instructions pour l'assistant", async () => {
@@ -505,7 +505,7 @@ describe("Le cadre du tuteur (TutorFramework)", () => {
     copy: { notebook: "Séance Et Série 6", pagesSeen: [1, 2, 3, 4], total: 11 },
   });
   const card = T.card(state, [{ kind: "copy", notebook: "Séance Et Série 6", pages: [4], total: 11, requested: true }]);
-  check(card.startsWith("[StudyTrack]") && card.includes("[/StudyTrack]"), "carte : dans le bloc que l'app retire");
+  check(card.startsWith("[Polymestre]") && card.includes("[/Polymestre]"), "carte : dans le bloc que l'app retire");
   check(card.includes("pas encore marqué fait") && !card.includes("à faire"), "carte : « pas encore marqué fait », pas « à faire »");
   check(card.includes("jusqu'au niveau 1/4") && card.includes("niveau 2 (outil)"), "carte : le niveau suivant est dit");
   check(card.includes("mon écriture") && card.includes("pas un corrigé"), "carte : la copie est de l'étudiant·e");
@@ -539,7 +539,7 @@ describe("Le cadre du tuteur (TutorFramework)", () => {
   check(!T.suggestions(s1, false).some((next) => next.kind === "check"), "propositions : pas de vérification de copie sans copie");
   check(eq(T.suggestions(new TutorState(), false), [TutorNext.explain]), "propositions : sans exercice, la notion");
   check(T.suggestions(s1, false).length <= 3, "propositions : trois au plus");
-  check(T.asksQuestion("Quel X isole une colonne ?\n\n```studytrack\n6.3 | 1 | x\n```") && !T.asksQuestion("Voilà."),
+  check(T.asksQuestion("Quel X isole une colonne ?\n\n```polymestre\n6.3 | 1 | x\n```") && !T.asksQuestion("Voilà."),
     "réponse : finit sur une question");
 
   // Les règles de la consigne.
@@ -620,7 +620,7 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
   check(ClaudeTutor.sessionRecovery("Error: No conversation found with session ID: abc") === "startFresh", "session perdue : on repart");
   check(ClaudeTutor.sessionRecovery("Error: Session ID abc is already in use.") === "resume", "session déjà là : on la reprend");
   check(ClaudeTutor.sessionRecovery("autre chose") === null, "autre erreur : rien");
-  check(ClaudeTutor.sessionFolderName("/Users/a/Library/Caches/StudyTrack/claude") === "-Users-a-Library-Caches-StudyTrack-claude"
+  check(ClaudeTutor.sessionFolderName("/Users/a/Library/Caches/Polymestre/claude") === "-Users-a-Library-Caches-Polymestre-claude"
     && ClaudeTutor.sessionFolderName("/Users/a/Application Support/x.y") === "-Users-a-Application-Support-x-y",
   "dossier des sessions de Claude Code");
 
@@ -638,13 +638,13 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
   check(switched.includes("autre exercice") && switched.includes("Exercice 2") && ClaudeTutor.displayText(switched + "Et là ?") === "Et là ?",
     "changer d'exercice dans la conversation");
 
-  const report = "Bilan.\n\n```studytrack\n1 : juste\nEx 2 : moyen\nexercice 3: FAUX\n4 : ?\n```\nVoilà.";
+  const report = "Bilan.\n\n```polymestre\n1 : juste\nEx 2 : moyen\nexercice 3: FAUX\n4 : ?\n```\nVoilà.";
   check(eq(ClaudeTutor.verdicts(report), [
     { exercise: "1", result: "correct" }, { exercise: "2", result: "partial" }, { exercise: "3", result: "wrong" },
   ]), "post-mortem : verdicts lus");
-  check(!ClaudeTutor.withoutVerdicts(report).includes("studytrack"), "post-mortem : le bloc ne s'affiche pas en texte");
+  check(!ClaudeTutor.withoutVerdicts(report).includes("polymestre"), "post-mortem : le bloc ne s'affiche pas en texte");
   check(ClaudeTutor.verdicts("rien").length === 0, "pas de bloc, pas de verdict");
-  check(ClaudeTutor.postMortemPrompt(true).includes("```studytrack"), "post-mortem : le format demandé");
+  check(ClaudeTutor.postMortemPrompt(true).includes("```polymestre"), "post-mortem : le format demandé");
   check(ClaudeTutor.matchExercise("2", ["1", "2", "3"]) === 1, "verdict → exercice 2");
   check(ClaudeTutor.matchExercise("3", ["Ex-03-01", "Ex-03-03"]) === 1, "verdict → numéro à tirets");
   check(ClaudeTutor.matchExercise("1.2", ["1.1", "1.2"]) === 1 && ClaudeTutor.matchExercise("9", ["1"]) === null,
@@ -664,15 +664,15 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
     { kind: "finished", error: null, contextTokens: 1002 }), "fin : taille du contexte");
   check(eq(ClaudeTutor.parse('{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","name":"mcp__notion__notion-search"}}}'),
     { kind: "tool", name: "mcp__notion__notion-search" }), "flux : un outil");
-  check(ClaudeTutor.toolLabel("mcp__notion__notion-search") === "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") === "Polymestre",
+  check(ClaudeTutor.toolLabel("mcp__notion__notion-search") === "Notion" && ClaudeTutor.toolLabel("mcp__polymestre__get_course") === "Polymestre",
     "outil : nom lisible");
   const jsonl = [
-    '{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\\n<command-name>/epfl-serie</command-name>\\n<command-args>On attaque.\\n\\n[StudyTrack]\\nCours : X\\n[/StudyTrack]\\n\\nPar où ?</command-args>"}}',
+    '{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\\n<command-name>/epfl-serie</command-name>\\n<command-args>On attaque.\\n\\n[Polymestre]\\nCours : X\\n[/Polymestre]\\n\\nPar où ?</command-args>"}}',
     '{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill"}]}}',
     '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Salut"},{"type":"tool_use","name":"Read"}]}}',
     '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"x"}]}}',
     '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"On commence."}]}}',
-    '{"type":"user","message":{"role":"user","content":[{"type":"document"},{"type":"text","text":"[StudyTrack]\\nCours : X\\n[/StudyTrack]\\n\\nUn indice ?"}]}}',
+    '{"type":"user","message":{"role":"user","content":[{"type":"document"},{"type":"text","text":"[Polymestre]\\nCours : X\\n[/Polymestre]\\n\\nUn indice ?"}]}}',
   ].join("\n");
   const history = ClaudeTutor.history(jsonl);
   check(eq(history.map((message) => ({ fromStudent: message.fromStudent, text: message.text })), [
@@ -709,17 +709,17 @@ describe("Claude dans le mode étude (ClaudeTutor, RichMarkup)", () => {
       "fichier : règles permises");
     const mcp = JSON.parse(ClaudeProject.mcpConfig(file, "https://x.supabase.co/functions/v1/mcp/T")) as Record<string, unknown>;
     const serverNames = Object.keys(mcp["mcpServers"] as Record<string, unknown>);
-    check(serverNames.length === 3 && ["notion", "todoist", "studytrack"].every((name) => serverNames.includes(name)),
+    check(serverNames.length === 3 && ["notion", "todoist", "polymestre"].every((name) => serverNames.includes(name)),
       "MCP : les serveurs du fichier et Polymestre");
-    check(!ClaudeProject.mcpConfig(file, "http://pas-sur").includes("studytrack"), "MCP : une adresse non chiffrée est refusée");
+    check(!ClaudeProject.mcpConfig(file, "http://pas-sur").includes("polymestre"), "MCP : une adresse non chiffrée est refusée");
     const withLocal = JSON.parse(ClaudeProject.mcpConfig(file, null, "http://127.0.0.1:47821/TOKEN")) as Record<string, unknown>;
-    const localEntry = (withLocal["mcpServers"] as Record<string, Record<string, unknown>>)["studytrack-files"];
+    const localEntry = (withLocal["mcpServers"] as Record<string, Record<string, unknown>>)["polymestre-files"];
     check(localEntry?.["url"] === "http://127.0.0.1:47821/TOKEN" && localEntry?.["type"] === "http", "MCP : le serveur local des fichiers est déclaré");
-    check(!ClaudeProject.mcpConfig(file, null, "http://evil.example:47821/T").includes("studytrack-files"),
+    check(!ClaudeProject.mcpConfig(file, null, "http://evil.example:47821/T").includes("polymestre-files"),
       "MCP : seule la boucle locale est acceptée comme serveur de fichiers");
-    check(!ClaudeProject.mcpConfig(file, null, null).includes("studytrack-files"), "MCP : éteint, il n'est pas déclaré");
-    check(ClaudeProject.allowedTools(file, false, [], true).includes("mcp__studytrack-files")
-      && !ClaudeProject.allowedTools(file, false).includes("mcp__studytrack-files"), "MCP : ses outils ne sont permis que s'il tourne");
+    check(!ClaudeProject.mcpConfig(file, null, null).includes("polymestre-files"), "MCP : éteint, il n'est pas déclaré");
+    check(ClaudeProject.allowedTools(file, false, [], true).includes("mcp__polymestre-files")
+      && !ClaudeProject.allowedTools(file, false).includes("mcp__polymestre-files"), "MCP : ses outils ne sont permis que s'il tourne");
     check(ClaudeProject.permissionSummary(file, false, [], true).includes("fichiers du Mac"), "MCP : les permis le disent");
     check(ClaudeProject.permissionSummary(file, true) === "lecture, compétences, écriture limitée, Notion, Todoist, Polymestre",
       "permissions en clair");
@@ -808,7 +808,7 @@ let x = 1
 describe("Extension Claude Desktop", () => {
   const manifest = JSON.parse(ClaudeDesktopExtension.manifest()) as Record<string, unknown>;
   const server = manifest["server"] as Record<string, unknown>;
-  check(manifest["name"] === "studytrack-files" && manifest["manifest_version"] === "0.4"
+  check(manifest["name"] === "polymestre-files" && manifest["manifest_version"] === "0.4"
     && server?.["type"] === "node" && server?.["entry_point"] === "server/index.js",
   "extension : manifeste (nom, version, point d'entrée Node)");
   const files = ClaudeDesktopExtension.files("com.exemple.app");
@@ -817,7 +817,7 @@ describe("Extension Claude Desktop", () => {
     "extension : deux fichiers, manifeste et pont");
   const script = files["server/index.js"];
   check(script.includes("com.exemple.app") && !script.includes("__APP_ID__"), "extension : l'identifiant de l'app est inscrit dans le pont");
-  check(ClaudeDesktopExtension.infoFile("/h") === "/h/Library/Application Support/StudyTrack/local-mcp.json",
+  check(ClaudeDesktopExtension.infoFile("/h") === "/h/Library/Application Support/Polymestre/local-mcp.json",
     "extension : le pont lit l'adresse dans local-mcp.json");
   // Non porté : l'exécution réelle du pont par Node (processus, HTTP, stdio —
   // essai d'intégration de LocalMCPTests.swift qui sort du périmètre du domaine).

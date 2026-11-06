@@ -1,4 +1,4 @@
-// Moodle, par les appels AJAX de ses propres pages (StudyTrack/Services/
+// Moodle, par les appels AJAX de ses propres pages (Polymestre/Services/
 // CourseSiteClients.swift › MoodleClient).
 //
 // Vérifié côté Mac sur moodle.epfl.ch (Moodle 4.5) :

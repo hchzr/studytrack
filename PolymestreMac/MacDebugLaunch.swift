@@ -24,8 +24,8 @@ enum MacDebugLaunch {
                 case "claude-card": content = AnyView(ClaudeMeasureCard().padding(24)); size = NSSize(width: 1000, height: 520)
                 case "claude-menu": content = AnyView(ClaudeMeasureMenuLine().padding(16)); size = NSSize(width: 340, height: 60)
                 case "recap":
-                    let memory = try! ModelContainer(for: StudyTrackSchema.current, configurations: [
-                        ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                    let memory = try! ModelContainer(for: PolymestreSchema.current, configurations: [
+                        ModelConfiguration(schema: PolymestreSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
                     if CommandLine.arguments.contains("-previewSeed") { MacStore.previewSeedPublic(memory.mainContext) }
                     let ctx = ModelContext(memory)
                     let all = (try? ctx.fetch(FetchDescriptor<Course>())) ?? []
@@ -58,8 +58,8 @@ enum MacDebugLaunch {
                 case "personalize":
                     // Réglages › Personnaliser, à côté de la vraie app (base en
                     // mémoire, réglages jetables) : relire la page sans cliquer.
-                    let memory = try! ModelContainer(for: StudyTrackSchema.current, configurations: [
-                        ModelConfiguration(schema: StudyTrackSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                    let memory = try! ModelContainer(for: PolymestreSchema.current, configurations: [
+                        ModelConfiguration(schema: PolymestreSchema.current, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
                     if CommandLine.arguments.contains("-previewSeed") {
                         MacStore.previewSeedPublic(memory.mainContext)
                     }

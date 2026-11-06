@@ -64,7 +64,7 @@ final class CoursewareTranscriptStore {
 
     private static func file(_ key: String) -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/transcripts", isDirectory: true)
+            .appendingPathComponent("Polymestre/transcripts", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let digest = SHA256.hash(data: Data(key.utf8)).prefix(10).map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent(digest + ".json")

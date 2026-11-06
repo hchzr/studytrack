@@ -85,7 +85,7 @@ struct ReviewCard: View {
 
     private func exercise(_ label: String) -> Exercise? { SeriesReview.exercise(label, in: series) }
 
-    /// Tout est déjà dans StudyTrack (la conversation relue plus tard).
+    /// Tout est déjà dans Polymestre (la conversation relue plus tard).
     private var alreadyApplied: Bool {
         let verdicts = report.verdicts.allSatisfy { verdict in exercise(verdict.exercise).map { $0.correctness == verdict.result && $0.isCorrected } ?? true }
         let mistakes = !features.mistakes || report.mistakes.allSatisfy { note in

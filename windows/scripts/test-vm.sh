@@ -13,9 +13,9 @@
 # Prérequis : `aws login` (ou `aws configure`) fait une fois, et l'app « Windows App ».
 set -euo pipefail
 
-REGION="${AWS_REGION:-${STUDYTRACK_VM_REGION:-eu-central-1}}" # Francfort : proche, et activée sur tout compte (Zurich est en option)
-TYPE="${STUDYTRACK_VM_TYPE:-t3.large}"
-NAME="studytrack-windows-test"
+REGION="${AWS_REGION:-${POLYMESTRE_VM_REGION:-eu-central-1}}" # Francfort : proche, et activée sur tout compte (Zurich est en option)
+TYPE="${POLYMESTRE_VM_TYPE:-t3.large}"
+NAME="polymestre-windows-test"
 KEY_FILE="$HOME/.ssh/$NAME.pem"
 RDP_FILE="$HOME/Downloads/$NAME.rdp"
 export AWS_REGION="$REGION" AWS_PAGER=""
@@ -39,7 +39,7 @@ security_group() {
     --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)"
   if [[ -z "$sg" || "$sg" == "None" ]]; then
     sg="$(aws ec2 create-security-group --group-name "$NAME" \
-      --description "StudyTrack Windows test VM: RDP from one IP" --query GroupId --output text)"
+      --description "Polymestre Windows test VM: RDP from one IP" --query GroupId --output text)"
   fi
   # Le Bureau à distance depuis l'adresse actuelle seulement (elle change : on la remet à chaque fois).
   local ip; ip="$(my_ip)"

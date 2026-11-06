@@ -83,7 +83,7 @@ enum AcademicCalendarService {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
         // Sans en-tête explicite, certains serveurs renvoient une page allégée.
-        request.setValue("StudyTrack/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Polymestre/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
         request.setValue("fr-CH,fr;q=0.9", forHTTPHeaderField: "Accept-Language")
 
         let data: Data

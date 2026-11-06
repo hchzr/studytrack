@@ -1,6 +1,6 @@
 // Garde-fou : src/models/schema.ts doit décrire exactement les `@Model` Swift.
 //
-// Lit StudyTrack/Models/*.swift, relève les propriétés **stockées** de chaque
+// Lit Polymestre/Models/*.swift, relève les propriétés **stockées** de chaque
 // `@Model` (celles qui ont une valeur par défaut, ou qui sont optionnelles sans
 // corps calculé) et les compare au schéma TypeScript : nom, type, optionnalité,
 // défaut littéral. Toute différence fait échouer `npm test`, donc la CI.
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { tables, excludedModels, excludedFields, type FieldType } from "../src/models/schema.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const modelsDir = join(root, "StudyTrack", "Models");
+const modelsDir = join(root, "Polymestre", "Models");
 
 interface SwiftProp { name: string; type: string; optional: boolean; default?: string }
 
@@ -56,11 +56,11 @@ export function check(): string[] {
   for (const file of readdirSync(modelsDir).filter((f) => f.endsWith(".swift"))) {
     for (const [k, v] of parseModels(readFileSync(join(modelsDir, file), "utf8"))) swift.set(k, v);
   }
-  const schemaSource = readFileSync(join(modelsDir, "StudyTrackSchema.swift"), "utf8");
+  const schemaSource = readFileSync(join(modelsDir, "PolymestreSchema.swift"), "utf8");
   const listed = [...schemaSource.matchAll(/^\s+(\w+)\.self,?$/gm)].map((m) => m[1]);
 
   for (const model of listed) {
-    if (!swift.has(model)) errors.push(`${model} : listé dans SchemaV1 mais introuvable dans StudyTrack/Models`);
+    if (!swift.has(model)) errors.push(`${model} : listé dans SchemaV1 mais introuvable dans Polymestre/Models`);
     const inTables = tables.some((t) => t.model === model);
     if (!inTables && !(model in excludedModels)) errors.push(`${model} : ni synchronisé ni exclu dans schema.ts`);
     if (inTables && model in excludedModels) errors.push(`${model} : à la fois synchronisé et exclu`);

@@ -1,5 +1,5 @@
 // Ce qui tombe à une date : une évaluation, une série à rendre, un corrigé qui
-// s'ouvre (StudyTrack/Domain/Deadline.swift). Lu dans les cours : l'accueil,
+// s'ouvre (Polymestre/Domain/Deadline.swift). Lu dans les cours : l'accueil,
 // l'agenda et les widgets.
 
 import { DateUtils } from "./dateUtils.ts";

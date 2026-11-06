@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
---  StudyTrack — vérification de l'état réel du projet Supabase
+--  Polymestre — vérification de l'état réel du projet Supabase
 --
 --  À coller dans Supabase ▸ SQL Editor et exécuter. Lecture seule : ce fichier ne
 --  modifie rien.

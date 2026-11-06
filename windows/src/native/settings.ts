@@ -35,7 +35,7 @@ export function writeFloatingTimer(value: boolean): void {
 }
 
 /** L'évènement de fenêtre levé quand un réglage natif change. */
-export const NATIVE_SETTINGS_EVENT = "studytrack:native-settings";
+export const NATIVE_SETTINGS_EVENT = "polymestre:native-settings";
 function notifyNative(): void {
   try { globalThis.dispatchEvent?.(new Event(NATIVE_SETTINGS_EVENT)); } catch { /* hors navigateur */ }
 }

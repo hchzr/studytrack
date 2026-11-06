@@ -1,5 +1,5 @@
 // Agrégats de sessions pour l'historique et les graphiques
-// (StudyTrack/Domain/SessionStats.swift) : fonctions pures.
+// (Polymestre/Domain/SessionStats.swift) : fonctions pures.
 
 import type { StudySession } from "../models/studySession.ts";
 

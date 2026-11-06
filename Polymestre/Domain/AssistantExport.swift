@@ -12,7 +12,7 @@ import Foundation
 /// partage ne doit pas transporter d'identités.
 enum AssistantExport {
 
-    static let fileName = "studytrack-assistant.json"
+    static let fileName = "polymestre-assistant.json"
     /// v2 : identifiants partout (cours, séries, exercices, questions,
     /// théorie, sessions) et étape de chaque exercice — un assistant qui
     /// **agit** doit désigner exactement ce qu'il modifie.
@@ -48,7 +48,7 @@ enum AssistantExport {
         let tracked = courses.filter(\.isTracked)
 
         var payload: [String: Any] = [
-            "format": "studytrack.assistant",
+            "format": "polymestre.assistant",
             "version": formatVersion,
             "generatedAt": ISO8601DateFormatter().string(from: Date())
         ]

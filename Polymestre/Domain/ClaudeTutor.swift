@@ -18,7 +18,7 @@ import Foundation
 ///   centaines de milliers de jetons de configuration ;
 /// - **projet EPFL** : dans un dossier à soi (`CLAUDE.md`, compétences
 ///   `epfl-serie`…), avec seulement les serveurs MCP qu'elles utilisent
-///   (Notion, StudyTrack) et seulement les outils permis d'avance.
+///   (Notion, Polymestre) et seulement les outils permis d'avance.
 ///
 /// Ici, ce qui est pur : les arguments, le message à envoyer, la lecture du
 /// flux, la consigne du tuteur. Testé dans `validate.sh`.
@@ -199,7 +199,7 @@ enum ClaudeTutor {
         case text(String)
         /// Claude réfléchit (avant d'écrire).
         case thinking
-        /// Claude utilise un outil (une compétence, Notion, StudyTrack).
+        /// Claude utilise un outil (une compétence, Notion, Polymestre).
         case tool(String)
         /// La réponse est finie ; `error` si elle a échoué. `contextTokens` :
         /// la taille du contexte envoyé (jetons d'entrée, cache compris).
@@ -263,7 +263,7 @@ enum ClaudeTutor {
         if name == "Read" { return "lecture" }
         if name.hasPrefix("mcp__") {
             let server = name.dropFirst(5).split(separator: "_").first.map(String.init) ?? name
-            return server == "studytrack" ? "Polymestre" : server.prefix(1).uppercased() + server.dropFirst()
+            return server == "polymestre" ? "Polymestre" : server.prefix(1).uppercased() + server.dropFirst()
         }
         return name
     }
@@ -350,8 +350,8 @@ enum ClaudeTutor {
         Réponds en français, tutoie. Écris les mathématiques en LaTeX léger entre dollars \
         ($x_n = \\frac{1}{n}$, $\\sum_{k=1}^n k$) ; une formule importante seule sur sa ligne entre $$…$$. \
         Utilise le Markdown simple : paragraphes courts, listes, **gras** pour l'idée clé. \
-        La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [StudyTrack] et \
-        [/StudyTrack] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus \
+        La conversation couvre toute une série d'exercices ; l'app ajoute le contexte entre [Polymestre] et \
+        [/Polymestre] (la série, l'exercice, ce qui a déjà été donné, les pièces jointes). Appuie-toi dessus \
         et sur le PDF de la série, et dis-le si une information te manque plutôt que de l'inventer.
         """
         return common + "\n\n" + TutorFramework.contract + "\n\n" + (mode == .tutor ? TutorFramework.tutor : TutorFramework.explain)
@@ -365,8 +365,8 @@ enum ClaudeTutor {
 
     /// Le contexte ajouté par l'app est entre ces deux lignes : on le retire à
     /// l'affichage d'une conversation reprise.
-    static let contextOpen = "[StudyTrack]"
-    static let contextClose = "[/StudyTrack]"
+    static let contextOpen = "[Polymestre]"
+    static let contextClose = "[/Polymestre]"
 
     /// Le contexte d'un exercice, avant la question.
     static func contextPreamble(_ context: Context) -> String {
@@ -436,7 +436,9 @@ enum ClaudeTutor {
 
     /// Ce que l'étudiant·e a écrit, sans le contexte ajouté par l'app.
     static func displayText(_ sent: String) -> String {
-        var text = sent
+        // Les conversations d'avant le changement de nom portent « [StudyTrack] ».
+        var text = sent.replacingOccurrences(of: "[StudyTrack]", with: contextOpen)
+            .replacingOccurrences(of: "[/StudyTrack]", with: contextClose)
         while let open = text.range(of: contextOpen), let close = text.range(of: contextClose, range: open.upperBound..<text.endIndex) {
             text.removeSubrange(open.lowerBound..<close.upperBound)
         }
@@ -448,7 +450,7 @@ enum ClaudeTutor {
 
     /// Le bloc qui termine un post-mortem : un verdict par exercice, que l'app
     /// propose de noter (rien n'est écrit sans confirmation).
-    static let verdictFence = "studytrack"
+    static let verdictFence = "polymestre"
 
     static let verdictInstruction = """
     Termine par un bloc de code ```\(verdictFence) avec une ligne par exercice corrigé, au format \
@@ -475,9 +477,9 @@ enum ClaudeTutor {
         var result: Correctness
     }
 
-    /// Les verdicts du bloc ```studytrack d'une réponse.
-    static func verdicts(in text: String) -> [Verdict] {
-        guard let block = verdictBlock(in: text) else { return [] }
+    /// Les verdicts du bloc ```polymestre d'une réponse.
+    static func verdicts(in original: String) -> [Verdict] {
+        guard let block = verdictBlock(in: currentFences(original)) else { return [] }
         return block.text.components(separatedBy: "\n").compactMap { line in
             let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2, !parts[0].isEmpty else { return nil }
@@ -497,11 +499,18 @@ enum ClaudeTutor {
     }
 
     /// La réponse sans son bloc de verdicts (il s'affiche en carte à part).
-    static func withoutVerdicts(_ text: String) -> String {
+    static func withoutVerdicts(_ original: String) -> String {
+        let text = currentFences(original)
         guard let block = verdictBlock(in: text) else { return text }
         var copy = text
         copy.removeSubrange(block.range)
         return copy.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Un bloc ```studytrack (consigne d'avant le changement de nom, encore suivie par un
+    /// projet Claude ou une conversation ancienne) se lit comme un bloc ```polymestre.
+    static func currentFences(_ text: String) -> String {
+        text.replacingOccurrences(of: "```studytrack", with: "```" + verdictFence)
     }
 
     private static func verdictBlock(in text: String) -> (range: Range<String.Index>, text: String)? {
@@ -754,7 +763,7 @@ enum RichMarkup {
             // [titre](https://…) : un lien, comme en Markdown.
             if c == "[", let close = closing("](", from: i + 1), close > i + 1, let end = closing(")", from: close + 2), end > close + 2 {
                 let url = String(chars[close + 2..<end])
-                // Toute adresse à schéma (`https:`, `mailto:`, `studytrack-poly:`) ou chemin.
+                // Toute adresse à schéma (`https:`, `mailto:`, `polymestre-poly:`) ou chemin.
                 if url.hasPrefix("/") || url.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*:"#, options: .regularExpression) != nil, !url.contains(" ") {
                     flush(); result.append(.link(String(chars[i + 1..<close]), url: url)); i = end + 1; continue
                 }

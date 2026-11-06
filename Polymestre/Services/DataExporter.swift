@@ -102,7 +102,7 @@ enum DataExporter {
         guard let data = makeJSON(courses: courses, sessions: sessions) else { return nil }
         let stamp = DateUtils.dateOnly.string(from: Date())
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("studytrack-\(stamp).json")
+            .appendingPathComponent("polymestre-\(stamp).json")
         do {
             try data.write(to: url, options: .atomic)
             return url
@@ -134,7 +134,7 @@ enum DataExporter {
     static func writeSessionsCSV(_ sessions: [StudySession]) -> URL? {
         let stamp = DateUtils.dateOnly.string(from: Date())
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("studytrack-sessions-\(stamp).csv")
+            .appendingPathComponent("polymestre-sessions-\(stamp).csv")
         do {
             try sessionsCSV(sessions).write(to: url, atomically: true, encoding: .utf8)
             return url

@@ -12,14 +12,14 @@ enum ClaudeDesktopSetup {
     }
 
     static var packageURL: URL {
-        ClaudeDesktopExtension.infoFile().deletingLastPathComponent().appendingPathComponent("StudyTrack.mcpb")
+        ClaudeDesktopExtension.infoFile().deletingLastPathComponent().appendingPathComponent("Polymestre.mcpb")
     }
 
     /// Fabrique le `.mcpb` (un zip : manifeste + pont) et rend son adresse.
     static func build() throws -> URL {
-        let work = FileManager.default.temporaryDirectory.appendingPathComponent("studytrack-mcpb-\(UUID().uuidString)", isDirectory: true)
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("polymestre-mcpb-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: work) }
-        for (path, data) in ClaudeDesktopExtension.files(appID: Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac") {
+        for (path, data) in ClaudeDesktopExtension.files(appID: Bundle.main.bundleIdentifier ?? "ch.polymestre.mac") {
             let file = work.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: file)
@@ -40,15 +40,20 @@ enum ClaudeDesktopSetup {
     }
 
     /// L'extension est-elle déjà dans l'app Claude ? (dossier « Claude Extensions », manifeste du même nom)
-    static var isInstalled: Bool {
+    static var isInstalled: Bool { installedNames.contains(ClaudeDesktopExtension.name) || isLegacyInstalled }
+
+    /// L'extension d'avant le changement de nom est encore dans l'app Claude.
+    static var isLegacyInstalled: Bool { installedNames.contains(ClaudeDesktopExtension.legacyName) }
+
+    private static var installedNames: Set<String> {
         let folder = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Claude/Claude Extensions", isDirectory: true)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-        return names.contains { name in
+        return Set(names.compactMap { name -> String? in
             guard let data = try? Data(contentsOf: folder.appendingPathComponent(name).appendingPathComponent("manifest.json")),
-                  let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
-            return manifest["name"] as? String == ClaudeDesktopExtension.name
-        }
+                  let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            return manifest["name"] as? String
+        })
     }
 
     /// L'app Claude est-elle sur ce Mac ? (celle qui ouvre les `.mcpb`)

@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/LocalFileCatalog.swift : tout ce qu'un assistant
+// Port de Polymestre/Domain/LocalFileCatalog.swift : tout ce qu'un assistant
 // peut lire d'un cours, **sans réseau** — la liste, pas les octets. Pur : les
 // modèles entrent, des lignes sortent.
 

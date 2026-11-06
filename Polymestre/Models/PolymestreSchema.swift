@@ -14,7 +14,7 @@ import SwiftData
 /// **à côté** :
 ///
 /// 1. écrire `enum SchemaV2: VersionedSchema` avec la liste complète des modèles ;
-/// 2. décrire le passage dans `StudyTrackMigrationPlan.stages` ;
+/// 2. décrire le passage dans `PolymestreMigrationPlan.stages` ;
 /// 3. si un attribut nouveau a besoin d'une valeur calculée — pas d'un défaut —
 ///    écrire un `MigrationStage.custom` avec son `didMigrate`.
 ///
@@ -50,12 +50,12 @@ enum SchemaV1: VersionedSchema {
 }
 
 /// Point d'entrée du schéma : l'app ne référence que `current`.
-enum StudyTrackSchema {
+enum PolymestreSchema {
     /// La version utilisée par le conteneur.
     ///
     /// Changer cette ligne est le **seul** geste qui fait passer l'app à une
     /// nouvelle version de schéma — et il oblige à avoir écrit le plan de
-    /// migration, puisque `StudyTrackMigrationPlan.schemas` doit la contenir.
+    /// migration, puisque `PolymestreMigrationPlan.schemas` doit la contenir.
     static var current: Schema { Schema(SchemaV1.models) }
 
     /// Version courante, telle qu'écrite dans les réglages.
@@ -71,7 +71,7 @@ enum StudyTrackSchema {
 /// Vide pour l'instant : il n'existe qu'une version. Sa raison d'être est d'être
 /// **déjà branché** le jour où une deuxième apparaîtra — un plan ajouté après coup
 /// sur une base déjà migrée ne rattrape rien.
-enum StudyTrackMigrationPlan: SchemaMigrationPlan {
+enum PolymestreMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }
     static var stages: [MigrationStage] { [] }
 }
@@ -130,7 +130,7 @@ enum DataRepair {
         // (`DetectedSeries.withoutBlanketBonus`).
         outcome.bonusCleared = clearBlanketBonus(in: context)
 
-        defaults.set(StudyTrackSchema.currentVersion, forKey: StudyTrackSchema.versionKey)
+        defaults.set(PolymestreSchema.currentVersion, forKey: PolymestreSchema.versionKey)
         defaults.set(repairVersion, forKey: repairKey)
         try? context.save()
         return outcome

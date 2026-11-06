@@ -1,14 +1,15 @@
+import CloudKit
 import SwiftUI
 import SwiftData
 import UserNotifications
 import WidgetKit
 
-/// StudyTrack sur Mac : le chrono dans la barre des menus, et une fenêtre pour
+/// Polymestre sur Mac : le chrono dans la barre des menus, et une fenêtre pour
 /// voir ses cours, cocher ses exercices et relire son bilan. Les données sont
 /// celles de l'iPhone, par iCloud ; le chrono aussi.
-/// Lancé par `StudyTrackMacEntry` (`StudyGuard.swift`), qui dirige vers le
+/// Lancé par `PolymestreMacEntry` (`StudyGuard.swift`), qui dirige vers le
 /// gardien du verrou quand c'est lui qu'on lance.
-struct StudyTrackMacApp: App {
+struct PolymestreMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var delegate
     @State private var store: MacStore
     @State private var settings: MacSettings
@@ -16,6 +17,18 @@ struct StudyTrackMacApp: App {
     @State private var menuClock: MenuBarClock
 
     init() {
+        // Avant tout : ce que StudyTrack (l'ancienne identité) a laissé — réglages,
+        // trousseau, fichiers, base — copié une fois, l'ancien n'est pas touché.
+        #if DEBUG
+        let trial = CommandLine.arguments.contains("-memoryStore")
+        #else
+        let trial = false
+        #endif
+        if !trial {
+            IdentityMigration.runBeforeStore(newStoreURL: MacSandboxMigration.storeURL,
+                                             cloud: MacStore.hasICloudEntitlement && !MacSandboxMigration.isSandboxed)
+            StudyGuard.retireLegacyAgent()
+        }
         let existingUser = UserDefaults.standard.object(forKey: "cloudRelay.device") != nil
             || UserDefaults.standard.object(forKey: "mac.epflEmail") != nil
         AppLanguage.settle(existingUser: existingUser)
@@ -48,7 +61,7 @@ struct StudyTrackMacApp: App {
         StudyModeController.shared.settings = settings
         StudyModeController.shared.container = store.container
         // La synchronisation Supabase (éteinte tant qu'on ne l'a pas demandée).
-        // Le compte StudyTrack : le même client pour la synchronisation et les groupes.
+        // Le compte Polymestre : le même client pour la synchronisation et les groupes.
         MacGroups.shared.timer = timer
         MacGroups.shared.settings = settings
         MacGroups.shared.container = store.container
@@ -386,7 +399,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// ⌘Q, « Quitter » du Dock, la fermeture de session, un redémarrage :
-    /// sous verrou, StudyTrack ne quitte pas (et le Mac ne s'éteint pas sans
+    /// sous verrou, Polymestre ne quitte pas (et le Mac ne s'éteint pas sans
     /// forcer). Sans verrou, en mode étude, on demande d'abord.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -456,7 +469,7 @@ enum CloudSchemaInit {
         let description = NSPersistentStoreDescription(url: url)
         description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: MacStore.cloudContainerID)
         description.shouldAddStoreAsynchronously = false
-        let container = NSPersistentCloudKitContainer(name: "StudyTrack", managedObjectModel: model)
+        let container = NSPersistentCloudKitContainer(name: "Polymestre", managedObjectModel: model)
         container.persistentStoreDescriptions = [description]
         var loadError: Error?
         container.loadPersistentStores { _, error in loadError = error }
@@ -495,6 +508,27 @@ enum CloudSchemaInit {
             let names = model.entities.compactMap(\.name).sorted().joined(separator: ", ")
             say("SCHEMA ok : \(model.entities.count) entités (\(names))")
         }
+        // Le verrou de la reprise de StudyTrack (`IdentityMigration.CloudLock`) : un type
+        // d'enregistrement hors du miroir, créé ici avec tous ses champs, puis retiré.
+        var lockDone = false
+        Task.detached {
+            let database = CKContainer(identifier: MacStore.cloudContainerID).privateCloudDatabase
+            let record = CKRecord(recordType: IdentityMigration.CloudLock.recordType,
+                                  recordID: CKRecord.ID(recordName: "schema-init-\(UUID().uuidString)"))
+            record["owner"] = "schema"
+            record["startedAt"] = Date()
+            record["completedAt"] = Date()
+            record["ids"] = IdentityMigrationPlan.encode([UUID()])
+            do {
+                let saved = try await database.save(record)
+                _ = try? await database.deleteRecord(withID: saved.recordID)
+                say("SCHEMA ok : type \(IdentityMigration.CloudLock.recordType)")
+            } catch {
+                say("SCHEMA échec du type \(IdentityMigration.CloudLock.recordType) : \(error)")
+            }
+            await MainActor.run { lockDone = true }
+        }
+        while !lockDone { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }
         if let store = container.persistentStoreCoordinator.persistentStores.first {
             try? container.persistentStoreCoordinator.remove(store)
         }
@@ -505,11 +539,11 @@ enum CloudSchemaInit {
 enum CloudCheck {
     static func run() -> Never {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("cloudcheck-\(UUID().uuidString).store")
-        let schema = StudyTrackSchema.current
+        let schema = PolymestreSchema.current
         let configuration = ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .private(MacStore.cloudContainerID))
         var container: ModelContainer?
         do {
-            container = try ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self, configurations: [configuration])
+            container = try ModelContainer(for: schema, migrationPlan: PolymestreMigrationPlan.self, configurations: [configuration])
             FileHandle.standardError.write(Data("CLOUD container ok (sandbox: \(MacSandboxMigration.isSandboxed))\n".utf8))
         } catch {
             FileHandle.standardError.write(Data("CLOUD container FAILED: \(error)\n".utf8))

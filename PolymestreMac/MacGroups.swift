@@ -8,7 +8,7 @@ import SwiftUI
 // les sessions prévues, les membres, le code à partager, quitter. Les mêmes services que
 // l'iPhone (`SocialService`, `GroupSync`, `GroupSessionService`, `PresenceService`).
 
-/// Le compte StudyTrack, la session de groupe et la présence, pour le Mac.
+/// Le compte Polymestre, la session de groupe et la présence, pour le Mac.
 @MainActor
 @Observable
 final class MacGroups: GroupSessionHost {

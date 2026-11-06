@@ -1,5 +1,5 @@
 // Ce qu'un PDF de série dit de lui-même **en dehors** de ses exercices : son
-// numéro de série et le cours auquel il appartient (StudyTrack/Domain/SeriesDocumentInference.swift).
+// numéro de série et le cours auquel il appartient (Polymestre/Domain/SeriesDocumentInference.swift).
 //
 // Deux causes directes d'imports « au hasard » :
 //   • la série n'était lue qu'en **début de ligne**. Un en-tête « Analyse I —

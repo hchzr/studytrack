@@ -92,7 +92,7 @@ export function ClaudePane({ course, series, exercise, tint, general = false, co
     const attachments = [];
     if (general || !course || !series) {
       // La page Claude : le semestre en contexte au premier message, puis la conversation.
-      const opening = conversation.messages.length === 0 && context ? `[StudyTrack]\n${context}\n[/StudyTrack]\n\n` : "";
+      const opening = conversation.messages.length === 0 && context ? `[Polymestre]\n${context}\n[/Polymestre]\n\n` : "";
       await conversation.send(value, opening + value);
       return;
     }
@@ -107,7 +107,7 @@ export function ClaudePane({ course, series, exercise, tint, general = false, co
         attachments.push({ kind: { type: "pdf" as const }, data: pdf, name: `${series.title || "Série"}.pdf` });
       }
       prefix = ClaudeTutor.openingMessage(seriesContext(course, series, pdf !== null), exercise ? exerciseContext(course, exercise) : null, null) + "\n\n"
-        + (pdfText ? `[StudyTrack]\nTexte de l'énoncé (PDF de la série) :\n${pdfText.slice(0, 40_000)}\n[/StudyTrack]\n\n` : "");
+        + (pdfText ? `[Polymestre]\nTexte de l'énoncé (PDF de la série) :\n${pdfText.slice(0, 40_000)}\n[/Polymestre]\n\n` : "");
       if (exercise) announced.set(conversation.key, exercise.id);
     } else if (exercise && announced.get(conversation.key) !== exercise.id) {
       prefix = ClaudeTutor.exerciseSwitch(exerciseContext(course, exercise));

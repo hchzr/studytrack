@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Deux repères se croisent : AppKit mesure depuis le **bas** de l'écran principal,
 /// l'Accessibilité depuis son **haut**. Tout est pur et testé ici ; poser la
-/// fenêtre est dans `StudyTrackMac/StudyMode/AppPlacement.swift`.
+/// fenêtre est dans `PolymestreMac/StudyMode/AppPlacement.swift`.
 enum DeskGeometry {
 
     struct Rect: Equatable {

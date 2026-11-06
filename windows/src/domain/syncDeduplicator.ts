@@ -1,5 +1,5 @@
 // Fusionne les doublons qu'iCloud fait apparaître
-// (StudyTrack/Domain/SyncDeduplicator.swift).
+// (Polymestre/Domain/SyncDeduplicator.swift).
 //
 // La synchronisation recopie chaque objet tel quel : elle ne sait pas que le
 // « CS-250 » importé sur l'iPhone et celui importé sur l'iPad sont le même

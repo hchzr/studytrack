@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Réglages › iCloud › Synchronisation Supabase : le même interrupteur que sur l'iPhone,
-/// avec la connexion au compte StudyTrack (le Mac n'a pas d'autre écran pour ça).
+/// avec la connexion au compte Polymestre (le Mac n'a pas d'autre écran pour ça).
 struct MacSupabaseSyncSection: View {
     @State private var sync: SupabaseSync? = SupabaseSync.shared
     @State private var email = ""

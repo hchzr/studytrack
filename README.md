@@ -1,16 +1,16 @@
 # Polymestre — suivi du temps d'étude EPFL (iOS)
 
 > **Nom.** L'app s'appelle **Polymestre** (Poly + semestre) depuis novembre 2026 ;
-> elle s'appelait StudyTrack. Seul ce que l'on voit a changé : le nom sous
+> elle s'appelait Polymestre. Seul ce que l'on voit a changé : le nom sous
 > l'icône, les textes, `Polymestre.app` sur Mac, l'installeur Windows, le site.
 > Les identifiants gardent l'ancien nom **exprès**, car les changer couperait
-> les données existantes : bundle IDs (`com.hczr.studytrack…`), conteneur
-> iCloud, App Group, schéma d'URL `studytrack://`, module Swift et cibles Xcode
-> (`StudyTrack`, `PRODUCT_MODULE_NAME = StudyTrack` sur Mac), dossiers
-> `Application Support/StudyTrack`, trousseau Windows (« StudyTrack »), info de
-> chiffrement de la synchronisation, marqueurs `[StudyTrack]` du tuteur, champ
-> `source` des webhooks, serveur MCP `studytrack`. Le calendrier Apple
-> « StudyTrack » est renommé « Polymestre » au premier usage.
+> les données existantes : bundle IDs (`ch.polymestre…`), conteneur
+> iCloud, App Group, schéma d'URL `polymestre://`, module Swift et cibles Xcode
+> (`Polymestre`, `PRODUCT_MODULE_NAME = Polymestre` sur Mac), dossiers
+> `Application Support/Polymestre`, trousseau Windows (« Polymestre »), info de
+> chiffrement de la synchronisation, marqueurs `[Polymestre]` du tuteur, champ
+> `source` des webhooks, serveur MCP `polymestre`. Le calendrier Apple
+> « Polymestre » est renommé « Polymestre » au premier usage.
 
 Application iOS (SwiftUI + SwiftData) qui structure un semestre EPFL, suit la
 progression théorie/exercices, mesure le temps de travail réel, le compare à la
@@ -42,7 +42,7 @@ CONFIGURATION=Release ./build.sh
 Ou directement :
 
 ```bash
-xcodebuild -project StudyTrack.xcodeproj -scheme StudyTrack \
+xcodebuild -project Polymestre.xcodeproj -scheme Polymestre \
   -sdk iphonesimulator -configuration Debug -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO OTHER_SWIFT_FLAGS="-disable-sandbox" build
 ```
@@ -53,14 +53,14 @@ xcodebuild -project StudyTrack.xcodeproj -scheme StudyTrack \
 > imbriqué est refusé (`sandbox_apply: Operation not permitted`) et la compilation
 > échoue avec `swift-plugin-server produced malformed response`. Le drapeau désactive
 > ce sandbox interne. **Dans Xcode normal, aucun drapeau n'est nécessaire** — ouvrez
-> simplement `StudyTrack.xcodeproj`.
+> simplement `Polymestre.xcodeproj`.
 
 ### Si Xcode signale un fichier introuvable ou « Multiple commands produce »
 
-Exemple : `Build input file cannot be found: …/StudyTrack/Domain/ColorContrast.swift`,
+Exemple : `Build input file cannot be found: …/Polymestre/Domain/ColorContrast.swift`,
 ou `Multiple commands produce …/<Fichier>.stringsdata`, pour un fichier qui a été
 **déplacé**. Le projet est alors sain : c'est la **description de build mise en
-cache** dans `~/Library/Developer/Xcode/DerivedData/StudyTrack-*` qui référence
+cache** dans `~/Library/Developer/Xcode/DerivedData/Polymestre-*` qui référence
 encore l'ancien chemin (et, s'il existe deux fichiers de même nom dans une même
 cible, fait produire deux fois le même `.stringsdata`).
 
@@ -68,10 +68,10 @@ cible, fait produire deux fois le même `.stringsdata`).
 quitter Xcode (⌘Q) — sinon il la réécrit — puis :
 
 ```bash
-rm -rf ~/Library/Developer/Xcode/DerivedData/StudyTrack-*
+rm -rf ~/Library/Developer/Xcode/DerivedData/Polymestre-*
 ```
 
-Les dossiers `PBXFileSystemSynchronizedRootGroup` (`StudyTrack/`, `StudyTrackWidgets/`,
+Les dossiers `PBXFileSystemSynchronizedRootGroup` (`Polymestre/`, `PolymestreWidgets/`,
 `Shared/`) sont résolus à l'ouverture du projet : rouvrez et recompilez.
 
 ### Vérifier la logique métier
@@ -104,18 +104,18 @@ pure (`Domain/`), pas sur le rendu SwiftUI.
 Un simulateur iOS est installé : l'app se lance et se capture réellement.
 
 ```bash
-xcodebuild -project StudyTrack.xcodeproj -scheme StudyTrack -sdk iphonesimulator \
+xcodebuild -project Polymestre.xcodeproj -scheme Polymestre -sdk iphonesimulator \
   -configuration Debug -derivedDataPath /tmp/simbuild \
   -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)' \
   CODE_SIGNING_ALLOWED=NO OTHER_SWIFT_FLAGS="-disable-sandbox" build
 
-xcrun simctl install booted /tmp/simbuild/Build/Products/Debug-iphonesimulator/StudyTrack.app
-xcrun simctl launch booted com.hczr.studytrack.app -seedSampleData -tab 0
+xcrun simctl install booted /tmp/simbuild/Build/Products/Debug-iphonesimulator/Polymestre.app
+xcrun simctl launch booted ch.polymestre.app -seedSampleData -tab 0
 xcrun simctl io booted screenshot /tmp/today-ipad.png
 ```
 
 `xcrun simctl` ne sait pas taper dans l'interface, et ouvrir un lien profond
-déclenche un « Ouvrir dans StudyTrack ? » qu'on ne peut pas confirmer. Ces
+déclenche un « Ouvrir dans Polymestre ? » qu'on ne peut pas confirmer. Ces
 arguments, **compilés en Debug seulement** (`PreviewLaunch`), rendent donc chaque
 écran atteignable :
 
@@ -244,7 +244,7 @@ Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 | Intégration | État | Détail |
 |---|---|---|
 | **Horaire EPFL (.ics)** | ✅ **nouveau, chemin principal** | `ICSParser` (RFC 5545 : `VEVENT`, `TZID`, `RRULE` hebdo/quotidienne, `BYDAY`, `EXDATE`), import par URL (`https://`, `webcal://`), fichier ou copier-coller. Crée les cours, **détecte ceux qui ont des heures de cours**, lie les séances, et est idempotent (par `UID`). |
-| **Calendrier Apple** (EventKit) | ✅ | Import, liaison automatique aux cours par code, création de sessions planifiées. Une session planifiée est écrite dans un calendrier « Polymestre » (l'ancien « StudyTrack » est renommé) et supprimée avec elle |
+| **Calendrier Apple** (EventKit) | ✅ | Import, liaison automatique aux cours par code, création de sessions planifiées. Une session planifiée est écrite dans un calendrier « Polymestre » (l'ancien « Polymestre » est renommé) et supprimée avec elle |
 | **Rappels Apple** | ✅ | Lecture, création, terminaison, suppression |
 | **Todoist** | ✅ | API unifiée v1 (`api.todoist.com/api/v1`) |
 | **Things 3** | ✅ **nouveau** | Schéma d'URL, écriture seule (signalé comme tel dans l'interface) |
@@ -255,11 +255,11 @@ Synchroniser (calendrier, groupes) se fait en **tirant vers le bas**.
 | **TickTick** | ✅ **nouveau, non vérifié sur un compte réel** | API ouverte v1 (`api.ticktick.com/open/v1`), jeton OAuth2 |
 | **Notice par intégration** | ✅ **nouveau** | Bouton « Comment configurer ? » sur chaque fournisseur : résumé, capacité, étapes numérotées, lien vers la page des identifiants et limite propre. `validate.sh` refuse un fournisseur sans notice |
 | **Siri / Raccourcis (App Intents)** | ✅ **nouveau** | « Démarre une session », « Enregistre une session », « Ajoute une tâche », « **Planifie une session** » (écrite au calendrier) et « **Marque un exercice comme fait** » (avec la sureté) — métadonnées `Metadata.appintents` générées |
-| **Widgets d'écran d'accueil** | ✅ | Six widgets dans la cible `StudyTrackWidgets`, dont trois **agissants** : **Prochaine tâche** (✓ pour cocher, ▶ pour lancer le chrono, temps en direct), **Cours de la semaine** (avancement par cours), **Prochaine évaluation** (compte à rebours, aussi en complication `accessory`). Les deux premiers widgets — « Cette semaine » et « Temps de travail » — sont **conservés** : les retirer viderait ceux déjà posés sur un écran d'accueil. Données partagées via l'App Group |
+| **Widgets d'écran d'accueil** | ✅ | Six widgets dans la cible `PolymestreWidgets`, dont trois **agissants** : **Prochaine tâche** (✓ pour cocher, ▶ pour lancer le chrono, temps en direct), **Cours de la semaine** (avancement par cours), **Prochaine évaluation** (compte à rebours, aussi en complication `accessory`). Les deux premiers widgets — « Cette semaine » et « Temps de travail » — sont **conservés** : les retirer viderait ceux déjà posés sur un écran d'accueil. Données partagées via l'App Group |
 | **Coches depuis un widget** | ✅ **nouveau** | La base SwiftData **n'est pas** dans l'App Group : le widget ne peut pas l'écrire. Il dépose donc le geste (`PendingWidgetActions`), met son propre affichage à jour tout de suite, et l'app l'applique à sa prochaine activation (`WidgetSnapshotWriter.applyPendingCompletions`) |
 | **Bouton Centre de contrôle** | ✅ **nouveau** | `FocusControl` (iOS 18) : un bouton « Chrono » pour le Centre de contrôle, l'écran verrouillé et le bouton Action |
 | **Live Activity** (écran verrouillé, îlot dynamique) | ✅ | `StudyActivityWidget` : le chrono, l'**anneau du bloc Pomodoro**, l'avancement en sous-questions « 3/9 » et un bouton **« question suivante »**. `ExamActivityWidget` : le **jour d'examen**, déclenché par le temps. Voir « Live Activity et îlot » plus bas |
-| **Liens profonds** | ✅ | `studytrack://focus?course=CS-250&type=exercise`, `://today`, `://tasks`, `://stats`, `://agenda`, `://courses`, `://groups`, **`://join?code=EPFL-XXXX`** (ouvre « Rejoindre » pré-rempli) |
+| **Liens profonds** | ✅ | `polymestre://focus?course=CS-250&type=exercise`, `://today`, `://tasks`, `://stats`, `://agenda`, `://courses`, `://groups`, **`://join?code=EPFL-XXXX`** (ouvre « Rejoindre » pré-rempli) |
 | **Sauvegarde / restauration** | ✅ **nouveau** | Profil › Données › *Créer une sauvegarde* produit un JSON **réimportable** (structure + avancement + sessions). Restauration par Importer › JSON, idempotente. Export CSV des sessions pour un tableur |
 | **Import JSON / CSV** | ✅ | Idempotent (upsert par code de cours / numéro) |
 | **Import PDF des séries** | ✅ | Lecture **par ligne avec la taille de police** (`PDFLayoutExtractor` + `SeriesLayoutParser`) : un titre se distingue d'un énoncé, ce que le texte aplati ne permettait pas. Les exercices sont numérotés **par leur série** (« Exercice 1 » de la Série 2 → « 2.1 »). `SeriesPDFParser` reste le repli pour le texte collé, sans mise en page. **Toujours suivi d'un écran de relecture** : on coche, on corrige le bonus, on crée. Un PDF **scanné** est annoncé comme tel plutôt que de laisser croire à un échec |
@@ -332,7 +332,7 @@ lancé, le matin de l'épreuve.
 
 | Ce qui est vrai | Détail |
 |---|---|
-| L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié (`log show --predicate 'subsystem == "com.hczr.studytrack"'`) |
+| L'activité est **créée** | Vérifié au simulateur : `activité créée <id> — 1 vivante(s)` dans le journal unifié (`log show --predicate 'subsystem == "ch.polymestre"'`) |
 | L'îlot replié | Un icône d'état à gauche, le **temps** à droite. Vider ces deux régions ne rétrécit pas l'îlot : il n'affiche **plus rien** |
 | La largeur de l'îlot replié est **imposée** | `Text(timerInterval:)` réserve la largeur du plus grand texte que son intervalle peut produire, pas celle de ce qu'il affiche — d'où un îlot large affichant « 1:20 ». Borner l'intervalle **ne suffit pas** : en `MM:SS` sur une journée, le pire cas est « 1440:00 ». La forme repliée impose donc une largeur (`@ScaledMetric`, calculée pour « 59:59 »), et le texte se condense au delà. L'intervalle reste borné pour une autre raison : le compteur s'arrête à sa fin |
 | Diagnostic | Profil › **Diagnostics** › « Îlot et écran verrouillé » : activités en cours, dernier refus, et deux boutons d'essai — le chrono et le jour d'examen |
@@ -397,7 +397,7 @@ activation de l'app.
 | **Matières multiples par groupe** | ✅ **nouveau** | Un groupe déclare **plusieurs** matières (avant : un seul code optionnel). Les administrateurs définissent la liste, chaque membre coche celles qu'il suit — et seul l'avancement de ces matières est partagé |
 | **Avancement lisible par matière** | ✅ **nouveau** | Un écran par matière : rang, avancement global, séries / exercices / théorie par membre, et l'**écart avec toi** (« 3 éléments d'avance »). Un sélecteur choisit l'axe mis en avant |
 | **Présence en direct** | ✅ **nouveau** | « Alice travaille sur CS-250 · Exercices · 3.2, depuis 1 h 12 », avec un battement toutes les 5 min. Un membre dont le battement date est éteint tout seul — pas de fausse présence |
-| **Invitations** | ✅ **nouveau** | Code, **lien** `studytrack://join?code=…` (reconnu par l'app) et **QR code** généré par CoreImage. Feuille de partage système |
+| **Invitations** | ✅ **nouveau** | Code, **lien** `polymestre://join?code=…` (reconnu par l'app) et **QR code** généré par CoreImage. Feuille de partage système |
 | **Rôles visibles** | ✅ **nouveau** | Pastille « Admin » sur les administrateurs ; nommer / rétrograder / retirer depuis la fiche, dans la limite des politiques RLS |
 | **Quitter un groupe** | ✅ **nouveau** | Bouton explicite dans la fiche (distinct de « Supprimer le groupe », réservé aux administrateurs), avec avertissement si tu es le dernier admin |
 | Temps d'étude du groupe | ✅ | 7 derniers jours et total, calculé côté serveur (`group_leaderboard`), affiché **sans rang** |
@@ -598,7 +598,7 @@ coller comme connecteur personnalisé.
   notes du dossier du Mac (`NotesStore`) n'y sont pas : le jeton est propre à
   l'iPhone, seul à synchroniser.
 - **Serveur local des fichiers (Mac)** (Réglages › Mode étude › « Fichiers pour
-  Claude », éteint par défaut) : un second serveur MCP, `studytrack-files`, dans
+  Claude », éteint par défaut) : un second serveur MCP, `polymestre-files`, dans
   l'app du Mac (`Domain/LocalMCP.swift`, `MacLocalMCP`), sur `127.0.0.1` seulement.
   Il lève les limites du serveur en ligne : il lit les données du Mac, a la
   session Moodle et le dossier de notes, et rend des **chemins** (pas des octets),
@@ -614,11 +614,11 @@ coller comme connecteur personnalisé.
   serveur en ligne reste pour le téléphone, claude.ai et l'écriture.
 - **Dans l'app Claude (Desktop), sans étape compliquée** : Réglages › Mode étude ›
   « Fichiers pour Claude » › **Ajouter à l'app Claude**. L'app allume le serveur
-  local, fabrique `StudyTrack.mcpb` (`ClaudeDesktopExtension`, manifeste 0.4,
+  local, fabrique `Polymestre.mcpb` (`ClaudeDesktopExtension`, manifeste 0.4,
   validé par `mcpb validate`) et l'ouvre : un clic « Installer » dans l'app
   Claude. L'extension est un pont Node sans dépendance : il relaie au serveur
-  local (adresse lue dans `~/Library/Application Support/StudyTrack/local-mcp.json`,
-  donc rien à réinstaller si le port change), rouvre StudyTrack s'il est fermé, et
+  local (adresse lue dans `~/Library/Application Support/Polymestre/local-mcp.json`,
+  donc rien à réinstaller si le port change), rouvre Polymestre s'il est fermé, et
   demande `read_file` en mode `inline` : les pages d'un PDF reviennent en
   **images** (formules intactes ; 5 pages par défaut, 8 au plus, `pages="9-16"`
   pour la suite), le texte et les `.docx` en texte — l'app Claude ne sait pas ouvrir
@@ -644,19 +644,19 @@ est retiré.
 ### Widgets : App Group à enregistrer
 
 L'app et l'extension widget partagent leurs données via l'App Group
-**`group.com.studytrack.app`**. Pour que le widget affiche quelque chose sur un
+**`group.com.polymestre.app`**. Pour que le widget affiche quelque chose sur un
 appareil réel :
 
-1. Dans le portail Apple Developer, créez un App Group `group.com.studytracker.app`
-   et ajoutez-le aux *deux* identifiants (`com.hczr.studytrack.app` et
-   `com.hczr.studytrack.app.widgets`).
-2. Les entitlements sont déjà fournis (`Support/StudyTrack.entitlements` et
-   `Support/StudyTrackWidgets.entitlements`) et référencés par les deux cibles.
+1. Dans le portail Apple Developer, créez un App Group `group.ch.polymestre.app`
+   et ajoutez-le aux *deux* identifiants (`ch.polymestre.app` et
+   `ch.polymestre.app.widgets`).
+2. Les entitlements sont déjà fournis (`Support/Polymestre.entitlements` et
+   `Support/PolymestreWidgets.entitlements`) et référencés par les deux cibles.
 
 Sans App Group, l'app fonctionne normalement : `WidgetBridge.write` est simplement
-un no-op et le widget affiche « Ouvre StudyTrack » au lieu de planter.
+un no-op et le widget affiche « Ouvre Polymestre » au lieu de planter.
 
-> L'identifiant est défini une seule fois (`STUDYTRACK_APP_GROUP` dans le projet)
+> L'identifiant est défini une seule fois (`POLYMESTRE_APP_GROUP` dans le projet)
 > et injecté dans les deux `Info.plist` et les deux entitlements.
 
 L'app publie l'instantané quand elle passe au premier plan / arrière-plan
@@ -665,11 +665,11 @@ L'app publie l'instantané quand elle passe au premier plan / arrière-plan
 ### Sign in with Apple (appareil réel)
 
 L'entitlement `com.apple.developer.applesignin` est **déjà déclaré** dans
-`Support/StudyTrack.entitlements`. Il reste deux choses à faire, qui ne sont pas dans
+`Support/Polymestre.entitlements`. Il reste deux choses à faire, qui ne sont pas dans
 le dépôt :
 
 1. **Portail Apple Developer** — active « Sign in with Apple » sur l'identifiant
-   `com.hczr.studytrack.app`. Avec la signature automatique, Xcode le fait pour toi au
+   `ch.polymestre.app`. Avec la signature automatique, Xcode le fait pour toi au
    premier build signé ; si le build échoue à signer, c'est que l'identifiant est géré
    ailleurs.
 2. **Supabase** — Authentication ▸ Providers ▸ Apple : renseigne le *Service ID*, la
@@ -684,36 +684,36 @@ le bouton Apple affiche désormais un message explicite au lieu de `(null)`.
 
 ### Avec mesure : le temps de Claude Code (Mac)
 
-Un mod Claude Code (`ClaudePlugin/mesure`) et une page de StudyTrack (Réglages ›
+Un mod Claude Code (`ClaudePlugin/mesure`) et une page de Polymestre (Réglages ›
 Claude Code, carte du Bilan, ligne de la barre des menus, carte du Bilan de
 l'iPhone). Éteint par défaut.
 
 - **Étude / projets / libre**, d'après le dossier de la séance : les dossiers
-  d'étude (`~/EPFL`, le projet Claude réglé dans StudyTrack) ne sont jamais
+  d'étude (`~/EPFL`, le projet Claude réglé dans Polymestre) ne sont jamais
   limités, seulement comptés ; le reste (« projets ») suit les règles.
 - **Règles**, dans l'ordre : verrou du mode étude (tout sauf l'étude), mode
   étude, cours de l'horaire, couvre-feu, d'abord étudier (minutes du jour
-  dans StudyTrack), pause après une longue série, budget du jour.
+  dans Polymestre), pause après une longue série, budget du jour.
 - **Passes** : `/mesure encore <raison>` — trois mots au moins, un délai de
   réflexion, un nombre par jour ; la raison va au Bilan. Pas de pass pendant un
   cours ni en mode étude.
 - **Durcir tout de suite, assouplir le lendemain** (4 h, au moins 12 h plus
   tard), couper Avec mesure compris ; le premier jour observe seulement.
-- **Fichiers** (`~/Library/Application Support/StudyTrack/Claude/`) :
-  `policy.json` (StudyTrack → mod), `sessions/<jour>/<séance>.json` et
-  `passes/<jour>/…` (mod → StudyTrack), `mod.json`. Le calcul existe deux fois,
-  `ClaudePlugin/mesure/hooks/policy.ts` et `StudyTrack/Domain/ClaudeMeasure.swift`,
+- **Fichiers** (`~/Library/Application Support/Polymestre/Claude/`) :
+  `policy.json` (Polymestre → mod), `sessions/<jour>/<séance>.json` et
+  `passes/<jour>/…` (mod → Polymestre), `mod.json`. Le calcul existe deux fois,
+  `ClaudePlugin/mesure/hooks/policy.ts` et `Polymestre/Domain/ClaudeMeasure.swift`,
   avec les mêmes cas de test (`claude plugin test ClaudePlugin/mesure`, `./validate.sh`).
 - **Brancher** : Réglages › Claude Code › « Brancher Claude Code » copie le mod
   (dans l'app : référence de dossier `ClaudePlugin`) vers Application Support,
-  puis `claude plugin marketplace add` et `claude plugin install mesure@studytrack`.
+  puis `claude plugin marketplace add` et `claude plugin install mesure@polymestre`.
   Une séance sans clavier (`claude -p`, le tuteur) n'est ni comptée ni bloquée ;
   un mod cassé laisse passer les demandes (pas de `.catch` sur `prompt.submit`).
 
 ### Distribuer : TestFlight (iPhone) et Developer ID (Mac)
 
 `./release.sh ios` archive, exporte pour App Store Connect et envoie la build ;
-`./release.sh mac` archive le Mac, le fait notariser et produit `StudyTrack.dmg`
+`./release.sh mac` archive le Mac, le fait notariser et produit `Polymestre.dmg`
 et le `latest.json` du site. Avant chaque envoi : monter `CURRENT_PROJECT_VERSION`
 (le numéro de build doit être neuf pour App Store Connect, et le Mac compare ce
 numéro pour annoncer une mise à jour).
@@ -722,7 +722,7 @@ numéro pour annoncer une mise à jour).
   nuage » : une clé App Store Connect « App Manager » ne peut pas signer).
 - **Notarisation du Mac** : la clé App Store Connect — `ASC_KEY_ID`,
   `ASC_ISSUER_ID` dans l'environnement, `AuthKey_<ID>.p8` à la racine (ignoré par git).
-- **Temps d'écran** : `STUDYTRACK_SCREEN_TIME` (`Support/Supabase.xcconfig`) vaut
+- **Temps d'écran** : `POLYMESTRE_SCREEN_TIME` (`Support/Supabase.xcconfig`) vaut
   `YES` partout depuis qu'Apple a accordé « Family Controls (Distribution) » au
   compte (27 octobre 2026 ; sans cet accord, l'export d'une build distribuée
   échoue). `NO` retire le droit (app et extension), le code du bouclier
@@ -732,11 +732,13 @@ numéro pour annoncer une mise à jour).
   du Mac avec `-initCloudKitSchema` (tout le schéma dans Development), puis console
   CloudKit › Deploy Schema Changes.
 - **Retours et site** : `FEEDBACK_EMAIL` et `SITE_HOST` (xcconfig). Le site
-  (dépôt `studytrack-site`, servi sur **polymestre.ch**) porte la confidentialité,
+  (dépôt `polymestre-site`, servi sur **polymestre.ch**) porte la confidentialité,
   `mac.html` et `mac/latest.json`, lu par le Mac une fois par jour (`MacUpdater`).
   L'ancienne adresse `studytrack.hczr.ch` doit **rester une redirection 301**
   vers `polymestre.ch` (règle Cloudflare, chemin conservé) : les Mac installés
   avant le changement lisent encore `studytrack.hczr.ch/mac/latest.json`.
+- **Changement d'identité** (StudyTrack → Polymestre) : la mise en service, dans l'ordre, et ce
+  qui garde l'ancien nom sont dans [`docs/rename-polymestre.md`](docs/rename-polymestre.md).
 - Une build TestFlight **expire au bout de 90 jours** : en refaire une à
   mi-semestre.
 
@@ -745,8 +747,8 @@ numéro pour annoncer une mise à jour).
 ## 6. Structure du projet
 
 ```
-StudyTrack/                     # cible application
-├── StudyTrackApp.swift          # point d'entrée (+ AppRuntime pour Siri)
+Polymestre/                     # cible application
+├── PolymestreApp.swift          # point d'entrée (+ AppRuntime pour Siri)
 ├── App/
 │   ├── AppContainer.swift       # injection SwiftData + services
 │   ├── AppRouter.swift          # onglet actif, demandes de chrono, liens profonds
@@ -779,12 +781,12 @@ Shared/                          # compilé dans les trois cibles (app, widget, 
 ├── FocusTimerIntents.swift      # pause / reprise / enregistrer / question suivante
 └── ColorContrast.swift          # solveur de contraste WCAG (couleurs accessibles)
 
-StudyTrackWidgets/               # cible d'extension WidgetKit
-├── StudyTrackWidgets.swift      # timelines, widgets d'origine, les deux Live Activities
-└── StudyTrackActionWidgets.swift # Prochaine tâche, Cours de la semaine, Évaluation,
+PolymestreWidgets/               # cible d'extension WidgetKit
+├── PolymestreWidgets.swift      # timelines, widgets d'origine, les deux Live Activities
+└── PolymestreActionWidgets.swift # Prochaine tâche, Cours de la semaine, Évaluation,
                                   # bouton Centre de contrôle
 
-StudyTrackShare/                 # cible d'extension de partage (recevoir un PDF)
+PolymestreShare/                 # cible d'extension de partage (recevoir un PDF)
 ```
 
 ---

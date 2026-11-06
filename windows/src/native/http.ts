@@ -2,7 +2,7 @@
 // dans le navigateur (aperçu Vite) c'est le `fetch` ordinaire.
 //
 // Les fonctions Supabase (`extract-series`, `analyze-course`) n'autorisent pas
-// l'en-tête `x-studytrack-install` en CORS, et les sites de cours n'en envoient
+// l'en-tête `x-polymestre-install` en CORS, et les sites de cours n'en envoient
 // aucun : la webview ne peut pas les appeler directement. Les URL joignables sont
 // bornées par la permission `http:default` de `capabilities/default.json`.
 

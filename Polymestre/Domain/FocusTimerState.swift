@@ -226,7 +226,7 @@ enum FocusTimerStore {
     static let key = "focus.timerState"
     /// Posté à chaque écriture : le bandeau « chrono en cours » suit l'état
     /// sans que l'écran Focus soit ouvert.
-    static let didSave = Notification.Name("studytrack.focusTimerDidSave")
+    static let didSave = Notification.Name("polymestre.focusTimerDidSave")
 
     static func load(defaults: UserDefaults = .standard) -> FocusTimerState? {
         guard let data = defaults.data(forKey: key) else { return nil }

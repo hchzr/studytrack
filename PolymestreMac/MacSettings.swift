@@ -126,8 +126,8 @@ final class MacSettings {
     var localFilesPort: Int { didSet { defaults.set(localFilesPort, forKey: "mac.localFilesPort") } }
     /// Le jeton secret de l'adresse locale (tiré au premier allumage).
     var localFilesToken: String { didSet { defaults.set(localFilesToken, forKey: "mac.localFilesToken") } }
-    /// L'adresse du serveur MCP de StudyTrack (iPhone › Réglages › Assistant IA).
-    var claudeStudyTrackMCP: String { didSet { defaults.set(claudeStudyTrackMCP, forKey: "mac.claudeStudyTrackMCP") } }
+    /// L'adresse du serveur MCP de Polymestre (iPhone › Réglages › Assistant IA).
+    var claudePolymestreMCP: String { didSet { defaults.set(claudePolymestreMCP, forKey: "mac.claudeStudyTrackMCP") } }
 
     // MARK: Après une série (chacun s'éteint : l'app reste simple pour qui n'en veut pas)
 
@@ -185,7 +185,7 @@ final class MacSettings {
         claudeProject = defaults.bool(forKey: "mac.claudeProject")
         claudeProjectFolder = defaults.string(forKey: "mac.claudeProjectFolder")
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("EPFL").path
-        claudeStudyTrackMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
+        claudePolymestreMCP = defaults.string(forKey: "mac.claudeStudyTrackMCP") ?? ""
         localFilesServer = defaults.bool(forKey: "mac.localFilesServer")
         localFilesPort = defaults.object(forKey: "mac.localFilesPort") as? Int ?? 47821
         localFilesToken = defaults.string(forKey: "mac.localFilesToken") ?? ""

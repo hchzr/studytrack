@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OLD_MIGRATION="$ROOT/supabase/migrations/20261030000000_user_data_sync.sql"
 MIGRATION="$ROOT/supabase/migrations/20261103000000_sync_e2ee.sql"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/studytrack-pg.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/polymestre-pg.XXXXXX")"
 PORT=55432
 cleanup() { pg_ctl -D "$WORK/data" -m immediate stop >/dev/null 2>&1 || true; rm -rf "$WORK"; }
 trap cleanup EXIT

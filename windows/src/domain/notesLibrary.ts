@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/NotesLibrary.swift : les notes de l'étudiant·e, là
+// Port de Polymestre/Domain/NotesLibrary.swift : les notes de l'étudiant·e, là
 // où son app les sauvegarde (GoodNotes, Notability…). Pur : à quel cours va un
 // cahier, de quelle semaine est un document, et s'il s'agit d'une série.
 

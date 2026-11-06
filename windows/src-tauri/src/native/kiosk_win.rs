@@ -64,7 +64,7 @@ impl Hook {
 pub fn install() -> Option<Hook> {
     let (tx, rx) = mpsc::channel::<Option<u32>>();
     let handle = std::thread::Builder::new()
-        .name("studytrack-kiosk-hook".into())
+        .name("polymestre-kiosk-hook".into())
         .spawn(move || {
             // SAFETY: tout reste sur ce fil ; le crochet est retiré avant de sortir.
             unsafe {

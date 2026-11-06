@@ -1,4 +1,4 @@
-// Génère StudyTrack/Domain/SyncSchema.generated.swift depuis windows/src/models/schema.ts :
+// Génère Polymestre/Domain/SyncSchema.generated.swift depuis windows/src/models/schema.ts :
 // la même description que celle dont la migration Supabase et la base Windows sont
 // tirées, donc les mêmes noms de colonnes, au caractère près.
 //
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { tables, fieldColumn, refColumn } from "../windows/src/models/schema.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const out = join(root, "StudyTrack", "Domain", "SyncSchema.generated.swift");
+const out = join(root, "Polymestre", "Domain", "SyncSchema.generated.swift");
 
 const ctor: Record<string, string> = { int: "int", double: "double", bool: "bool", text: "text", date: "date", uuid: "text" };
 

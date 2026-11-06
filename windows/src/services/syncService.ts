@@ -41,10 +41,13 @@ import type { Loopback, OAuthProvider } from "./oauth.ts";
 export type { SyncReport } from "../sync/engine.ts";
 
 /** Clés `localStorage` : le drapeau et l'état survivent aux lancements. */
-export const ENABLED_KEY = "studytrack.sync.enabled";
-export const STATUS_KEY = "studytrack.sync.status";
+export const ENABLED_KEY = "polymestre.sync.enabled";
+export const STATUS_KEY = "polymestre.sync.status";
+// Les mêmes réglages avant le changement de nom : relus tant que les nouveaux n'existent pas.
+const LEGACY_ENABLED_KEY = "studytrack.sync.enabled";
+const LEGACY_STATUS_KEY = "studytrack.sync.status";
 /** La clé du compte (« <id utilisateur>:<hex> »), au coffre du système : jamais envoyée au serveur. */
-export const ACCOUNT_KEY = "studytrack.sync.accountKey";
+export const ACCOUNT_KEY = "polymestre.sync.accountKey";
 
 /** Attente après une écriture locale : grouper les saisies en une passe. */
 export const WRITE_DEBOUNCE_MS = 3_000;
@@ -171,7 +174,7 @@ function sessionFromSignUp(raw: unknown): Session | null {
 
 function readEnabled(storage: Storage | null): boolean {
   try {
-    return (storage?.getItem(ENABLED_KEY) ?? "") === "1";
+    return (storage?.getItem(ENABLED_KEY) ?? storage?.getItem(LEGACY_ENABLED_KEY) ?? "") === "1";
   } catch {
     return false;
   }
@@ -179,7 +182,7 @@ function readEnabled(storage: Storage | null): boolean {
 
 function readStatus(storage: Storage | null): PersistedStatus {
   try {
-    const raw = storage?.getItem(STATUS_KEY);
+    const raw = storage?.getItem(STATUS_KEY) ?? storage?.getItem(LEGACY_STATUS_KEY);
     if (!raw) return { lastSyncAt: null, lastError: null, lastReport: null };
     const value = JSON.parse(raw) as Partial<PersistedStatus>;
     return {

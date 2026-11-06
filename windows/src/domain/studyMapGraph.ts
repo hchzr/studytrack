@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/StudyMapGraph.swift : les schémas (flow,
+// Port de Polymestre/Domain/StudyMapGraph.swift : les schémas (flow,
 // dépendances, arbre, comparaison) et leur disposition, la carte mentale des
 // deux côtés de la racine, les liens déduits des citations, et l'ordre dans
 // lequel apprendre.

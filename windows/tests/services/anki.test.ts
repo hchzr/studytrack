@@ -37,7 +37,7 @@ describe("AnkiWebClient", () => {
     const key = await new AnkiWebClient("", null, fetcher).login("eleve@epfl.ch", "secret");
     expect(key).toBe("hk-123");
     expect(seen!.url).toBe("https://sync.ankiweb.net/sync/hostKey");
-    expect(seen!.type).toMatch(/^multipart\/form-data; boundary=StudyTrack-/);
+    expect(seen!.type).toMatch(/^multipart\/form-data; boundary=Polymestre-/);
     expect(seen!.body).toContain('name="c"\r\n\r\n0');
     expect(seen!.body).toContain('name="data"; filename="data"');
     expect(seen!.body).toContain('{"u":"eleve@epfl.ch","p":"secret"}');

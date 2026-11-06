@@ -7,7 +7,7 @@ import AppKit
 #endif
 
 /// La feuille de connexion du système (`ASWebAuthenticationSession`) qui capte
-/// `studytrack://auth-callback` : elle n'exige pas d'enregistrer le schéma.
+/// `polymestre://auth-callback` : elle n'exige pas d'enregistrer le schéma.
 @MainActor
 final class SupabaseOAuthWebSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     static let shared = SupabaseOAuthWebSession()

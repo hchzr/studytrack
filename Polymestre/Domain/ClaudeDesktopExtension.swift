@@ -1,24 +1,31 @@
 import Foundation
 
-/// L'extension « StudyTrack » de l'app Claude (Desktop) : un fichier `.mcpb` à
+/// L'extension « Polymestre » de l'app Claude (Desktop) : un fichier `.mcpb` à
 /// ouvrir d'un double-clic — l'app Claude propose de l'installer.
 ///
 /// L'app Claude ne lance que des serveurs **locaux en stdio** et ne sait pas
 /// ouvrir un chemin de fichier. L'extension est donc un petit pont, sans
 /// dépendance, que l'app Claude fait tourner avec son propre Node :
-/// - il relaie chaque requête au serveur local de StudyTrack (`LocalMCP`),
+/// - il relaie chaque requête au serveur local de Polymestre (`LocalMCP`),
 ///   dont il lit l'adresse dans `local-mcp.json` — elle peut changer d'un
 ///   lancement à l'autre, rien n'est copié dans l'extension ;
 /// - il demande `read_file` en mode « inline » : les pages d'un PDF reviennent en
 ///   **images**, le texte en texte — Claude les lit sans chemin ;
-/// - si StudyTrack n'est pas ouvert, il l'ouvre (sans l'amener au premier plan).
+/// - si Polymestre n'est pas ouvert, il l'ouvre (sans l'amener au premier plan).
 enum ClaudeDesktopExtension {
 
-    static let name = "studytrack-files"
+    static let name = "polymestre-files"
     static let version = "1.0.0"
+    /// L'extension installée avant le changement de nom : elle lit son adresse dans
+    /// l'ancien dossier, que l'app tient à jour tant qu'elle est là.
+    static let legacyName = "studytrack-files"
 
     /// Où l'app écrit l'adresse de son serveur local (lu par le pont).
     static func infoFile(home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> URL {
+        home.appendingPathComponent("Library/Application Support/Polymestre/local-mcp.json")
+    }
+
+    static func legacyInfoFile(home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> URL {
         home.appendingPathComponent("Library/Application Support/StudyTrack/local-mcp.json")
     }
 
@@ -68,12 +75,12 @@ enum ClaudeDesktopExtension {
     const path = require('path');
     const { spawn } = require('child_process');
 
-    const INFO = process.env.STUDYTRACK_MCP_INFO ||
-      path.join(os.homedir(), 'Library', 'Application Support', 'StudyTrack', 'local-mcp.json');
+    const INFO = process.env.POLYMESTRE_MCP_INFO ||
+      path.join(os.homedir(), 'Library', 'Application Support', 'Polymestre', 'local-mcp.json');
     const APP_ID = '__APP_ID__';
     // Réglables pour les essais : ne pas ouvrir l'app, et combien de temps l'attendre.
-    const NO_LAUNCH = process.env.STUDYTRACK_MCP_NO_LAUNCH === '1';
-    const WAIT_MS = Number(process.env.STUDYTRACK_MCP_WAIT_MS || 20000);
+    const NO_LAUNCH = process.env.POLYMESTRE_MCP_NO_LAUNCH === '1';
+    const WAIT_MS = Number(process.env.POLYMESTRE_MCP_WAIT_MS || 20000);
     const HINT = "Polymestre ne répond pas. Ouvre l'app Polymestre sur ce Mac et active Réglages › Mode étude › « Serveur local des fichiers », puis réessaie.";
 
     function readURL() {

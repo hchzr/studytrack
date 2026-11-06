@@ -31,7 +31,7 @@ declare const Deno: {
   serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
-const SERVER_INFO = { name: "studytrack", title: "Polymestre", version: "3.0.0" };
+const SERVER_INFO = { name: "polymestre", title: "Polymestre", version: "3.0.0" };
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 // L'instantané porte maintenant les notes et les fiches : de la marge.
 const MAX_BODY = 8 * 1024 * 1024;
@@ -647,7 +647,7 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-const fileURI = (id: string) => `studytrack://file/${encodeURIComponent(id)}`;
+const fileURI = (id: string) => `polymestre://file/${encodeURIComponent(id)}`;
 
 /// Le contenu d'un fichier : du texte, ou les octets en base64.
 async function loadFile(hash: string, data: any, id: string): Promise<{ entry: FileEntry; text?: string; base64?: string }> {
@@ -686,8 +686,9 @@ async function listResources(hash: string) {
 async function readResource(hash: string, uri: unknown) {
   const link = await getLink(hash);
   if (!link?.snapshot) throw new UserError("Aucune donnée pour l'instant.");
-  const prefix = "studytrack://file/";
-  if (typeof uri !== "string" || !uri.startsWith(prefix)) throw new UserError("Ressource inconnue.");
+  // `studytrack://file/` : une adresse donnée avant le changement de nom.
+  const prefix = ["polymestre://file/", "studytrack://file/"].find((p) => typeof uri === "string" && uri.startsWith(p));
+  if (typeof uri !== "string" || !prefix) throw new UserError("Ressource inconnue.");
   const { entry, text, base64 } = await loadFile(hash, link.snapshot, decodeURIComponent(uri.slice(prefix.length)));
   return { contents: [text !== undefined ? { uri, mimeType: entry.mime, text } : { uri, mimeType: entry.mime, blob: base64 }] };
 }
@@ -929,7 +930,7 @@ async function handleRPC(hash: string, message: any): Promise<unknown | null> {
 /// L'app envoie son instantané et ses comptes rendus, reçoit les commandes.
 async function sync(hash: string, body: any): Promise<Response> {
   if (body?.snapshot) {
-    if (body.snapshot.format !== "studytrack.assistant") return json({ error: "instantané invalide" }, 400);
+    if (!["polymestre.assistant", "studytrack.assistant"].includes(body.snapshot.format)) return json({ error: "instantané invalide" }, 400);
     await saveSnapshot(hash, body.snapshot);
   }
   for (const result of body?.results ?? []) {

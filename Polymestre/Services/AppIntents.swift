@@ -377,7 +377,7 @@ struct MarkExerciseDoneIntent: AppIntent {
 
 // MARK: - Raccourcis proposés par défaut
 
-struct StudyTrackShortcuts: AppShortcutsProvider {
+struct PolymestreShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: StartStudyTimerIntent(),
                     phrases: [

@@ -113,7 +113,7 @@ test('d\'abord étudier', () => {
   const saturday = new Date(2026, 9, 31, 15).getTime()
   const weekend = { studied: { day: '2026-10-31', seconds: 0, accumulated: 0, runningSince: null } }
   expect(evaluate('projets', false, policy({}, weekend), noUse, [], saturday).allow).toBe(true)
-  // StudyTrack fermé depuis hier : la règle ne peut pas se vérifier, elle ne bloque pas.
+  // Polymestre fermé depuis hier : la règle ne peut pas se vérifier, elle ne bloque pas.
   const stale = { studied: { day: '2026-10-26', seconds: 0, accumulated: 0, runningSince: null } }
   expect(evaluate('projets', false, policy({}, stale), noUse, [], at(15)).allow).toBe(true)
   expect(evaluate('projets', false, policy({}, { studied: null }), noUse, [], at(15)).allow).toBe(true)

@@ -1,6 +1,6 @@
-// Ce que Claude rapporte d'une série, lu dans le bloc ```studytrack qui termine
+// Ce que Claude rapporte d'une série, lu dans le bloc ```polymestre qui termine
 // sa réponse : corrections, erreurs du carnet, exercices admis dans la file de
-// reprise et indices donnés (StudyTrack/Domain/SeriesReview.swift).
+// reprise et indices donnés (Polymestre/Domain/SeriesReview.swift).
 //
 // Rien n'est noté sans que l'étudiant·e le confirme — sauf les indices, un
 // simple journal.
@@ -8,7 +8,7 @@
 // Le format est fait pour être écrit par Claude et relu sans ambiguïté, une
 // ligne par fait :
 //
-// ```studytrack
+// ```polymestre
 // 2 : faux
 // erreur 2 | méthode | oubli de vérifier la continuité en 0 | vérifier f continue en 0 avant le TAF | continuité
 // reprise 2 | méthode : n'a pas vu le critère | Pose M_n = sup |f_n(x)|
@@ -137,11 +137,17 @@ function bareHint(line: string): Hint | null {
   return { exercise, level, text: fields[2] };
 }
 
-/// Les verdicts du bloc ```studytrack d'une réponse.
-function verdicts(inText: string): ReviewVerdict[] {
-  const open = inText.indexOf("```studytrack");
+/// Un bloc ```studytrack (consigne d'avant le changement de nom, encore suivie par un projet
+/// Claude ou une conversation ancienne) se lit comme un bloc ```polymestre. Même longueur :
+/// les positions trouvées valent pour le texte d'origine.
+export const currentFences = (text: string): string => text.split("```studytrack").join("```polymestre");
+
+/// Les verdicts du bloc ```polymestre d'une réponse.
+function verdicts(original: string): ReviewVerdict[] {
+  const inText = currentFences(original);
+  const open = inText.indexOf("```polymestre");
   if (open < 0) return [];
-  const after = inText.slice(open + "```studytrack".length);
+  const after = inText.slice(open + "```polymestre".length);
   const close = after.indexOf("```");
   const block = close < 0 ? after : after.slice(0, close);
   const result: ReviewVerdict[] = [];
@@ -170,11 +176,11 @@ function verdicts(inText: string): ReviewVerdict[] {
 
 function blocks(inText: string): string[] {
   const found: string[] = [];
-  let rest = inText;
+  let rest = currentFences(inText);
   for (;;) {
-    const open = rest.indexOf("```studytrack");
+    const open = rest.indexOf("```polymestre");
     if (open < 0) break;
-    const after = rest.slice(open + "```studytrack".length);
+    const after = rest.slice(open + "```polymestre".length);
     const close = after.indexOf("```");
     found.push(close < 0 ? after : after.slice(0, close));
     rest = close < 0 ? "" : after.slice(close + 3);
@@ -182,7 +188,7 @@ function blocks(inText: string): string[] {
   return found;
 }
 
-/// Tous les blocs ```studytrack d'une réponse, lus ligne à ligne.
+/// Tous les blocs ```polymestre d'une réponse, lus ligne à ligne.
 function parse(text: string): Report {
   const report = new Report();
   for (const block of blocks(text)) {
@@ -226,7 +232,7 @@ function parse(text: string): Report {
           // « 6.3 | 1 | … » : Claude oublie souvent le mot « indice » (vu en vrai).
           report.hints.push(hint);
         } else {
-          const verdict = verdicts(`\`\`\`studytrack\n${line}\n\`\`\``)[0];
+          const verdict = verdicts(`\`\`\`polymestre\n${line}\n\`\`\``)[0];
           if (verdict) report.verdicts.push(verdict);
         }
       }
@@ -237,11 +243,11 @@ function parse(text: string): Report {
 
 /// La réponse sans ses blocs (ils s'affichent en carte à part).
 function withoutBlocks(text: string): string {
-  let copy = text;
+  let copy = currentFences(text);
   for (;;) {
-    const open = copy.indexOf("```studytrack");
+    const open = copy.indexOf("```polymestre");
     if (open < 0) break;
-    const after = copy.indexOf("```", open + "```studytrack".length);
+    const after = copy.indexOf("```", open + "```polymestre".length);
     copy = copy.slice(0, open) + (after < 0 ? "" : copy.slice(after + 3));
   }
   return trimAll(copy);
@@ -251,7 +257,7 @@ function withoutBlocks(text: string): string {
 
 /// Le format, tel qu'on le décrit à Claude — selon ce qui est allumé.
 function instruction(features: Features): string {
-  const lines = ["Termine par un bloc de code ```studytrack, une ligne par fait :",
+  const lines = ["Termine par un bloc de code ```polymestre, une ligne par fait :",
     "- « numéro : juste », « numéro : moyen » ou « numéro : faux » pour chaque exercice corrigé ;"];
   if (features.mistakes) {
     lines.push("- « erreur numéro | type | résumé précis | la bonne démarche en une phrase | notion » pour chaque écart, même une étourderie ; type parmi calcul, méthode, compréhension, étourderie, lacune de cours, gestion du temps, lecture de l'énoncé ;");
@@ -264,7 +270,7 @@ function instruction(features: Features): string {
 }
 
 /// La consigne des indices, pendant la résolution.
-const hintInstruction = "Quand tu donnes un indice sur un exercice, ajoute à la fin de ta réponse un bloc ```studytrack "
+const hintInstruction = "Quand tu donnes un indice sur un exercice, ajoute à la fin de ta réponse un bloc ```polymestre "
   + "d'une ligne, **avec le mot « indice »** : « indice 6.3 | 2 | l'indice en une phrase », niveau 1 (orientation), "
   + "2 (outil), 3 (amorce) ou 4 (solution). Polymestre le note pour la reprise et le post-mortem.";
 

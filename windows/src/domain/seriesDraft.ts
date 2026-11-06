@@ -1,5 +1,5 @@
 // Une série telle qu'elle sera enregistrée — modifiable avant — et les gestes
-// purs sur l'arbre des questions (StudyTrack/Domain/SeriesDraft.swift).
+// purs sur l'arbre des questions (Polymestre/Domain/SeriesDraft.swift).
 //
 // Le **même** brouillon sert à relire un import et à modifier une série déjà
 // enregistrée : les deux écrans se comportent donc de la même façon, et un

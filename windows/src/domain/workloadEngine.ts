@@ -1,4 +1,4 @@
-// Charge de travail EPFL (StudyTrack/Domain/WorkloadEngine.swift).
+// Charge de travail EPFL (Polymestre/Domain/WorkloadEngine.swift).
 //
 // Modèle : charge totale attendue = `crédits × heuresParCrédit`. La part
 // « cours » correspond aux heures d'amphi planifiées ; le reste est le travail

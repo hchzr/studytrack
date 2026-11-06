@@ -291,7 +291,7 @@ enum StudyMode {
         case hideOnly
         /// Couverte, puis fermée.
         case close
-        /// Hors de portée : StudyTrack, le système, les agents.
+        /// Hors de portée : Polymestre, le système, les agents.
         case system
     }
 

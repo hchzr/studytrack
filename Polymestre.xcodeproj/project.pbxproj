@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StudyTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* StudyTrackShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B1000000000000000000000B /* PolymestreWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* PolymestreWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E1000000000000000000000C /* PolymestreShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* PolymestreShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F30000000000000000000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Theme.swift */; };
 		F30000000000000000000002 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* SupabaseConfig.swift */; };
 		F30000000000000000000003 /* DataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* DataExporter.swift */; };
@@ -39,9 +39,9 @@
 		F3000000000000000000001C /* RealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001C /* RealtimeClient.swift */; };
 		F3000000000000000000001D /* GroupKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001D /* GroupKeyStore.swift */; };
 		F3000000000000000000001E /* GroupSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000001E /* GroupSessionService.swift */; };
-		G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* StudyTrackMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		G1000000000000000000000B /* PolymestreMacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = G10000000000000000000002 /* PolymestreMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		G3000000000000000000000D /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000000000000000000D /* WidgetBridge.swift */; };
-		H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* StudyTrackLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		H1000000000000000000000B /* PolymestreLock.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* PolymestreLock.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		K10000000000000000000002 /* ClaudePlugin in Resources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000001 /* ClaudePlugin */; };
 		M10000000000000000000003 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000002 /* SwiftMath */; };
 		M10000000000000000000005 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = M10000000000000000000004 /* SwiftMath */; };
@@ -53,28 +53,28 @@
 			containerPortal = A1000000000000000000000A /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = B10000000000000000000003;
-			remoteInfo = StudyTrackWidgets;
+			remoteInfo = PolymestreWidgets;
 		};
 		E1000000000000000000000A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1000000000000000000000A /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = E10000000000000000000003;
-			remoteInfo = StudyTrackShare;
+			remoteInfo = PolymestreShare;
 		};
 		G1000000000000000000000D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1000000000000000000000A /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = G10000000000000000000003;
-			remoteInfo = StudyTrackMacWidgets;
+			remoteInfo = PolymestreMacWidgets;
 		};
 		H1000000000000000000000D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1000000000000000000000A /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = H10000000000000000000003;
-			remoteInfo = StudyTrackLock;
+			remoteInfo = PolymestreLock;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -85,9 +85,9 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				B1000000000000000000000B /* StudyTrackWidgets.appex in Embed Foundation Extensions */,
-				E1000000000000000000000C /* StudyTrackShare.appex in Embed Foundation Extensions */,
-				H1000000000000000000000B /* StudyTrackLock.appex in Embed Foundation Extensions */,
+				B1000000000000000000000B /* PolymestreWidgets.appex in Embed Foundation Extensions */,
+				E1000000000000000000000C /* PolymestreShare.appex in Embed Foundation Extensions */,
+				H1000000000000000000000B /* PolymestreLock.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -98,7 +98,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				G1000000000000000000000B /* StudyTrackMacWidgets.appex in Embed App Extensions */,
+				G1000000000000000000000B /* PolymestreMacWidgets.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -106,43 +106,43 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A10000000000000000000005 /* StudyTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StudyTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B10000000000000000000002 /* StudyTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000005 /* Polymestre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Polymestre.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000002 /* PolymestreWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PolymestreWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D10000000000000000000001 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Support/Supabase.xcconfig; sourceTree = "<group>"; };
-		E10000000000000000000002 /* StudyTrackShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E10000000000000000000002 /* PolymestreShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PolymestreShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000002 /* Polymestre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Polymestre.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F20000000000000000000001 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = StudyTrack/App/Theme.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000002 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseConfig.swift; path = StudyTrack/App/SupabaseConfig.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000003 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DataExporter.swift; path = StudyTrack/Services/DataExporter.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000004 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CalendarService.swift; path = StudyTrack/Services/CalendarService.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000005 /* TimetableImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimetableImportService.swift; path = StudyTrack/Services/TimetableImportService.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000006 /* TimetableImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimetableImport.swift; path = StudyTrack/Services/TimetableImport.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000007 /* CourseImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseImporter.swift; path = StudyTrack/Services/CourseImporter.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000008 /* SeriesPDFParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeriesPDFParser.swift; path = StudyTrack/Services/SeriesPDFParser.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000009 /* PDFLayoutExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFLayoutExtractor.swift; path = StudyTrack/Services/PDFLayoutExtractor.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000001 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = Polymestre/App/Theme.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000002 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseConfig.swift; path = Polymestre/App/SupabaseConfig.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000003 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DataExporter.swift; path = Polymestre/Services/DataExporter.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000004 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CalendarService.swift; path = Polymestre/Services/CalendarService.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000005 /* TimetableImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimetableImportService.swift; path = Polymestre/Services/TimetableImportService.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000006 /* TimetableImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimetableImport.swift; path = Polymestre/Services/TimetableImport.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000007 /* CourseImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseImporter.swift; path = Polymestre/Services/CourseImporter.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000008 /* SeriesPDFParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeriesPDFParser.swift; path = Polymestre/Services/SeriesPDFParser.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000009 /* PDFLayoutExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFLayoutExtractor.swift; path = Polymestre/Services/PDFLayoutExtractor.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000A /* ColorContrast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ColorContrast.swift; path = Shared/ColorContrast.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000B /* ActivityTimerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivityTimerState.swift; path = Shared/ActivityTimerState.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000C /* ExamActivityState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExamActivityState.swift; path = Shared/ExamActivityState.swift; sourceTree = SOURCE_ROOT; };
 		F2000000000000000000000D /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WidgetBridge.swift; path = Shared/WidgetBridge.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000000E /* CourseSiteClients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseSiteClients.swift; path = StudyTrack/Services/CourseSiteClients.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000000F /* WebContentScraper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WebContentScraper.swift; path = StudyTrack/Services/WebContentScraper.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000010 /* ConnectionCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectionCenter.swift; path = StudyTrack/Services/ConnectionCenter.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000011 /* CourseEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseEvidence.swift; path = StudyTrack/Services/CourseEvidence.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000012 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseClient.swift; path = StudyTrack/Services/SupabaseClient.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000013 /* SupabaseSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSessionStore.swift; path = StudyTrack/Services/SupabaseSessionStore.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000014 /* SupabaseSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSync.swift; path = StudyTrack/Services/SupabaseSync.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000015 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseOAuth.swift; path = StudyTrack/Services/SupabaseOAuth.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000016 /* SyncDeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncDeviceLink.swift; path = StudyTrack/Services/SyncDeviceLink.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000017 /* SyncEncryptionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncEncryptionViews.swift; path = StudyTrack/Views/Stats/SyncEncryptionViews.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000018 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SocialService.swift; path = StudyTrack/Services/SocialService.swift; sourceTree = SOURCE_ROOT; };
-		F20000000000000000000019 /* GroupSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSync.swift; path = StudyTrack/Services/GroupSync.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000001A /* PresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PresenceService.swift; path = StudyTrack/Services/PresenceService.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000001B /* GroupEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupEncryption.swift; path = StudyTrack/Services/GroupEncryption.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000001C /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RealtimeClient.swift; path = StudyTrack/Services/RealtimeClient.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000001D /* GroupKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupKeyStore.swift; path = StudyTrack/Services/GroupKeyStore.swift; sourceTree = SOURCE_ROOT; };
-		F2000000000000000000001E /* GroupSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSessionService.swift; path = StudyTrack/Services/GroupSessionService.swift; sourceTree = SOURCE_ROOT; };
-		G10000000000000000000002 /* StudyTrackMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		H10000000000000000000002 /* StudyTrackLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyTrackLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2000000000000000000000E /* CourseSiteClients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseSiteClients.swift; path = Polymestre/Services/CourseSiteClients.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000000F /* WebContentScraper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WebContentScraper.swift; path = Polymestre/Services/WebContentScraper.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000010 /* ConnectionCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectionCenter.swift; path = Polymestre/Services/ConnectionCenter.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000011 /* CourseEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseEvidence.swift; path = Polymestre/Services/CourseEvidence.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000012 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseClient.swift; path = Polymestre/Services/SupabaseClient.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000013 /* SupabaseSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSessionStore.swift; path = Polymestre/Services/SupabaseSessionStore.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000014 /* SupabaseSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseSync.swift; path = Polymestre/Services/SupabaseSync.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000015 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SupabaseOAuth.swift; path = Polymestre/Services/SupabaseOAuth.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000016 /* SyncDeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncDeviceLink.swift; path = Polymestre/Services/SyncDeviceLink.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000017 /* SyncEncryptionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncEncryptionViews.swift; path = Polymestre/Views/Stats/SyncEncryptionViews.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000018 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SocialService.swift; path = Polymestre/Services/SocialService.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000019 /* GroupSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSync.swift; path = Polymestre/Services/GroupSync.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001A /* PresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PresenceService.swift; path = Polymestre/Services/PresenceService.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001B /* GroupEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupEncryption.swift; path = Polymestre/Services/GroupEncryption.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001C /* RealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RealtimeClient.swift; path = Polymestre/Services/RealtimeClient.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001D /* GroupKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupKeyStore.swift; path = Polymestre/Services/GroupKeyStore.swift; sourceTree = SOURCE_ROOT; };
+		F2000000000000000000001E /* GroupSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupSessionService.swift; path = Polymestre/Services/GroupSessionService.swift; sourceTree = SOURCE_ROOT; };
+		G10000000000000000000002 /* PolymestreMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PolymestreMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		H10000000000000000000002 /* PolymestreLock.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PolymestreLock.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		K10000000000000000000001 /* ClaudePlugin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ClaudePlugin; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -152,21 +152,21 @@
 			membershipExceptions = (
 				SeedData.swift,
 			);
-			target = F10000000000000000000003 /* StudyTrackMac */;
+			target = F10000000000000000000003 /* PolymestreMac */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A10000000000000000000001 /* StudyTrack */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrack; sourceTree = "<group>"; };
-		B10000000000000000000001 /* StudyTrackWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackWidgets; sourceTree = "<group>"; };
+		A10000000000000000000001 /* Polymestre */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Polymestre; sourceTree = "<group>"; };
+		B10000000000000000000001 /* PolymestreWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PolymestreWidgets; sourceTree = "<group>"; };
 		C10000000000000000000001 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
-		E10000000000000000000001 /* StudyTrackShare */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackShare; sourceTree = "<group>"; };
+		E10000000000000000000001 /* PolymestreShare */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PolymestreShare; sourceTree = "<group>"; };
 		E20000000000000000000001 /* StudyKit */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyKit; sourceTree = "<group>"; };
-		F10000000000000000000001 /* StudyTrackMac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackMac; sourceTree = "<group>"; };
-		F1000000000000000000000C /* Models (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (F1000000000000000000000F /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); name = "Models (Mac)"; path = StudyTrack/Models; sourceTree = "<group>"; };
-		F1000000000000000000000D /* Domain (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "Domain (Mac)"; path = StudyTrack/Domain; sourceTree = "<group>"; };
-		G10000000000000000000001 /* StudyTrackMacWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackMacWidgets; sourceTree = "<group>"; };
-		H10000000000000000000001 /* StudyTrackLock */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = StudyTrackLock; sourceTree = "<group>"; };
+		F10000000000000000000001 /* PolymestreMac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PolymestreMac; sourceTree = "<group>"; };
+		F1000000000000000000000C /* Models (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (F1000000000000000000000F /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); name = "Models (Mac)"; path = Polymestre/Models; sourceTree = "<group>"; };
+		F1000000000000000000000D /* Domain (Mac) */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "Domain (Mac)"; path = Polymestre/Domain; sourceTree = "<group>"; };
+		G10000000000000000000001 /* PolymestreMacWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PolymestreMacWidgets; sourceTree = "<group>"; };
+		H10000000000000000000001 /* PolymestreLock */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PolymestreLock; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -221,13 +221,13 @@
 			isa = PBXGroup;
 			children = (
 				K10000000000000000000001 /* ClaudePlugin */,
-				A10000000000000000000001 /* StudyTrack */,
-				B10000000000000000000001 /* StudyTrackWidgets */,
-				E10000000000000000000001 /* StudyTrackShare */,
+				A10000000000000000000001 /* Polymestre */,
+				B10000000000000000000001 /* PolymestreWidgets */,
+				E10000000000000000000001 /* PolymestreShare */,
 				C10000000000000000000001 /* Shared */,
-				F10000000000000000000001 /* StudyTrackMac */,
-				H10000000000000000000001 /* StudyTrackLock */,
-				G10000000000000000000001 /* StudyTrackMacWidgets */,
+				F10000000000000000000001 /* PolymestreMac */,
+				H10000000000000000000001 /* PolymestreLock */,
+				G10000000000000000000001 /* PolymestreMacWidgets */,
 				E20000000000000000000001 /* StudyKit */,
 				F1000000000000000000000E /* Mac — sources partagées */,
 				D10000000000000000000001 /* Supabase.xcconfig */,
@@ -238,12 +238,12 @@
 		A10000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A10000000000000000000005 /* StudyTrack.app */,
-				B10000000000000000000002 /* StudyTrackWidgets.appex */,
-				E10000000000000000000002 /* StudyTrackShare.appex */,
+				A10000000000000000000005 /* Polymestre.app */,
+				B10000000000000000000002 /* PolymestreWidgets.appex */,
+				E10000000000000000000002 /* PolymestreShare.appex */,
 				F10000000000000000000002 /* Polymestre.app */,
-				G10000000000000000000002 /* StudyTrackMacWidgets.appex */,
-				H10000000000000000000002 /* StudyTrackLock.appex */,
+				G10000000000000000000002 /* PolymestreMacWidgets.appex */,
+				H10000000000000000000002 /* PolymestreLock.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -290,9 +290,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A10000000000000000000006 /* StudyTrack */ = {
+		A10000000000000000000006 /* Polymestre */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000007 /* Build configuration list for PBXNativeTarget "StudyTrack" */;
+			buildConfigurationList = A10000000000000000000007 /* Build configuration list for PBXNativeTarget "Polymestre" */;
 			buildPhases = (
 				A10000000000000000000008 /* Sources */,
 				A10000000000000000000002 /* Frameworks */,
@@ -307,21 +307,21 @@
 				H1000000000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A10000000000000000000001 /* StudyTrack */,
+				A10000000000000000000001 /* Polymestre */,
 				C10000000000000000000001 /* Shared */,
 				E20000000000000000000001 /* StudyKit */,
 			);
-			name = StudyTrack;
+			name = Polymestre;
 			packageProductDependencies = (
 				M10000000000000000000002 /* SwiftMath */,
 			);
-			productName = StudyTrack;
-			productReference = A10000000000000000000005 /* StudyTrack.app */;
+			productName = Polymestre;
+			productReference = A10000000000000000000005 /* Polymestre.app */;
 			productType = "com.apple.product-type.application";
 		};
-		B10000000000000000000003 /* StudyTrackWidgets */ = {
+		B10000000000000000000003 /* PolymestreWidgets */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackWidgets" */;
+			buildConfigurationList = B10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreWidgets" */;
 			buildPhases = (
 				B10000000000000000000007 /* Sources */,
 				B10000000000000000000009 /* Frameworks */,
@@ -332,17 +332,17 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				B10000000000000000000001 /* StudyTrackWidgets */,
+				B10000000000000000000001 /* PolymestreWidgets */,
 				C10000000000000000000001 /* Shared */,
 			);
-			name = StudyTrackWidgets;
-			productName = StudyTrackWidgets;
-			productReference = B10000000000000000000002 /* StudyTrackWidgets.appex */;
+			name = PolymestreWidgets;
+			productName = PolymestreWidgets;
+			productReference = B10000000000000000000002 /* PolymestreWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		E10000000000000000000003 /* StudyTrackShare */ = {
+		E10000000000000000000003 /* PolymestreShare */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackShare" */;
+			buildConfigurationList = E10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreShare" */;
 			buildPhases = (
 				E10000000000000000000007 /* Sources */,
 				E10000000000000000000009 /* Frameworks */,
@@ -354,16 +354,16 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C10000000000000000000001 /* Shared */,
-				E10000000000000000000001 /* StudyTrackShare */,
+				E10000000000000000000001 /* PolymestreShare */,
 			);
-			name = StudyTrackShare;
-			productName = StudyTrackShare;
-			productReference = E10000000000000000000002 /* StudyTrackShare.appex */;
+			name = PolymestreShare;
+			productName = PolymestreShare;
+			productReference = E10000000000000000000002 /* PolymestreShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		F10000000000000000000003 /* StudyTrackMac */ = {
+		F10000000000000000000003 /* PolymestreMac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackMac" */;
+			buildConfigurationList = F10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreMac" */;
 			buildPhases = (
 				F10000000000000000000007 /* Sources */,
 				F10000000000000000000009 /* Frameworks */,
@@ -377,21 +377,21 @@
 			);
 			fileSystemSynchronizedGroups = (
 				E20000000000000000000001 /* StudyKit */,
-				F10000000000000000000001 /* StudyTrackMac */,
+				F10000000000000000000001 /* PolymestreMac */,
 				F1000000000000000000000C /* Models (Mac) */,
 				F1000000000000000000000D /* Domain (Mac) */,
 			);
-			name = StudyTrackMac;
+			name = PolymestreMac;
 			packageProductDependencies = (
 				M10000000000000000000004 /* SwiftMath */,
 			);
-			productName = StudyTrackMac;
+			productName = PolymestreMac;
 			productReference = F10000000000000000000002 /* Polymestre.app */;
 			productType = "com.apple.product-type.application";
 		};
-		G10000000000000000000003 /* StudyTrackMacWidgets */ = {
+		G10000000000000000000003 /* PolymestreMacWidgets */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = G10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackMacWidgets" */;
+			buildConfigurationList = G10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreMacWidgets" */;
 			buildPhases = (
 				G10000000000000000000007 /* Sources */,
 				G10000000000000000000009 /* Frameworks */,
@@ -402,16 +402,16 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				G10000000000000000000001 /* StudyTrackMacWidgets */,
+				G10000000000000000000001 /* PolymestreMacWidgets */,
 			);
-			name = StudyTrackMacWidgets;
-			productName = StudyTrackMacWidgets;
-			productReference = G10000000000000000000002 /* StudyTrackMacWidgets.appex */;
+			name = PolymestreMacWidgets;
+			productName = PolymestreMacWidgets;
+			productReference = G10000000000000000000002 /* PolymestreMacWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		H10000000000000000000003 /* StudyTrackLock */ = {
+		H10000000000000000000003 /* PolymestreLock */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = H10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackLock" */;
+			buildConfigurationList = H10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreLock" */;
 			buildPhases = (
 				H10000000000000000000007 /* Sources */,
 				H10000000000000000000009 /* Frameworks */,
@@ -422,11 +422,11 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				H10000000000000000000001 /* StudyTrackLock */,
+				H10000000000000000000001 /* PolymestreLock */,
 			);
-			name = StudyTrackLock;
-			productName = StudyTrackLock;
-			productReference = H10000000000000000000002 /* StudyTrackLock.appex */;
+			name = PolymestreLock;
+			productName = PolymestreLock;
+			productReference = H10000000000000000000002 /* PolymestreLock.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -459,7 +459,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXProject "StudyTrack" */;
+			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXProject "Polymestre" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = fr;
 			hasScannedForEncodings = 0;
@@ -476,12 +476,12 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A10000000000000000000006 /* StudyTrack */,
-				B10000000000000000000003 /* StudyTrackWidgets */,
-				E10000000000000000000003 /* StudyTrackShare */,
-				F10000000000000000000003 /* StudyTrackMac */,
-				G10000000000000000000003 /* StudyTrackMacWidgets */,
-				H10000000000000000000003 /* StudyTrackLock */,
+				A10000000000000000000006 /* Polymestre */,
+				B10000000000000000000003 /* PolymestreWidgets */,
+				E10000000000000000000003 /* PolymestreShare */,
+				F10000000000000000000003 /* PolymestreMac */,
+				G10000000000000000000003 /* PolymestreMacWidgets */,
+				H10000000000000000000003 /* PolymestreLock */,
 			);
 		};
 /* End PBXProject section */
@@ -611,22 +611,22 @@
 /* Begin PBXTargetDependency section */
 		B1000000000000000000000C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B10000000000000000000003 /* StudyTrackWidgets */;
+			target = B10000000000000000000003 /* PolymestreWidgets */;
 			targetProxy = B1000000000000000000000D /* PBXContainerItemProxy */;
 		};
 		E1000000000000000000000B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = E10000000000000000000003 /* StudyTrackShare */;
+			target = E10000000000000000000003 /* PolymestreShare */;
 			targetProxy = E1000000000000000000000A /* PBXContainerItemProxy */;
 		};
 		G1000000000000000000000E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = G10000000000000000000003 /* StudyTrackMacWidgets */;
+			target = G10000000000000000000003 /* PolymestreMacWidgets */;
 			targetProxy = G1000000000000000000000D /* PBXContainerItemProxy */;
 		};
 		H1000000000000000000000C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = H10000000000000000000003 /* StudyTrackLock */;
+			target = H10000000000000000000003 /* PolymestreLock */;
 			targetProxy = H1000000000000000000000D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -659,8 +659,8 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
-				STUDYTRACK_APP_GROUP = group.com.studytracker.app;
-				STUDYTRACK_BUNDLE_ID = com.hczr.studytrack.app;
+				POLYMESTRE_APP_GROUP = group.ch.polymestre.app;
+				POLYMESTRE_BUNDLE_ID = ch.polymestre.app;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -687,8 +687,8 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
-				STUDYTRACK_APP_GROUP = group.com.studytracker.app;
-				STUDYTRACK_BUNDLE_ID = com.hczr.studytrack.app;
+				POLYMESTRE_APP_GROUP = group.ch.polymestre.app;
+				POLYMESTRE_BUNDLE_ID = ch.polymestre.app;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
@@ -700,7 +700,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_APP_ENTITLEMENTS)";
+				CODE_SIGN_ENTITLEMENTS = "$(POLYMESTRE_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
@@ -713,7 +713,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID)";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -727,7 +727,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_APP_ENTITLEMENTS)";
+				CODE_SIGN_ENTITLEMENTS = "$(POLYMESTRE_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
@@ -740,7 +740,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID)";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -753,19 +753,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackWidgets.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackWidgets-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreWidgets-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).widgets";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).widgets";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -778,19 +778,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackWidgets.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackWidgets-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreWidgets-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).widgets";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).widgets";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -803,19 +803,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackShare.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackShare-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreShare-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).share";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).share";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -828,19 +828,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackShare.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackShare-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreShare-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).share";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).share";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -854,7 +854,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = StudyTrackMac/StudyTrackMac.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PolymestreMac/PolymestreMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -863,7 +863,7 @@
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Support/StudyTrackMac-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = fr;
 				INFOPLIST_KEY_CFBundleDisplayName = Polymestre;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
@@ -874,8 +874,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac;
-				PRODUCT_MODULE_NAME = StudyTrack;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.polymestre.mac;
+				PRODUCT_MODULE_NAME = Polymestre;
 				PRODUCT_NAME = Polymestre;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
@@ -889,7 +889,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = StudyTrackMac/StudyTrackMac.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PolymestreMac/PolymestreMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -898,7 +898,7 @@
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Support/StudyTrackMac-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = fr;
 				INFOPLIST_KEY_CFBundleDisplayName = Polymestre;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
@@ -909,8 +909,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac;
-				PRODUCT_MODULE_NAME = StudyTrack;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.polymestre.mac;
+				PRODUCT_MODULE_NAME = Polymestre;
 				PRODUCT_NAME = Polymestre;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
@@ -923,14 +923,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackMacWidgets.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreMacWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackMacWidgets-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreMacWidgets-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -938,7 +938,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.polymestre.mac.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -952,14 +952,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = Support/StudyTrackMacWidgets.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Support/PolymestreMacWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackMacWidgets-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreMacWidgets-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -967,7 +967,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hczr.studytrack.mac.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.polymestre.mac.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -982,12 +982,12 @@
 			baseConfigurationReference = D10000000000000000000001 /* Supabase.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_LOCK_ENTITLEMENTS)";
+				CODE_SIGN_ENTITLEMENTS = "$(POLYMESTRE_LOCK_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreLock-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -995,7 +995,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).lock";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).lock";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1010,12 +1010,12 @@
 			baseConfigurationReference = D10000000000000000000001 /* Supabase.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = "$(STUDYTRACK_LOCK_ENTITLEMENTS)";
+				CODE_SIGN_ENTITLEMENTS = "$(POLYMESTRE_LOCK_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5GGDH5F3NG;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/StudyTrackLock-Info.plist";
+				INFOPLIST_FILE = "Support/PolymestreLock-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1023,7 +1023,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(STUDYTRACK_BUNDLE_ID).lock";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(POLYMESTRE_BUNDLE_ID).lock";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1036,7 +1036,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A10000000000000000000007 /* Build configuration list for PBXNativeTarget "StudyTrack" */ = {
+		A10000000000000000000007 /* Build configuration list for PBXNativeTarget "Polymestre" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000000E /* Debug */,
@@ -1045,7 +1045,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1000000000000000000000B /* Build configuration list for PBXProject "StudyTrack" */ = {
+		A1000000000000000000000B /* Build configuration list for PBXProject "Polymestre" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000000C /* Debug */,
@@ -1054,7 +1054,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackWidgets" */ = {
+		B10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreWidgets" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B10000000000000000000005 /* Debug */,
@@ -1063,7 +1063,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackShare" */ = {
+		E10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreShare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E10000000000000000000005 /* Debug */,
@@ -1072,7 +1072,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackMac" */ = {
+		F10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F10000000000000000000005 /* Debug */,
@@ -1081,7 +1081,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		G10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackMacWidgets" */ = {
+		G10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreMacWidgets" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				G10000000000000000000005 /* Debug */,
@@ -1090,7 +1090,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		H10000000000000000000004 /* Build configuration list for PBXNativeTarget "StudyTrackLock" */ = {
+		H10000000000000000000004 /* Build configuration list for PBXNativeTarget "PolymestreLock" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				H10000000000000000000005 /* Debug */,

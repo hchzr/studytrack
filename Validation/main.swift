@@ -34,7 +34,7 @@ func pct(_ value: Double) -> String {
 
 // Le conteneur de test utilise le schéma **de l'app**, pas une copie :
 // c'est ce qui garantit que le test porte sur la vraie définition.
-let schema = StudyTrackSchema.current
+let schema = PolymestreSchema.current
 
 print("== Conteneur SwiftData (en mémoire) ==")
 let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -219,14 +219,14 @@ check(absorbed.subjectCodes == ["CS-250", "PHYS-101"],
       "affectation normalisée et dédupliquée — \(absorbed.subjectCodes)")
 
 let invitationGroup = StudyGroup(name: "Buddies", courseCodes: ["CS-250"], inviteCode: "EPFL-4F2A")
-check(invitationGroup.inviteLink == "studytrack://join?code=EPFL-4F2A",
+check(invitationGroup.inviteLink == "polymestre://join?code=EPFL-4F2A",
       "lien d'invitation — \(invitationGroup.inviteLink)")
 check(StudyGroup.normalizeInviteCode(" epfl-4f2a ") == "EPFL-4F2A",
       "code d'invitation reçu par lien, normalisé")
 check(StudyGroup.normalizeInviteCode("EPFL 4F2A") == "EPFL4F2A", "espaces internes retirés")
 check(invitationGroup.inviteMessage.contains("EPFL-4F2A")
       && invitationGroup.inviteMessage.contains("CS-250")
-      && invitationGroup.inviteMessage.contains("studytrack://"),
+      && invitationGroup.inviteMessage.contains("polymestre://"),
       "message d'invitation : nom, matières, code et lien")
 
 print("== Rôles dans un groupe ==")
@@ -610,7 +610,7 @@ let exportData = AssistantExport.make(courses: exportCourses,
                                       groups: [],
                                       hoursPerCredit: 30,
                                       displayName: "Test")
-check(exportData["format"] as? String == "studytrack.assistant",
+check(exportData["format"] as? String == "polymestre.assistant",
       "le format est annoncé — \(exportData["format"] ?? "-")")
 check(exportData["version"] as? Int == AssistantExport.formatVersion,
       "la version du format est portée")
@@ -644,14 +644,14 @@ let exportJSON = AssistantExport.data(courses: exportCourses,
 check(exportJSON != nil, "l'instantané est sérialisable")
 if let exportJSON,
    let reparsed = try? JSONSerialization.jsonObject(with: exportJSON) as? [String: Any] {
-    check(reparsed["format"] as? String == "studytrack.assistant",
+    check(reparsed["format"] as? String == "polymestre.assistant",
           "…et se relit après un aller-retour JSON")
     check((reparsed["courses"] as? [[String: Any]])?.isEmpty == false, "les cours survivent")
 }
 // Un export sans cours ne doit pas produire un objet vide mais valide.
 let emptyExport = AssistantExport.make(courses: [], sessions: [], milestones: [],
                                        groups: [], hoursPerCredit: 25, displayName: "")
-check(emptyExport["format"] as? String == "studytrack.assistant",
+check(emptyExport["format"] as? String == "polymestre.assistant",
       "un export vide garde son format")
 check((emptyExport["courses"] as? [[String: Any]])?.isEmpty == true,
       "…et une liste de cours vide plutôt qu'absente")
@@ -1855,10 +1855,10 @@ check(unknownInSchema.isEmpty,
 check(schemaModelNames.count == declared.count,
       "\(declared.count) modèles déclarés, \(schemaModelNames.count) dans le schéma")
 check(SchemaV1.versionIdentifier == Schema.Version(1, 0, 0), "version 1.0.0")
-check(StudyTrackSchema.currentVersion == 1, "version courante cohérente")
-check(StudyTrackMigrationPlan.schemas.count == 1,
-      "le plan connaît la version en cours (\(StudyTrackMigrationPlan.schemas.count))")
-check(StudyTrackMigrationPlan.stages.isEmpty || !StudyTrackMigrationPlan.stages.isEmpty,
+check(PolymestreSchema.currentVersion == 1, "version courante cohérente")
+check(PolymestreMigrationPlan.schemas.count == 1,
+      "le plan connaît la version en cours (\(PolymestreMigrationPlan.schemas.count))")
+check(PolymestreMigrationPlan.stages.isEmpty || !PolymestreMigrationPlan.stages.isEmpty,
       "le plan de migration est interrogeable")
 
 // La liste des modèles déclarés n'est pas vide : un garde-fou qui ne compare rien
@@ -3279,8 +3279,8 @@ do {
     check(!FocusTimerState(sessionStartedAt: t0).isRestorable(at: t0), "un chrono à zéro n'est pas restauré")
 
     // Un domaine jetable, effacé après : sans ça, chaque passage laissait un
-    // `studytrack.validation.<UUID>.plist` dans ~/Library/Preferences (539 au 26 octobre).
-    let suite = "studytrack.validation.\(UUID().uuidString)"
+    // `polymestre.validation.<UUID>.plist` dans ~/Library/Preferences (539 au 26 octobre).
+    let suite = "polymestre.validation.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { dropSuite(suite) }
     FocusTimerStore.save(timer, defaults: defaults)
@@ -3708,7 +3708,7 @@ do {
 
 print("== Import PDF de bout en bout : vrais PDF, vraie extraction ==")
 do {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("studytrack-fixtures-\(UUID().uuidString)")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("polymestre-fixtures-\(UUID().uuidString)")
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -5715,9 +5715,9 @@ do {
     print("== Distribution : retour et mises à jour du Mac ==")
     let entry = LogEntry(id: UUID(), date: Date(timeIntervalSince1970: 2_000_000_000), level: .error,
                          category: "Sync", message: "a & b = c ?", detail: "ligne 1\nligne 2")
-    let mail = FeedbackMail.url(to: "studytrack@example.ch", version: "2.1 (3)", device: "iPhone · iOS 27.0", entries: [entry])
+    let mail = FeedbackMail.url(to: "polymestre@example.ch", version: "2.1 (3)", device: "iPhone · iOS 27.0", entries: [entry])
     let text = mail?.absoluteString ?? ""
-    check(text.hasPrefix("mailto:studytrack@example.ch?subject="), "retour : un lien mailto vers l'adresse configurée")
+    check(text.hasPrefix("mailto:polymestre@example.ch?subject="), "retour : un lien mailto vers l'adresse configurée")
     let body = text.components(separatedBy: "&body=").last ?? ""
     check(!body.contains("&") && !body.contains("="), "retour : « & » et « = » du journal encodés (le corps n'est pas coupé)")
     check((body.removingPercentEncoding ?? "").contains("a & b = c ?") && (body.removingPercentEncoding ?? "").contains("2.1 (3)"),
@@ -5728,7 +5728,7 @@ do {
     check(((long?.absoluteString.components(separatedBy: "&body=").last ?? "").removingPercentEncoding ?? "").count <= FeedbackMail.maxBody + 200,
           "retour : un long journal est tronqué")
 
-    let json = #"{"version":"2.2","build":7,"url":"https://studytrack.hczr.ch/mac/StudyTrack.dmg","notes":"Mise à jour"}"#
+    let json = #"{"version":"2.2","build":7,"url":"https://studytrack.hczr.ch/mac/Polymestre.dmg","notes":"Mise à jour"}"#
     let feed = MacUpdateFeed.decode(Data(json.utf8))
     check(feed?.build == 7 && feed?.version == "2.2", "mise à jour : le flux se lit")
     check(feed?.isNewer(thanBuild: "3") == true, "mise à jour : build 7 > 3 → proposée")
@@ -5746,7 +5746,7 @@ do {
 do {
     // Bloquer le reste : choisi pour une nouvelle installation, gardé pour qui
     // s'en servait avec l'ancien défaut, jamais réécrit une fois choisi.
-    let suite = "studytrack.validation.blocking.\(UUID().uuidString)"
+    let suite = "polymestre.validation.blocking.\(UUID().uuidString)"
     let fresh = UserDefaults(suiteName: suite)!
     StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: false, in: fresh)
     check(fresh.object(forKey: "studyMode.blocking") as? Bool == false, "nouvelle installation : le mode étude ne bloque rien")
@@ -5881,7 +5881,7 @@ do {
     func entry(_ id: String, _ link: String) -> RevisionSheet.Entry { .init(id: id, kind: .theorem, title: id, body: "b", source: "", link: link) }
     let sheet = RevisionSheet(origin: .handout, generatedAt: Date(), chapters: [
         .init(id: "c0", title: "Suites", entries: [entry("a", "/handout/matiere/m_suites"), entry("b", "/handout/matiere/m_suites/cauchy")]),
-        .init(id: "c1", title: "Limites", entries: [entry("c", "studytrack-poly:///handout/matiere/m_limites")]),
+        .init(id: "c1", title: "Limites", entries: [entry("c", "polymestre-poly:///handout/matiere/m_limites")]),
         .init(id: "c2", title: "Sans lien", entries: [entry("d", "")]),
     ])
     check(sheet.chapters(forPath: "/handout/matiere/m_suites").map(\.id) == ["c0"], "semaine : une section → son chapitre")
@@ -5942,25 +5942,25 @@ do {
     check(!T.suggestions(s1, replyAsksQuestion: false).contains(.check), "propositions : pas de vérification de copie sans copie")
     check(T.suggestions(.init(), replyAsksQuestion: false) == [.explain], "propositions : sans exercice, la notion")
     check(T.suggestions(s1, replyAsksQuestion: false).count <= 3, "propositions : trois au plus")
-    check(T.asksQuestion("Quel X isole une colonne ?\n\n```studytrack\n6.3 | 1 | x\n```") && !T.asksQuestion("Voilà."), "réponse : finit sur une question")
+    check(T.asksQuestion("Quel X isole une colonne ?\n\n```polymestre\n6.3 | 1 | x\n```") && !T.asksQuestion("Voilà."), "réponse : finit sur une question")
 
     // Les règles de la consigne.
     let prompt = ClaudeTutor.systemPrompt(mode: .tutor)
     check(prompt.contains("Ne refuse jamais de lire") && prompt.contains("niveau **suivant**") && prompt.contains("une centaine de mots"),
           "consigne : copie à lui, indice suivant, brièveté")
     check(!ClaudeTutor.systemPrompt(mode: .explain).contains("Échelle d'indices"), "consigne : pas d'échelle en mode explications")
-    // Pour rejouer une conversation avec la vraie consigne : STUDYTRACK_DUMP_PROMPT=/chemin ./validate.sh
-    if let path = ProcessInfo.processInfo.environment["STUDYTRACK_DUMP_PROMPT"] {
+    // Pour rejouer une conversation avec la vraie consigne : POLYMESTRE_DUMP_PROMPT=/chemin ./validate.sh
+    if let path = ProcessInfo.processInfo.environment["POLYMESTRE_DUMP_PROMPT"] {
         try? prompt.write(toFile: path, atomically: true, encoding: .utf8)
         try? T.card(.init(exercise: "Série 6 · Exercice 6.3", hintLevel: 1, questionsTotal: 0), attached: []).write(toFile: path + ".card1", atomically: true, encoding: .utf8)
     }
 
     // L'indice sans son mot-clé, vu en vrai (« 6.3 | 1 | … »), est noté.
-    let bare = SeriesReview.parse("Quel X ?\n\n```studytrack\n6.3 | 1 | Choisis un X qui isole une colonne.\n```")
+    let bare = SeriesReview.parse("Quel X ?\n\n```polymestre\n6.3 | 1 | Choisis un X qui isole une colonne.\n```")
     check(bare.hints.count == 1 && bare.hints[0].exercise == "6.3" && bare.hints[0].level == 1, "indice : « 6.3 | 1 | … » sans le mot indice")
-    let keyed = SeriesReview.parse("```studytrack\nindice 6.3 | 2 | L'outil\n```")
+    let keyed = SeriesReview.parse("```polymestre\nindice 6.3 | 2 | L'outil\n```")
     check(keyed.hints.count == 1 && keyed.hints[0].level == 2, "indice : avec le mot indice")
-    check(SeriesReview.parse("```studytrack\n6.3 : juste\n```").hints.isEmpty && SeriesReview.parse("```studytrack\n6.3 : juste\n```").verdicts.count == 1,
+    check(SeriesReview.parse("```polymestre\n6.3 : juste\n```").hints.isEmpty && SeriesReview.parse("```polymestre\n6.3 : juste\n```").verdicts.count == 1,
           "indice : un verdict n'est pas pris pour un indice")
 }
 
@@ -5987,7 +5987,7 @@ do {
 
     let projectFile = ClaudeProject.File(mcpServers: ["notion": .init(url: "https://mcp.notion.com/mcp")])
     let project = ClaudeTutor.arguments(.init(profile: .project, sessionID: "S", systemPrompt: "P", mcpConfigPath: "/tmp/mcp.json",
-                                              allowedTools: ClaudeProject.allowedTools(file: projectFile, studyTrack: false),
+                                              allowedTools: ClaudeProject.allowedTools(file: projectFile, polymestre: false),
                                               tools: ClaudeProject.tools(file: projectFile), deniedServers: ["rea"]))
     check(!project.contains("--safe-mode") && !project.contains("--disable-slash-commands"), "projet EPFL : compétences et commandes chargées")
     check(!project.contains("--setting-sources") && !project.contains("--strict-mcp-config"), "projet : les connecteurs du compte se chargent")
@@ -5996,7 +5996,7 @@ do {
     let listed = ClaudeProject.servers(mcpList: "Checking MCP server health…\n\nclaude.ai Claude Docs: https://api.anthropic.com/v1/pages/mcp - ✔ Connected\nclaude.ai Notion: https://mcp.notion.com/mcp - ✔ Connected\nrea: npx -y rea-agents@6.4.0 mcp - ✔ Connected\n")
     check(listed.connectors == ["claude.ai Claude Docs", "claude.ai Notion"] && listed.local == ["rea"], "mcp list : connecteurs et serveurs locaux")
     check(ClaudeProject.toolPrefix(server: "claude.ai Claude Docs") == "mcp__claude_ai_Claude_Docs", "préfixe d'outils d'un connecteur")
-    check(ClaudeProject.allowedTools(file: ClaudeProject.File(), studyTrack: false, connectors: ["claude.ai Notion"]) == ["Read", "Glob", "Skill", "mcp__claude_ai_Notion"],
+    check(ClaudeProject.allowedTools(file: ClaudeProject.File(), polymestre: false, connectors: ["claude.ai Notion"]) == ["Read", "Glob", "Skill", "mcp__claude_ai_Notion"],
           "les connecteurs du compte sont permis")
     // L'éditeur des boutons ne réécrit que les boutons et les modèles.
     let original = Data(#"{"skills":["epfl-serie"],"mcpServers":{"todoist":{"url":"https://ai.todoist.net/mcp"}},"maClé":42,"commands":[]}"#.utf8)
@@ -6021,7 +6021,7 @@ do {
     check(ClaudeTutor.sessionRecovery(stderr: "Error: No conversation found with session ID: abc") == .startFresh, "session perdue : on repart")
     check(ClaudeTutor.sessionRecovery(stderr: "Error: Session ID abc is already in use.") == .resume, "session déjà là : on la reprend")
     check(ClaudeTutor.sessionRecovery(stderr: "autre chose") == nil, "autre erreur : rien")
-    check(ClaudeTutor.sessionFolderName(workingDirectory: "/Users/a/Library/Caches/StudyTrack/claude") == "-Users-a-Library-Caches-StudyTrack-claude"
+    check(ClaudeTutor.sessionFolderName(workingDirectory: "/Users/a/Library/Caches/Polymestre/claude") == "-Users-a-Library-Caches-Polymestre-claude"
           && ClaudeTutor.sessionFolderName(workingDirectory: "/Users/a/Application Support/x.y") == "-Users-a-Application-Support-x-y",
           "dossier des sessions de Claude Code")
 
@@ -6038,13 +6038,13 @@ do {
     check(switched.contains("autre exercice") && switched.contains("Exercice 2") && ClaudeTutor.displayText(switched + "Et là ?") == "Et là ?",
           "changer d'exercice dans la conversation")
 
-    let report = "Bilan.\n\n```studytrack\n1 : juste\nEx 2 : moyen\nexercice 3: FAUX\n4 : ?\n```\nVoilà."
+    let report = "Bilan.\n\n```polymestre\n1 : juste\nEx 2 : moyen\nexercice 3: FAUX\n4 : ?\n```\nVoilà."
     check(ClaudeTutor.verdicts(in: report) == [.init(exercise: "1", result: .correct), .init(exercise: "2", result: .partial),
                                                  .init(exercise: "3", result: .wrong)], "post-mortem : verdicts lus")
-    check(ClaudeTutor.withoutVerdicts(report) == "Bilan.\n\n\nVoilà." || !ClaudeTutor.withoutVerdicts(report).contains("studytrack"),
+    check(ClaudeTutor.withoutVerdicts(report) == "Bilan.\n\n\nVoilà." || !ClaudeTutor.withoutVerdicts(report).contains("polymestre"),
           "post-mortem : le bloc ne s'affiche pas en texte")
     check(ClaudeTutor.verdicts(in: "rien") == [], "pas de bloc, pas de verdict")
-    check(ClaudeTutor.postMortemPrompt(useSkill: true).contains("```studytrack"), "post-mortem : le format demandé")
+    check(ClaudeTutor.postMortemPrompt(useSkill: true).contains("```polymestre"), "post-mortem : le format demandé")
     check(ClaudeTutor.matchExercise("2", numbers: ["1", "2", "3"]) == 1, "verdict → exercice 2")
     check(ClaudeTutor.matchExercise("3", numbers: ["Ex-03-01", "Ex-03-03"]) == 1, "verdict → numéro à tirets")
     check(ClaudeTutor.matchExercise("1.2", numbers: ["1.1", "1.2"]) == 1 && ClaudeTutor.matchExercise("9", numbers: ["1"]) == nil,
@@ -6061,15 +6061,15 @@ do {
           == .finished(error: nil, contextTokens: 1002), "fin : taille du contexte")
     check(ClaudeTutor.parse(line: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","name":"mcp__notion__notion-search"}}}"#)
           == .tool("mcp__notion__notion-search"), "flux : un outil")
-    check(ClaudeTutor.toolLabel("mcp__notion__notion-search") == "Notion" && ClaudeTutor.toolLabel("mcp__studytrack__get_course") == "Polymestre",
+    check(ClaudeTutor.toolLabel("mcp__notion__notion-search") == "Notion" && ClaudeTutor.toolLabel("mcp__polymestre__get_course") == "Polymestre",
           "outil : nom lisible")
     let jsonl = [
-        #"{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\n<command-name>/epfl-serie</command-name>\n<command-args>On attaque.\n\n[StudyTrack]\nCours : X\n[/StudyTrack]\n\nPar où ?</command-args>"}}"#,
+        #"{"type":"user","message":{"role":"user","content":"<command-message>epfl-serie</command-message>\n<command-name>/epfl-serie</command-name>\n<command-args>On attaque.\n\n[Polymestre]\nCours : X\n[/Polymestre]\n\nPar où ?</command-args>"}}"#,
         #"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill"}]}}"#,
         #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Salut"},{"type":"tool_use","name":"Read"}]}}"#,
         #"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"x"}]}}"#,
         #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"On commence."}]}}"#,
-        #"{"type":"user","message":{"role":"user","content":[{"type":"document"},{"type":"text","text":"[StudyTrack]\nCours : X\n[/StudyTrack]\n\nUn indice ?"}]}}"#,
+        #"{"type":"user","message":{"role":"user","content":[{"type":"document"},{"type":"text","text":"[Polymestre]\nCours : X\n[/Polymestre]\n\nUn indice ?"}]}}"#,
     ].joined(separator: "\n")
     check(ClaudeTutor.history(jsonl: jsonl) == [.init(fromStudent: true, text: "/epfl-serie On attaque.\n\nPar où ?"), .init(fromStudent: false, text: "Salut\n\nOn commence."),
                                                  .init(fromStudent: true, text: "Un indice ?")],
@@ -6099,24 +6099,24 @@ do {
         check(file.model(for: file.commands[0], scope: .system) == "sonnet" && file.model(for: file.commands[2], scope: .series) == "haiku"
               && file.model(for: file.commands[1], scope: .series) == "sonnet", "fichier : le modèle de chaque bouton")
         check(ClaudeProject.tools(file: file) == ["Read", "Glob", "Skill", "Write", "Edit"], "fichier : écriture limitée chargée")
-        check(ClaudeProject.allowedTools(file: file, studyTrack: false) == ["Read", "Glob", "Skill", "mcp__notion", "mcp__todoist",
+        check(ClaudeProject.allowedTools(file: file, polymestre: false) == ["Read", "Glob", "Skill", "mcp__notion", "mcp__todoist",
                                                                            "Write(./memoire/**)", "Edit(./memoire/**)"], "fichier : règles permises")
-        let mcp = ClaudeProject.mcpConfig(file: file, studyTrackURL: "https://x.supabase.co/functions/v1/mcp/T")
+        let mcp = ClaudeProject.mcpConfig(file: file, polymestreURL: "https://x.supabase.co/functions/v1/mcp/T")
         if let object = try? JSONSerialization.jsonObject(with: Data(mcp.utf8)) as? [String: Any], let servers = object["mcpServers"] as? [String: Any] {
-            check(Set(servers.keys) == ["notion", "todoist", "studytrack"], "MCP : les serveurs du fichier et Polymestre")
+            check(Set(servers.keys) == ["notion", "todoist", "polymestre"], "MCP : les serveurs du fichier et Polymestre")
         } else { check(false, "MCP : JSON lisible") }
-        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: "http://pas-sur").contains("studytrack"), "MCP : une adresse non chiffrée est refusée")
-        let withLocal = ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: "http://127.0.0.1:47821/TOKEN")
+        check(!ClaudeProject.mcpConfig(file: file, polymestreURL: "http://pas-sur").contains("polymestre"), "MCP : une adresse non chiffrée est refusée")
+        let withLocal = ClaudeProject.mcpConfig(file: file, polymestreURL: nil, localFilesURL: "http://127.0.0.1:47821/TOKEN")
         let declared = (try? JSONSerialization.jsonObject(with: Data(withLocal.utf8))) as? [String: Any]
-        let localEntry = (declared?["mcpServers"] as? [String: Any])?["studytrack-files"] as? [String: Any]
+        let localEntry = (declared?["mcpServers"] as? [String: Any])?["polymestre-files"] as? [String: Any]
         check(localEntry?["url"] as? String == "http://127.0.0.1:47821/TOKEN" && localEntry?["type"] as? String == "http", "MCP : le serveur local des fichiers est déclaré")
-        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: "http://evil.example:47821/T").contains("studytrack-files"),
+        check(!ClaudeProject.mcpConfig(file: file, polymestreURL: nil, localFilesURL: "http://evil.example:47821/T").contains("polymestre-files"),
               "MCP : seule la boucle locale est acceptée comme serveur de fichiers")
-        check(!ClaudeProject.mcpConfig(file: file, studyTrackURL: nil, localFilesURL: nil).contains("studytrack-files"), "MCP : éteint, il n'est pas déclaré")
-        check(ClaudeProject.allowedTools(file: file, studyTrack: false, localFiles: true).contains("mcp__studytrack-files")
-              && !ClaudeProject.allowedTools(file: file, studyTrack: false).contains("mcp__studytrack-files"), "MCP : ses outils ne sont permis que s'il tourne")
-        check(ClaudeProject.permissionSummary(file: file, studyTrack: false, localFiles: true).contains("fichiers du Mac"), "MCP : les permis le disent")
-        check(ClaudeProject.permissionSummary(file: file, studyTrack: true) == "lecture, compétences, écriture limitée, Notion, Todoist, Polymestre",
+        check(!ClaudeProject.mcpConfig(file: file, polymestreURL: nil, localFilesURL: nil).contains("polymestre-files"), "MCP : éteint, il n'est pas déclaré")
+        check(ClaudeProject.allowedTools(file: file, polymestre: false, localFiles: true).contains("mcp__polymestre-files")
+              && !ClaudeProject.allowedTools(file: file, polymestre: false).contains("mcp__polymestre-files"), "MCP : ses outils ne sont permis que s'il tourne")
+        check(ClaudeProject.permissionSummary(file: file, polymestre: false, localFiles: true).contains("fichiers du Mac"), "MCP : les permis le disent")
+        check(ClaudeProject.permissionSummary(file: file, polymestre: true) == "lecture, compétences, écriture limitée, Notion, Todoist, Polymestre",
               "permissions en clair")
         check(ClaudeProject.expand(file.commands[1].prompt, .init(code: "MATH-101", course: "analyse", seriesNumber: "4")) == "post-mortem série 4 analyse",
               "commande : série et cours remplis")
@@ -6210,10 +6210,10 @@ do {
     check(lifted == [.paragraph("Par exemple,"), .math("\\begin{align*}1+\\tfrac12&=\\tfrac32\\end{align*}"), .paragraph("et voilà la suite.")],
           "Botafogo : un calcul aligné entre $…$ devient une formule isolée")
     check(BotafogoPage.liftingDisplayMath("$f(x)=\\begin{cases}1&x\\end{cases}$ ok") == [.paragraph("$f(x)=\\begin{cases}1&x\\end{cases}$ ok")], "Botafogo : cases en ligne reste en ligne")
-    // Le rapport d'une série (bloc ```studytrack) et la file de reprise.
+    // Le rapport d'une série (bloc ```polymestre) et la file de reprise.
     let reviewText = """
     Voilà le post-mortem.
-    ```studytrack
+    ```polymestre
     1 : juste
     2 : faux
     erreur 2 | Méthode | oubli de vérifier la continuité en 0 | vérifier f continue en 0 avant le TAF | continuité
@@ -6222,7 +6222,7 @@ do {
     reprise 2 | méthode : n'a pas vu le critère | Pose M_n = sup |f_n(x)|
     ```
     Et un indice :
-    ```studytrack
+    ```polymestre
     indice 3 | 2 | Le critère de Weierstrass s'applique
     ```
     """
@@ -6260,7 +6260,7 @@ do {
                                 alreadyQueued: 1, config: ladder).count == 1, "Reprise : plafond par série (2), moins ce qui y est déjà")
     let customLadder = try? JSONDecoder().decode(RedoLadder.Config.self, from: Data(#"{"steps":[3,10,"exam"],"maxPerSeries":1}"#.utf8))
     check(customLadder?.steps == [.days(3), .days(10), .exam] && customLadder?.maxPerSeries == 1 && customLadder?.perSession == 3,
-          "Reprise : paliers du projet (studytrack.json)")
+          "Reprise : paliers du projet (polymestre.json)")
     let hinted = Exercise(exerciseNumber: "3")
     hinted.recordHint(level: 2, text: "Weierstrass | majoration\nvérifie", at: ladderNow)
     hinted.recordHint(level: 1, text: "Chapitre 6", at: ladderNow)
@@ -6279,7 +6279,7 @@ do {
             reviewContext.insert(Exercise(series: reviewSeries, exerciseNumber: "6.\(n)", sortOrder: n))
         }
         let report = SeriesReview.parse("""
-        ```studytrack
+        ```polymestre
         6.1 : juste
         2 : faux
         erreur 2 | méthode | oubli de la continuité en 0 | vérifier la continuité | continuité
@@ -6377,8 +6377,8 @@ do {
     check(BotafogoNavigation.nextUnread(in: navChapters[0].sections, read: ["/a"])?.path == "/b", "Botafogo : reprendre à la première section non lue")
     check(BotafogoNavigation.progress(navChapters[0], read: ["/a", "/c"]) == (1, 2), "Botafogo : progression d'un chapitre")
     check(BotafogoNavigation.plainTitle("2 Nombres: $\\mathbb{C}$").contains("ℂ"), "Botafogo : titre de chapitre sans TeX (fil d'Ariane)")
-    check(RichMarkup.inlines("on [peut](studytrack-poly:///handout/matiere/m_x) calculer").contains(.link("peut", url: "studytrack-poly:///handout/matiere/m_x")),
-          "Texte : lien à schéma studytrack-poly reconnu")
+    check(RichMarkup.inlines("on [peut](polymestre-poly:///handout/matiere/m_x) calculer").contains(.link("peut", url: "polymestre-poly:///handout/matiere/m_x")),
+          "Texte : lien à schéma polymestre-poly reconnu")
     check(TeXNormalizer.normalize("\\mathscr{B}=(v_1,\\ldots,v_n)") == "\\mathcal{B}=(v_1,\\ldots,v_n)", "TeX : \\mathscr")
     check(TeXNormalizer.normalize("\\left[\\begin{array}{cc|c} 1 & 2 & 3 \\end{array}\\right]") == "\\left[\\begin{matrix} 1 & 2 & 3 \\end{matrix}\\right]",
           "TeX : array → matrix")
@@ -7560,9 +7560,9 @@ do {
 
     // Un renvoi au polycopié : un lien qui s'ouvre dans l'app.
     if case .paragraph(let text)? = page(BotafogoFixtures.ref).first {
-        check(text == "[Suites de Cauchy](studytrack-poly:///handout/matiere/m_suites_cauchy)", "renvoi : lien vers la section du polycopié (\(text))")
+        check(text == "[Suites de Cauchy](polymestre-poly:///handout/matiere/m_suites_cauchy)", "renvoi : lien vers la section du polycopié (\(text))")
     } else { check(false, "renvoi : lu comme un lien") }
-    check(BotafogoPage.handoutPath(link: URL(string: "studytrack-poly:///handout/matiere/m_suites_cauchy")!) == "/handout/matiere/m_suites_cauchy",
+    check(BotafogoPage.handoutPath(link: URL(string: "polymestre-poly:///handout/matiere/m_suites_cauchy")!) == "/handout/matiere/m_suites_cauchy",
           "renvoi : l'adresse du lien redonne le chemin")
 }
 

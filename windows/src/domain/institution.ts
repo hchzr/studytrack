@@ -1,6 +1,6 @@
 // L'école de l'étudiant·e, **en données** : ses sites (Moodle, Open edX, vidéos
 // Kaltura, Ed Discussion, sites propres), sa chaîne de connexion, ses domaines
-// (StudyTrack/Domain/Institution.swift).
+// (Polymestre/Domain/Institution.swift).
 //
 // Le code ne connaît que des sortes de plateformes ; ce qui est propre à une école
 // vit ici. L'EPFL est le profil intégré (`.epfl`) et reprend exactement les valeurs

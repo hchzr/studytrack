@@ -3,7 +3,7 @@ import Foundation
 /// Le serveur MCP local, essayé pour de vrai : une écoute sur la boucle locale,
 /// de vraies requêtes HTTP, un faux fournisseur d'outils. Rend (réussi, libellé).
 final class FakeFilesProvider: LocalMCPProvider, @unchecked Sendable {
-    let serverName = "studytrack-files"
+    let serverName = "polymestre-files"
     let instructions = "essai"
     var tools: [[String: Any]] { [["name": "list_files", "inputSchema": ["type": "object"]], ["name": "read_file", "inputSchema": ["type": "object"]]] }
     func call(_ name: String, arguments: [String: Any]) async -> [String: Any] {
@@ -38,7 +38,7 @@ func localMCPResults() -> [(Bool, String)] {
         }
 
         let initialize = await result(["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ["protocolVersion": "2025-06-18"]])
-        note(initialize?["protocolVersion"] as? String == "2025-06-18" && (initialize?["serverInfo"] as? [String: Any])?["name"] as? String == "studytrack-files",
+        note(initialize?["protocolVersion"] as? String == "2025-06-18" && (initialize?["serverInfo"] as? [String: Any])?["name"] as? String == "polymestre-files",
              "initialize : version et nom du serveur")
         note(initialize?["instructions"] as? String == "essai", "…et les instructions pour l'assistant")
         let list = await result(["jsonrpc": "2.0", "id": 2, "method": "tools/list"])
@@ -99,14 +99,14 @@ func desktopBridgeResults() -> [(Bool, String)] {
     let manifestData = Data(ClaudeDesktopExtension.manifest().utf8)
     let manifest = (try? JSONSerialization.jsonObject(with: manifestData)) as? [String: Any]
     let server = manifest?["server"] as? [String: Any]
-    note(manifest?["name"] as? String == "studytrack-files" && manifest?["manifest_version"] as? String == "0.4"
+    note(manifest?["name"] as? String == "polymestre-files" && manifest?["manifest_version"] as? String == "0.4"
          && server?["type"] as? String == "node" && server?["entry_point"] as? String == "server/index.js",
          "extension : manifeste (nom, version, point d'entrée Node)")
     let files = ClaudeDesktopExtension.files(appID: "com.exemple.app")
     note(Set(files.keys) == ["manifest.json", "server/index.js"], "extension : deux fichiers, manifeste et pont")
     let script = String(decoding: files["server/index.js"] ?? Data(), as: UTF8.self)
     note(script.contains("com.exemple.app") && !script.contains("__APP_ID__"), "extension : l'identifiant de l'app est inscrit dans le pont")
-    note(ClaudeDesktopExtension.infoFile(home: URL(fileURLWithPath: "/h")).path == "/h/Library/Application Support/StudyTrack/local-mcp.json",
+    note(ClaudeDesktopExtension.infoFile(home: URL(fileURLWithPath: "/h")).path == "/h/Library/Application Support/Polymestre/local-mcp.json",
          "extension : le pont lit l'adresse dans local-mcp.json")
 
     // Node : celui de la machine (l'app Claude a le sien).
@@ -169,7 +169,7 @@ func desktopBridgeResults() -> [(Bool, String)] {
         guard let port = await server.start(port: 0), let url = server.url else { note(false, "pont : serveur d'essai"); semaphore.signal(); return }
         let info = work.appendingPathComponent("local-mcp.json")
         try? JSONSerialization.data(withJSONObject: ["url": url.absoluteString]).write(to: info)
-        let env = ["STUDYTRACK_MCP_INFO": info.path, "STUDYTRACK_MCP_NO_LAUNCH": "1", "STUDYTRACK_MCP_WAIT_MS": "1500"]
+        let env = ["POLYMESTRE_MCP_INFO": info.path, "POLYMESTRE_MCP_NO_LAUNCH": "1", "POLYMESTRE_MCP_WAIT_MS": "1500"]
         let lines = [
             #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}"#,
             #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,

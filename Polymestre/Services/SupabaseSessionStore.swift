@@ -13,7 +13,7 @@ import Security
 /// `UserDefaults` est un fichier plist lisible dans une sauvegarde.
 enum SupabaseSessionStore {
 
-    private static let service = "com.hczr.studytrack.supabase"
+    private static let service = "ch.polymestre.supabase"
 
     /// Clé de stockage propre au projet Supabase.
     ///

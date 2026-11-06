@@ -17,7 +17,7 @@ import { PROMPTS } from "./prompts.generated.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-studytrack-install",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-polymestre-install, x-studytrack-install",
 };
 
 const MAX_BODY = 260_000;
@@ -37,8 +37,13 @@ Deno.serve(async (request) => {
     return json({ error: "JSON invalide" }, 400);
   }
   const mode = body.mode ?? "tutor";
-  const system = PROMPTS[mode];
-  if (!system) return json({ error: "mode inconnu" }, 400);
+  const current = PROMPTS[mode];
+  if (!current) return json({ error: "mode inconnu" }, 400);
+  // Une app d'avant le changement de nom (sans `x-polymestre-install`) ne lit que ses
+  // anciennes balises : elle les reçoit dans la consigne.
+  const system = request.headers.has("x-polymestre-install") ? current : current
+    .replaceAll("[Polymestre]", "[StudyTrack]").replaceAll("[/Polymestre]", "[/StudyTrack]")
+    .replaceAll("```polymestre", "```studytrack");
   const messages = (body.messages ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim() !== "")
     .slice(-MAX_MESSAGES);

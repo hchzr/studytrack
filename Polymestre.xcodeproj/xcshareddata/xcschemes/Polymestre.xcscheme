@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A10000000000000000000006"
-               BuildableName = "StudyTrack.app"
-               BlueprintName = "StudyTrack"
-               ReferencedContainer = "container:StudyTrack.xcodeproj">
+               BuildableName = "Polymestre.app"
+               BlueprintName = "Polymestre"
+               ReferencedContainer = "container:Polymestre.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -29,9 +29,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B10000000000000000000003"
-               BuildableName = "StudyTrackWidgets.appex"
-               BlueprintName = "StudyTrackWidgets"
-               ReferencedContainer = "container:StudyTrack.xcodeproj">
+               BuildableName = "PolymestreWidgets.appex"
+               BlueprintName = "PolymestreWidgets"
+               ReferencedContainer = "container:Polymestre.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -59,9 +59,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A10000000000000000000006"
-            BuildableName = "StudyTrack.app"
-            BlueprintName = "StudyTrack"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            BuildableName = "Polymestre.app"
+            BlueprintName = "Polymestre"
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -76,9 +76,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A10000000000000000000006"
-            BuildableName = "StudyTrack.app"
-            BlueprintName = "StudyTrack"
-            ReferencedContainer = "container:StudyTrack.xcodeproj">
+            BuildableName = "Polymestre.app"
+            BlueprintName = "Polymestre"
+            ReferencedContainer = "container:Polymestre.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

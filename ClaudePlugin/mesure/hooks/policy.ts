@@ -1,6 +1,6 @@
 // Avec mesure : ce qui se décide à chaque demande, sans entrée ni sortie.
 //
-// Le même calcul vit en Swift dans StudyTrack (`StudyTrack/Domain/ClaudeMeasure.swift`),
+// Le même calcul vit en Swift dans Polymestre (`Polymestre/Domain/ClaudeMeasure.swift`),
 // pour l'afficher : les deux suivent ce fichier, et leurs tests portent les mêmes cas.
 //
 // Ce qui se compte : le temps passé avec Claude Code, séance par séance —
@@ -9,7 +9,7 @@
 // demande suivante si l'écart reste sous 5 min (on lit, on réfléchit, on
 // tape) ; au-delà, on était parti. Les séances simultanées ne comptent qu'une
 // fois (union des intervalles). Les séances sans clavier (`claude -p`, le
-// tuteur de StudyTrack, les scripts) ne comptent pas et ne sont jamais bloquées.
+// tuteur de Polymestre, les scripts) ne comptent pas et ne sont jamais bloquées.
 
 export const IDLE_MS = 5 * 60_000
 export const TURN_CAP_MS = 20 * 60_000
@@ -21,7 +21,7 @@ export type Category = 'etude' | 'projets' | 'libre'
 export type EventKind = 's' | 'p' | 'd' | 'e'
 export type SessionEvent = { t: number; k: EventKind }
 
-/** `sessions/<jour>/<séance>.json`, écrit par le mod, lu par StudyTrack. */
+/** `sessions/<jour>/<séance>.json`, écrit par le mod, lu par Polymestre. */
 export type SessionRecord = {
   v: 1
   session: string
@@ -44,7 +44,7 @@ export type Rules = {
   curfew: Curfew | null
   /** Le couvre-feu vaut aussi pour l'étude. */
   curfewAll: boolean
-  /** Minutes d'étude (StudyTrack) avant d'ouvrir les projets ; 0 : pas de condition. */
+  /** Minutes d'étude (Polymestre) avant d'ouvrir les projets ; 0 : pas de condition. */
   studyFirstWeekday: number
   studyFirstWeekend: number
   duringClasses: boolean
@@ -79,14 +79,14 @@ export const DEFAULT_RULES: Rules = {
 }
 
 export type StudyContext = {
-  /** Le mode étude de StudyTrack : `locks`, le verrou (on ne sort pas avant l'heure). */
+  /** Le mode étude de Polymestre : `locks`, le verrou (on ne sort pas avant l'heure). */
   studyMode: { since: number; until: number; blocks: boolean; locks: boolean } | null
   classes: { start: number; end: number; title: string }[]
-  /** Le temps d'étude du jour, compté comme StudyTrack le compte, plus le chrono qui tourne. */
+  /** Le temps d'étude du jour, compté comme Polymestre le compte, plus le chrono qui tourne. */
   studied: { day: string; seconds: number; accumulated: number; runningSince: number | null } | null
 }
 
-/** `policy.json`, écrit par StudyTrack (Réglages › Claude Code), lu à chaque demande. */
+/** `policy.json`, écrit par Polymestre (Réglages › Claude Code), lu à chaque demande. */
 export type Policy = {
   v: 1
   writtenAt: number
@@ -329,7 +329,7 @@ function firstBlock(category: Category, rules: Rules, context: StudyContext, use
   if (curfew) {
     return { rule: 'curfew', until: curfew, passable: true, message: `Couvre-feu jusqu'à ${clock(curfew)}. Dors : le code sera là demain.` }
   }
-  // Le temps étudié n'est connu que si StudyTrack l'a écrit aujourd'hui : sinon
+  // Le temps étudié n'est connu que si Polymestre l'a écrit aujourd'hui : sinon
   // (l'app fermée depuis hier), la règle ne peut pas se vérifier et ne bloque pas.
   const needed = (isWeekend(now) ? rules.studyFirstWeekend : rules.studyFirstWeekday) * 60
   const studied = studiedSeconds(context, now)

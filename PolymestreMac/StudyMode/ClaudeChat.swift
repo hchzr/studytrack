@@ -45,14 +45,14 @@ final class ClaudeChat: Identifiable {
         var deniedServers: [String] = []
         /// Ce qui est permis, en clair.
         var permissions: String
-        /// Le fichier du projet (`studytrack.json`) : boutons, modèles, compétences.
+        /// Le fichier du projet (`polymestre.json`) : boutons, modèles, compétences.
         var file: ClaudeProject.File?
         /// Ce qui est noté après une série (carnet, reprise, indices).
         var review = SeriesReview.Features()
 
         static var isolated: Config {
             let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("StudyTrack/claude", isDirectory: true)
+                .appendingPathComponent("Polymestre/claude", isDirectory: true)
             return Config(folder: folder, permissions: "aucun outil")
         }
     }
@@ -95,7 +95,7 @@ final class ClaudeChat: Identifiable {
     /// Le modèle demandé pour le prochain message, et celui du processus en cours.
     @ObservationIgnored private var requestedModel: String?
     @ObservationIgnored private var runningModel: String?
-    @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "claude")
+    @ObservationIgnored private let log = Logger(subsystem: "ch.polymestre.mac", category: "claude")
 
     init(seriesID: UUID?, config: Config) {
         self.seriesID = seriesID

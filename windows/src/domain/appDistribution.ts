@@ -1,4 +1,4 @@
-// Distribuer l'app hors du simulateur (StudyTrack/Domain/AppDistribution.swift) :
+// Distribuer l'app hors du simulateur (Polymestre/Domain/AppDistribution.swift) :
 // le courriel « Signaler un problème » et le flux de mises à jour du Mac.
 //
 // Les adresses viennent de la configuration, jamais du code. Vides, les boutons

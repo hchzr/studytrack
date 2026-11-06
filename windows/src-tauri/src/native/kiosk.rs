@@ -1,4 +1,4 @@
-//! Le verrou d'étude : pendant une session qui « bloque le reste », StudyTrack **est** le
+//! Le verrou d'étude : pendant une session qui « bloque le reste », Polymestre **est** le
 //! verrou (comme le mode étude du Mac qui prend l'écran). Fenêtre principale en plein écran,
 //! toujours au-dessus, qui reprend le focus si une autre app le prend ; sous Windows, un
 //! crochet clavier bas niveau avale Win, Alt+Tab, Alt+Échap, Ctrl+Échap, Alt+F4 et

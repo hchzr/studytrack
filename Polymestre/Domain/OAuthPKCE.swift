@@ -6,17 +6,17 @@ import Security
 ///
 /// Le flux (le même que `windows/src/services/oauth.ts`) :
 ///   1. un `code_verifier` aléatoire et son `code_challenge` (S256) ;
-///   2. `{URL}/auth/v1/authorize?provider=google&redirect_to=studytrack://auth-callback&code_challenge=…
+///   2. `{URL}/auth/v1/authorize?provider=google&redirect_to=polymestre://auth-callback&code_challenge=…
 ///      &code_challenge_method=s256` s'ouvre dans une feuille de connexion ;
-///   3. elle capte `studytrack://auth-callback?code=…` ;
+///   3. elle capte `polymestre://auth-callback?code=…` ;
 ///   4. `POST /auth/v1/token?grant_type=pkce` `{auth_code, code_verifier}` rend la session.
 /// Lier Google à un compte déjà connecté passe par `/auth/v1/user/identities/authorize`.
 ///
 /// Pur : tout ce qui se construit sans réseau se teste dans `Validation`.
 enum OAuthPKCE {
     /// L'adresse que GoTrue rappelle ; à déclarer dans Authentication › URL Configuration › Redirect URLs.
-    static let redirect = "studytrack://auth-callback"
-    static let callbackScheme = "studytrack"
+    static let redirect = "polymestre://auth-callback"
+    static let callbackScheme = "polymestre"
 
     static func base64URL(_ data: Data) -> String {
         data.base64EncodedString()
@@ -62,7 +62,7 @@ enum OAuthPKCE {
         case error(String)
     }
 
-    /// Ce que GoTrue renvoie à `studytrack://auth-callback` : `?code=…`, ou une erreur en
+    /// Ce que GoTrue renvoie à `polymestre://auth-callback` : `?code=…`, ou une erreur en
     /// `?error_description=…` / `#error_description=…`. `nil` : ce n'est pas notre retour.
     static func parseCallback(_ url: URL) -> Callback? {
         guard url.scheme == callbackScheme else { return nil }

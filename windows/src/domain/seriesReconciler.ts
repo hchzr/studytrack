@@ -1,6 +1,6 @@
 // Retrouve, dans une nouvelle lecture d'un énoncé, les exercices déjà
 // enregistrés — **par leur contenu, pas par leur numéro**
-// (StudyTrack/Domain/SeriesReconciler.swift).
+// (Polymestre/Domain/SeriesReconciler.swift).
 //
 // La série 6 d'AICC a été révisée après l'import : un « Exercise 1 (repris de la
 // semaine 5) » ajouté en tête, trois exercices retirés. Tout s'était décalé

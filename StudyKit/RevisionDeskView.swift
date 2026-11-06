@@ -187,7 +187,7 @@ struct RevisionDeskView: View {
             if !item.urlString.isEmpty {
                 // Question par question, le corrigé de chacune à côté.
                 Button("Travailler") {
-                    openCourse(SiteHub.Request(courseID: course.id, source: .studytrack, reading: .pastExam(item.id)))
+                    openCourse(SiteHub.Request(courseID: course.id, source: .polymestre, reading: .pastExam(item.id)))
                 }
                 .buttonStyle(.ink)
                 Button("Sujet") { openDocument(item.title, item.urlString) }.buttonStyle(.paper)
@@ -202,7 +202,7 @@ struct RevisionDeskView: View {
     }
 
     private func openDocument(_ title: String, _ address: String) {
-        openCourse(SiteHub.Request(courseID: course.id, source: .studytrack, reading: .pdf(title: title, address: address)))
+        openCourse(SiteHub.Request(courseID: course.id, source: .polymestre, reading: .pdf(title: title, address: address)))
     }
 
     // MARK: À refaire
@@ -313,7 +313,7 @@ struct RevisionDeskView: View {
                 Text("Théorie pas encore vue").font(Carnet.serif(.title3)).foregroundStyle(Carnet.ink)
                 ForEach(unseen.prefix(12)) { item in
                     Button {
-                        openCourse(SiteHub.Request(courseID: course.id, source: .studytrack, reading: .theory(item.id)))
+                        openCourse(SiteHub.Request(courseID: course.id, source: .polymestre, reading: .theory(item.id)))
                     } label: {
                         HStack(spacing: 10) {
                             Text("S\(item.plannedWeek)").font(.caption.monospacedDigit()).foregroundStyle(Carnet.inkTertiary)

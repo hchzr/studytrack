@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let realtimeTrace = Logger(subsystem: "com.hczr.studytrack", category: "realtime")
+private let realtimeTrace = Logger(subsystem: "ch.polymestre", category: "realtime")
 
 /// Supabase Realtime, sans dépendance : une WebSocket (protocole Phoenix v1),
 /// un canal par groupe, et les écrans qui s'y abonnent.

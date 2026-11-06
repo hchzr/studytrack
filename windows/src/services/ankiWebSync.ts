@@ -1,5 +1,5 @@
 // AnkiWeb, sans ordinateur : se connecter, garder une copie de la collection et en lire
-// l'historique de révision (StudyTrack/Services/AnkiWeb/AnkiWebSync.swift).
+// l'historique de révision (Polymestre/Services/AnkiWeb/AnkiWebSync.swift).
 //
 // **Lecture seule sur Windows.** L'app ne synchronise pas « normalement » (pas d'envoi de
 // notes, `pushPending` absent) : quand le serveur a changé, elle **retélécharge** la

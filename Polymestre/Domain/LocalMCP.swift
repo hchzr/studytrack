@@ -124,7 +124,7 @@ struct LocalHTTPRequest {
 final class LocalMCPServer: @unchecked Sendable {
     private let token: String
     private let provider: LocalMCPProvider
-    private let queue = DispatchQueue(label: "studytrack.localmcp")
+    private let queue = DispatchQueue(label: "polymestre.localmcp")
     private var listener: NWListener?
     private(set) var port: UInt16 = 0
 

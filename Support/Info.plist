@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.hczr.studytrack.moodle-watch</string>
+		<string>ch.polymestre.moodle-watch</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>fr</string>
@@ -31,6 +31,7 @@
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>polymestre</string>
 				<string>studytrack</string>
 			</array>
 		</dict>
@@ -65,8 +66,8 @@
 	<true/>
 	<key>NotionClientID</key>
 	<string>$(NOTION_CLIENT_ID)</string>
-	<key>StudyTrackAppGroup</key>
-	<string>$(STUDYTRACK_APP_GROUP)</string>
+	<key>PolymestreAppGroup</key>
+	<string>$(POLYMESTRE_APP_GROUP)</string>
 	<key>FeedbackEmail</key>
 	<string>$(FEEDBACK_EMAIL)</string>
 	<key>SiteHost</key>

@@ -2,7 +2,9 @@
 //
 // Le fournisseur redirige ici avec `?code=…&state=<fournisseur>.<aléa>`. La
 // fonction échange le code contre un jeton (le secret ne quitte jamais le
-// serveur), puis rouvre l'app : `studytrack://oauth?state=…&access_token=…`.
+// serveur), puis rouvre l'app : `polymestre://oauth?state=…&access_token=…`. L'app dit
+// son nom dans `state` (`<fournisseur>.<aléa>.polymestre`) ; sans lui, c'est une app
+// d'avant le changement de nom, rouverte sur `studytrack://oauth`.
 // Rien n'est stocké : le jeton ne transite que dans la redirection.
 //
 // Secrets à définir (supabase secrets set …) :
@@ -10,10 +12,8 @@
 //   TICKTICK_CLIENT_ID, TICKTICK_CLIENT_SECRET
 //   NOTION_CLIENT_ID, NOTION_CLIENT_SECRET
 
-const APP = "studytrack://oauth";
-
 function back(params: Record<string, string>): Response {
-  const url = new URL(APP);
+  const url = new URL((params.state ?? "").endsWith(".polymestre") ? "polymestre://oauth" : "studytrack://oauth");
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return new Response(null, { status: 302, headers: { Location: url.toString() } });
 }

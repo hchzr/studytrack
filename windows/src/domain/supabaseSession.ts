@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/SupabaseSession.swift : la session Supabase telle
+// Port de Polymestre/Domain/SupabaseSession.swift : la session Supabase telle
 // qu'elle survit à un lancement. Type valeur et pur — la décision « ce jeton
 // est-il encore bon ? » se teste sans réseau ni trousseau.
 

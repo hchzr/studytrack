@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
---  StudyTrack — schéma Supabase complet
+--  Polymestre — schéma Supabase complet
 --
 --  À exécuter dans Supabase ▸ SQL Editor, en une seule fois. Idempotent : tu peux
 --  le relancer sans casser ce qui existe déjà.

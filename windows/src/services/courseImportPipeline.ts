@@ -1,4 +1,4 @@
-// L'import d'un cours Moodle, de bout en bout (StudyTrack/Services/CourseSiteClients.swift
+// L'import d'un cours Moodle, de bout en bout (Polymestre/Services/CourseSiteClients.swift
 // › CourseImportPipeline).
 //
 // 1. Moodle (le plan du cours, les cibles des liens) — `MoodleClient.snapshot` ;

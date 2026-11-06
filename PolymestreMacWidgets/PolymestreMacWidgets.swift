@@ -5,7 +5,7 @@ import WidgetKit
 /// journée (horaire et échéances), la semaine cours par cours. Ils lisent
 /// l'instantané écrit par l'app (`WidgetSnapshot`, partagé avec l'iPhone).
 @main
-struct StudyTrackMacWidgets: WidgetBundle {
+struct PolymestreMacWidgets: WidgetBundle {
     var body: some Widget {
         TimerWidget()
         TodayWidget()

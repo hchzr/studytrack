@@ -8,5 +8,6 @@ pub mod lock;
 pub mod mini;
 pub mod oauth;
 pub mod power;
+pub mod rename;
 pub mod secrets;
 pub mod site;

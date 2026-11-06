@@ -149,7 +149,7 @@ struct ProfileView: View {
         }
     }
 
-    /// Les comptes : sites des cours (Moodle, MediaSpace…), compte StudyTrack.
+    /// Les comptes : sites des cours (Moodle, MediaSpace…), compte Polymestre.
     private var accountsHubSection: some View {
         Section {
             NavigationLink {

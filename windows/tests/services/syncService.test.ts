@@ -236,7 +236,7 @@ describe("syncService", () => {
     expect(status.lastReport?.pushed).toBe(1);
     expect(status.lastSyncAt).not.toBeNull();
     expect(status.lastError).toBeNull();
-    const persisted = JSON.parse(storage.getItem("studytrack.sync.status")!);
+    const persisted = JSON.parse(storage.getItem("polymestre.sync.status")!);
     expect(persisted.lastReport.pushed).toBe(1);
 
     // Une deuxième passe n'a plus rien à envoyer.
@@ -423,7 +423,7 @@ describe("synchronisation chiffrée de bout en bout", () => {
     const states: string[] = [];
     const host = await a.service.startPairing((s) => states.push(s));
     expect(host.code).toMatch(/^[0-9A-Z]{4}(-[0-9A-Z]{4}){5}-[0-9A-Z]{2}$/);
-    expect(host.qr).toBe(`studytrack-pair:${host.code}`);
+    expect(host.qr).toBe(`polymestre-pair:${host.code}`);
     await b.service.joinPairing(host.code);
 
     await vi.waitFor(() => expect(states).toContain("done"));

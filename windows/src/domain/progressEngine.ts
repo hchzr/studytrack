@@ -1,4 +1,4 @@
-// Progression d'un cours (StudyTrack/Domain/ProgressEngine.swift).
+// Progression d'un cours (Polymestre/Domain/ProgressEngine.swift).
 //
 // Le calcul est pur : il lit les relations d'un `Course` (théorie, séries,
 // semestre) et ne touche ni au disque ni à l'interface. Les pourcentages sont

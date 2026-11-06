@@ -1,5 +1,5 @@
 // Ce que l'iPhone envoie au bureau du Mac pendant une session
-// (StudyTrack/Domain/DeskDrop.swift) : la photo de ta copie, un « je bloque »,
+// (Polymestre/Domain/DeskDrop.swift) : la photo de ta copie, un « je bloque »,
 // une question dictée. Par le lien du chrono, chiffré de la même clé ; rien
 // n'est gardé par le relais.
 

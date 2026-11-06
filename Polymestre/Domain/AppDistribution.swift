@@ -67,7 +67,7 @@ enum FeedbackMail {
 /// `https://<site>/mac/latest.json` : la dernière build du Mac. Sans Sparkle ni
 /// dépendance : un petit fichier, lu au plus une fois par jour.
 ///
-///     {"version": "2.1", "build": 3, "url": "https://…/StudyTrack.dmg", "notes": "…"}
+///     {"version": "2.1", "build": 3, "url": "https://…/Polymestre.dmg", "notes": "…"}
 struct MacUpdateFeed: Codable, Equatable {
     var version: String
     var build: Int

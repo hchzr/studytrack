@@ -48,22 +48,32 @@ final class AppContainer {
     let storeError: String?
 
     /// Le conteneur iCloud de l'app (base privée de l'étudiant·e).
-    static let cloudContainerID = "iCloud.com.hczr.studytrack.app"
+    static let cloudContainerID = AppIdentity.cloudContainer
+
+    /// `<groupe>/Library/Application Support/default.store` ; nil sans groupe d'app
+    /// (build non signée : l'emplacement par défaut).
+    static var storeURL: URL? {
+        WidgetBridge.containerURL?.appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent("default.store")
+    }
 
     /// Vrai quand la base est synchronisée avec iCloud (iPhone, iPad, Mac).
     let isCloudSynced: Bool
 
     init() {
-        let schema = StudyTrackSchema.current
+        let schema = PolymestreSchema.current
         var failure: String?
         var synced = false
 
         // D'abord synchronisée par iCloud ; à défaut (build sans les droits
         // iCloud, simulateur non signé), la même base, locale. `.none` est
         // explicite : `.automatic` activerait iCloud à l'insu du code.
-        let cloud = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false,
-                                       cloudKitDatabase: .private(Self.cloudContainerID))
-        let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+        // La base est dans le groupe d'app, à une adresse **explicite** : la reprise des
+        // données de StudyTrack (`IdentityMigration`) y écrit avant cette ouverture.
+        let cloud = Self.storeURL.map { ModelConfiguration(schema: schema, url: $0, cloudKitDatabase: .private(Self.cloudContainerID)) }
+            ?? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .private(Self.cloudContainerID))
+        let local = Self.storeURL.map { ModelConfiguration(schema: schema, url: $0, cloudKitDatabase: .none) }
+            ?? ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
         var cloudError: String?
         var cloudContainer: ModelContainer?
         #if NO_CLOUDKIT
@@ -73,7 +83,7 @@ final class AppContainer {
         _ = cloud
         #else
         do {
-            cloudContainer = try ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+            cloudContainer = try ModelContainer(for: schema, migrationPlan: PolymestreMigrationPlan.self,
                                                 configurations: [cloud])
         } catch {
             cloudError = String(describing: error)
@@ -82,7 +92,7 @@ final class AppContainer {
         if let cloudContainer {
             self.modelContainer = cloudContainer
             synced = true
-        } else if let container = try? ModelContainer(for: schema, migrationPlan: StudyTrackMigrationPlan.self,
+        } else if let container = try? ModelContainer(for: schema, migrationPlan: PolymestreMigrationPlan.self,
                                                       configurations: [local]) {
             self.modelContainer = container
             AppLog.record(.info, AppLog.Category.storage, "iCloud indisponible : base locale", detail: cloudError ?? "")

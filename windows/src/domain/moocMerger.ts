@@ -1,5 +1,5 @@
 // Range le MOOC d'un cours dans les semaines de son Moodle
-// (StudyTrack/Domain/MoocMerger.swift).
+// (Polymestre/Domain/MoocMerger.swift).
 //
 // Chaque leçon du MOOC reçoit la semaine où Moodle la cite : un lien Moodle qui
 // pointe dans la leçon, « Semaine 3 » dans le titre du chapitre, le numéro du

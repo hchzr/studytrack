@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/ClaudeProject.swift : le « projet EPFL » de Claude
+// Port de Polymestre/Domain/ClaudeProject.swift : le « projet EPFL » de Claude
 // Code — un dossier à soi, un CLAUDE.md qui dit où on en est, et seulement les
 // serveurs MCP dont les compétences ont besoin. Ici, ce qui est pur.
 
@@ -148,7 +148,7 @@ export interface ClaudeFileInit {
   commands?: ClaudeCommand[];
 }
 
-/** `studytrack.json` : la façon de travailler de l'étudiant·e, pas celle de l'app. */
+/** `polymestre.json` : la façon de travailler de l'étudiant·e, pas celle de l'app. */
 export class ClaudeProjectFile {
   /** Les compétences à relier depuis `~/.claude/skills/synced/…`. */
   skills: string[];
@@ -262,15 +262,15 @@ function foundationJSON(value: unknown, indent = 0): string {
 }
 
 export const ClaudeProject = {
-  beginMarker: "<!-- studytrack:début -->",
-  endMarker: "<!-- studytrack:fin -->",
+  beginMarker: "<!-- polymestre:début -->",
+  endMarker: "<!-- polymestre:fin -->",
 
   File: ClaudeProjectFile,
   Server: ClaudeServer,
   Command: ClaudeCommand,
   Models: ClaudeModels,
 
-  /** Le contexte que StudyTrack tient à jour dans le `CLAUDE.md`. */
+  /** Le contexte que Polymestre tient à jour dans le `CLAUDE.md`. */
   context(courses: { code: string; name: string; week?: number | null; progress?: string | null }[],
           week: number | null, date: string,
           redo: { code: string; exercise: string; step: string; due?: string | null; why: string }[] = [],
@@ -278,7 +278,7 @@ export const ClaudeProject = {
     const lines = [
       `## Polymestre (mis à jour par l'app, le ${date})`,
       "",
-      "Étudiant en première année à l'EPFL. Polymestre range chaque cours en semaines : la théorie (vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par l'app est entre [StudyTrack] et [/StudyTrack].",
+      "Étudiant en première année à l'EPFL. Polymestre range chaque cours en semaines : la théorie (vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par l'app est entre [Polymestre] et [/Polymestre].",
     ];
     if (week !== null) lines.push("", `Semaine du semestre : ${week}.`);
     if (courses.length !== 0) {
@@ -306,10 +306,13 @@ export const ClaudeProject = {
     return lines.join("\n");
   },
 
-  /** Le `CLAUDE.md` avec la partie de StudyTrack à jour : remplacée si elle existe, ajoutée sinon. */
-  claudeMD(existing: string | null, context: string): string {
+  /** Le `CLAUDE.md` avec la partie de Polymestre à jour : remplacée si elle existe, ajoutée sinon. */
+  claudeMD(original: string | null, context: string): string {
     const block = ClaudeProject.beginMarker + "\n" + context + "\n" + ClaudeProject.endMarker;
-    if (existing === null || existing === "") return block + "\n";
+    if (original === null || original === "") return block + "\n";
+    // La partie écrite avant le changement de nom (« studytrack ») est remplacée, pas doublée.
+    const existing = original.split("<!-- studytrack:début -->").join(ClaudeProject.beginMarker)
+      .split("<!-- studytrack:fin -->").join(ClaudeProject.endMarker);
     const begin = existing.indexOf(ClaudeProject.beginMarker);
     if (begin >= 0) {
       const end = existing.indexOf(ClaudeProject.endMarker, begin + ClaudeProject.beginMarker.length);
@@ -390,20 +393,20 @@ export const ClaudeProject = {
   },
 
   /** Les règles `--allowedTools` : la base, les connecteurs, les serveurs du fichier, ses règles. */
-  allowedTools(file: ClaudeProjectFile, studyTrack: boolean, connectors: string[] = [], localFiles = false): string[] {
+  allowedTools(file: ClaudeProjectFile, polymestre: boolean, connectors: string[] = [], localFiles = false): string[] {
     const result: string[] = [
       ...ClaudeProject.baseTools,
       ...connectors.map((server) => ClaudeProject.toolPrefix(server)),
       ...Object.keys(file.mcpServers).sort().map((name) => "mcp__" + name),
-      ...(studyTrack ? ["mcp__studytrack"] : []),
-      ...(localFiles ? ["mcp__studytrack-files"] : []),
+      ...(polymestre ? ["mcp__polymestre"] : []),
+      ...(localFiles ? ["mcp__polymestre-files"] : []),
     ];
     for (const rule of file.allowedTools) if (!result.includes(rule)) result.push(rule);
     return result;
   },
 
-  /** Le fichier `--mcp-config` : les serveurs du fichier, et StudyTrack s'il est relié. */
-  mcpConfig(file: ClaudeProjectFile, studyTrackURL: string | null, localFilesURL: string | null = null): string {
+  /** Le fichier `--mcp-config` : les serveurs du fichier, et Polymestre s'il est relié. */
+  mcpConfig(file: ClaudeProjectFile, polymestreURL: string | null, localFilesURL: string | null = null): string {
     const servers: Record<string, unknown> = {};
     for (const [name, server] of Object.entries(file.mcpServers)) {
       const entry: Record<string, unknown> = { type: server.type };
@@ -412,25 +415,25 @@ export const ClaudeProject = {
       if (server.args !== null) entry["args"] = server.args;
       servers[name] = entry;
     }
-    const address = studyTrackURL?.replace(/^\s+|\s+$/g, "");
+    const address = polymestreURL?.replace(/^\s+|\s+$/g, "");
     if (address !== undefined && address.startsWith("https://")) {
-      servers["studytrack"] = { type: "http", url: address };
+      servers["polymestre"] = { type: "http", url: address };
     }
     // Le serveur local des fichiers : seulement sur la boucle locale, jamais une autre adresse.
     const local = localFilesURL?.replace(/^\s+|\s+$/g, "");
     if (local !== undefined && local.startsWith("http://127.0.0.1:")) {
-      servers["studytrack-files"] = { type: "http", url: local };
+      servers["polymestre-files"] = { type: "http", url: local };
     }
     return foundationJSON({ mcpServers: servers });
   },
 
   /** Ce que Claude a le droit de faire, en clair. */
-  permissionSummary(file: ClaudeProjectFile, studyTrack: boolean, connectors: string[] = [], localFiles = false): string {
+  permissionSummary(file: ClaudeProjectFile, polymestre: boolean, connectors: string[] = [], localFiles = false): string {
     const parts = ["lecture", "compétences"];
     if (file.allowedTools.some((rule) => rule.startsWith("Write") || rule.startsWith("Edit"))) parts.push("écriture limitée");
     parts.push(...connectors.map((server) => server.slice("claude.ai ".length)));
     parts.push(...Object.keys(file.mcpServers).sort().map((name) => ClaudeTutor.toolLabel("mcp__" + name)));
-    if (studyTrack) parts.push("Polymestre");
+    if (polymestre) parts.push("Polymestre");
     if (localFiles) parts.push("fichiers du Mac");
     return parts.join(", ");
   },

@@ -1,6 +1,6 @@
 // Explique (explique.epfl.ch) : l'outil d'AICC (CS-101) où vivent les cours en
 // replay, semaine par semaine, et les « exercices d'explication » à rendre
-// (StudyTrack/Domain/ExpliqueImport.swift).
+// (Polymestre/Domain/ExpliqueImport.swift).
 
 import { Institution } from "./institution.ts";
 import { CourseVideos, type CourseVideo } from "./courseVideos.ts";

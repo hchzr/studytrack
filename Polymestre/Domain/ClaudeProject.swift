@@ -12,10 +12,10 @@ enum ClaudeProject {
 
     // MARK: CLAUDE.md
 
-    /// La partie écrite par StudyTrack est entre ces deux lignes : le reste du
+    /// La partie écrite par Polymestre est entre ces deux lignes : le reste du
     /// fichier appartient à l'étudiant·e et n'est jamais touché.
-    static let beginMarker = "<!-- studytrack:début -->"
-    static let endMarker = "<!-- studytrack:fin -->"
+    static let beginMarker = "<!-- polymestre:début -->"
+    static let endMarker = "<!-- polymestre:fin -->"
 
     struct CourseLine: Equatable {
         var code: String
@@ -25,7 +25,7 @@ enum ClaudeProject {
         var progress: String?
     }
 
-    /// Le contexte que StudyTrack tient à jour dans le `CLAUDE.md`.
+    /// Le contexte que Polymestre tient à jour dans le `CLAUDE.md`.
     /// Un exercice de la file de reprise, pour le `CLAUDE.md`.
     struct RedoLine: Equatable {
         var code: String
@@ -43,7 +43,7 @@ enum ClaudeProject {
             "Étudiant en première année à l'EPFL. Polymestre range chaque cours en semaines : la théorie " +
             "(vidéos, chapitres), les séries d'exercices (questions cochées, correction juste / moyen / faux), " +
             "le temps d'étude. Dans le mode étude, une conversation suit une série ; le contexte envoyé par " +
-            "l'app est entre [StudyTrack] et [/StudyTrack].",
+            "l'app est entre [Polymestre] et [/Polymestre].",
         ]
         if let week { lines += ["", "Semaine du semestre : \(week)."] }
         if !courses.isEmpty {
@@ -71,11 +71,14 @@ enum ClaudeProject {
         return lines.joined(separator: "\n")
     }
 
-    /// Le `CLAUDE.md` avec la partie de StudyTrack à jour : remplacée si elle
+    /// Le `CLAUDE.md` avec la partie de Polymestre à jour : remplacée si elle
     /// existe, ajoutée à la fin sinon.
     static func claudeMD(existing: String?, context: String) -> String {
         let block = beginMarker + "\n" + context + "\n" + endMarker
-        guard let existing, !existing.isEmpty else { return block + "\n" }
+        guard let original = existing, !original.isEmpty else { return block + "\n" }
+        // La partie écrite avant le changement de nom (« studytrack ») est remplacée, pas doublée.
+        let existing = original.replacingOccurrences(of: "<!-- studytrack:début -->", with: beginMarker)
+            .replacingOccurrences(of: "<!-- studytrack:fin -->", with: endMarker)
         if let begin = existing.range(of: beginMarker),
            let end = existing.range(of: endMarker, range: begin.upperBound..<existing.endIndex) {
             var copy = existing
@@ -87,7 +90,7 @@ enum ClaudeProject {
 
     // MARK: Le fichier du projet
 
-    /// `studytrack.json`, dans le dossier du projet : **la façon de travailler
+    /// `polymestre.json`, dans le dossier du projet : **la façon de travailler
     /// de l'étudiant·e**, pas celle de l'app. Ses compétences, ses serveurs MCP,
     /// ses outils permis, ses modèles et ses boutons (« brief », « post-mortem »…).
     /// Sans fichier, le projet n'a ni bouton ni serveur : chacun écrit le sien.
@@ -178,7 +181,7 @@ enum ClaudeProject {
         var allowedTools: [String] = []
         var commands: [Command] = []
         /// La file de reprise de l'étudiant·e : paliers, plafonds (sinon ceux
-        /// de StudyTrack : J+7, J+21, pré-examen ; 2 par série).
+        /// de Polymestre : J+7, J+21, pré-examen ; 2 par série).
         var redo: RedoLadder.Config?
 
         init(skills: [String] = [], seriesSkill: String? = nil, models: Models = Models(),
@@ -217,7 +220,7 @@ enum ClaudeProject {
         }
     }
 
-    /// Les boutons et les modèles réécrits dans `studytrack.json` (l'éditeur des
+    /// Les boutons et les modèles réécrits dans `polymestre.json` (l'éditeur des
     /// Réglages) : le reste du fichier — compétences, serveurs, permis, et toute
     /// clé inconnue — est gardé tel quel. `nil` si le fichier n'est pas un objet JSON.
     static func updating(_ json: Data?, commands: [File.Command], models: File.Models) -> Data? {
@@ -304,17 +307,17 @@ enum ClaudeProject {
 
     /// Les règles `--allowedTools` : la base, les connecteurs du compte, les
     /// serveurs du fichier, ses règles.
-    static func allowedTools(file: File, studyTrack: Bool, connectors: [String] = [], localFiles: Bool = false) -> [String] {
+    static func allowedTools(file: File, polymestre: Bool, connectors: [String] = [], localFiles: Bool = false) -> [String] {
         var result = baseTools + connectors.map(toolPrefix(server:))
-            + file.mcpServers.keys.sorted().map { "mcp__" + $0 } + (studyTrack ? ["mcp__studytrack"] : [])
-            + (localFiles ? ["mcp__studytrack-files"] : [])
+            + file.mcpServers.keys.sorted().map { "mcp__" + $0 } + (polymestre ? ["mcp__polymestre"] : [])
+            + (localFiles ? ["mcp__polymestre-files"] : [])
         for rule in file.allowedTools where !result.contains(rule) { result.append(rule) }
         return result
     }
 
     /// Le fichier `--mcp-config` : les serveurs du fichier du projet, et celui
-    /// de StudyTrack s'il est relié. Rien d'autre (`--strict-mcp-config`).
-    static func mcpConfig(file: File, studyTrackURL: String?, localFilesURL: String? = nil) -> String {
+    /// de Polymestre s'il est relié. Rien d'autre (`--strict-mcp-config`).
+    static func mcpConfig(file: File, polymestreURL: String?, localFilesURL: String? = nil) -> String {
         var servers: [String: Any] = [:]
         for (name, server) in file.mcpServers {
             var entry: [String: Any] = ["type": server.type]
@@ -323,24 +326,24 @@ enum ClaudeProject {
             if let args = server.args { entry["args"] = args }
             servers[name] = entry
         }
-        if let address = studyTrackURL?.trimmingCharacters(in: .whitespacesAndNewlines), address.hasPrefix("https://") {
-            servers["studytrack"] = ["type": "http", "url": address]
+        if let address = polymestreURL?.trimmingCharacters(in: .whitespacesAndNewlines), address.hasPrefix("https://") {
+            servers["polymestre"] = ["type": "http", "url": address]
         }
         // Le serveur local des fichiers : seulement sur la boucle locale, jamais une autre adresse.
         if let address = localFilesURL?.trimmingCharacters(in: .whitespacesAndNewlines), address.hasPrefix("http://127.0.0.1:") {
-            servers["studytrack-files"] = ["type": "http", "url": address]
+            servers["polymestre-files"] = ["type": "http", "url": address]
         }
         let data = (try? JSONSerialization.data(withJSONObject: ["mcpServers": servers], options: [.sortedKeys, .prettyPrinted])) ?? Data()
         return String(decoding: data, as: UTF8.self)
     }
 
     /// Ce que Claude a le droit de faire, en clair (affiché dans la conversation).
-    static func permissionSummary(file: File, studyTrack: Bool, connectors: [String] = [], localFiles: Bool = false) -> String {
+    static func permissionSummary(file: File, polymestre: Bool, connectors: [String] = [], localFiles: Bool = false) -> String {
         var parts = ["lecture", "compétences"]
         if file.allowedTools.contains(where: { $0.hasPrefix("Write") || $0.hasPrefix("Edit") }) { parts.append("écriture limitée") }
         parts += connectors.map { String($0.dropFirst("claude.ai ".count)) }
         parts += file.mcpServers.keys.sorted().map { ClaudeTutor.toolLabel("mcp__" + $0) }
-        if studyTrack { parts.append("Polymestre") }
+        if polymestre { parts.append("Polymestre") }
         if localFiles { parts.append("fichiers du Mac") }
         return parts.joined(separator: ", ")
     }

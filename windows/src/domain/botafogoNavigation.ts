@@ -1,5 +1,5 @@
 // Se déplacer dans un cours Botafogo comme sur le site
-// (StudyTrack/Domain/BotafogoNavigation.swift).
+// (Polymestre/Domain/BotafogoNavigation.swift).
 //
 // Le plan d'une page (« Sur cette page »), la section précédente et suivante, le
 // chemin (« Polycopié › 5 Séries numériques › 5.1 Définitions »), ce qu'on a lu.

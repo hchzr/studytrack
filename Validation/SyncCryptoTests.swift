@@ -101,12 +101,12 @@ func syncCryptoChecks(_ results: inout [(Bool, String)]) throws {
 
     // MARK: Vecteurs communs avec Windows
 
-    let root = ProcessInfo.processInfo.environment["STUDYTRACK_ROOT"] ?? ""
+    let root = ProcessInfo.processInfo.environment["POLYMESTRE_ROOT"] ?? ""
     guard let vectorData = try? Data(contentsOf: URL(fileURLWithPath: root + "/supabase/e2ee-vectors.json")),
           let V = try? JSONSerialization.jsonObject(with: vectorData) as? [String: Any],
           let row = V["row"] as? [String: Any], let pairing = V["pairing"] as? [String: Any],
           let fields = row["fields"] as? [String: Any] else {
-        note(false, "sync chiffrée : supabase/e2ee-vectors.json introuvable (STUDYTRACK_ROOT=\(root))")
+        note(false, "sync chiffrée : supabase/e2ee-vectors.json introuvable (POLYMESTRE_ROOT=\(root))")
         return
     }
     let ak = bytes(V["accountKey"] as! String)

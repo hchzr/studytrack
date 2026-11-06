@@ -1,5 +1,5 @@
 // Les sections d'un brouillon de cours, semaine par semaine, à corriger
-// (StudyTrack/Views/Courses/ContentImport.swift › ContentDraftSections).
+// (Polymestre/Views/Courses/ContentImport.swift › ContentDraftSections).
 
 import { Checkbox, Icon, Select, cx } from "../../../kit.tsx";
 import { ContentDraft, ContentDraftItem, ContentDraftSection, ContentItemKind } from "../../../../domain/courseContentImport.ts";

@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// NotebookLM, pour écouter son cours : StudyTrack **prépare** les sources (la fiche, ses liens, ses
+/// NotebookLM, pour écouter son cours : Polymestre **prépare** les sources (la fiche, ses liens, ses
 /// schémas, ses questions), tu les déposes dans un carnet NotebookLM, puis tu rapportes ici le
 /// podcast (ou la vidéo, le quiz) pour l'écouter pendant que tu révises.
 ///
@@ -89,7 +89,7 @@ struct NotebookLMPanel: View {
 
     // MARK: Automatique (compte Google)
 
-    /// Connecté à Google : StudyTrack crée le carnet, y dépose la fiche, lance le podcast et le rapporte.
+    /// Connecté à Google : Polymestre crée le carnet, y dépose la fiche, lance le podcast et le rapporte.
     private var automatic: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Automatique", systemImage: "wand.and.stars").font(.headline).foregroundStyle(Carnet.ink)
@@ -180,7 +180,7 @@ struct NotebookLMPanel: View {
         #if os(macOS)
         // Sur le Mac, les fichiers vont dans Documents : on les retrouve, on les glisse dans le navigateur.
         if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let folder = documents.appending(path: "StudyTrack NotebookLM/\(tag.replacingOccurrences(of: "/", with: "-"))", directoryHint: .isDirectory)
+            let folder = documents.appending(path: "Polymestre NotebookLM/\(tag.replacingOccurrences(of: "/", with: "-"))", directoryHint: .isDirectory)
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             urls = urls.compactMap { source in
                 let target = folder.appending(path: source.lastPathComponent)

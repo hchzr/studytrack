@@ -1,14 +1,14 @@
 // Une note rapide, rangée dans les notes d'un cours, datée (QuickNoteSheet du Mac) : ce qu'on
 // veut retenir arrive n'importe quand — « le midterm couvre jusqu'au chapitre 5 », « demander
 // la 3.4 à l'assistant ». Une ligne, un cours, et c'est rangé. S'ouvre de partout par
-// l'événement `studytrack:quicknote` (la palette, le mode étude).
+// l'événement `polymestre:quicknote` (la palette, le mode étude).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Course } from "../../models/index.ts";
 import { useData } from "../../data/dataContext.tsx";
 import { timerController } from "../timerController.ts";
 
-export const QUICK_NOTE_EVENT = "studytrack:quicknote";
+export const QUICK_NOTE_EVENT = "polymestre:quicknote";
 
 export function openQuickNote(): void {
   window.dispatchEvent(new CustomEvent(QUICK_NOTE_EVENT));

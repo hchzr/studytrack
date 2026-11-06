@@ -32,7 +32,7 @@ SITE_RELEASES=hczr-dev/polymestre-site
 mkdir -p "$OUT"
 
 setting() {
-  xcodebuild -project StudyTrack.xcodeproj -scheme "$1" -configuration Release -showBuildSettings 2>/dev/null \
+  xcodebuild -project Polymestre.xcodeproj -scheme "$1" -configuration Release -showBuildSettings 2>/dev/null \
     | awk -v k="$2" '$1 == k { print $3; exit }'
 }
 
@@ -71,10 +71,10 @@ notarize() {
 
 case "${1:-}" in
 ios)
-  VERSION=$(setting StudyTrack MARKETING_VERSION); BUILD=$(setting StudyTrack CURRENT_PROJECT_VERSION)
-  ARCHIVE="$OUT/StudyTrack-$VERSION-$BUILD.xcarchive"
-  echo "→ iPhone $VERSION ($BUILD), Temps d'écran : $(setting StudyTrack STUDYTRACK_SCREEN_TIME)"
-  xcodebuild archive -project StudyTrack.xcodeproj -scheme StudyTrack -configuration Release \
+  VERSION=$(setting Polymestre MARKETING_VERSION); BUILD=$(setting Polymestre CURRENT_PROJECT_VERSION)
+  ARCHIVE="$OUT/Polymestre-$VERSION-$BUILD.xcarchive"
+  echo "→ iPhone $VERSION ($BUILD), Temps d'écran : $(setting Polymestre POLYMESTRE_SCREEN_TIME)"
+  xcodebuild archive -project Polymestre.xcodeproj -scheme Polymestre -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" "${AUTH[@]}" \
     OTHER_SWIFT_FLAGS="-disable-sandbox"
   export_options app-store-connect upload > "$OUT/ios-export.plist"
@@ -83,10 +83,10 @@ ios)
   echo "✅ Envoyée. App Store Connect la traite (~15 min) puis elle apparaît dans TestFlight."
   ;;
 mac)
-  VERSION=$(setting StudyTrackMac MARKETING_VERSION); BUILD=$(setting StudyTrackMac CURRENT_PROJECT_VERSION)
-  ARCHIVE="$OUT/StudyTrackMac-$VERSION-$BUILD.xcarchive"
+  VERSION=$(setting PolymestreMac MARKETING_VERSION); BUILD=$(setting PolymestreMac CURRENT_PROJECT_VERSION)
+  ARCHIVE="$OUT/PolymestreMac-$VERSION-$BUILD.xcarchive"
   echo "→ Mac $VERSION ($BUILD)"
-  xcodebuild archive -project StudyTrack.xcodeproj -scheme StudyTrackMac -configuration Release \
+  xcodebuild archive -project Polymestre.xcodeproj -scheme PolymestreMac -configuration Release \
     -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" "${AUTH[@]}" \
     OTHER_SWIFT_FLAGS="-disable-sandbox"
   export_options developer-id export > "$OUT/mac-export.plist"
@@ -114,11 +114,11 @@ mac)
   cat > "$OUT/latest.json" <<EOF
 {"version": "$VERSION", "build": $BUILD, "url": "https://github.com/$SITE_RELEASES/releases/download/$TAG/Polymestre.dmg", "notes": "${NOTES:-}"}
 EOF
-  echo "✅ $DMG notarisée. Puis : ./release.sh publish-mac (SITE_REPO=<clone de studytrack-site>)"
+  echo "✅ $DMG notarisée. Puis : ./release.sh publish-mac (SITE_REPO=<clone de polymestre-site>)"
   ;;
 publish-mac)
-  : "${SITE_REPO:?SITE_REPO manquant : le chemin vers un clone de studytrack-site}"
-  VERSION=$(setting StudyTrackMac MARKETING_VERSION); BUILD=$(setting StudyTrackMac CURRENT_PROJECT_VERSION)
+  : "${SITE_REPO:?SITE_REPO manquant : le chemin vers un clone de polymestre-site}"
+  VERSION=$(setting PolymestreMac MARKETING_VERSION); BUILD=$(setting PolymestreMac CURRENT_PROJECT_VERSION)
   TAG="mac-$VERSION-$BUILD"
   [ -f "$OUT/Polymestre.dmg" ] && [ -f "$OUT/latest.json" ] || { echo "Lancer d'abord ./release.sh mac" >&2; exit 1; }
   gh release create "$TAG" "$OUT/Polymestre.dmg" --repo "$SITE_RELEASES" \

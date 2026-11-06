@@ -1,7 +1,7 @@
 // Les pièces visuelles du mode étude : sur-titres, pastilles de cours, boutons
 // encre/papier, le grand cadran, le bouton qu'il faut tenir, la liste des
 // sous-questions et les marques rapides — les mêmes formes que
-// StudyTrackMac/StudyMode et StudyKit/ExerciseParts, sur le papier de nuit.
+// PolymestreMac/StudyMode et StudyKit/ExerciseParts, sur le papier de nuit.
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Course } from "../../models/course.ts";

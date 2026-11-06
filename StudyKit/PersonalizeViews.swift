@@ -337,7 +337,7 @@ private struct SessionStepRow: View {
 // MARK: - NotebookLM
 
 /// NotebookLM : allumé, la fiche a un onglet « Écouter » (sources prêtes à déposer, podcast à
-/// rapporter). Éteint par défaut : rien ne part de l'appareil, de toute façon — StudyTrack ne parle
+/// rapporter). Éteint par défaut : rien ne part de l'appareil, de toute façon — Polymestre ne parle
 /// jamais à Google, il écrit des fichiers et ouvre un lien.
 struct NotebookLMSection: View {
     @AppStorage("notebooklm.enabled") private var enabled = false

@@ -19,7 +19,7 @@ export async function openWebURL(url: string): Promise<void> {
 }
 
 /**
- * Ouvre une adresse **dans l'app** (une fenêtre StudyTrack, au-dessus du mode étude) : rien
+ * Ouvre une adresse **dans l'app** (une fenêtre Polymestre, au-dessus du mode étude) : rien
  * n'oblige à passer par le navigateur. Hors de l'app, un onglet du navigateur.
  */
 export async function openInApp(url: string, title = "Polymestre"): Promise<void> {

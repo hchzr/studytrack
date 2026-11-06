@@ -1,6 +1,6 @@
 import Foundation
 
-/// Ce qu'une autre app a partagé vers StudyTrack, en attente d'être importé.
+/// Ce qu'une autre app a partagé vers Polymestre, en attente d'être importé.
 ///
 /// L'extension de partage et l'app sont **deux processus** : l'extension ne peut
 /// pas ouvrir l'écran d'import. Elle dépose donc le fichier dans le conteneur

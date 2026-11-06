@@ -23,7 +23,7 @@ final class AnkiWebClient {
     ///
     /// AnkiWeb lit la version dans cet identifiant et refuse (400, sans
     /// message) tout ce qui n'en a pas la forme ou qui est trop ancien :
-    /// « studytrack,1.0,ios » faisait échouer la lecture du compte (`meta`)
+    /// « polymestre,1.0,ios » faisait échouer la lecture du compte (`meta`)
     /// juste après une connexion réussie. Vérifié sur sync20.ankiweb.net le
     /// 1ᵉʳ octobre 2026 : cette forme répond 200, la nôtre 400.
     static let clientVersion = "anki,25.02.7 (6ddc22e5),ios"
@@ -77,7 +77,7 @@ final class AnkiWebClient {
     }
 
     private func post(_ method: String, data: Data, timeout: TimeInterval, redirects: Int = 0) async throws -> Data {
-        let boundary = "StudyTrack-\(Self.randomKey(16))"
+        let boundary = "Polymestre-\(Self.randomKey(16))"
         var request = URLRequest(url: endpoint.appendingPathComponent("sync").appendingPathComponent(method))
         request.httpMethod = "POST"
         request.timeoutInterval = timeout

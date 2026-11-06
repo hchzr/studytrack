@@ -41,7 +41,7 @@ fn sender() -> &'static Mutex<mpsc::Sender<Msg>> {
     WORKER.get_or_init(|| {
         let (tx, rx) = mpsc::channel();
         std::thread::Builder::new()
-            .name("studytrack-keep-awake".into())
+            .name("polymestre-keep-awake".into())
             .spawn(move || worker(rx))
             .expect("thread keep-awake");
         Mutex::new(tx)

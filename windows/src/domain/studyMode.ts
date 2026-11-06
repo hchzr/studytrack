@@ -1,4 +1,4 @@
-// Le **mode étude** (StudyTrack/Domain/StudyMode.swift) : pendant une session,
+// Le **mode étude** (Polymestre/Domain/StudyMode.swift) : pendant une session,
 // le Mac et l'iPhone n'ouvrent que ce qui sert à travailler — les sites de cours,
 // Claude, GoodNotes.
 //

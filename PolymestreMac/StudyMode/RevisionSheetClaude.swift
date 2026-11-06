@@ -39,7 +39,7 @@ enum RevisionSheetClaude {
             "--system-prompt", instructions,
         ]
         let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/claude-sheet", isDirectory: true)
+            .appendingPathComponent("Polymestre/claude-sheet", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         process.currentDirectoryURL = folder
         var environment = ProcessInfo.processInfo.environment

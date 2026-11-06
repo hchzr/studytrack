@@ -5,7 +5,7 @@
 // Comment les fixtures ont été produites (une seule fois, à la main, rien dans le dépôt
 // hors de ce dossier) :
 //   1. Un script Swift (copie dans fixtures/crypto/interop.swift.txt) a été compilé avec
-//      StudyTrack/Domain/GroupCrypto.swift :
+//      Polymestre/Domain/GroupCrypto.swift :
 //        swiftc -O GroupCrypto.swift main.swift -o gc
 //      `./gc gen > fixtures/crypto/swift-vectors.json` écrit un groupe, une clé de groupe,
 //      des messages scellés (accents, vide, émoji, retour à la ligne), deux identités

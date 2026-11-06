@@ -1,11 +1,11 @@
 import SwiftUI
 import WebKit
 
-/// Ton compte Google pour NotebookLM : se connecter une fois, puis StudyTrack crée le carnet,
+/// Ton compte Google pour NotebookLM : se connecter une fois, puis Polymestre crée le carnet,
 /// y dépose la fiche, lance le podcast et le rapporte ici.
 ///
 /// **Comment** : NotebookLM n'a pas d'API publique pour un compte personnel. On ouvre la vraie
-/// page de connexion de Google dans une fenêtre de l'app (StudyTrack ne voit jamais ton mot de
+/// page de connexion de Google dans une fenêtre de l'app (Polymestre ne voit jamais ton mot de
 /// passe : seule la session reste, dans le stockage web de l'app), puis on parle au site comme
 /// il se parle à lui-même (`NotebookLMWire`). C'est **non officiel** : Google peut changer le
 /// protocole sans préavis (l'appel échoue alors, avec un message, et l'export manuel reste là),

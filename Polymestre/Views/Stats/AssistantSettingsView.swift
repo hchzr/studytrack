@@ -154,7 +154,7 @@ struct AssistantSettingsView: View {
                         "Réglages › Applications et connecteurs › Avancé : active le mode développeur, puis Créer. Colle l'adresse, sans authentification.")
             VStack(alignment: .leading, spacing: Layout.tight) {
                 Text("Claude Code").font(.subheadline.weight(.semibold))
-                let command = "claude mcp add --transport http studytrack \(url.absoluteString)"
+                let command = "claude mcp add --transport http polymestre \(url.absoluteString)"
                 Text(command)
                     .font(.caption.monospaced())
                     .textSelection(.enabled)

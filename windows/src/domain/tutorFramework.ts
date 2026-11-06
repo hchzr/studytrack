@@ -1,12 +1,12 @@
-// Port de StudyTrack/Domain/TutorFramework.swift : ce que Claude doit savoir à
+// Port de Polymestre/Domain/TutorFramework.swift : ce que Claude doit savoir à
 // **chaque** tour, et la façon de répondre. Une conversation de série dure des
 // jours ; les défauts vus en vrai venaient d'un état absent. Tout est pur.
 
 import { SeriesReview } from "./seriesReview.ts";
 
 /** Les bornes du contexte ajouté par l'app (ClaudeTutor les retire à l'affichage). */
-export const contextOpen = "[StudyTrack]";
-export const contextClose = "[/StudyTrack]";
+export const contextOpen = "[Polymestre]";
+export const contextClose = "[/Polymestre]";
 
 export type TutorMarked =
   | { kind: "notMarked" }
@@ -94,7 +94,7 @@ export const TutorFramework = {
 - Ce que l'étudiant·e t'envoie est à elle ou lui : sa copie GoodNotes (son écriture : ses tentatives et ses notes prises en séance), ses photos, ses captures. Ce n'est pas un corrigé, même si une page ressemble à une rédaction complète. Ne refuse jamais de lire une page qu'on te montre ou dont on te donne le numéro : dis ce que tu y vois. Si une page contient la solution entière de l'exercice en cours, demande une fois : « Tu veux que j'explique cette rédaction, ou tu préfères la refaire sans ? » — sans sermon.
 - « pas encore marqué fait » dans l'app veut dire « pas coché », pas « pas essayé » : regarde la copie avant de dire que quelque chose n'a pas été tenté.
 - Les numéros de page sont ceux du cahier. Le PDF joint peut ne contenir que certaines pages ; le message dit lesquelles.
-- À chaque message, l'app te donne l'état entre [StudyTrack] et [/StudyTrack] : fie-toi à lui, pas à ta mémoire.`,
+- À chaque message, l'app te donne l'état entre [Polymestre] et [/Polymestre] : fie-toi à lui, pas à ta mémoire.`,
 
   tutor: `Mode tuteur. Ne donne pas la solution d'emblée.
 Échelle d'indices : 1 orientation (où regarder, quelle question se poser) · 2 outil (la définition, le théorème ou la propriété à utiliser) · 3 amorce (le premier geste concret, sans finir) · 4 solution rédigée.

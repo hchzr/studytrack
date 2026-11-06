@@ -1,4 +1,4 @@
-// La session d'un site de cours (StudyTrack/Services/CourseSiteClients.swift ›
+// La session d'un site de cours (Polymestre/Services/CourseSiteClients.swift ›
 // HiddenSiteSession).
 //
 // Sur le Mac, un navigateur invisible charge une page du site et y exécute ses

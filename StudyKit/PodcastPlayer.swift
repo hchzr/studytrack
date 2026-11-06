@@ -90,11 +90,11 @@ final class PodcastPlayer {
     }
 }
 
-/// Où sont gardés les podcasts importés : `Application Support/StudyTrack/Podcasts/<cours>/`.
+/// Où sont gardés les podcasts importés : `Application Support/Polymestre/Podcasts/<cours>/`.
 enum PodcastStore {
     static func folder(for course: Course) -> URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let folder = base.appending(path: "StudyTrack/Podcasts/\(course.id.uuidString)", directoryHint: .isDirectory)
+        let folder = base.appending(path: "Polymestre/Podcasts/\(course.id.uuidString)", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }

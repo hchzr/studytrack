@@ -1,5 +1,5 @@
 // Relève le temps passé dans Anki et l'enregistre en sessions étiquetées « Anki »
-// (StudyTrack/Services/AnkiReviewSync.swift).
+// (Polymestre/Services/AnkiReviewSync.swift).
 //
 // L'étudiant·e ne saisit rien : connecté·e à AnkiWeb, l'app rapatrie les révisions faites
 // depuis le dernier relevé. Hors réseau n'est pas une erreur — on réessaiera au prochain

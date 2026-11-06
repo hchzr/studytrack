@@ -1,5 +1,5 @@
 // Le verrou d'étude (StudyLock du Mac) : pendant une session qui « bloque le reste »,
-// StudyTrack occupe l'écran — plein écran, toujours au-dessus, il reprend le focus, et
+// Polymestre occupe l'écran — plein écran, toujours au-dessus, il reprend le focus, et
 // Rust avale Win, Alt+Tab, Alt+Échap, Ctrl+Échap, Alt+F4 (native/kiosk.rs). Rien n'est
 // fermé ni écrit hors de l'app, aucun droit administrateur. On en sort comme le décident
 // les règles du mode étude (StudyMode.locks), jamais autrement.

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Extension de partage : « Partager › StudyTrack » depuis Fichiers, Safari, Mail.
+/// Extension de partage : « Partager › Polymestre » depuis Fichiers, Safari, Mail.
 ///
 /// Elle ne fait qu'une chose — **prendre le PDF et le déposer** dans le conteneur
 /// partagé — puis se referme. Analyser, c'est l'app qui le fait, avec son écran de

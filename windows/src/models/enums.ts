@@ -1,4 +1,4 @@
-// Les énumérations de StudyTrack/Models/Enums.swift (et celles déclarées à côté
+// Les énumérations de Polymestre/Models/Enums.swift (et celles déclarées à côté
 // des modèles : SubQuestionKind, GroupRole, RSVPStatus…).
 //
 // Un type est une union de littéraux — les `rawValue` Swift, à l'identique, parce

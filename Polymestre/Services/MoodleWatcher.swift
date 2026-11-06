@@ -19,7 +19,7 @@ import UserNotifications
 /// les réglages disent qu'il faut rouvrir l'app.
 @MainActor
 enum MoodleWatcher {
-    static let taskIdentifier = "com.hczr.studytrack.moodle-watch"
+    static let taskIdentifier = "ch.polymestre.moodle-watch"
     static let categoryIdentifier = "moodle-news"
     static let interval: TimeInterval = 2 * 3600
 

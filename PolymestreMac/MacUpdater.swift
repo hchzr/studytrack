@@ -16,7 +16,7 @@ final class MacUpdater {
     /// « À jour » ou la raison d'un échec, après une recherche à la main.
     private(set) var status: String?
 
-    private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "update")
+    private let log = Logger(subsystem: "ch.polymestre.mac", category: "update")
     private let lastCheckKey = "mac.update.lastCheck"
     private let cachedKey = "mac.update.feed"
 
@@ -37,7 +37,7 @@ final class MacUpdater {
         checking = true
         defer { checking = false }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        request.setValue("StudyTrack/\(AppDistribution.versionLabel)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Polymestre/\(AppDistribution.versionLabel)", forHTTPHeaderField: "User-Agent")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200, let feed = MacUpdateFeed.decode(data) else {

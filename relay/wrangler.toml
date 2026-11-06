@@ -3,6 +3,9 @@ name = "studytrack-relay"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 workers_dev = true
+# La même instance sous deux adresses : les apps d'avant le changement de nom gardent
+# `studytrack-relay.….workers.dev`, Polymestre passe par ici — et ils se voient.
+routes = [{ pattern = "relay.polymestre.ch", custom_domain = true }]
 
 [vars]
 APNS_KEY_ID = "5JQ549T39X"

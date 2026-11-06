@@ -35,7 +35,7 @@ describe("La semaine relie la fiche (RevisionSheet.chaptersForPath)", () => {
   const sheet = new RevisionSheet({
     origin: "handout", generatedAt: new Date(), chapters: [
       new RevisionChapter({ id: "c0", title: "Suites", entries: [entry("a", "/handout/matiere/m_suites"), entry("b", "/handout/matiere/m_suites/cauchy")] }),
-      new RevisionChapter({ id: "c1", title: "Limites", entries: [entry("c", "studytrack-poly:///handout/matiere/m_limites")] }),
+      new RevisionChapter({ id: "c1", title: "Limites", entries: [entry("c", "polymestre-poly:///handout/matiere/m_limites")] }),
       new RevisionChapter({ id: "c2", title: "Sans lien", entries: [entry("d", "")] }),
     ],
   });

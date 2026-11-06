@@ -29,7 +29,7 @@ final class DeskGround {
         for screen in NSScreen.screens { load(screen) }
     }
 
-    /// Lu une fois : sur disque (`~/Library/Caches/StudyTrack/wallpaper-…`, clé : adresse,
+    /// Lu une fois : sur disque (`~/Library/Caches/Polymestre/wallpaper-…`, clé : adresse,
     /// date de modification et largeur), sinon flouté puis écrit.
     private func load(_ screen: NSScreen) {
         let key = Self.key(screen)
@@ -44,7 +44,7 @@ final class DeskGround {
     nonisolated private static func cacheURL(_ url: URL) -> URL? {
         let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSince1970 ?? 0
         let name = "wallpaper-\(abs(url.path.hashValue))-\(Int(modified)).png"
-        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appending(path: "StudyTrack/\(name)")
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appending(path: "Polymestre/\(name)")
     }
 
     nonisolated private static func cached(_ url: URL) -> NSImage? {
@@ -122,7 +122,7 @@ final class DeskStatus {
         monitor.pathUpdateHandler = { path in
             Task { @MainActor in DeskStatus.shared.online = path.status == .satisfied }
         }
-        monitor.start(queue: DispatchQueue(label: "com.hczr.studytrack.status"))
+        monitor.start(queue: DispatchQueue(label: "ch.polymestre.status"))
         self.monitor = monitor
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             MainActor.assumeIsolated { DeskStatus.shared.read() }

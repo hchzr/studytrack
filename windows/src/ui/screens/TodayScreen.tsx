@@ -1,5 +1,5 @@
 // Aujourd'hui — le tableau de bord de la semaine (MacTodayView.swift,
-// StudyTrack/Views/Home/TodayView.swift + TodayWeekCard.swift).
+// Polymestre/Views/Home/TodayView.swift + TodayWeekCard.swift).
 //
 // On y lit le `ModelStore` via `useData()` et on laisse le domaine calculer :
 // `StudyTime` pour les heures, `ProgressEngine` pour la théorie / les séries /

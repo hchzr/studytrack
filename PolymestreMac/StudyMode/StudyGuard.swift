@@ -1,7 +1,7 @@
 import AppKit
 import OSLog
 
-/// Le gardien du verrou : StudyTrack ne se ferme pas pendant le mode étude.
+/// Le gardien du verrou : Polymestre ne se ferme pas pendant le mode étude.
 ///
 /// ⌘Q, « Quitter » du Dock, la fermeture de session sont refusés par l'app
 /// elle-même ; « Forcer à quitter » (⌥⌘⎋) aussi, tant qu'elle est au premier
@@ -9,11 +9,11 @@ import OSLog
 /// l'app est tuée, elle ne peut rien refuser. Le gardien est là pour ça.
 ///
 /// **Comment.** Un agent `launchd` de l'utilisateur
-/// (`~/Library/LaunchAgents/com.hczr.studytrack.guard.plist`, visible dans
-/// Réglages › Ouverture), qui lance le binaire même de StudyTrack avec
+/// (`~/Library/LaunchAgents/ch.polymestre.guard.plist`, visible dans
+/// Réglages › Ouverture), qui lance le binaire même de Polymestre avec
 /// `--study-guard` : pas de fenêtre, pas d'icône, aucun service de l'app.
 /// Toutes les secondes et demie, il lit le chrono partagé (`FocusTimerStore`,
-/// les mêmes préférences) ; sous verrou et sans StudyTrack ouvert, il le
+/// les mêmes préférences) ; sous verrou et sans Polymestre ouvert, il le
 /// relance — l'écran du mode étude revient aussitôt. Tué à son tour, `launchd`
 /// le relance (`KeepAlive`) ; au démarrage du Mac, il part avec la session
 /// (`RunAtLoad`). Sans verrou, il s'arrête de lui-même au bout de quinze
@@ -22,13 +22,28 @@ import OSLog
 /// Pour l'arrêter de force, il faudrait le Terminal ou le Moniteur d'activité :
 /// deux apps que le mode étude ferme.
 enum StudyGuard {
-    static let label = "com.hczr.studytrack.guard"
+    static let label = "ch.polymestre.guard"
     static let flag = "--study-guard"
-    fileprivate static let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "guard")
+    fileprivate static let log = Logger(subsystem: "ch.polymestre.mac", category: "guard")
 
     static var isGuardProcess: Bool { CommandLine.arguments.contains(flag) }
 
     // MARK: Côté app
+
+    /// L'agent posé par StudyTrack, avant le changement de nom : il relancerait le
+    /// gardien de l'ancienne app. Arrêté et retiré une fois (StudyTrack le reposerait
+    /// à son prochain verrou s'il servait encore).
+    static func retireLegacyAgent() {
+        let legacy = "com.hczr.studytrack.guard"
+        let file = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/LaunchAgents/\(legacy).plist")
+        guard FileManager.default.fileExists(atPath: file.path) else { return }
+        let domain = "gui/\(getuid())"
+        Task.detached(priority: .utility) {
+            launchctl(["bootout", "\(domain)/\(legacy)"])
+            try? FileManager.default.removeItem(at: file)
+            log.notice("agent de StudyTrack retiré")
+        }
+    }
 
     /// Installe l'agent (ou le réécrit si l'app a bougé) et le démarre. Appelé
     /// à chaque verrou.
@@ -47,7 +62,7 @@ enum StudyGuard {
             "KeepAlive": ["SuccessfulExit": false],
             "ProcessType": "Background",
             "ThrottleInterval": 2,
-            "AssociatedBundleIdentifiers": [Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"],
+            "AssociatedBundleIdentifiers": [Bundle.main.bundleIdentifier ?? "ch.polymestre.mac"],
         ]
         guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0) else { return }
         let changed = (try? Data(contentsOf: file)) != data
@@ -106,7 +121,7 @@ private final class Watcher {
         // Les préférences ont pu changer dans l'autre processus.
         UserDefaults.standard.synchronize()
         let state = FocusTimerStore.load()
-        let id = Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"
+        let id = Bundle.main.bundleIdentifier ?? "ch.polymestre.mac"
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
             .filter { $0.processIdentifier != getpid() && !$0.isTerminated }
         guard StudyMode.locks(state) else {
@@ -146,11 +161,11 @@ private final class Watcher {
 
 /// Le point d'entrée : l'app, ou son gardien.
 @main
-enum StudyTrackMacEntry {
+enum PolymestreMacEntry {
     static func main() {
         if StudyGuard.isGuardProcess {
             MainActor.assumeIsolated { StudyGuard.run() }
         }
-        StudyTrackMacApp.main()
+        PolymestreMacApp.main()
     }
 }

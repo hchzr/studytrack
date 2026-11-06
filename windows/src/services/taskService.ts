@@ -1,5 +1,5 @@
 // Les tâches liées : un fournisseur externe, et leur synchronisation vers le modèle local
-// (StudyTrack/Services/TaskService.swift).
+// (Polymestre/Services/TaskService.swift).
 //
 // Rappels (EventKit) et Things 3 (schéma d'URL) n'existent pas sur Windows : restent
 // Todoist, Notion, Google Tasks, TickTick (lecture + écriture) et le webhook (écriture).

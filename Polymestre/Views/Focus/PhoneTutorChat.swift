@@ -139,7 +139,7 @@ struct PhoneTutorChat: View {
                 let answer = try await FreeTutor.ask(messages: sent)
                 history.append((role: "assistant", content: answer.text))
                 answering = false
-                // Le bloc ```studytrack (l'indice noté) est pour l'app, pas pour la conversation.
+                // Le bloc ```polymestre (l'indice noté) est pour l'app, pas pour la conversation.
                 lines.append(Line(student: false, text: SeriesReview.withoutBlocks(answer.text)))
                 Haptics.tap()
             } catch {

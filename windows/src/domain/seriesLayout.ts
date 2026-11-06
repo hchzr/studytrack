@@ -1,4 +1,4 @@
-// Repère séries et exercices d'après la mise en page d'un PDF (StudyTrack/Domain/SeriesLayout.swift).
+// Repère séries et exercices d'après la mise en page d'un PDF (Polymestre/Domain/SeriesLayout.swift).
 //
 // `NSRegularExpression` devient `RegExp` (voir icuRegExp.ts) ; les positions sont des indices
 // UTF-16 comme les `NSRange` ; les décomptes de `Character` (`.count`, `.prefix`) se font en

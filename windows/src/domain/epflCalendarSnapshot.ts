@@ -1,4 +1,4 @@
-// L'instantané du calendrier académique de l'EPFL (StudyTrack/Domain/EPFLCalendarSnapshot.swift).
+// L'instantané du calendrier académique de l'EPFL (Polymestre/Domain/EPFLCalendarSnapshot.swift).
 //
 // `Calendar.current` devient l'heure locale de la machine (les tests tournent à Europe/Zurich).
 

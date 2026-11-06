@@ -1,5 +1,5 @@
 // Les sources d'un cours et le brouillon relu avant écriture
-// (StudyTrack/Domain/CourseContentImport.swift).
+// (Polymestre/Domain/CourseContentImport.swift).
 //
 // L'EPFL ne donne **aucun** accès API aux étudiant·e·s. Le contenu arrive par la
 // page elle-même : Moodle et Courseware s'ouvrent dans un navigateur intégré, puis

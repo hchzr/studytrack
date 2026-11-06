@@ -1,5 +1,5 @@
 // La session Supabase dans `localStorage` — le pendant de
-// `StudyTrack/Services/SupabaseSessionStore.swift`, qui la met au trousseau
+// `Polymestre/Services/SupabaseSessionStore.swift`, qui la met au trousseau
 // parce qu'un jeton d'accès est un secret et que `UserDefaults` est un fichier
 // lisible dans une sauvegarde.
 //
@@ -15,7 +15,7 @@ import { StoredSession } from "../domain/supabaseSession.ts";
 import type { Session, SessionStore } from "./supabase.ts";
 
 /** La clé de `localStorage` ; les tests comme l'app la relisent telle quelle. */
-export const SESSION_KEY = "studytrack.supabase.session";
+export const SESSION_KEY = "polymestre.supabase.session";
 
 /**
  * Dans l'app Tauri, le coffre du système (secrets.ts : la session porte le jeton

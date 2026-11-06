@@ -94,7 +94,7 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
             let verifier = Self.randomString(64)
             let redirect = redirectURI(provider)
             let url = authorizeURL(provider, state: state, redirect: redirect, challenge: Self.challenge(verifier))
-            let callback = try await authenticate(url: url, scheme: URL(string: redirect)?.scheme ?? "studytrack")
+            let callback = try await authenticate(url: url, scheme: URL(string: redirect)?.scheme ?? "polymestre")
             let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
             guard items.first(where: { $0.name == "state" })?.value == state else { throw OAuthError.stateMismatch }
             guard let code = items.first(where: { $0.name == "code" })?.value else {
@@ -103,13 +103,15 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
             return try await exchangePKCE(provider, code: code, verifier: verifier, redirect: redirect)
         }
         // Avec secret : le fournisseur renvoie vers la fonction Supabase, qui
-        // échange le code et rouvre l'app sur `studytrack://oauth?…`.
+        // échange le code et rouvre l'app sur `polymestre://oauth?…`.
         let redirect = "\(SupabaseConfig.urlString)/functions/v1/oauth"
-        let url = authorizeURL(provider, state: "\(provider.rawValue).\(state)", redirect: redirect, challenge: nil)
-        let callback = try await authenticate(url: url, scheme: "studytrack")
+        // `.polymestre` : la fonction rouvre cette app-ci (`polymestre://`), pas l'ancienne.
+        let sent = "\(provider.rawValue).\(state).polymestre"
+        let url = authorizeURL(provider, state: sent, redirect: redirect, challenge: nil)
+        let callback = try await authenticate(url: url, scheme: "polymestre")
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if let error = items.first(where: { $0.name == "error" })?.value { throw OAuthError.badResponse(error) }
-        guard items.first(where: { $0.name == "state" })?.value == "\(provider.rawValue).\(state)" else {
+        guard items.first(where: { $0.name == "state" })?.value == sent else {
             throw OAuthError.stateMismatch
         }
         guard let token = items.first(where: { $0.name == "access_token" })?.value, !token.isEmpty else {
@@ -127,7 +129,7 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
             let reversed = OAuthConfig.googleClientID.split(separator: ".").reversed().joined(separator: ".")
             return "\(reversed):/oauth2redirect"
         default:
-            return "studytrack://oauth"
+            return "polymestre://oauth"
         }
     }
 

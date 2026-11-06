@@ -12,8 +12,8 @@
 # `Add-AppxPackage -Register layout\AppxManifest.xml`).
 
 param(
-  [string]$IdentityName = $(if ($env:MSSTORE_IDENTITY_NAME) { $env:MSSTORE_IDENTITY_NAME } else { "StudyTrack.Preview" }),
-  [string]$Publisher = $(if ($env:MSSTORE_PUBLISHER) { $env:MSSTORE_PUBLISHER } else { "CN=StudyTrackPreview" }),
+  [string]$IdentityName = $(if ($env:MSSTORE_IDENTITY_NAME) { $env:MSSTORE_IDENTITY_NAME } else { "Polymestre.Preview" }),
+  [string]$Publisher = $(if ($env:MSSTORE_PUBLISHER) { $env:MSSTORE_PUBLISHER } else { "CN=PolymestrePreview" }),
   [string]$PublisherDisplayName = $(if ($env:MSSTORE_PUBLISHER_DISPLAY_NAME) { $env:MSSTORE_PUBLISHER_DISPLAY_NAME } else { "Hugo Chazarain" })
 )
 
@@ -29,8 +29,8 @@ $config = Get-Content (Join-Path $tauri "tauri.conf.json") -Raw | ConvertFrom-Js
 if ($config.version -notmatch '^\d+\.\d+\.\d+$') { throw "Version Tauri inattendue : $($config.version)" }
 $version = "$($config.version).0"
 
-# L'exécutable : le binaire Cargo (`studytrack.exe`) ; le nom du produit en secours.
-$exe = @("Polymestre.exe", "polymestre.exe", "studytrack.exe", "StudyTrack.exe") | ForEach-Object { Join-Path $release $_ } |
+# L'exécutable : le binaire Cargo (`polymestre.exe`) ; le nom du produit en secours.
+$exe = @("Polymestre.exe", "polymestre.exe", "polymestre.exe", "Polymestre.exe") | ForEach-Object { Join-Path $release $_ } |
   Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $exe) { throw "Pas d'exécutable dans $release : lancer d'abord « npm run tauri build »." }
 
@@ -74,7 +74,7 @@ function Esc([string]$value) { [System.Security.SecurityElement]::Escape($value)
   </Resources>
   <Applications>
     <!-- Une app Win32 « entière » (Tauri) : FullTrustApplication + runFullTrust. -->
-    <Application Id="StudyTrack" Executable="Polymestre.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Polymestre" Executable="Polymestre.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Polymestre"
         Description="Ton semestre, tes séries et ton temps d'étude."

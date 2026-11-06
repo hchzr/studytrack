@@ -6,14 +6,14 @@ import UIKit
 
 // MARK: - Timeline
 
-struct StudyTrackEntry: TimelineEntry {
+struct PolymestreEntry: TimelineEntry {
     var date: Date
     var snapshot: WidgetSnapshot?
 
-    static var placeholder: StudyTrackEntry {
+    static var placeholder: PolymestreEntry {
         let now = Date()
         let monday = Calendar(identifier: .iso8601).dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        return StudyTrackEntry(date: now, snapshot: WidgetSnapshot(
+        return PolymestreEntry(date: now, snapshot: WidgetSnapshot(
             updatedAt: now,
             courses: [
                 WidgetCourse(id: "1", code: "CS-250", colorHex: "#4F46E5", done: 3, total: 5, summary: "reste 1 théorie · 1 exo",
@@ -34,23 +34,23 @@ struct StudyTrackEntry: TimelineEntry {
     }
 }
 
-struct StudyTrackProvider: TimelineProvider {
-    func placeholder(in context: Context) -> StudyTrackEntry { .placeholder }
+struct PolymestreProvider: TimelineProvider {
+    func placeholder(in context: Context) -> PolymestreEntry { .placeholder }
 
-    func getSnapshot(in context: Context, completion: @escaping (StudyTrackEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @escaping (PolymestreEntry) -> Void) {
         if context.isPreview {
             completion(.placeholder)
         } else {
-            completion(StudyTrackEntry(date: Date(), snapshot: WidgetBridge.read()))
+            completion(PolymestreEntry(date: Date(), snapshot: WidgetBridge.read()))
         }
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<StudyTrackEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<PolymestreEntry>) -> Void) {
         let snapshot = WidgetBridge.read()
         // Une entrée à chaque instant où le widget change de lui-même (fin d'un
         // cours, échéance, fin de pause, minuit) ; l'app recharge le reste.
         let plan = (snapshot ?? WidgetSnapshot(updatedAt: .distantPast)).timelineDates(from: Date())
-        let entries = plan.dates.map { StudyTrackEntry(date: $0, snapshot: snapshot) }
+        let entries = plan.dates.map { PolymestreEntry(date: $0, snapshot: snapshot) }
         completion(Timeline(entries: entries, policy: .after(plan.reloadAfter)))
     }
 }
@@ -736,7 +736,7 @@ struct ImportActivityLockView: View {
 }
 
 @main
-struct StudyTrackWidgetsBundle: WidgetBundle {
+struct PolymestreWidgetsBundle: WidgetBundle {
     var body: some Widget {
         WeekCoursesWidget()
         TodayScheduleWidget()

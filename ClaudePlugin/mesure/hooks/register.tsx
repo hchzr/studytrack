@@ -1,12 +1,12 @@
 // Avec mesure, côté Claude Code : compter, prévenir, et appliquer les règles
-// réglées dans StudyTrack (Réglages › Claude Code).
+// réglées dans Polymestre (Réglages › Claude Code).
 //
-// Les fichiers, dans `~/Library/Application Support/StudyTrack/Claude/` :
-//   policy.json                  StudyTrack → ici : les règles et le contexte (mode
+// Les fichiers, dans `~/Library/Application Support/Polymestre/Claude/` :
+//   policy.json                  Polymestre → ici : les règles et le contexte (mode
 //                                étude, cours du jour, temps étudié) ;
-//   sessions/<jour>/<séance>.json ici → StudyTrack : les marques de chaque séance ;
-//   passes/<jour>/<instant>.json  ici → StudyTrack : « encore 15 min », avec sa raison ;
-//   mod.json                     ici → StudyTrack : le mod est branché (version, vu à).
+//   sessions/<jour>/<séance>.json ici → Polymestre : les marques de chaque séance ;
+//   passes/<jour>/<instant>.json  ici → Polymestre : « encore 15 min », avec sa raison ;
+//   mod.json                     ici → Polymestre : le mod est branché (version, vu à).
 // Chaque séance n'écrit que son fichier : plusieurs terminaux ne se marchent pas dessus.
 //
 // Coût au repos : nul. Rien ne tourne entre deux demandes, sauf une minuterie
@@ -79,7 +79,7 @@ async function readDays<T>($: EngineInterface, folder: (day: string) => string, 
 async function ensureRoot($: EngineInterface) {
   if (root) return
   home = (await $.env.get('HOME')) ?? ''
-  root = `${home}/Library/Application Support/StudyTrack/Claude`
+  root = `${home}/Library/Application Support/Polymestre/Claude`
 }
 
 /** La séance de ce processus : relue après un rechargement, refaite après un /clear. */

@@ -1,4 +1,4 @@
-// Le temps passé dans Anki, relevé sans rien demander (StudyTrack/Domain/AnkiReviewImport.swift).
+// Le temps passé dans Anki, relevé sans rien demander (Polymestre/Domain/AnkiReviewImport.swift).
 //
 // `Int64` devient un `number` : les identifiants de révision sont des millisecondes depuis
 // 1970 (environ 1,7e12), très en deçà de 2^53.

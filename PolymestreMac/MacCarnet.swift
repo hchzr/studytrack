@@ -5,7 +5,7 @@ import AppKit
 ///
 /// L'app Mac parlait sa propre langue — dégradés, ombres, cartes grises du
 /// système, couleurs de cours criardes — et ne ressemblait pas à l'iPhone. Ici,
-/// les mêmes valeurs que `StudyTrack/App/Carnet.swift` (qui ne compile pas sur
+/// les mêmes valeurs que `Polymestre/App/Carnet.swift` (qui ne compile pas sur
 /// macOS : il s'appuie sur UIKit) : fond crème, feuilles, encre, traits fins,
 /// titres en serif, couleurs de cours adoucies. Plat par construction : la
 /// profondeur vient du papier et des traits, jamais d'une ombre.

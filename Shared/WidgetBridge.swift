@@ -1,7 +1,7 @@
 import Foundation
 
-/// Instantané de l'état StudyTrack, partagé entre l'app et l'extension widget
-/// via le conteneur de groupe d'app (`StudyTrackAppGroup`, voir `WidgetBridge`).
+/// Instantané de l'état Polymestre, partagé entre l'app et l'extension widget
+/// via le conteneur de groupe d'app (`PolymestreAppGroup`, voir `WidgetBridge`).
 ///
 /// Ce fichier est compilé dans **les deux cibles** : il ne dépend donc que de
 /// Foundation, et sert de contrat unique entre l'app et le widget.
@@ -110,19 +110,19 @@ struct WidgetTimer: Codable, Equatable {
 enum WidgetBridge {
     /// Identifiant du groupe d'app.
     ///
-    /// Défini **une seule fois** dans le projet (`STUDYTRACK_APP_GROUP`), puis
+    /// Défini **une seule fois** dans le projet (`POLYMESTRE_APP_GROUP`), puis
     /// injecté dans l'Info.plist des deux cibles et dans leurs entitlements.
     /// Le lire ici évite qu'une valeur codée en dur ne diverge de la configuration.
     static let appGroupID: String = {
         #if os(macOS)
         // Groupe préfixé par l'équipe : pas de profil à part sur macOS.
-        return "5GGDH5F3NG.com.hczr.studytrack"
+        return "5GGDH5F3NG.ch.polymestre"
         #else
-        if let value = Bundle.main.object(forInfoDictionaryKey: "StudyTrackAppGroup") as? String,
+        if let value = Bundle.main.object(forInfoDictionaryKey: "PolymestreAppGroup") as? String,
            !value.isEmpty {
             return value
         }
-        return "group.com.studytracker.app"
+        return "group.ch.polymestre.app"
         #endif
     }()
 
@@ -192,13 +192,13 @@ enum WidgetFormat {
 
 /// Liens profonds ouverts par les widgets. Le schéma est celui de l'app.
 enum WidgetLink {
-    static let focus = URL(string: "studytrack://focus")!
-    static let today = URL(string: "studytrack://today")!
-    static let courses = URL(string: "studytrack://courses")!
-    static let agenda = URL(string: "studytrack://agenda")!
+    static let focus = URL(string: "polymestre://focus")!
+    static let today = URL(string: "polymestre://today")!
+    static let courses = URL(string: "polymestre://courses")!
+    static let agenda = URL(string: "polymestre://agenda")!
 
-    /// Ouvre un cours : `studytrack://course?id=…`.
+    /// Ouvre un cours : `polymestre://course?id=…`.
     static func course(_ id: String) -> URL {
-        URL(string: "studytrack://course?id=\(id)") ?? courses
+        URL(string: "polymestre://course?id=\(id)") ?? courses
     }
 }

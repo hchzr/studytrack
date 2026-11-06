@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Les boutons de Claude et ses modèles, sans ouvrir `studytrack.json` : la
+/// Les boutons de Claude et ses modèles, sans ouvrir `polymestre.json` : la
 /// liste à gauche (dans la série, puis le système), le bouton choisi à droite.
 /// Seuls `commands` et `models` sont réécrits ; le reste du fichier est gardé
 /// (`ClaudeProject.updating`).
@@ -141,7 +141,7 @@ struct ClaudeButtonsEditor: View {
         let data = try? Data(contentsOf: url)
         if let data, !data.isEmpty {
             guard let file = ClaudeProject.File.decode(data) else {
-                error = "studytrack.json est illisible : corrige-le avant d'éditer ici."
+                error = "polymestre.json est illisible : corrige-le avant d'éditer ici."
                 return
             }
             commands = file.commands
@@ -159,7 +159,7 @@ struct ClaudeButtonsEditor: View {
             return copy
         }
         guard let data = ClaudeProject.updating(try? Data(contentsOf: url), commands: cleaned, models: models) else {
-            error = "studytrack.json n'a pas pu être réécrit."
+            error = "polymestre.json n'a pas pu être réécrit."
             return
         }
         do {

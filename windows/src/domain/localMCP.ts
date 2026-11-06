@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/LocalMCP.swift : un serveur MCP **local**, HTTP sur
+// Port de Polymestre/Domain/LocalMCP.swift : un serveur MCP **local**, HTTP sur
 // 127.0.0.1, JSON-RPC, réponses JSON. La couche socket (Network.framework côté
 // Mac) n'est pas portable telle quelle : elle est injectée (`LocalMCPHost`), le
 // protocole et le contrôle d'accès restent ici, purs et testés.

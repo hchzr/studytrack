@@ -7,7 +7,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
-  /** Ce qui s'est cassé, pour le message (« Ce panneau », « StudyTrack »). */
+  /** Ce qui s'est cassé, pour le message (« Ce panneau », « Polymestre »). */
   label?: string;
   /** Quand cette valeur change, on réessaie tout seul (un autre panneau, un autre écran). */
   resetKey?: unknown;
@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("[StudyTrack] affichage en échec", error, info.componentStack);
+    console.error("[Polymestre] affichage en échec", error, info.componentStack);
   }
 
   componentDidUpdate(prev: Props): void {

@@ -1,5 +1,5 @@
 // La nature d'un moteur d'analyse de PDF et l'ordre dans lequel on l'essaie
-// (StudyTrack/Domain/SeriesEngineOrder.swift).
+// (Polymestre/Domain/SeriesEngineOrder.swift).
 //
 // Séparé du service pour que l'ordre de préférence soit une fonction pure, donc
 // testable sans modèle, sans réseau et sans base. Cet ordre a déjà été inversé une

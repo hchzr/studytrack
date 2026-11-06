@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Réglages › Comptes › Synchronisation : envoyer ses données à son compte StudyTrack
+/// Réglages › Comptes › Synchronisation : envoyer ses données à son compte Polymestre
 /// pour les retrouver sur le Mac et sur Windows. Éteinte par défaut.
 struct SupabaseSyncSection: View {
     @Environment(AppContainer.self) private var app

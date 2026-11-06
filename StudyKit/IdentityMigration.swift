@@ -42,6 +42,8 @@ enum IdentityMigration {
         var conflicts = 0
         /// La dernière raison d'attendre, s'il y en a une.
         var waiting: String?
+        /// La première tentative sur cet appareil.
+        var firstAttempt: Date?
     }
 
     static var dataState: DataState {
@@ -66,12 +68,12 @@ enum IdentityMigration {
     ///
     /// `cloud` faux (copie sans droit iCloud : compilation de contrôle) : réglages et fichiers
     /// seulement, la base n'est pas touchée.
-    static func runBeforeStore(newStoreURL: URL, cloud: Bool) {
+    static func runBeforeStore(newStoreURL: URL?, cloud: Bool) {
         guard !AppIdentity.isLegacyBuild else { return }
         importSettings()
         importKeychain()
         importFiles()
-        guard cloud else { return }
+        guard cloud, let newStoreURL else { return }
         migrateData(into: newStoreURL)
     }
 
@@ -109,7 +111,7 @@ enum IdentityMigration {
 
         // Les réglages du groupe (chrono partagé avec les widgets et Siri).
         if let oldGroup = UserDefaults(suiteName: AppIdentity.Legacy.appGroup),
-           let groupID = Bundle.main.object(forInfoDictionaryKey: "StudyTrackAppGroup") as? String,
+           let groupID = Bundle.main.object(forInfoDictionaryKey: "PolymestreAppGroup") as? String,
            groupID != AppIdentity.Legacy.appGroup,
            let newGroup = UserDefaults(suiteName: groupID),
            let values = oldGroup.persistentDomain(forName: AppIdentity.Legacy.appGroup) {
@@ -222,7 +224,7 @@ enum IdentityMigration {
     }
 
     static var newGroupURL: URL? {
-        (Bundle.main.object(forInfoDictionaryKey: "StudyTrackAppGroup") as? String)
+        (Bundle.main.object(forInfoDictionaryKey: "PolymestreAppGroup") as? String)
             .flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     }
 
@@ -285,6 +287,15 @@ enum IdentityMigration {
 
     // MARK: La base
 
+    /// La synchronisation Supabase attend-elle la reprise ? Elle créerait dans une base
+    /// encore vide les objets qu'iCloud apporte aussi — deux objets de même identifiant.
+    /// Bornée : au-delà de `IdentityMigrationPlan.settleAfter`, elle reprend quoi qu'il arrive.
+    static var holdsBackSync: Bool {
+        let state = dataState
+        guard state.phase == .pending, let first = state.firstAttempt else { return false }
+        return Date().timeIntervalSince(first) < IdentityMigrationPlan.settleAfter
+    }
+
     static func migrateData(into newStoreURL: URL) {
         var state = dataState
         guard let legacyURL = legacyStoreURL else {
@@ -292,6 +303,7 @@ enum IdentityMigration {
             return
         }
         let legacyStamp = stamp(of: legacyURL)
+        state.firstAttempt = state.firstAttempt ?? Date()
         if state.phase == .done {
             // Rien de neuf dans l'ancienne base, ou la période de surveillance est finie.
             if legacyStamp == state.legacyStamp { return }

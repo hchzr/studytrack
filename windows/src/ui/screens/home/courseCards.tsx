@@ -1,4 +1,4 @@
-// Les cartes de « Mes cours » (StudyTrack/Views/Courses/CoursesView.swift) :
+// Les cartes de « Mes cours » (Polymestre/Views/Courses/CoursesView.swift) :
 // progression d'un cours, son état (à jour / en retard), et le geste de suivi.
 // La carte d'ajout reprend le formulaire minimal du cours.
 

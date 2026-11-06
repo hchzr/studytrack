@@ -1,16 +1,16 @@
-// Port de StudyTrack/Domain/ClaudeDesktopExtension.swift : l'extension
-// « StudyTrack » de l'app Claude (Desktop) — un `.mcpb` à ouvrir d'un
+// Port de Polymestre/Domain/ClaudeDesktopExtension.swift : l'extension
+// « Polymestre » de l'app Claude (Desktop) — un `.mcpb` à ouvrir d'un
 // double-clic. L'app Claude ne lance que des serveurs locaux en stdio : le pont
-// relaie chaque requête au serveur local de StudyTrack et lit son adresse dans
+// relaie chaque requête au serveur local de Polymestre et lit son adresse dans
 // `local-mcp.json`, qui peut changer d'un lancement à l'autre.
 
 export const ClaudeDesktopExtension = {
-  name: "studytrack-files",
+  name: "polymestre-files",
   version: "1.0.0",
 
   /** Où l'app écrit l'adresse de son serveur local (lu par le pont). */
   infoFile(home = "/"): string {
-    return home.replace(/\/+$/, "") + "/Library/Application Support/StudyTrack/local-mcp.json";
+    return home.replace(/\/+$/, "") + "/Library/Application Support/Polymestre/local-mcp.json";
   },
 
   manifest(): string {
@@ -50,19 +50,19 @@ export const ClaudeDesktopExtension = {
 };
 
 const script = `#!/usr/bin/env node
-// StudyTrack — pont entre l'app Claude (stdio) et le serveur MCP local de StudyTrack (HTTP, 127.0.0.1).
+// Polymestre — pont entre l'app Claude (stdio) et le serveur MCP local de Polymestre (HTTP, 127.0.0.1).
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const INFO = process.env.STUDYTRACK_MCP_INFO ||
-  path.join(os.homedir(), 'Library', 'Application Support', 'StudyTrack', 'local-mcp.json');
+const INFO = process.env.POLYMESTRE_MCP_INFO ||
+  path.join(os.homedir(), 'Library', 'Application Support', 'Polymestre', 'local-mcp.json');
 const APP_ID = '__APP_ID__';
 // Réglables pour les essais : ne pas ouvrir l'app, et combien de temps l'attendre.
-const NO_LAUNCH = process.env.STUDYTRACK_MCP_NO_LAUNCH === '1';
-const WAIT_MS = Number(process.env.STUDYTRACK_MCP_WAIT_MS || 20000);
+const NO_LAUNCH = process.env.POLYMESTRE_MCP_NO_LAUNCH === '1';
+const WAIT_MS = Number(process.env.POLYMESTRE_MCP_WAIT_MS || 20000);
 const HINT = "Polymestre ne répond pas. Ouvre l'app Polymestre sur ce Mac et active Réglages › Mode étude › « Serveur local des fichiers », puis réessaie.";
 
 function readURL() {

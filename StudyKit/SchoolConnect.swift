@@ -54,7 +54,7 @@ final class SchoolConnect {
         set { UserDefaults.standard.set(newValue, forKey: "mac.epflEmail") }
     }
 
-    @ObservationIgnored private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "epfl")
+    @ObservationIgnored private let log = Logger(subsystem: "ch.polymestre.mac", category: "epfl")
 
     func state(_ site: Site) -> State { states[site] ?? (waiting.contains(site.rawValue) ? .needsYou : .unknown) }
 

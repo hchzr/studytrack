@@ -47,20 +47,20 @@ describe("adresses", () => {
 describe("retour", () => {
   it("lit le code de la boucle locale (dans la requête)", () => {
     expect(parseCallback("http://127.0.0.1:54321/auth-callback?code=abc123")).toEqual({ code: "abc123" });
-    expect(parseCallback("studytrack://auth-callback?code=abc123")).toEqual({ code: "abc123" });
+    expect(parseCallback("polymestre://auth-callback?code=abc123")).toEqual({ code: "abc123" });
   });
   it("le redirect_to de la boucle locale porte le port", () => {
     expect(loopbackRedirect(8080)).toBe("http://127.0.0.1:8080/auth-callback");
   });
   it("lit une erreur en requête ou en fragment", () => {
     expect(parseCallback("http://127.0.0.1:9/auth-callback?error=access_denied&error_description=Nope")).toEqual({ error: "Nope" });
-    expect(parseCallback("studytrack://auth-callback#error_code=400&error_description=bad")).toEqual({ error: "bad" });
+    expect(parseCallback("polymestre://auth-callback#error_code=400&error_description=bad")).toEqual({ error: "bad" });
   });
   it("ignore ce qui n'est pas notre retour", () => {
     expect(parseCallback("https://x.supabase.co/?code=1")).toBeNull();
     expect(parseCallback("http://127.0.0.1:1/favicon.ico")).toBeNull();
     expect(parseCallback("http://evil.example/auth-callback?code=1")).toBeNull();
-    expect(parseCallback("studytrack://auth-callback")).toBeNull();
+    expect(parseCallback("polymestre://auth-callback")).toBeNull();
     expect(parseCallback("n'importe quoi")).toBeNull();
   });
   it("la requête d'échange", () => expect(exchangeBody("c", "v")).toEqual({ auth_code: "c", code_verifier: "v" }));

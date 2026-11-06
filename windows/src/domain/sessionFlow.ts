@@ -72,7 +72,7 @@ export function moveStep(flow: SessionFlow, step: SessionStep, offset: number): 
   flow.steps.splice(target, 0, step);
 }
 
-// MARK: - Raccourcis du chrono (StudyTrack/Domain/FocusShortcut.swift)
+// MARK: - Raccourcis du chrono (Polymestre/Domain/FocusShortcut.swift)
 
 /** Un raccourci du chrono : « CS-250 · Exercices », lancé d'un tap.
  *

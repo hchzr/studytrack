@@ -5,7 +5,8 @@
 // fonction était un accès gratuit au modèle pour qui le voulait. Ici, comptés
 // en base (`hit_rate_limit`) :
 //
-// - un plafond par **installation** et par heure (`x-studytrack-install`, un
+// - un plafond par **installation** et par heure (`x-polymestre-install`, ou
+//   `x-studytrack-install` pour les apps d'avant le changement de nom ; un
 //   UUID tiré au hasard par l'app). Compter par adresse IP seulement faisait
 //   partager un plafond à toute une classe sur le Wi-Fi du campus ;
 // - un plafond par adresse IP, dix fois plus haut quand l'installation est
@@ -22,7 +23,7 @@ const INSTALL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function allowed(request: Request, limit: Limit): Promise<{ ok: boolean; reason?: string }> {
   const ip = (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "inconnue";
-  const install = (request.headers.get("x-studytrack-install") ?? "").trim().toLowerCase();
+  const install = (request.headers.get("x-polymestre-install") ?? request.headers.get("x-studytrack-install") ?? "").trim().toLowerCase();
   const known = INSTALL.test(install);
   const checks: Array<[string, number, number]> = [
     ...(known ? [[`${limit.name}:install:${install}`, 3600, limit.perInstallPerHour] as [string, number, number]] : []),

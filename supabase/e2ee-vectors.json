@@ -26,7 +26,7 @@
   "pairing": {
     "secret": "101112131415161718191a1b1c1d1e1f",
     "code": "208H-44RM-2MB1-E60S-38DH-R78Y-3W",
-    "qr": "studytrack-pair:208H-44RM-2MB1-E60S-38DH-R78Y-3W",
+    "qr": "polymestre-pair:208H-44RM-2MB1-E60S-38DH-R78Y-3W",
     "channel": "pair-77e5e62297ccdaa82434cd1262d69ed5",
     "privateA": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
     "publicA": "64b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d48466",

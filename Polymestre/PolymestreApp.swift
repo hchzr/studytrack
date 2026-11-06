@@ -5,11 +5,11 @@ import SwiftData
 /// Arguments de capture pour le simulateur — jamais compilés en Release.
 ///
 /// `xcrun simctl` ne sait pas taper dans l'interface, et ouvrir un lien profond
-/// déclenche un « Ouvrir dans StudyTrack ? » qu'on ne peut pas confirmer. Ce sont
+/// déclenche un « Ouvrir dans Polymestre ? » qu'on ne peut pas confirmer. Ce sont
 /// donc les seuls moyens de rendre l'app **remplie**, un onglet donné, et l'étape
 /// « section » de l'accueil — pour les relire sur iPhone **et** sur iPad :
 ///
-///     xcrun simctl launch <udid> com.hczr.studytrack.app -seedSampleData -tab 1
+///     xcrun simctl launch <udid> ch.polymestre.app -seedSampleData -tab 1
 enum PreviewLaunch {
     static let seedFlag = "-seedSampleData"
     static let tabFlag = "-tab"
@@ -221,12 +221,19 @@ enum PreviewLaunch {
 #endif
 
 @main
-struct StudyTrackApp: App {
+struct PolymestreApp: App {
     /// Reçoit les raccourcis de l'écran d'accueil d'iOS.
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var container: AppContainer
 
     init() {
+        // Avant tout : ce que StudyTrack (l'ancienne identité) a laissé — réglages,
+        // trousseau, fichiers, base — copié une fois, l'ancien n'est pas touché.
+        #if NO_CLOUDKIT
+        IdentityMigration.runBeforeStore(newStoreURL: AppContainer.storeURL, cloud: false)
+        #else
+        IdentityMigration.runBeforeStore(newStoreURL: AppContainer.storeURL, cloud: true)
+        #endif
         let existingUser = UserDefaults.standard.bool(forKey: "settings.hasCompletedOnboarding")
         AppLanguage.settle(existingUser: existingUser)
         StudyMode.settleBlockingDefaults(["studyMode.blocking"], existingUser: existingUser)
@@ -245,8 +252,6 @@ struct StudyTrackApp: App {
             // Les boutons de la Live Activity s'exécutent dans ce processus : le
             // gestionnaire est posé ici, avant que la moindre commande n'arrive.
             FocusTimerCommandHandler.install(container: container)
-            // Copie des réglages privés pour Polymestre (nouvel identifiant d'app).
-            RenameBridge.install()
         }
 
         #if DEBUG

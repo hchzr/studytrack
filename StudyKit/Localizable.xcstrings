@@ -15850,12 +15850,12 @@
         }
       }
     },
-    "Le projet Claude en détail (dossier, studytrack.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise." : {
+    "Le projet Claude en détail (dossier, polymestre.json, boutons, serveur), les fichiers pour Claude, les paliers de reprise." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Claude project in detail (folder, studytrack.json, buttons, server), files for Claude, redo steps."
+            "value" : "The Claude project in detail (folder, polymestre.json, buttons, server), files for Claude, redo steps."
           }
         }
       }
@@ -16393,12 +16393,12 @@
         }
       }
     },
-    "Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
+    "Les paliers de la reprise se changent dans polymestre.json (« redo »)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Redo steps are changed in studytrack.json (“redo”)."
+            "value" : "Redo steps are changed in polymestre.json (“redo”)."
           }
         }
       }
@@ -21581,13 +21581,13 @@
         }
       }
     },
-    "Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans studytrack.json (« redo »)." : {
+    "Quand tu clos une série, Claude compare ta copie au corrigé : les corrections, les erreurs (type, bonne démarche) et les exercices à refaire sur papier te sont proposés, rien n'est noté sans ton accord. Les paliers de la reprise se changent dans polymestre.json (« redo »)." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When you close a series, Claude compares your notes with the solution: corrections, errors (type, right approach) and exercises to redo on paper are proposed; nothing is recorded without your consent. The revival stages are changed in studytrack.json (“redo”)."
+            "value" : "When you close a series, Claude compares your notes with the solution: corrections, errors (type, right approach) and exercises to redo on paper are proposed; nothing is recorded without your consent. The revival stages are changed in polymestre.json (“redo”)."
           }
         }
       }
@@ -25312,12 +25312,12 @@
         }
       }
     },
-    "studytrack.json" : {
+    "polymestre.json" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "studytrack.json"
+            "value" : "polymestre.json"
           }
         }
       }
@@ -26250,23 +26250,23 @@
         }
       }
     },
-    "Ta façon de travailler est dans studytrack.json (détails dans « Avancé »)." : {
+    "Ta façon de travailler est dans polymestre.json (détails dans « Avancé »)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your way of working is in studytrack.json (details in “Advanced”)."
+            "value" : "Your way of working is in polymestre.json (details in “Advanced”)."
           }
         }
       }
     },
-    "Ta façon de travailler est dans studytrack.json." : {
+    "Ta façon de travailler est dans polymestre.json." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your way of working is in studytrack.json."
+            "value" : "Your way of working is in polymestre.json."
           }
         }
       }
@@ -27753,12 +27753,12 @@
         }
       }
     },
-    "Toutes les commandes (les tiennes viennent de studytrack.json)" : {
+    "Toutes les commandes (les tiennes viennent de polymestre.json)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All commands (yours come from studytrack.json)"
+            "value" : "All commands (yours come from polymestre.json)"
           }
         }
       }

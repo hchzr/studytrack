@@ -1,5 +1,5 @@
 // Où en est un exercice, en **une** valeur, et le parcours d'une série
-// (StudyTrack/Domain/ExerciseFlow.swift).
+// (Polymestre/Domain/ExerciseFlow.swift).
 //
 // Le code vert / orange / rouge est celui de la **correction** — juste,
 // moyen, faux — et non une « sureté » donnée en cochant : c'est en corrigeant

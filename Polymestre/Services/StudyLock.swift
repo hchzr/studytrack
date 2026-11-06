@@ -22,7 +22,7 @@ import DeviceActivity
 /// du chrono (geste ici, état adopté du Mac, réveil par push iCloud) : il pose
 /// ou lève le bouclier. Et pour ne jamais laisser l'iPhone fermé si l'app ne se
 /// réveille pas à temps, une activité planifiée (`DeviceActivityCenter`) court
-/// jusqu'à l'échéance : l'extension `StudyTrackLock` lève le bouclier à la fin,
+/// jusqu'à l'échéance : l'extension `PolymestreLock` lève le bouclier à la fin,
 /// app fermée ou non.
 @MainActor
 @Observable
@@ -31,7 +31,7 @@ final class StudyLock {
 
     /// Le blocage par le Temps d'écran est dans cette build. Une build
     /// distribuée ne peut porter le droit qu'avec l'accord d'Apple (« Family
-    /// Controls (Distribution) ») : sans lui, `STUDYTRACK_SCREEN_TIME = NO` le
+    /// Controls (Distribution) ») : sans lui, `POLYMESTRE_SCREEN_TIME = NO` le
     /// retire, et l'iPhone ne propose pas de bloquer — le Mac, lui, bloque.
     static var isAvailable: Bool {
         #if canImport(FamilyControls) && SCREEN_TIME
@@ -47,7 +47,7 @@ final class StudyLock {
     private(set) var isShielding = false
     private(set) var lastError: String?
 
-    private let log = Logger(subsystem: "com.hczr.studytrack", category: "studylock")
+    private let log = Logger(subsystem: "ch.polymestre", category: "studylock")
     private static let selectionKey = "studyLock.selection"
     private static let sitesKey = "studyMode.sites"
 
@@ -132,7 +132,7 @@ final class StudyLock {
         store.shield.webDomainCategories = .all(except: selection.webDomainTokens)
         let domains = Set(sites.compactMap(StudyMode.normalizedDomain).map { WebDomain(domain: $0) })
         store.webContent.blockedByFilter = .all(except: domains)
-        // Pas de sortie par la bande : StudyTrack (ni aucune app) ne se
+        // Pas de sortie par la bande : Polymestre (ni aucune app) ne se
         // supprime pendant le verrou, et l'heure ne se règle pas à la main —
         // avancer l'horloge ne lève rien.
         store.application.denyAppRemoval = true
@@ -184,11 +184,11 @@ final class StudyLock {
 
 #if canImport(FamilyControls) && SCREEN_TIME
 extension ManagedSettingsStore.Name {
-    /// Le magasin du mode étude, partagé avec l'extension `StudyTrackLock`.
-    static let studyMode = Self("studytrack.studyMode")
+    /// Le magasin du mode étude, partagé avec l'extension `PolymestreLock`.
+    static let studyMode = Self("polymestre.studyMode")
 }
 
 extension DeviceActivityName {
-    static let studyMode = Self("studytrack.studyMode")
+    static let studyMode = Self("polymestre.studyMode")
 }
 #endif

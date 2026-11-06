@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/StudyMap.swift : ce qui rend une fiche
+// Port de Polymestre/Domain/StudyMap.swift : ce qui rend une fiche
 // **compréhensible** et pas seulement un dictionnaire — les liens entre les
 // notions, où l'on en est, une phrase en clair, des schémas, une question.
 // Séparé de `RevisionSheet` exprès : la fiche est écrite et peut être refaite ;

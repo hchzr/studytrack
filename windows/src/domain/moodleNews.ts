@@ -1,5 +1,5 @@
 // Ce qui est apparu sur Moodle depuis la dernière vérification
-// (StudyTrack/Domain/MoodleNews.swift).
+// (Polymestre/Domain/MoodleNews.swift).
 //
 // Pur, donc testé : la surveillance en arrière-plan lit le plan du cours, et
 // c'est ici qu'on décide ce qui est **nouveau**, ce qui mérite d'être dit, et

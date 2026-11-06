@@ -18,7 +18,7 @@ enum CookieKeeper {
     nonisolated private static var domains: [String] {
         Institution.current.rootDomains + ["eduid.ch", "switch.ch", "kaltura.com"] + [Institution.current.video?.passwordIdPHost].compactMap { $0 }
     }
-    nonisolated private static let service = "com.hczr.studytrack.cookies"
+    nonisolated private static let service = "ch.polymestre.cookies"
 
     nonisolated private static func relevant(_ cookie: HTTPCookie) -> Bool {
         let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
@@ -116,7 +116,7 @@ enum CookieKeeper {
     /// l'app de développement n'a pas, ou une autorisation à chaque version.
     nonisolated private static var file: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StudyTrack/session-cookies.json")
+            .appendingPathComponent("Polymestre/session-cookies.json")
     }
     #endif
 

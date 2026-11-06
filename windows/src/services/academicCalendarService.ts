@@ -1,5 +1,5 @@
 // Tient le calendrier académique à jour dans l'app
-// (StudyTrack/Services/AcademicCalendarService.swift).
+// (Polymestre/Services/AcademicCalendarService.swift).
 //
 // Deux sources, dans cet ordre :
 //   1. **L'instantané embarqué** — disponible hors ligne dès l'installation, et le jour

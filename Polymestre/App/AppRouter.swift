@@ -137,7 +137,7 @@ final class AppRouter {
         courseRoute = CourseRoute(id: id, section: section, targetID: targetID)
     }
 
-    /// Code d'invitation reçu par lien profond (`studytrack://join?code=EPFL-XXXX`).
+    /// Code d'invitation reçu par lien profond (`polymestre://join?code=EPFL-XXXX`).
     ///
     /// Consommé par l'onglet Groupes, qui ouvre alors la feuille « Rejoindre » déjà
     /// remplie. Sans ça, cliquer sur un lien d'invitation ouvrirait l'app… sans rien

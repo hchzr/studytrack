@@ -228,9 +228,9 @@ describe("Distribution : retour et mises à jour du Mac", () => {
     date: new Date(2_000_000_000 * 1000), level: "error",
     category: "Sync", message: "a & b = c ?", detail: "ligne 1\nligne 2",
   });
-  const mail = FeedbackMail.url("studytrack@example.ch", "2.1 (3)", "iPhone · iOS 27.0", [entry]);
+  const mail = FeedbackMail.url("polymestre@example.ch", "2.1 (3)", "iPhone · iOS 27.0", [entry]);
   const text = mail?.toString() ?? "";
-  check(text.startsWith("mailto:studytrack@example.ch?subject="), "retour : un lien mailto vers l'adresse configurée");
+  check(text.startsWith("mailto:polymestre@example.ch?subject="), "retour : un lien mailto vers l'adresse configurée");
   const body = text.split("&body=").pop() ?? "";
   check(!body.includes("&") && !body.includes("="), "retour : « & » et « = » du journal encodés (le corps n'est pas coupé)");
   check(decodeURIComponent(body).includes("a & b = c ?") && decodeURIComponent(body).includes("2.1 (3)"),
@@ -243,7 +243,7 @@ describe("Distribution : retour et mises à jour du Mac", () => {
   check(Array.from(decodeURIComponent(long?.toString().split("&body=").pop() ?? "")).length <= FeedbackMail.maxBody + 200,
     "retour : un long journal est tronqué");
 
-  const json = `{"version":"2.2","build":7,"url":"https://studytrack.hczr.ch/mac/StudyTrack.dmg","notes":"Mise à jour"}`;
+  const json = `{"version":"2.2","build":7,"url":"https://studytrack.hczr.ch/mac/Polymestre.dmg","notes":"Mise à jour"}`;
   const feed = MacUpdateFeed.decode(json);
   check(feed?.build === 7 && feed?.version === "2.2", "mise à jour : le flux se lit");
   check(feed?.isNewer("3") === true, "mise à jour : build 7 > 3 → proposée");
@@ -256,6 +256,6 @@ describe("Distribution : retour et mises à jour du Mac", () => {
   check(MacUpdateFeed.isDue(add(t, -90_000), t), "mise à jour : lue hier → à relire");
   check(MacUpdateFeed.isDue(add(t, 3600), t), "mise à jour : horloge reculée → à relire");
 
-  AppDistribution.configure({ feedbackEmail: "a@b.ch", siteHost: "studytrack.example", version: "2.1", build: "14" });
+  AppDistribution.configure({ feedbackEmail: "a@b.ch", siteHost: "polymestre.example", version: "2.1", build: "14" });
   check(AppDistribution.versionLabel() === "2.1 (14)", "version : « 2.1 (14) »");
 });

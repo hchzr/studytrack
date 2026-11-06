@@ -109,9 +109,9 @@ struct ClaudePane: View {
                 let a = numbers.first ?? "1", b = numbers.dropFirst().first ?? "2", c = numbers.dropFirst(2).first ?? "3"
                 chat.debugInject([
                     (true, "Je bloque sur le \(b), je ne vois pas comment montrer que la suite est croissante."),
-                    (false, "Regarde le signe de $x_{n+1} - x_n$ : que vaut-il, écrit sur un dénominateur commun ?\n\n```studytrack\nindice \(b) | 2 | Étudier le signe de x_{n+1} - x_n sur un dénominateur commun\n```"),
+                    (false, "Regarde le signe de $x_{n+1} - x_n$ : que vaut-il, écrit sur un dénominateur commun ?\n\n```polymestre\nindice \(b) | 2 | Étudier le signe de x_{n+1} - x_n sur un dénominateur commun\n```"),
                     (true, "Clore la série"),
-                    (false, "Bilan : le \(a) est juste ; au \(b) tu as conclu sans vérifier que $cn + d > 0$.\n\n```studytrack\n\(a) : juste\n\(b) : faux\nerreur \(b) | méthode | conclu sur le signe sans vérifier que cn + d > 0 | vérifier le signe du dénominateur avant de conclure | suites monotones\nerreur \(c) | étourderie | signe perdu en développant | recopier la ligne avant de développer\nreprise \(b) | méthode : le signe du dénominateur oublié | Écris x_{n+1} - x_n comme une seule fraction\n```")
+                    (false, "Bilan : le \(a) est juste ; au \(b) tu as conclu sans vérifier que $cn + d > 0$.\n\n```polymestre\n\(a) : juste\n\(b) : faux\nerreur \(b) | méthode | conclu sur le signe sans vérifier que cn + d > 0 | vérifier le signe du dénominateur avant de conclure | suites monotones\nerreur \(c) | étourderie | signe perdu en développant | recopier la ligne avant de développer\nreprise \(b) | méthode : le signe du dénominateur oublié | Écris x_{n+1} - x_n comme une seule fraction\n```")
                 ], exercises: ["Série 6 · Exercice \(b)", "Série 6 · Exercice \(b)"])
             }
             #endif
@@ -153,7 +153,7 @@ struct ClaudePane: View {
     /// relu quand il change (sa date).
     static func configKey(settings: MacSettings) -> String {
         let modified = (try? FileManager.default.attributesOfItem(atPath: ClaudeProjectSetup.fileURL(settings: settings).path))?[.modificationDate] as? Date
-        return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudeStudyTrackMCP)|\(MacLocalMCP.shared.url?.absoluteString ?? "")|\(modified?.timeIntervalSince1970 ?? 0)"
+        return "\(settings.claudeProject)|\(settings.claudeProjectFolder)|\(settings.claudePolymestreMCP)|\(MacLocalMCP.shared.url?.absoluteString ?? "")|\(modified?.timeIntervalSince1970 ?? 0)"
     }
 
     private var chat: ClaudeChat? {
@@ -610,7 +610,7 @@ struct ClaudePane: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .foregroundStyle(Carnet.inkSecondary)
-        .help("Toutes les commandes (les tiennes viennent de studytrack.json)")
+        .help("Toutes les commandes (les tiennes viennent de polymestre.json)")
     }
 
     /// Les valeurs d'une commande du fichier : le cours, la série, l'exercice.
@@ -940,7 +940,7 @@ struct ClaudePane: View {
 
     /// La capture interactive du système (un viseur, comme ⇧⌘4).
     private func capture() {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("studytrack-capture-\(UUID().uuidString).png")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("polymestre-capture-\(UUID().uuidString).png")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-i", "-x", file.path]

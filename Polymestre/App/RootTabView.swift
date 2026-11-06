@@ -334,9 +334,11 @@ struct RootTabView: View {
         Haptics.success()
     }
 
-    /// Liens profonds : `studytrack://focus?course=CS-250&type=exercise`.
+    /// Liens profonds : `polymestre://focus?course=CS-250&type=exercise`.
+    /// `studytrack://` aussi : les liens d'invitation et raccourcis faits avant le
+    /// changement de nom restent valables.
     private func handle(_ url: URL) {
-        guard url.scheme?.lowercased() == "studytrack" else { return }
+        guard ["polymestre", "studytrack"].contains(url.scheme?.lowercased() ?? "") else { return }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let items = components?.queryItems ?? []
         func value(_ name: String) -> String? {
@@ -357,7 +359,7 @@ struct RootTabView: View {
                                   taskType: type,
                                   label: label)
         case "course":
-            // `studytrack://course?id=…` — depuis le widget « Cours de la semaine ».
+            // `polymestre://course?id=…` — depuis le widget « Cours de la semaine ».
             if let id = value("id").flatMap(UUID.init(uuidString:)) {
                 app.router.openCourse(id)
             } else {
@@ -377,10 +379,10 @@ struct RootTabView: View {
         case "groups":
             app.router.selectedTab = .groups
         case "lecture":
-            // `studytrack://lecture?id=…` — suivre le cours (widget, raccourci).
+            // `polymestre://lecture?id=…` — suivre le cours (widget, raccourci).
             if let id = value("id").flatMap(UUID.init(uuidString:)) { app.router.openLectureDesk(courseID: id) }
         case "join":
-            // `studytrack://join?code=EPFL-XXXX` — le lien partagé par un camarade.
+            // `polymestre://join?code=EPFL-XXXX` — le lien partagé par un camarade.
             let code = value("code") ?? ""
             guard !code.isEmpty else {
                 app.router.selectedTab = .groups

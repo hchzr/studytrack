@@ -6,7 +6,7 @@ import PDFKit
 import SwiftUI
 
 /// Le bureau du mode étude : un seul endroit pour tout ce qui sert à
-/// travailler — la série, le cours (StudyTrack, Moodle, Botafogo), Claude, la
+/// travailler — la série, le cours (Polymestre, Moodle, Botafogo), Claude, la
 /// calculatrice, et le navigateur en dernier recours.
 @MainActor
 @Observable

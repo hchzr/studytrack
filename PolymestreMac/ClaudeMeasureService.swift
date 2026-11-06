@@ -6,7 +6,7 @@ import SwiftData
 /// Avec mesure, côté Mac (le calcul est dans `ClaudeMeasure`, le mod dans
 /// `ClaudePlugin/mesure`) :
 ///
-/// - écrit `policy.json` — les règles réglées ici et le contexte de StudyTrack
+/// - écrit `policy.json` — les règles réglées ici et le contexte de Polymestre
 ///   (mode étude, cours des sept jours, temps étudié) — **seulement quand
 ///   quelque chose change** : un geste du chrono, une donnée enregistrée, la fin
 ///   d'un cours, minuit. Rien ne tourne entre-temps ;
@@ -38,12 +38,12 @@ final class ClaudeMeasureService {
     @ObservationIgnored private var pendingWrite: Task<Void, Never>?
     @ObservationIgnored private var boundary: Timer?
     @ObservationIgnored private var lastRead: Date?
-    private let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "mesure")
+    let log = Logger(subsystem: "ch.polymestre.mac", category: "mesure")
 
     static let summariesKey = "claude.measure.days"
 
     static var root: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/StudyTrack/Claude")
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Polymestre/Claude")
     }
     private var policyURL: URL { Self.root.appending(path: "policy.json") }
 
@@ -56,7 +56,7 @@ final class ClaudeMeasureService {
     var isConfigured: Bool { policy != nil }
 
     /// Les règles d'une première mise en route : le dossier d'étude est celui du
-    /// projet Claude réglé dans StudyTrack (`~/EPFL` par défaut).
+    /// projet Claude réglé dans Polymestre (`~/EPFL` par défaut).
     static func initialRules(_ settings: MacSettings?) -> CM.Rules {
         var rules = CM.Rules.standard
         if let folder = settings?.claudeProjectFolder, !folder.isEmpty {
@@ -97,6 +97,37 @@ final class ClaudeMeasureService {
         write(policy)
         scheduleBoundary()
         syncPlugin()
+        migrateLegacyPlugin()
+    }
+
+    /// Le mod branché avant le changement de nom (marketplace « studytrack », copie dans
+    /// l'ancien dossier) est remplacé par celui-ci, une fois : même état (allumé ou non).
+    func migrateLegacyPlugin() {
+        let key = "mac.claude.pluginRenamed"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let known = (try? Data(contentsOf: home.appending(path: ".claude/plugins/known_marketplaces.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        guard known["studytrack"] != nil else {
+            UserDefaults.standard.set(true, forKey: key)
+            return
+        }
+        guard let claude = ClaudeTutor.candidatePaths(home: home.path).first(where: { FileManager.default.isExecutableFile(atPath: $0) }),
+              FileManager.default.fileExists(atPath: Self.pluginCopy.path) else { return }
+        let settings = (try? Data(contentsOf: home.appending(path: ".claude/settings.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        let enabled = (settings["enabledPlugins"] as? [String: Any])?["mesure@studytrack"] as? Bool ?? false
+        let path = Self.pluginCopy.path
+        Task.detached(priority: .utility) {
+            _ = Self.run(claude, ["plugin", "marketplace", "add", path])
+            if enabled { _ = Self.run(claude, ["plugin", "install", "mesure@polymestre"]) }
+            _ = Self.run(claude, ["plugin", "uninstall", "mesure@studytrack"])
+            let removed = Self.run(claude, ["plugin", "marketplace", "remove", "studytrack"])
+            await MainActor.run {
+                if removed.status == 0 { UserDefaults.standard.set(true, forKey: key) }
+                ClaudeMeasureService.shared.log.notice("mod : studytrack → polymestre (\(enabled ? "allumé" : "éteint", privacy: .public), retrait \(removed.status))")
+            }
+        }
     }
 
     /// Un geste du chrono, une donnée enregistrée : le contexte est réécrit
@@ -135,7 +166,7 @@ final class ClaudeMeasureService {
         }
     }
 
-    /// Ce que le mod a besoin de savoir de StudyTrack, maintenant.
+    /// Ce que le mod a besoin de savoir de Polymestre, maintenant.
     func context(now: Date = Date()) -> CM.Context {
         var studyMode: CM.StudyModeInfo?
         let state = timer?.engine.state
@@ -250,10 +281,10 @@ final class ClaudeMeasureService {
     // MARK: Brancher sur Claude Code
 
     static var pluginCopy: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/StudyTrack/ClaudePlugin")
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Polymestre/ClaudePlugin")
     }
 
-    /// La copie du mod suit celle de l'app (une nouvelle version de StudyTrack
+    /// La copie du mod suit celle de l'app (une nouvelle version de Polymestre
     /// apporte la sienne) ; Claude Code la relit à la séance suivante.
     func syncPlugin() {
         guard let bundled = Bundle.main.url(forResource: "ClaudePlugin", withExtension: nil) else { return }
@@ -277,7 +308,7 @@ final class ClaudeMeasureService {
         }
     }
 
-    /// `claude plugin marketplace add <copie>` puis `claude plugin install mesure@studytrack`.
+    /// `claude plugin marketplace add <copie>` puis `claude plugin install mesure@polymestre`.
     func install() {
         guard !installing else { return }
         syncPlugin()
@@ -295,7 +326,7 @@ final class ClaudeMeasureService {
         let path = Self.pluginCopy.path
         Task.detached(priority: .userInitiated) {
             let add = Self.run(claude, ["plugin", "marketplace", "add", path])
-            let install = Self.run(claude, ["plugin", "install", "mesure@studytrack"])
+            let install = Self.run(claude, ["plugin", "install", "mesure@polymestre"])
             let ok = install.status == 0 || install.output.localizedCaseInsensitiveContains("already")
             await MainActor.run {
                 let service = ClaudeMeasureService.shared

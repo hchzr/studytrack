@@ -57,7 +57,7 @@ async function askShared(payload: Record<string, unknown>, signal?: AbortSignal)
         "Content-Type": "application/json",
         apikey: config.anonKey,
         Authorization: `Bearer ${config.anonKey}`,
-        "x-studytrack-install": installID(),
+        "x-polymestre-install": installID(),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

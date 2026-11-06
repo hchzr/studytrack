@@ -10,7 +10,7 @@ import OSLog
 /// La base est de toute façon dans iCloud ; la reprendre évite seulement de
 /// tout retélécharger. Les réglages, eux, n'existent que là.
 enum MacSandboxMigration {
-    private static let log = Logger(subsystem: "com.hczr.studytrack.mac", category: "migration")
+    private static let log = Logger(subsystem: "ch.polymestre.mac", category: "migration")
     private static let doneKey = "mac.migratedFromSandbox"
 
     static var isSandboxed: Bool { ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil }
@@ -19,7 +19,7 @@ enum MacSandboxMigration {
     /// `default.store` partagé de « Application Support ».
     static var storeDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let directory = base.appendingPathComponent("StudyTrack", isDirectory: true)
+        let directory = base.appendingPathComponent("Polymestre", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
@@ -35,7 +35,7 @@ enum MacSandboxMigration {
         guard !isSandboxed, !UserDefaults.standard.bool(forKey: doneKey) else { return }
         defer { UserDefaults.standard.set(true, forKey: doneKey) }
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let bundle = Bundle.main.bundleIdentifier ?? "com.hczr.studytrack.mac"
+        let bundle = Bundle.main.bundleIdentifier ?? "ch.polymestre.mac"
         let container = home.appendingPathComponent("Library/Containers/\(bundle)/Data/Library", isDirectory: true)
 
         // Réglages : le bac à sable fait foi (identifiant d'appareil, chrono,

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Tant qu'une autre app est devant, les raccourcis du système (Spotlight,
 /// ⌘Tab, Mission Control, les bureaux, Launchpad…) marchent comme d'habitude :
-/// la présentation de StudyTrack (`NSApp.presentationOptions`) ne vaut que
+/// la présentation de Polymestre (`NSApp.presentationOptions`) ne vaut que
 /// quand il est lui-même au premier plan. Pendant un blocage, on les éteint donc
 /// un par un — et **il faut pouvoir les rallumer à coup sûr** : le changement
 /// vit dans le système, pas dans l'app (il survit à sa mort, vérifié), et un
@@ -12,7 +12,7 @@ import Foundation
 /// rallumé à sa place.
 ///
 /// Tout ce qui décide est ici, pur et testé ; l'écriture dans le système est dans
-/// `StudyTrackMac/StudyMode/SystemHotKeys.swift` et `SystemChrome.swift`.
+/// `PolymestreMac/StudyMode/SystemHotKeys.swift` et `SystemChrome.swift`.
 enum StudyLockPlan {
 
     /// Les raccourcis du système éteints pendant un blocage (numéros de

@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/RevisionSheet.swift : la fiche de révision d'un
+// Port de Polymestre/Domain/RevisionSheet.swift : la fiche de révision d'un
 // cours, chapitre par chapitre — définitions, théorèmes, formules, méthodes,
 // pièges. Deux origines, une seule forme : le polycopié (énoncés tels quels) ou
 // le modèle. La même liste sert à « À savoir » dans une série (`relevant`).

@@ -1,4 +1,4 @@
-// Port de StudyTrack/Domain/SearchEngine.swift : recherche dans tout ce que
+// Port de Polymestre/Domain/SearchEngine.swift : recherche dans tout ce que
 // l'app contient. Fonction **pure** : elle reçoit des documents et une requête,
 // sans base ni interface — et notamment ce qui ne doit **pas** ressortir.
 

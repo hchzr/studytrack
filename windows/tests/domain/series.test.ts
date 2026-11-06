@@ -784,7 +784,7 @@ describe("Séries publiées en HTML (CS-107)", () => {
 
 describe("Rapport d'une série et file de reprise", () => {
   const reviewText = `Voilà le post-mortem.
-\`\`\`studytrack
+\`\`\`polymestre
 1 : juste
 2 : faux
 erreur 2 | Méthode | oubli de vérifier la continuité en 0 | vérifier f continue en 0 avant le TAF | continuité
@@ -793,7 +793,7 @@ erreur 4 | n'importe quoi | ignoré
 reprise 2 | méthode : n'a pas vu le critère | Pose M_n = sup |f_n(x)|
 \`\`\`
 Et un indice :
-\`\`\`studytrack
+\`\`\`polymestre
 indice 3 | 2 | Le critère de Weierstrass s'applique
 \`\`\``;
   const review = SeriesReview.parse(reviewText);
@@ -872,7 +872,7 @@ indice 3 | 2 | Le critère de Weierstrass s'applique
     ).length).toBe(1);
   });
   const customLadder = RedoLadder.Config.fromJSON({ steps: [3, 10, "exam"], maxPerSeries: 1 });
-  it("Reprise : paliers du projet (studytrack.json)", () => {
+  it("Reprise : paliers du projet (polymestre.json)", () => {
     expect(customLadder.steps).toEqual([{ days: 3 }, { days: 10 }, "exam"]);
     expect(customLadder.maxPerSeries).toBe(1);
     expect(customLadder.perSession).toBe(3);
@@ -884,7 +884,7 @@ indice 3 | 2 | Le critère de Weierstrass s'applique
   for (let n = 1; n <= 4; n++) {
     new Exercise({ series: reviewSeries, exerciseNumber: `6.${n}`, sortOrder: n });
   }
-  const report = SeriesReview.parse(`\`\`\`studytrack
+  const report = SeriesReview.parse(`\`\`\`polymestre
 6.1 : juste
 2 : faux
 erreur 2 | méthode | oubli de la continuité en 0 | vérifier la continuité | continuité
@@ -939,18 +939,18 @@ reprise 4 | méthode | Trace le graphe
   });
 
   it("indice : un verdict n'est pas pris pour un indice", () => {
-    const verdictOnly = SeriesReview.parse("```studytrack\n6.3 : juste\n```");
+    const verdictOnly = SeriesReview.parse("```polymestre\n6.3 : juste\n```");
     expect(verdictOnly.hints).toEqual([]);
     expect(verdictOnly.verdicts.length).toBe(1);
   });
   it("indice : « 6.3 | 1 | … » sans le mot indice", () => {
-    const bare = SeriesReview.parse("Quel X ?\n\n```studytrack\n6.3 | 1 | Choisis un X qui isole une colonne.\n```");
+    const bare = SeriesReview.parse("Quel X ?\n\n```polymestre\n6.3 | 1 | Choisis un X qui isole une colonne.\n```");
     expect(bare.hints.length).toBe(1);
     expect(bare.hints[0]?.exercise).toBe("6.3");
     expect(bare.hints[0]?.level).toBe(1);
   });
   it("indice : avec le mot indice", () => {
-    const keyed = SeriesReview.parse("```studytrack\nindice 6.3 | 2 | L'outil\n```");
+    const keyed = SeriesReview.parse("```polymestre\nindice 6.3 | 2 | L'outil\n```");
     expect(keyed.hints.length).toBe(1);
     expect(keyed.hints[0]?.level).toBe(2);
   });

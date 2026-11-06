@@ -77,7 +77,7 @@ export class StudyGroup {
 
   /** Lien d'invitation partageable, compris par l'app elle-même. */
   get inviteLink(): string {
-    return `studytrack://join?code=${this.inviteCode}`;
+    return `polymestre://join?code=${this.inviteCode}`;
   }
 
   /**

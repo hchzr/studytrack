@@ -1,4 +1,4 @@
-// La géométrie du bureau d'étude (StudyTrack/Domain/DeskGeometry.swift) : où
+// La géométrie du bureau d'étude (Polymestre/Domain/DeskGeometry.swift) : où
 // poser la fenêtre d'une app permise pour qu'elle remplisse le centre du bureau.
 //
 // Deux repères se croisent : AppKit mesure depuis le **bas** de l'écran

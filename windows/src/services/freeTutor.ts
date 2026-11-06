@@ -20,7 +20,7 @@ export async function askTutor(mode: TutorMode, messages: { role: "user" | "assi
     method: "POST",
     headers: {
       "Content-Type": "application/json", apikey: config.anonKey, Authorization: `Bearer ${config.anonKey}`,
-      "x-studytrack-install": installID(),
+      "x-polymestre-install": installID(),
     },
     body: JSON.stringify({ mode, messages }),
     signal: AbortSignal.timeout(mode === "tutor" ? 75_000 : 160_000),

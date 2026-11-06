@@ -1,5 +1,5 @@
 // Lit une page de série publiée en HTML par un site de cours
-// (StudyTrack/Domain/SeriesPageParser.swift).
+// (Polymestre/Domain/SeriesPageParser.swift).
 //
 // CS-107 (Introduction à la programmation) publie chaque série sur
 // `proginsc.epfl.ch` : une page par série, avec pour chaque exercice son

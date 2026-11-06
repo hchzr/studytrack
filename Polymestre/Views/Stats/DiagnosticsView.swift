@@ -188,7 +188,7 @@ struct DiagnosticsView: View {
         guard !entries.isEmpty else { return nil }
         let text = LogBuffer.text(entries)
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("studytrack-journal.txt")
+            .appendingPathComponent("polymestre-journal.txt")
         guard (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil else { return nil }
         return url
     }

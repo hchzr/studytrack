@@ -105,7 +105,7 @@ final class EventKitCalendarService: CalendarService {
         if let existing = calendars.first(where: { $0.title == title }) {
             return existing
         }
-        // L'app s'appelait StudyTrack : son calendrier garde ses sessions, il change seulement de nom.
+        // L'app s'appelait Polymestre : son calendrier garde ses sessions, il change seulement de nom.
         if title == CalendarEventSpec.appCalendarTitle,
            let legacy = calendars.first(where: { $0.title == CalendarEventSpec.legacyCalendarTitle && $0.allowsContentModifications }) {
             legacy.title = title
