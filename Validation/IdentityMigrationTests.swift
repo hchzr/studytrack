@@ -115,13 +115,14 @@ private func identityMigrationChecks(_ results: inout [(Bool, String)]) throws {
     // 3. SwiftData relit la copie, relations comprises.
     for store in fresh.persistentStoreCoordinator.persistentStores { try fresh.persistentStoreCoordinator.remove(store) }
     do {
-        let container = try ModelContainer(for: StudyTrackSchema.current,
+        // Comme l'app l'ouvre : avec le plan de migration.
+        let container = try ModelContainer(for: StudyTrackSchema.current, migrationPlan: StudyTrackMigrationPlan.self,
                                            configurations: [ModelConfiguration(schema: StudyTrackSchema.current, url: newURL, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let courses = try context.fetch(FetchDescriptor<Course>())
         let course = courses.first
         note(courses.count == 1 && course?.id == f.course && course?.code == "MATH-101" && course?.name == "Analyse I",
-             "migration : SwiftData relit le cours copié, mêmes identifiant et champs")
+             "migration : SwiftData (avec le plan de migration de l'app) relit le cours copié, mêmes identifiant et champs")
         note(course?.term?.id == f.term && course?.term?.name == "Automne 2026", "migration : le cours garde son semestre")
         let series = course?.series.first
         note(series?.id == f.series && series?.exercises.first?.id == f.exercise, "migration : cours → série → exercice, dans les deux sens")
