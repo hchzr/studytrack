@@ -245,6 +245,8 @@ struct StudyTrackApp: App {
             // Les boutons de la Live Activity s'exécutent dans ce processus : le
             // gestionnaire est posé ici, avant que la moindre commande n'arrive.
             FocusTimerCommandHandler.install(container: container)
+            // Copie des réglages privés pour Polymestre (nouvel identifiant d'app).
+            RenameBridge.install()
         }
 
         #if DEBUG
