@@ -7,6 +7,9 @@
 #
 #   supabase/setup-email.sh
 #
+# Sans invite (par ex. depuis Claude Code), les clés se lisent dans ~/.config/polymestre/resend
+# et ~/.config/polymestre/supabase, un fichier par clé (droits 600).
+#
 # Ce qu'il faut :
 #   - une clé API Resend « Full access » (resend.com › API Keys) ;
 #   - un jeton d'accès Supabase (supabase.com › Account › Access Tokens).
@@ -14,7 +17,7 @@
 # Idempotent : relançable autant de fois que nécessaire (par ex. après avoir posé le DNS).
 set -euo pipefail
 
-DOMAIN="${EMAIL_DOMAIN:-studytrack.hczr.ch}"
+DOMAIN="${EMAIL_DOMAIN:-polymestre.ch}"
 SENDER="${EMAIL_SENDER:-noreply@$DOMAIN}"
 REF="$(cat "$(dirname "$0")/.temp/project-ref")"
 
@@ -22,6 +25,9 @@ need() { command -v "$1" >/dev/null || { echo "Il manque « $1 »." >&2; exit 1;
 need curl
 need jq
 
+KEYS="$HOME/.config/polymestre"
+if [[ -z "${RESEND_API_KEY:-}" && -s "$KEYS/resend" ]]; then RESEND_API_KEY="$(cat "$KEYS/resend")"; fi
+if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" && -s "$KEYS/supabase" ]]; then SUPABASE_ACCESS_TOKEN="$(cat "$KEYS/supabase")"; fi
 if [[ -z "${RESEND_API_KEY:-}" ]]; then read -rsp "Clé API Resend (re_…) : " RESEND_API_KEY; echo; fi
 if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then read -rsp "Jeton d'accès Supabase (sbp_…) : " SUPABASE_ACCESS_TOKEN; echo; fi
 
@@ -54,7 +60,7 @@ status="$(jq -r .status <<<"$domain")"
 echo "Domaine $DOMAIN chez Resend : $status"
 if [[ "$status" != "verified" ]]; then
   echo
-  echo "À poser dans Cloudflare (zone hczr.ch › DNS › Records), proxy désactivé (nuage gris) :"
+  echo "À poser dans Cloudflare (zone $DOMAIN › DNS › Records), proxy désactivé (nuage gris) :"
   jq -r '.records[] | "  \(.record // .type)\t\(.type)\t\(.name)\t\(.value)\(if .priority then "\tpriorité \(.priority)" else "" end)"' <<<"$domain"
   echo
   echo "(Ou, plus simple : sur resend.com › Domains › $DOMAIN, le bouton « Auto configure » avec Cloudflare.)"

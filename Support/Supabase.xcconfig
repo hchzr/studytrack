@@ -47,7 +47,7 @@ TIMER_RELAY_HOST = studytrack-relay.apnsprobe.workers.dev
 //  l'app (confidentialité, téléchargement du Mac, `mac/latest.json`), sans
 //  « https:// ». Vides = pas de bouton, pas de recherche de mise à jour.
 // ─────────────────────────────────────────────────────────────────────────────
-FEEDBACK_EMAIL = studytrack@hczr.ch
+FEEDBACK_EMAIL = contact@polymestre.ch
 SITE_HOST = polymestre.ch
 
 // ─────────────────────────────────────────────────────────────────────────────
