@@ -1,6 +1,6 @@
 # Polymestre
 
-Polymestre rassemble tes cours EPFL et te dit chaque matin ce qu'il te reste à faire.
+Polymestre rassemble tes cours de EPFL
 
 L'app connaît la forme d'un cours à l'EPFL : les vidéos, les séries et leurs sous-exercices, les corrections, les évaluations. Elle récupère ce qu'il faut depuis Moodle, Botafogo, Ed et IS-Academia, puis garde le compte de ce que tu as vraiment fait et du temps que ça t'a pris. Il y a aussi un mode étude avec chrono, un tuteur IA qui donne des indices plutôt que la réponse, et des groupes pour travailler à plusieurs.
 
@@ -8,16 +8,15 @@ Elle est gratuite et n'a aucun lien officiel avec l'EPFL.
 
 ## Installer
 
-- **iPhone (iOS 17+)** : [la bêta TestFlight](https://testflight.apple.com/join/ZVnuFAbM)
-- **Mac (macOS 14+) et Windows** : [polymestre.ch](https://polymestre.ch) ou les [releases](https://github.com/hczr-dev/polymestre/releases)
+- **iPhone (iOS 17+)** : [bêta TestFlight](https://testflight.apple.com/join/ZVnuFAbM)
+- **Mac (macOS 14+) et Windows** : [polymestre.ch](https://polymestre.ch) ou [releases](https://github.com/hczr-dev/polymestre/releases)
 
 ## Compiler
 
-L'app Apple s'ouvre dans Xcode avec `Polymestre.xcodeproj`, sans aucune dépendance à installer. En ligne de commande :
+L'app Apple s'ouvre dans Xcode avec `Polymestre.xcodeproj`. En ligne de commande :
 
 ```bash
 ./build.sh      # l'app iPhone pour le simulateur
-./validate.sh   # les tests de la logique métier
 ```
 
 Pour Windows (Tauri et React) :
