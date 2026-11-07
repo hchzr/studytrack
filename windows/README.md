@@ -4,9 +4,6 @@ Le portage de l'app Mac (PolymestreMac + StudyKit + Models + Domain) sur Windows
 **Tauri 2** (shell Rust) + **React 19 / TypeScript** (webview), base locale **SQLite**
 (tauri-plugin-sql) et **synchronisation Supabase** (les apps Apple la rejoignent).
 
-Le tout de suite, premier réflexe : lire `windows/HANDOFF.md` (où on en est),
-`PORTING.md` (règles de fidélité Swift → TS), `UI.md` (contrat des écrans).
-
 ## Lancer
 
 ```bash

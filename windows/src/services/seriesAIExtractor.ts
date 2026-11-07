@@ -59,7 +59,7 @@ export class ExtractionError extends Error {
           + "Pour l'activer, une seule fois, depuis le dossier du projet :\n"
           + "    supabase functions deploy extract-series --project-ref <ta-ref>\n"
           + "    supabase secrets set LLM_API_KEY=<ta-clé>\n"
-          + "Le détail est dans README.md §5.";
+          + "Le détail est dans docs/configuration.md.";
       case "emptyAnswer":
         return "Le modèle n'a rien trouvé de structuré dans ce texte.";
     }

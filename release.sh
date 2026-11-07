@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Distribuer Polymestre (README §5, « Distribuer ») :
+# Distribuer Polymestre (docs/configuration.md, « Distribuer ») :
 #
 #   ./release.sh ios           # archive → export App Store Connect → envoi (TestFlight)
 #   ./release.sh mac           # archive → Developer ID → notarisation → Polymestre.dmg + latest.json

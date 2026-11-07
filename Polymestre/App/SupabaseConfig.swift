@@ -9,7 +9,7 @@ import Foundation
 /// de la base permettent.
 ///
 /// Définies par `SUPABASE_URL` et `SUPABASE_ANON_KEY` dans les réglages de build
-/// (voir README §5) et injectées par `Support/Info.plist`.
+/// (voir docs/configuration.md) et injectées par `Support/Info.plist`.
 enum SupabaseConfig {
     /// Le domaine du projet, **sans schéma**.
     ///

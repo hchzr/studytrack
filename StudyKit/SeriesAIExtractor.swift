@@ -74,7 +74,7 @@ enum SeriesAIExtractor {
                 Pour l'activer, une seule fois, depuis le dossier du projet :
                     supabase functions deploy extract-series --project-ref <ta-ref>
                     supabase secrets set LLM_API_KEY=<ta-clé>
-                Le détail est dans README.md §5.
+                Le détail est dans docs/configuration.md.
                 """
             case .emptyAnswer:
                 return "Le modèle n'a rien trouvé de structuré dans ce texte."
