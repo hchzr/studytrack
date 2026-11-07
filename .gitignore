@@ -36,3 +36,14 @@ build-release/
 
 # Build signée de contrôle (Mac)
 build-mac-signed/
+
+# Notes de travail (agents, conception) : restent sur la machine, hors du dépôt public
+/HANDOFF.md
+/DESIGN.md
+/AUDIT.md
+/BACKLOG.md
+/SPEC.md
+/PRODUCT.md
+/windows/HANDOFF.md
+/windows/PORTING.md
+/windows/UI.md

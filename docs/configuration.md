@@ -139,8 +139,8 @@ Tout est optionnel : **l'app fonctionne entièrement hors ligne**.
   bloc par fournisseur, avec l'état, l'aide et un bouton **Tester** qui interroge
   réellement le service.
 - **Groupes (Supabase)** : la configuration est **compilée dans l'app**, pas saisie
-  par l'utilisateur. Voir « Relier les groupes » ci-dessous ; le schéma SQL est en
-  section 7 du `SPEC.md`.
+  par l'utilisateur. Voir « Relier les groupes » ci-dessous ; le schéma SQL est dans
+  `Support/supabase-schema.sql`.
 - **Charge EPFL** : Profil › Charge de travail (heures par crédit ECTS).
 
 > **Le mode opératoire complet est dans [`Support/SUPABASE.md`](../Support/SUPABASE.md)** :
@@ -159,9 +159,9 @@ politiques RLS de la base permettent.
    dans le navigateur Xcode sous le groupe racine. Deux lignes à remplir :
    `SUPABASE_HOST` (le domaine du projet, **sans** `https://`) et `SUPABASE_ANON_KEY`.
 2. Exécute **`Support/supabase-schema.sql`** dans Supabase ▸ SQL Editor. Ce fichier
-   contient tout : les tables du `SPEC.md` §7.1, la fonction de classement
-   `group_leaderboard` (appelée par le code mais absente du SPEC), le déclencheur
-   qui crée le profil à l'inscription, les politiques RLS du §7.3, et le
+   contient tout : les tables, la fonction de classement
+   `group_leaderboard`, le déclencheur
+   qui crée le profil à l'inscription, les politiques RLS, et le
    rechargement du cache PostgREST. Il est idempotent.
 3. Rien d'autre : ce fichier est la configuration de base du projet, `Support/Info.plist`
    l'injecte (`SupabaseHost`, `SupabaseAnonKey`) et `SupabaseConfig` compose l'URL au
